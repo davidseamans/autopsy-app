@@ -1040,6 +1040,74 @@ function ChainItem({
   );
 }
 
+function ChainCard({
+  icon,
+  title,
+  rows,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  rows: Array<{ label: string; value: any; prose?: boolean }>;
+}) {
+  const visible = rows.filter((r) => hasContent(r.value));
+  if (visible.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-[hsl(var(--autopsy-border))] p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="h-7 w-7 rounded-md bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] flex items-center justify-center shrink-0">
+          {icon}
+        </span>
+        <div className="text-sm font-semibold tracking-tight">{title}</div>
+      </div>
+      <div className="space-y-3">
+        {visible.map((r) => (
+          <div key={r.label}>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {r.label}
+            </div>
+            {r.prose ? (
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {typeof r.value === "string" ? r.value : JSON.stringify(humanizeDeep(r.value), null, 2)}
+              </div>
+            ) : (
+              <div className="text-sm font-medium break-words">{String(r.value)}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function parseDimensionDictionary(raw: any): Array<[string, string]> {
+  if (!raw) return [];
+  const out: Array<[string, string]> = [];
+  const push = (name: any, desc: any) => {
+    const n = humanize(name);
+    const d = typeof desc === "string" ? desc : "";
+    if (n && d) out.push([n, d]);
+  };
+  if (Array.isArray(raw)) {
+    for (const r of raw) {
+      if (!r || typeof r !== "object") continue;
+      push(
+        r.label ?? r.name ?? r.dimension_code ?? r.code ?? r.dimension,
+        r.description ?? r.definition ?? r.explanation ?? r.summary,
+      );
+    }
+  } else if (typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string") push(k, v);
+      else if (v && typeof v === "object")
+        push(
+          (v as any).label ?? (v as any).name ?? k,
+          (v as any).description ?? (v as any).definition ?? (v as any).explanation,
+        );
+    }
+  }
+  return out;
+}
+
 function Prose({ value }: { value: any }) {
   if (value == null || value === "") return null;
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
