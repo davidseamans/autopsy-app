@@ -37,12 +37,14 @@ export const createAutopsyRun = (params: {
   scenario: string;
   run_name: string;
   tester_email: string;
+  operator_class: string;
 }) =>
   rpc<any>("create_autopsy_run", {
     p_industry: params.industry,
     p_run_name: params.run_name,
     p_scenario: params.scenario,
     p_tester_email: params.tester_email,
+    p_operator_class: params.operator_class,
   });
 
 export const getGatewayPayload = (run_id: string) =>
