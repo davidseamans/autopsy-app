@@ -149,6 +149,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     localStorage.setItem("autopsy_intake_email", testerEmail);
   }, [testerEmail]);
 
+  // Persist active runId so standalone /worksheet route can recover it.
+  useEffect(() => {
+    if (runId) localStorage.setItem("autopsy_active_run_id", runId);
+  }, [runId]);
+
   const payloadQuery = useQuery({
     queryKey: ["autopsy", "payload", runId],
     queryFn: () => getGatewayPayload(runId as string),
@@ -274,10 +279,26 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         if (Number.isFinite(n)) sum += n;
       }
     }
+    const integrity = (payloadQuery.data as any)?.integrity ?? {};
+    const liveScore = Number(integrity.score_total_live);
     const backendScore = Number((payloadQuery.data?.run as any)?.score_total);
-    const finalScore = Number.isFinite(backendScore) ? backendScore : sum;
+    const finalScore = Number.isFinite(liveScore)
+      ? liveScore
+      : Number.isFinite(backendScore)
+        ? backendScore
+        : sum;
     return { scoreSoFar: finalScore, scoreMax: max, scoreNumeric: anyNumeric };
   }, [questions, localAnswers, payloadQuery.data]);
+
+  // Preselect previously saved answer when the current question changes.
+  useEffect(() => {
+    if (view !== "question" || !currentQuestion) return;
+    const qid = String(currentQuestion.question_id);
+    const prior =
+      currentQuestion.selected_option ?? localAnswers[qid] ?? null;
+    setPendingSelection(prior as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentQuestion?.question_id, view]);
 
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
