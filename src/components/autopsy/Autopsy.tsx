@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Skull,
-  History,
   ArrowLeft,
   ChevronRight,
   Activity,
@@ -88,6 +87,31 @@ function sortedQuestions(payload: GatewayPayload | undefined): GatewayQuestion[]
   return [...qs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
 
+function humanize(value: any): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  return s
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+function hasContent(value: any): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value).length > 2;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -152,9 +176,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     mutationFn: recordAutopsyAnswer,
     onSuccess: async (_d, vars) => {
       setError(null);
+      const justAnsweredId = String(vars.question_id);
+      let nextSize = 0;
       setAnsweredIds((prev) => {
         const next = new Set(prev);
-        next.add(String(vars.question_id));
+        next.add(justAnsweredId);
+        nextSize = next.size;
         return next;
       });
       setLocalAnswers((prev) => ({
@@ -163,6 +190,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }));
       setPendingSelection(null);
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
+      // Auto-finalize when last question was just answered.
+      if (questions.length > 0 && nextSize >= questions.length && runId) {
+        finalizeMutation.mutate(runId);
+      }
     },
     onError: (e: any) =>
       setError({
@@ -246,9 +277,24 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  function handleFinalize() {
-    if (!runId) return;
-    finalizeMutation.mutate(runId);
+  function handleBack() {
+    if (view === "verdict") {
+      handleReset();
+      return;
+    }
+    if (view === "question" && currentIndex > 0) {
+      const prevQ = questions[currentIndex - 1];
+      if (!prevQ) return;
+      const prevId = String(prevQ.question_id);
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.delete(prevId);
+        return next;
+      });
+      const prevSel =
+        localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
+      setPendingSelection(prevSel as any);
+    }
   }
 
   function handleReset() {
@@ -269,22 +315,27 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
       <div className="container max-w-3xl py-10 space-y-6">
         <div className="flex items-center justify-between">
+          {(view === "verdict" || (view === "question" && currentIndex > 0)) ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </button>
+          ) : (
+            <span />
+          )}
           {view === "verdict" ? (
             <Link
               to="/autopsy/history"
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft className="h-4 w-4" /> Back
+              Run History
             </Link>
           ) : (
             <span />
           )}
-          <Link
-            to="/autopsy/history"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <History className="h-4 w-4" /> Run History
-          </Link>
         </div>
 
         {error && <ErrorPanel error={error} />}
@@ -309,7 +360,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         {view === "question" && (
           <QuestionView
             loading={payloadQuery.isLoading}
-            saving={answerMutation.isPending}
+            saving={answerMutation.isPending || finalizeMutation.isPending}
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
@@ -317,7 +368,6 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             pendingSelection={pendingSelection}
             onSelect={setPendingSelection}
             onNext={handleNext}
-            onFinalize={handleFinalize}
             finalizing={finalizeMutation.isPending}
             scoreSoFar={scoreSoFar}
             scoreMax={scoreMax}
@@ -500,7 +550,6 @@ function QuestionView(props: {
   pendingSelection: string | number | null;
   onSelect: (v: string | number) => void;
   onNext: () => void;
-  onFinalize: () => void;
   finalizing: boolean;
   scoreSoFar: number;
   scoreMax: number;
@@ -517,28 +566,9 @@ function QuestionView(props: {
 
   if (props.allAnswered) {
     return (
-      <div className="space-y-4">
-        <ProgressHeader
-          currentIndex={props.currentIndex}
-          total={props.total}
-          pct={100}
-          scoreSoFar={props.scoreSoFar}
-          scoreMax={props.scoreMax}
-          scoreNumeric={props.scoreNumeric}
-        />
-        <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 text-center">
-          <h2 className="text-xl font-semibold">All questions answered</h2>
-          <p className="text-sm text-muted-foreground mt-1 mb-6">
-            Finalize to compute the verdict from the backend.
-          </p>
-          <Button
-            onClick={props.onFinalize}
-            disabled={props.finalizing}
-            className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
-          >
-            {props.finalizing ? "Finalizing…" : "Finalize Autopsy"}
-          </Button>
-        </div>
+      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-12 text-center">
+        <div className="inline-block h-6 w-6 rounded-full border-2 border-[hsl(var(--autopsy-accent))] border-t-transparent animate-spin mb-4" />
+        <p className="text-sm text-muted-foreground">Computing verdict…</p>
       </div>
     );
   }
@@ -560,7 +590,7 @@ function QuestionView(props: {
 
       <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8">
         <Badge variant="secondary" className="mb-4 uppercase tracking-wider text-[10px]">
-          {q.dimension_code}
+          {humanize(q.dimension_code)}
         </Badge>
         <h2 className="text-xl font-semibold leading-snug mb-6">{q.prompt}</h2>
 
@@ -698,7 +728,7 @@ function VerdictView({
           )}
           {run.primary_risk && (
             <Badge variant="outline" className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]">
-              Primary constraint: {String(run.primary_risk)}
+              Primary constraint: {humanize(run.primary_risk)}
             </Badge>
           )}
         </div>
@@ -710,8 +740,8 @@ function VerdictView({
           <KV label="Run name" value={run.run_name} />
           <KV label="Tester email" value={run.tester_email} />
           <KV label="Industry" value={run.industry} />
-          <KV label="Scenario" value={run.scenario} />
-          <KV label="Operator profile" value={run.operator_class} />
+          <KV label="Scenario" value={humanize(run.scenario)} />
+          <KV label="Operator profile" value={humanize(run.operator_class)} />
         </div>
       </SurfaceCard>
 
@@ -733,9 +763,13 @@ function VerdictView({
               return (
                 <div key={d.code}>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className={cn("font-medium", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
-                      {d.label || d.code}
-                      {isWeakest && " · primary constraint"}
+                    <span className={cn("font-medium inline-flex items-center gap-2", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
+                      {humanize(d.label || d.code)}
+                      {isWeakest && (
+                        <span className="inline-flex items-center rounded-full bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-accent))]/30 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                          Primary Constraint
+                        </span>
+                      )}
                     </span>
                     <span className="text-muted-foreground">{d.score}</span>
                   </div>
@@ -768,7 +802,7 @@ function VerdictView({
           <ChainItem
             icon={<Activity className="h-4 w-4" />}
             label="Weakest Dimension"
-            value={run.weakest_dimension}
+            value={humanize(run.weakest_dimension)}
           />
           <ChainItem
             icon={<AlertTriangle className="h-4 w-4" />}
@@ -788,30 +822,46 @@ function VerdictView({
         </div>
       </SurfaceCard>
 
-      <SurfaceCard title="What this verdict means">
-        <Prose value={run.narrative_output} />
-      </SurfaceCard>
-      <SurfaceCard title="Execution diagnosis">
-        <Prose value={run.execution_diagnosis} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 1">
-        <Prose value={run.mechanism_step_1} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 2">
-        <Prose value={run.mechanism_step_2} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 3">
-        <Prose value={run.mechanism_step_3} />
-      </SurfaceCard>
-      <SurfaceCard title="Final outcome">
-        <Prose value={run.final_outcome} />
-      </SurfaceCard>
-      <SurfaceCard title="Worksheet">
-        <Prose value={run.worksheet_output} />
-      </SurfaceCard>
-      <SurfaceCard title="Retest condition">
-        <Prose value={run.retest_condition} />
-      </SurfaceCard>
+      {hasContent(run.narrative_output) && (
+        <SurfaceCard title="What this verdict means">
+          <Prose value={run.narrative_output} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.execution_diagnosis) && (
+        <SurfaceCard title="Execution diagnosis">
+          <Prose value={run.execution_diagnosis} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_1) && (
+        <SurfaceCard title="Mechanism — Step 1">
+          <Prose value={run.mechanism_step_1} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_2) && (
+        <SurfaceCard title="Mechanism — Step 2">
+          <Prose value={run.mechanism_step_2} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_3) && (
+        <SurfaceCard title="Mechanism — Step 3">
+          <Prose value={run.mechanism_step_3} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.final_outcome) && (
+        <SurfaceCard title="Final outcome">
+          <Prose value={run.final_outcome} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.worksheet_output) && (
+        <SurfaceCard title="Worksheet">
+          <Prose value={run.worksheet_output} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.retest_condition) && (
+        <SurfaceCard title="Retest condition">
+          <Prose value={run.retest_condition} />
+        </SurfaceCard>
+      )}
 
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
