@@ -33,16 +33,17 @@ export default function AutopsyHistory() {
   });
 
   return (
-    <div className="container max-w-5xl py-10 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
+      <div className="container max-w-3xl py-10 space-y-6">
+        <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Run history</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Run History</h1>
           <p className="text-sm text-muted-foreground">Prior autopsy runs from the backend.</p>
         </div>
-        <Button asChild>
+        <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
           <Link to="/autopsy">New run</Link>
         </Button>
-      </div>
+        </div>
 
       {q.isLoading && <p className="text-sm text-muted-foreground">Loading runs…</p>}
       {q.error && (
@@ -54,7 +55,7 @@ export default function AutopsyHistory() {
       <div className="grid gap-3">
         {(q.data ?? []).map((r) => (
           <Link key={r.id} to={`/autopsy/run/${r.id}`}>
-            <Card className="hover:bg-muted/40 transition-colors">
+            <Card className="hover:bg-muted/40 transition-colors rounded-2xl">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-base truncate">
@@ -66,7 +67,11 @@ export default function AutopsyHistory() {
                 </div>
               </CardHeader>
               <CardContent className="text-sm flex flex-wrap gap-2 items-center">
-                {r.verdict_name && <Badge>{r.verdict_name}</Badge>}
+                {r.verdict_name && (
+                  <Badge className="bg-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent-foreground))] hover:bg-[hsl(var(--autopsy-accent))]/90">
+                    {r.verdict_name}
+                  </Badge>
+                )}
                 {r.scenario && <Badge variant="secondary">{r.scenario}</Badge>}
                 {r.operator_class && <Badge variant="outline">{r.operator_class}</Badge>}
                 {r.score_total != null && (
@@ -84,6 +89,7 @@ export default function AutopsyHistory() {
         {q.data && q.data.length === 0 && (
           <p className="text-sm text-muted-foreground">No runs yet.</p>
         )}
+      </div>
       </div>
     </div>
   );
