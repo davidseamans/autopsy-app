@@ -45,6 +45,7 @@ export function Autopsy() {
   const [view, setView] = useState<View>("start");
   const [runId, setRunId] = useState<string | null>(null);
   const [error, setError] = useState<RpcError | null>(null);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
 
   // start form
   const [industry, setIndustry] = useState("");
@@ -98,8 +99,13 @@ export function Autopsy() {
 
   const answerMutation = useMutation({
     mutationFn: recordAutopsyAnswer,
-    onSuccess: async () => {
+    onSuccess: async (_data, vars) => {
       setError(null);
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.add(String(vars.question_id));
+        return next;
+      });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
     onError: (e: any) =>
@@ -129,12 +135,23 @@ export function Autopsy() {
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
   const currentIndex = useMemo(() => {
-    const idx = questions.findIndex((q) => !q.answered && q.selected_option == null);
+    const idx = questions.findIndex(
+      (q) =>
+        !q.answered &&
+        q.selected_option == null &&
+        !answeredIds.has(String(q.question_id)),
+    );
     return idx === -1 ? questions.length - 1 : idx;
-  }, [questions]);
+  }, [questions, answeredIds]);
   const currentQuestion = questions[currentIndex];
   const allAnswered =
-    questions.length > 0 && questions.every((q) => q.answered || q.selected_option != null);
+    questions.length > 0 &&
+    questions.every(
+      (q) =>
+        q.answered ||
+        q.selected_option != null ||
+        answeredIds.has(String(q.question_id)),
+    );
 
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
@@ -165,6 +182,7 @@ export function Autopsy() {
     setRunId(null);
     setView("start");
     setError(null);
+    setAnsweredIds(new Set());
     setIndustry("");
     setScenario("");
     setRunName("");
