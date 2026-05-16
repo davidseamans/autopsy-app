@@ -1,11 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { isDebug } from "@/lib/supabase";
 import {
   GatewayPayload,
@@ -26,9 +40,28 @@ interface RpcError {
   runId: string | null;
 }
 
+const INDUSTRIES = [
+  "Cleaning",
+  "Trades",
+  "Hospitality",
+  "Retail",
+  "Professional Services",
+  "Other",
+];
+
+const SCENARIOS = ["startup", "existing_business", "acquisition", "franchise"];
+
+const OPERATOR_CLASSES = [
+  "unproven",
+  "developing",
+  "experienced",
+  "operator",
+  "advanced_operator",
+];
+
 function normalizeOption(opt: any, idx: number) {
   if (typeof opt === "string") {
-    return { value: opt, label: opt, key: `${idx}-${opt}` };
+    return { value: opt, label: opt, key: `${idx}-${opt}`, selected: false };
   }
   const value = opt.value ?? opt.option_id ?? opt.id ?? opt.label ?? idx;
   const label = opt.label ?? opt.text ?? String(value);
@@ -40,16 +73,17 @@ function sortedQuestions(payload: GatewayPayload | undefined): GatewayQuestion[]
   return [...qs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
 
-export function Autopsy() {
+export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
-  const [view, setView] = useState<View>("start");
-  const [runId, setRunId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [view, setView] = useState<View>(initialRunId ? "verdict" : "start");
+  const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
   const [error, setError] = useState<RpcError | null>(null);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
 
-  // start form
-  const [industry, setIndustry] = useState("");
-  const [scenario, setScenario] = useState("");
+  const [industry, setIndustry] = useState("Cleaning");
+  const [scenario, setScenario] = useState("startup");
+  const [operatorClass, setOperatorClass] = useState("developing");
   const [runName, setRunName] = useState("");
   const [testerEmail, setTesterEmail] = useState("");
 
@@ -99,7 +133,7 @@ export function Autopsy() {
 
   const answerMutation = useMutation({
     mutationFn: recordAutopsyAnswer,
-    onSuccess: async (_data, vars) => {
+    onSuccess: async (_d, vars) => {
       setError(null);
       setAnsweredIds((prev) => {
         const next = new Set(prev);
@@ -157,10 +191,11 @@ export function Autopsy() {
     e.preventDefault();
     setError(null);
     startMutation.mutate({
-      industry: industry.trim(),
-      scenario: scenario.trim(),
+      industry,
+      scenario,
       run_name: runName.trim(),
       tester_email: testerEmail.trim(),
+      operator_class: operatorClass,
     });
   }
 
@@ -183,42 +218,57 @@ export function Autopsy() {
     setView("start");
     setError(null);
     setAnsweredIds(new Set());
-    setIndustry("");
-    setScenario("");
     setRunName("");
     setTesterEmail("");
+    navigate("/autopsy");
   }
 
   const debug = isDebug();
+  const run = payloadQuery.data?.run ?? {};
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="container max-w-3xl py-10 space-y-6">
-        <header className="space-y-1">
+    <div className="container max-w-4xl py-10 space-y-6">
+      <header className="flex items-end justify-between gap-4">
+        <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">Autopsy</h1>
           <p className="text-sm text-muted-foreground">
-            Thin runtime · backend is the source of truth
+            Diagnostic intake · backend is the source of truth
           </p>
-        </header>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate("/autopsy/history")}>
+          History
+        </Button>
+      </header>
 
-        {error && <ErrorPanel error={error} />}
+      {error && <ErrorPanel error={error} />}
 
-        {view === "start" && (
-          <StartView
-            industry={industry}
-            scenario={scenario}
-            runName={runName}
-            testerEmail={testerEmail}
-            setIndustry={setIndustry}
-            setScenario={setScenario}
-            setRunName={setRunName}
-            setTesterEmail={setTesterEmail}
-            onSubmit={handleStart}
-            loading={startMutation.isPending}
+      {view === "start" && (
+        <StartView
+          industry={industry}
+          scenario={scenario}
+          operatorClass={operatorClass}
+          runName={runName}
+          testerEmail={testerEmail}
+          setIndustry={setIndustry}
+          setScenario={setScenario}
+          setOperatorClass={setOperatorClass}
+          setRunName={setRunName}
+          setTesterEmail={setTesterEmail}
+          onSubmit={handleStart}
+          loading={startMutation.isPending}
+        />
+      )}
+
+      {view === "question" && (
+        <>
+          <RunHeader
+            runName={(run.run_name as string) ?? runName}
+            scenario={(run.scenario as string) ?? scenario}
+            operatorClass={(run.operator_class as string) ?? operatorClass}
+            currentDimension={currentQuestion?.dimension_code}
+            position={currentIndex + 1}
+            total={questions.length}
           />
-        )}
-
-        {view === "question" && (
           <QuestionView
             loading={payloadQuery.isLoading}
             fetching={payloadQuery.isFetching || answerMutation.isPending}
@@ -230,35 +280,36 @@ export function Autopsy() {
             onFinalize={handleFinalize}
             finalizing={finalizeMutation.isPending}
           />
-        )}
+        </>
+      )}
 
-        {view === "verdict" && (
-          <VerdictView
-            payload={payloadQuery.data}
-            loading={payloadQuery.isLoading}
-            onReset={handleReset}
-          />
-        )}
+      {view === "verdict" && (
+        <VerdictView
+          payload={payloadQuery.data}
+          loading={payloadQuery.isLoading}
+          onReset={handleReset}
+        />
+      )}
 
-        {debug && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Debug</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-xs overflow-auto max-h-96 bg-muted p-3 rounded">
-{JSON.stringify(
-  { view, runId, payload: payloadQuery.data },
-  null,
-  2,
-)}
-              </pre>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      {debug && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Debug</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs overflow-auto max-h-96 bg-muted p-3 rounded">
+{JSON.stringify({ view, runId, payload: payloadQuery.data }, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
+}
+
+export function AutopsyRunRoute() {
+  const { runId } = useParams();
+  return <Autopsy initialRunId={runId} />;
 }
 
 function ErrorPanel({ error }: { error: RpcError }) {
@@ -279,51 +330,146 @@ function ErrorPanel({ error }: { error: RpcError }) {
 function StartView(props: {
   industry: string;
   scenario: string;
+  operatorClass: string;
   runName: string;
   testerEmail: string;
   setIndustry: (v: string) => void;
   setScenario: (v: string) => void;
+  setOperatorClass: (v: string) => void;
   setRunName: (v: string) => void;
   setTesterEmail: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   loading: boolean;
 }) {
   const disabled =
-    !props.industry.trim() ||
-    !props.scenario.trim() ||
+    !props.industry ||
+    !props.scenario ||
+    !props.operatorClass ||
     !props.runName.trim() ||
     !props.testerEmail.trim() ||
     props.loading;
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Start a run</CardTitle>
-        <CardDescription>Provide context for this autopsy.</CardDescription>
+        <CardTitle>New autopsy run</CardTitle>
+        <CardDescription>
+          Establish the operating context. These values frame the diagnostic and
+          are recorded on the run.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={props.onSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="industry">Industry</Label>
-            <Input id="industry" value={props.industry} onChange={(e) => props.setIndustry(e.target.value)} />
+        <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={props.onSubmit}>
+          <Field label="Industry" hint="Sector of the operating business.">
+            <Select value={props.industry} onValueChange={props.setIndustry}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {INDUSTRIES.map((i) => (
+                  <SelectItem key={i} value={i}>{i}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Scenario" hint="Lifecycle stage being diagnosed.">
+            <Select value={props.scenario} onValueChange={props.setScenario}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SCENARIOS.map((s) => (
+                  <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field
+            label="Operator competency"
+            hint="Self-classified operator class. Calibrates pressure interpretation."
+          >
+            <Select value={props.operatorClass} onValueChange={props.setOperatorClass}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {OPERATOR_CLASSES.map((o) => (
+                  <SelectItem key={o} value={o}>{o.replace("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Run name" hint="Internal label for this diagnostic.">
+            <Input
+              value={props.runName}
+              onChange={(e) => props.setRunName(e.target.value)}
+              placeholder="e.g. Q2 cleaning startup review"
+            />
+          </Field>
+
+          <Field label="Tester email" hint="Operator or analyst running this autopsy.">
+            <Input
+              type="email"
+              value={props.testerEmail}
+              onChange={(e) => props.setTesterEmail(e.target.value)}
+              placeholder="operator@example.com"
+            />
+          </Field>
+
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={disabled} className="w-full">
+              {props.loading ? "Creating run…" : "Begin diagnostic"}
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="scenario">Scenario</Label>
-            <Input id="scenario" value={props.scenario} onChange={(e) => props.setScenario(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="run_name">Run name</Label>
-            <Input id="run_name" value={props.runName} onChange={(e) => props.setRunName(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tester_email">Tester email</Label>
-            <Input id="tester_email" type="email" value={props.testerEmail} onChange={(e) => props.setTesterEmail(e.target.value)} />
-          </div>
-          <Button type="submit" disabled={disabled} className="w-full">
-            {props.loading ? "Creating…" : "Begin"}
-          </Button>
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function RunHeader(props: {
+  runName: string;
+  scenario: string;
+  operatorClass: string;
+  currentDimension?: string;
+  position: number;
+  total: number;
+}) {
+  return (
+    <Card>
+      <CardContent className="py-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+        <HeaderStat label="Progress" value={`${props.position} / ${props.total}`} />
+        <HeaderStat label="Dimension" value={props.currentDimension ?? "—"} />
+        <HeaderStat label="Run" value={props.runName || "—"} />
+        <HeaderStat label="Scenario" value={props.scenario || "—"} />
+        <HeaderStat label="Operator" value={props.operatorClass || "—"} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeaderStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="truncate font-medium">{value}</div>
+    </div>
   );
 }
 
@@ -382,7 +528,7 @@ function QuestionView(props: {
             onClick={() => props.onSelect(opt.value as any)}
             disabled={props.fetching}
           >
-            {opt.label}
+            {props.fetching ? "Saving…" : opt.label}
           </Button>
         ))}
       </CardContent>
@@ -401,79 +547,90 @@ function VerdictView({
 }) {
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
-  const dimensionScores = run.dimension_scores;
-  const primaryRisks = run.primary_risks;
+
+  const structuralSignals = [
+    ["Failure shape", run.failure_shape],
+    ["Pressure stage", run.pressure_stage],
+    ["Progression state", run.progression_state],
+    ["Collapse pattern", run.collapse_pattern],
+  ].filter(([, v]) => v != null && v !== "");
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardDescription>Verdict</CardDescription>
-          <CardTitle className="text-2xl">{run.verdict_name ?? "—"}</CardTitle>
+          <CardTitle className="text-2xl">{(run.verdict_name as string) ?? "—"}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {run.verdict_body && <p className="text-sm leading-relaxed">{String(run.verdict_body)}</p>}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat label="Score total" value={run.score_total} />
-            <Stat label="Adjusted score" value={run.adjusted_score} />
-            <Stat label="Weakest dimension" value={run.weakest_dimension} />
-            <Stat label="Weakest score" value={run.weakest_score} />
-            <Stat label="Primary risk" value={run.primary_risk} />
-            <Stat label="Final outcome" value={run.final_outcome} />
-            <Stat label="Retest condition" value={run.retest_condition} />
-          </div>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <Stat label="Score total" value={run.score_total} />
+          <Stat label="Permission level" value={run.permission_level} />
+          <Stat label="Weakest dimension" value={run.weakest_dimension} />
+          <Stat label="Adjusted score" value={run.adjusted_score} />
         </CardContent>
       </Card>
 
-      {Array.isArray(primaryRisks) && primaryRisks.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Primary risks</CardTitle></CardHeader>
-          <CardContent>
-            <ul className="list-disc pl-5 text-sm space-y-1">
-              {primaryRisks.map((r: any, i: number) => (
-                <li key={i}>{typeof r === "string" ? r : JSON.stringify(r)}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+      <Section title="Structural diagnosis">
+        <Block label="Narrative" value={run.narrative_output} />
+        <Block label="Execution diagnosis" value={run.execution_diagnosis} />
+        <Block label="Final outcome" value={run.final_outcome} />
+      </Section>
 
-      {dimensionScores && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Dimension scores</CardTitle></CardHeader>
-          <CardContent>
-            <DimensionScores data={dimensionScores} />
-          </CardContent>
-        </Card>
-      )}
+      <Section title="Mechanism">
+        <Block label="Step 1" value={run.mechanism_step_1} />
+        <Block label="Step 2" value={run.mechanism_step_2} />
+        <Block label="Step 3" value={run.mechanism_step_3} />
+      </Section>
 
-      {run.narrative_output && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Narrative</CardTitle></CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm leading-relaxed">
-              {typeof run.narrative_output === "string"
-                ? run.narrative_output
-                : JSON.stringify(run.narrative_output, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+      <Section title="Worksheet">
+        <Block label="Worksheet" value={run.worksheet_output} />
+      </Section>
 
-      {run.worksheet_output && (
+      <Section title="Retest">
+        <Block label="Retest condition" value={run.retest_condition} />
+      </Section>
+
+      {structuralSignals.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Worksheet</CardTitle></CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm leading-relaxed">
-              {typeof run.worksheet_output === "string"
-                ? run.worksheet_output
-                : JSON.stringify(run.worksheet_output, null, 2)}
-            </pre>
+          <CardHeader><CardTitle className="text-base">Structural signals</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3 text-sm">
+            {structuralSignals.map(([k, v]) => (
+              <Stat key={k as string} label={k as string} value={v} />
+            ))}
           </CardContent>
         </Card>
       )}
 
       <Button variant="outline" onClick={onReset}>Start another run</Button>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+      <CardContent className="space-y-3">{children}</CardContent>
+    </Card>
+  );
+}
+
+function Block({ label, value }: { label: string; value: any }) {
+  if (value == null || value === "") {
+    return (
+      <div>
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className="text-sm text-muted-foreground">—</div>
+      </div>
+    );
+  }
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+        {label}
+      </div>
+      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{text}</pre>
     </div>
   );
 }
@@ -489,31 +646,6 @@ function Stat({ label, value }: { label: string; value: any }) {
     <div className="rounded-md border p-3">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="font-medium break-words">{display}</div>
-    </div>
-  );
-}
-
-function DimensionScores({ data }: { data: any }) {
-  let entries: Array<[string, any]> = [];
-  if (Array.isArray(data)) {
-    entries = data.map((d: any, i) => [
-      String(d.dimension_code ?? d.code ?? i),
-      d.score ?? d.value ?? d,
-    ]);
-  } else if (data && typeof data === "object") {
-    entries = Object.entries(data);
-  }
-  if (entries.length === 0) {
-    return <pre className="text-xs">{JSON.stringify(data, null, 2)}</pre>;
-  }
-  return (
-    <div className="grid grid-cols-2 gap-2 text-sm">
-      {entries.map(([k, v]) => (
-        <div key={k} className="flex justify-between rounded border px-3 py-2">
-          <span className="text-muted-foreground">{k}</span>
-          <span className="font-medium">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
-        </div>
-      ))}
     </div>
   );
 }
