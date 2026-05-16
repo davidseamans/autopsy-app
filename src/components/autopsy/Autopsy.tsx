@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Skull,
-  History,
   ArrowLeft,
   ChevronRight,
   Activity,
@@ -88,6 +87,31 @@ function sortedQuestions(payload: GatewayPayload | undefined): GatewayQuestion[]
   return [...qs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
 
+function humanize(value: any): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  return s
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+function hasContent(value: any): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value).length > 2;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -152,9 +176,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     mutationFn: recordAutopsyAnswer,
     onSuccess: async (_d, vars) => {
       setError(null);
+      const justAnsweredId = String(vars.question_id);
+      let nextSize = 0;
       setAnsweredIds((prev) => {
         const next = new Set(prev);
-        next.add(String(vars.question_id));
+        next.add(justAnsweredId);
+        nextSize = next.size;
         return next;
       });
       setLocalAnswers((prev) => ({
@@ -163,6 +190,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }));
       setPendingSelection(null);
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
+      // Auto-finalize when last question was just answered.
+      if (questions.length > 0 && nextSize >= questions.length && runId) {
+        finalizeMutation.mutate(runId);
+      }
     },
     onError: (e: any) =>
       setError({
@@ -246,9 +277,24 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  function handleFinalize() {
-    if (!runId) return;
-    finalizeMutation.mutate(runId);
+  function handleBack() {
+    if (view === "verdict") {
+      handleReset();
+      return;
+    }
+    if (view === "question" && currentIndex > 0) {
+      const prevQ = questions[currentIndex - 1];
+      if (!prevQ) return;
+      const prevId = String(prevQ.question_id);
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.delete(prevId);
+        return next;
+      });
+      const prevSel =
+        localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
+      setPendingSelection(prevSel as any);
+    }
   }
 
   function handleReset() {
@@ -269,22 +315,27 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
       <div className="container max-w-3xl py-10 space-y-6">
         <div className="flex items-center justify-between">
+          {(view === "verdict" || (view === "question" && currentIndex > 0)) ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </button>
+          ) : (
+            <span />
+          )}
           {view === "verdict" ? (
             <Link
               to="/autopsy/history"
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft className="h-4 w-4" /> Back
+              Run History
             </Link>
           ) : (
             <span />
           )}
-          <Link
-            to="/autopsy/history"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <History className="h-4 w-4" /> Run History
-          </Link>
         </div>
 
         {error && <ErrorPanel error={error} />}
@@ -309,7 +360,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         {view === "question" && (
           <QuestionView
             loading={payloadQuery.isLoading}
-            saving={answerMutation.isPending}
+            saving={answerMutation.isPending || finalizeMutation.isPending}
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
@@ -317,7 +368,6 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             pendingSelection={pendingSelection}
             onSelect={setPendingSelection}
             onNext={handleNext}
-            onFinalize={handleFinalize}
             finalizing={finalizeMutation.isPending}
             scoreSoFar={scoreSoFar}
             scoreMax={scoreMax}
