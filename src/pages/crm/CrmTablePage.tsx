@@ -50,7 +50,7 @@ export default function CrmTablePage({
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data ?? []) as Record<string, unknown>[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     retry: false,
   });
