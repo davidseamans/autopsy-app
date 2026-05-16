@@ -643,9 +643,6 @@ function QuestionView(props: {
         <div className="space-y-3">
           {options.map((opt) => {
             const selected = props.pendingSelection === opt.value;
-            const rawOpt = (q.options ?? [])[options.indexOf(opt)] as any;
-            const isHardFail =
-              rawOpt && typeof rawOpt === "object" && rawOpt.hard_fail === true;
             return (
               <button
                 key={opt.key}
