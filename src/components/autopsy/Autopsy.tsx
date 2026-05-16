@@ -122,11 +122,32 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
 
-  const [industry, setIndustry] = useState("Cleaning");
-  const [scenario, setScenario] = useState("startup");
-  const [operatorClass, setOperatorClass] = useState("unproven");
+  const [industry, setIndustry] = useState(
+    () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
+  );
+  const [scenario, setScenario] = useState(
+    () => localStorage.getItem("autopsy_intake_scenario") || "startup",
+  );
+  const [operatorClass, setOperatorClass] = useState(
+    () => localStorage.getItem("autopsy_intake_operator") || "unproven",
+  );
   const [runName, setRunName] = useState("");
-  const [testerEmail, setTesterEmail] = useState("");
+  const [testerEmail, setTesterEmail] = useState(
+    () => localStorage.getItem("autopsy_intake_email") || "",
+  );
+
+  useEffect(() => {
+    localStorage.setItem("autopsy_intake_industry", industry);
+  }, [industry]);
+  useEffect(() => {
+    localStorage.setItem("autopsy_intake_scenario", scenario);
+  }, [scenario]);
+  useEffect(() => {
+    localStorage.setItem("autopsy_intake_operator", operatorClass);
+  }, [operatorClass]);
+  useEffect(() => {
+    localStorage.setItem("autopsy_intake_email", testerEmail);
+  }, [testerEmail]);
 
   const payloadQuery = useQuery({
     queryKey: ["autopsy", "payload", runId],
@@ -282,6 +303,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       handleReset();
       return;
     }
+    if (view === "question" && currentIndex === 0) {
+      handleReset();
+      return;
+    }
     if (view === "question" && currentIndex > 0) {
       const prevQ = questions[currentIndex - 1];
       if (!prevQ) return;
@@ -305,7 +330,6 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setLocalAnswers({});
     setPendingSelection(null);
     setRunName("");
-    setTesterEmail("");
     navigate("/autopsy");
   }
 
@@ -315,7 +339,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
       <div className="container max-w-3xl py-10 space-y-6">
         <div className="flex items-center justify-between">
-          {(view === "verdict" || (view === "question" && currentIndex > 0)) ? (
+          {(view === "verdict" || view === "question") ? (
             <button
               type="button"
               onClick={handleBack}
@@ -566,9 +590,8 @@ function QuestionView(props: {
 
   if (props.allAnswered) {
     return (
-      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-12 text-center">
-        <div className="inline-block h-6 w-6 rounded-full border-2 border-[hsl(var(--autopsy-accent))] border-t-transparent animate-spin mb-4" />
-        <p className="text-sm text-muted-foreground">Computing verdict…</p>
+      <div className="flex items-center justify-center py-6">
+        <div className="h-5 w-5 rounded-full border-2 border-[hsl(var(--autopsy-accent))] border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -666,11 +689,9 @@ function ProgressHeader({
         <span className="font-medium">
           Question {Math.min(currentIndex + 1, total)} of {total}
         </span>
-        {scoreNumeric ? (
-          <span className="text-muted-foreground">
-            Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / {scoreMax}
-          </span>
-        ) : null}
+        <span className="text-muted-foreground">
+          Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / 30
+        </span>
       </div>
       <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
         <div
@@ -870,9 +891,6 @@ function VerdictView({
           </Button>
         )}
         <Button variant="outline" onClick={onReset}>Start New Analysis</Button>
-        <Button asChild variant="outline">
-          <Link to="/autopsy/history">View History</Link>
-        </Button>
       </div>
     </div>
   );
