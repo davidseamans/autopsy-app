@@ -17,12 +17,15 @@ import {
   GitBranch,
   FileText,
   Briefcase,
+  Users,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
+  { title: "Leads", url: "/leads", icon: Users },
+  { title: "Accounts", url: "/accounts", icon: Building2 },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
@@ -33,7 +36,7 @@ function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Operator</SidebarGroupLabel>
+          <SidebarGroupLabel>CRM</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
@@ -41,11 +44,11 @@ function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end={item.url === "/dashboard"}
                       className={({ isActive }) =>
                         cn(
                           "flex items-center gap-2",
-                          isActive && "bg-muted text-foreground font-medium",
+                          isActive &&
+                            "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
                         )
                       }
                     >
@@ -66,14 +69,14 @@ function AppSidebar() {
 export default function AppShell() {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background text-foreground">
+      <div className="min-h-screen flex w-full bg-[hsl(var(--autopsy-bg))] text-foreground">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b px-2 gap-2">
+          <header className="h-12 flex items-center border-b px-2 gap-2 bg-white">
             <SidebarTrigger />
             <span className="text-sm font-medium tracking-tight">Autopsy Console</span>
           </header>
-          <main className="flex-1 min-w-0">
+          <main className="flex-1 min-w-0 bg-white">
             <Outlet />
           </main>
         </div>
