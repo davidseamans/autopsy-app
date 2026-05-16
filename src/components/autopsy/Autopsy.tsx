@@ -857,44 +857,67 @@ function VerdictView({
             <HelpCircle className="h-3.5 w-3.5" /> What the dimensions mean
           </CollapsibleTrigger>
           <CollapsibleContent className="text-sm text-muted-foreground pt-3 space-y-2">
-            {[
-              ["Cash Reality", "Whether the business has the cash position and runway to survive the next stage of pressure."],
-              ["Economic Literacy", "Whether the operator understands unit economics, margins, and how money actually moves through the business."],
-              ["Market Reality", "Whether the market is real, reachable, and willing to pay — not assumed or projected."],
-              ["Operational Capacity", "Whether the business can actually deliver the work consistently at the required scale."],
-              ["Execution Discipline", "Whether the operator follows through on commitments, systems, and decisions under pressure."],
-              ["Psychological Resilience", "Whether the operator can sustain effort and judgment through stress, setbacks, and uncertainty."],
-            ].map(([name, desc]) => (
-              <div key={name}>
-                <span className="font-medium text-foreground">{name}.</span> {desc}
-              </div>
-            ))}
+            {(() => {
+              const dict = parseDimensionDictionary((payload as any)?.dimension_dictionary);
+              const entries = dict.length
+                ? dict
+                : [
+                    ["Cash Reality", "Whether the business has the cash position and runway to survive the next stage of pressure."],
+                    ["Economic Literacy", "Whether the operator understands unit economics, margins, and how money actually moves through the business."],
+                    ["Market Reality", "Whether the market is real, reachable, and willing to pay — not assumed or projected."],
+                    ["Operational Capacity", "Whether the business can actually deliver the work consistently at the required scale."],
+                    ["Execution Discipline", "Whether the operator follows through on commitments, systems, and decisions under pressure."],
+                    ["Psychological Resilience", "Whether the operator can sustain effort and judgment through stress, setbacks, and uncertainty."],
+                  ] as Array<[string, string]>;
+              return entries.map(([name, desc]) => (
+                <div key={name}>
+                  <span className="font-medium text-foreground">{name}.</span> {desc}
+                </div>
+              ));
+            })()}
           </CollapsibleContent>
         </Collapsible>
       </SurfaceCard>
 
       {/* Mechanical Failure Chain */}
       <SurfaceCard title="Mechanical Failure Chain">
-        <div className="space-y-3">
-          <ChainItem
+        <div className="space-y-4">
+          <ChainCard
             icon={<Activity className="h-4 w-4" />}
-            label="Weakest Dimension"
-            value={humanize(run.weakest_dimension)}
+            title="Primary Constraint"
+            rows={[
+              { label: "Weakest dimension", value: humanize(run.weakest_dimension ?? run.primary_risk) },
+              { label: "Pressure stage", value: humanize(run.pressure_stage) },
+              { label: "Summary", value: run.pressure_summary, prose: true },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<AlertTriangle className="h-4 w-4" />}
-            label="Constraint Effect"
-            value={run.pressure_summary ?? run.failure_shape}
+            title="Constraint Effect"
+            rows={[
+              { label: "Failure type", value: humanize(run.failure_type) },
+              { label: "Failure speed", value: humanize(run.failure_speed) },
+              { label: "Visibility", value: humanize(run.visibility) },
+              { label: "Narrative tone", value: humanize(run.narrative_tone) },
+              { label: "Recoverability", value: humanize(run.recoverability) },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<Target className="h-4 w-4" />}
-            label="Failure Path"
-            value={run.collapse_pattern ?? run.progression_state}
+            title="Failure Path"
+            rows={[
+              { label: "Collapse pattern", value: run.collapse_pattern, prose: true },
+              { label: "Failure shape", value: humanize(run.failure_shape) },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<Wrench className="h-4 w-4" />}
-            label="Required Breakpoint"
-            value={run.permission_bias ?? run.required_breakpoint}
+            title="Required Breakpoint"
+            rows={[
+              { label: "Progression state", value: humanize(run.progression_state) },
+              { label: "Permission bias", value: humanize(run.permission_bias) },
+              { label: "Retest condition", value: run.retest_condition, prose: true },
+            ]}
           />
         </div>
       </SurfaceCard>
@@ -944,12 +967,12 @@ function VerdictView({
       )}
       {hasContent(run.worksheet_output) && (
         <SurfaceCard title="Worksheet">
-          <Prose value={run.worksheet_output} />
+          <Prose value={humanizeDeep(run.worksheet_output)} />
         </SurfaceCard>
       )}
       {hasContent(run.retest_condition) && (
         <SurfaceCard title="Retest condition">
-          <Prose value={run.retest_condition} />
+          <Prose value={humanizeDeep(run.retest_condition)} />
         </SurfaceCard>
       )}
 
