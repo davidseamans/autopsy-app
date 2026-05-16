@@ -112,6 +112,20 @@ function hasContent(value: any): boolean {
   return true;
 }
 
+function humanizeDeep(value: any): any {
+  if (value == null) return value;
+  if (typeof value === "string") {
+    return value.replace(/\b[A-Z][A-Z0-9_]{2,}\b/g, (m) => humanize(m));
+  }
+  if (Array.isArray(value)) return value.map(humanizeDeep);
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) out[humanize(k)] = humanizeDeep(v);
+    return out;
+  }
+  return value;
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
