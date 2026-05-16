@@ -55,6 +55,18 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  /* Autopsy legacy tokens */
+  :root {
+    --autopsy-bg: 220 14% 96%;
+    --autopsy-surface: 0 0% 100%;
+    --autopsy-border: 220 13% 91%;
+    --autopsy-accent: 350 78% 55%;
+    --autopsy-accent-foreground: 0 0% 100%;
+    --autopsy-accent-soft: 350 90% 96%;
+    --autopsy-warning-soft: 48 96% 90%;
+    --autopsy-warning-border: 45 80% 60%;
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
