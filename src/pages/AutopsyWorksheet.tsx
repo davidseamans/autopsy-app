@@ -13,9 +13,20 @@ export default function AutopsyWorksheet() {
     queryFn: () => getGatewayPayload(runId),
     enabled: !!runId,
   });
+  if (!runId) {
+    return (
+      <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
+        <div className="container max-w-3xl py-10">
+          <p className="text-sm text-muted-foreground">No active run selected.</p>
+        </div>
+      </div>
+    );
+  }
   const run = q.data?.run ?? {};
   const primaryRisk = (run.primary_risk as string) ?? "—";
   const weakest = (run.weakest_dimension as string) ?? "—";
+  const worksheetOutput = run.worksheet_output as any;
+  const retestCondition = run.retest_condition as any;
 
   return (
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
@@ -43,6 +54,24 @@ export default function AutopsyWorksheet() {
             Business Structure Worksheet
           </h1>
         </div>
+
+        {q.isLoading && (
+          <p className="text-sm text-muted-foreground">Loading worksheet…</p>
+        )}
+
+        <Section title="Backend worksheet output">
+          {worksheetOutput ? (
+            <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
+              {typeof worksheetOutput === "string"
+                ? worksheetOutput
+                : JSON.stringify(worksheetOutput, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No worksheet output returned from backend.
+            </p>
+          )}
+        </Section>
 
         <Section title="Section 1 — Economic Engine">
           <WField label="Who is your customer?" />
@@ -78,6 +107,20 @@ export default function AutopsyWorksheet() {
           <WTextarea label="What must be proven?" />
           <WTextarea label="How will you test it?" />
           <WTextarea label="What result confirms success?" />
+        </Section>
+
+        <Section title="Retest condition (from backend)">
+          {retestCondition ? (
+            <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
+              {typeof retestCondition === "string"
+                ? retestCondition
+                : JSON.stringify(retestCondition, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No retest condition returned from backend.
+            </p>
+          )}
         </Section>
 
         <p className="text-xs text-muted-foreground">
