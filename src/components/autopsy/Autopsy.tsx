@@ -754,6 +754,11 @@ function VerdictView({
               Primary constraint: {humanize(run.primary_risk)}
             </Badge>
           )}
+          {run.hard_fail_question_id && (
+            <Badge variant="destructive" className="uppercase tracking-wider">
+              Hard fail triggered
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -812,9 +817,19 @@ function VerdictView({
           <CollapsibleTrigger className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
             <HelpCircle className="h-3.5 w-3.5" /> What the dimensions mean
           </CollapsibleTrigger>
-          <CollapsibleContent className="text-sm text-muted-foreground pt-2">
-            Each dimension reflects one structural pressure axis evaluated by the backend.
-            Lower scores indicate higher constraint pressure on that axis.
+          <CollapsibleContent className="text-sm text-muted-foreground pt-3 space-y-2">
+            {[
+              ["Cash Reality", "Whether the business has the cash position and runway to survive the next stage of pressure."],
+              ["Economic Literacy", "Whether the operator understands unit economics, margins, and how money actually moves through the business."],
+              ["Market Reality", "Whether the market is real, reachable, and willing to pay — not assumed or projected."],
+              ["Operational Capacity", "Whether the business can actually deliver the work consistently at the required scale."],
+              ["Execution Discipline", "Whether the operator follows through on commitments, systems, and decisions under pressure."],
+              ["Psychological Resilience", "Whether the operator can sustain effort and judgment through stress, setbacks, and uncertainty."],
+            ].map(([name, desc]) => (
+              <div key={name}>
+                <span className="font-medium text-foreground">{name}.</span> {desc}
+              </div>
+            ))}
           </CollapsibleContent>
         </Collapsible>
       </SurfaceCard>
