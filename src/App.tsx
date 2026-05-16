@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AppShell from "@/components/AppShell";
 import { Autopsy, AutopsyRunRoute } from "@/components/autopsy/Autopsy";
 import AutopsyHistory from "@/pages/AutopsyHistory";
+import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
 import Leads from "@/pages/crm/Leads";
 import Accounts from "@/pages/crm/Accounts";
 import Pipeline from "@/pages/crm/Pipeline";
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/autopsy" element={<Autopsy />} />
             <Route path="/autopsy/history" element={<AutopsyHistory />} />
             <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
+            <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/pipeline" element={<Pipeline />} />
