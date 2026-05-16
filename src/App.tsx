@@ -29,6 +29,8 @@ const App = () => (
             <Route path="/autopsy/history" element={<AutopsyHistory />} />
             <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
             <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
+            <Route path="/worksheet" element={<AutopsyWorksheet />} />
+            <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/pipeline" element={<Pipeline />} />
