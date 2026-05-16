@@ -6,6 +6,33 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
+function humanize(value: any): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  return s
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+function humanizeDeep(value: any): any {
+  if (value == null) return value;
+  if (typeof value === "string") {
+    // Replace ALL_CAPS_SNAKE tokens with humanized form.
+    return value.replace(/\b[A-Z][A-Z0-9_]{2,}\b/g, (m) => humanize(m));
+  }
+  if (Array.isArray(value)) return value.map(humanizeDeep);
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) out[humanize(k)] = humanizeDeep(v);
+    return out;
+  }
+  return value;
+}
+
 export default function AutopsyWorksheet() {
   const { runId = "" } = useParams();
   const q = useQuery({
@@ -23,8 +50,8 @@ export default function AutopsyWorksheet() {
     );
   }
   const run = q.data?.run ?? {};
-  const primaryRisk = (run.primary_risk as string) ?? "—";
-  const weakest = (run.weakest_dimension as string) ?? "—";
+  const primaryRisk = humanize(run.primary_risk) || "—";
+  const weakest = humanize(run.weakest_dimension) || "—";
   const worksheetOutput = run.worksheet_output as any;
   const retestCondition = run.retest_condition as any;
 
@@ -63,8 +90,8 @@ export default function AutopsyWorksheet() {
           {worksheetOutput ? (
             <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
               {typeof worksheetOutput === "string"
-                ? worksheetOutput
-                : JSON.stringify(worksheetOutput, null, 2)}
+                ? humanizeDeep(worksheetOutput)
+                : JSON.stringify(humanizeDeep(worksheetOutput), null, 2)}
             </pre>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -113,8 +140,8 @@ export default function AutopsyWorksheet() {
           {retestCondition ? (
             <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
               {typeof retestCondition === "string"
-                ? retestCondition
-                : JSON.stringify(retestCondition, null, 2)}
+                ? humanizeDeep(retestCondition)
+                : JSON.stringify(humanizeDeep(retestCondition), null, 2)}
             </pre>
           ) : (
             <p className="text-sm text-muted-foreground">
