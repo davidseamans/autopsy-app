@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,16 +27,20 @@ interface RunRow {
   weakest_dimension: string | null;
   scenario: string | null;
   operator_class: string | null;
+  industry: string | null;
+  primary_risk: string | null;
+  finalized_at: string | null;
 }
 
 export default function AutopsyHistory() {
+  const navigate = useNavigate();
   const q = useQuery({
     queryKey: ["autopsy", "history"],
     queryFn: async (): Promise<RunRow[]> => {
       const { data, error } = await supabase
         .from("autopsy_runs")
         .select(
-          "id, run_name, created_at, score_total, verdict_name, weakest_dimension, scenario, operator_class",
+          "id, run_name, created_at, score_total, verdict_name, weakest_dimension, scenario, operator_class, industry, primary_risk, finalized_at",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -44,17 +49,39 @@ export default function AutopsyHistory() {
     },
   });
 
+  const rows = q.data ?? [];
+  const completed = rows.filter((r) => !!r.verdict_name);
+  const inProgress = rows.filter((r) => !r.verdict_name);
+
+  function handleBack() {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/autopsy");
+  }
+
   return (
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
       <div className="container max-w-3xl py-10 space-y-6">
         <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+          <Button
+            asChild
+            className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+          >
+            <Link to="/autopsy">New Run</Link>
+          </Button>
+        </div>
+
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Run History</h1>
-          <p className="text-sm text-muted-foreground">Prior autopsy runs from the backend.</p>
-        </div>
-        <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
-          <Link to="/autopsy">New run</Link>
-        </Button>
+          <p className="text-sm text-muted-foreground">
+            Review previous Autopsy assessments.
+          </p>
         </div>
 
       {q.isLoading && <p className="text-sm text-muted-foreground">Loading runs…</p>}
@@ -65,44 +92,72 @@ export default function AutopsyHistory() {
       )}
 
       <div className="grid gap-3">
-        {(q.data ?? []).map((r) => (
-          <Link key={r.id} to={`/autopsy/run/${r.id}`}>
-            <Card className="hover:bg-muted/40 transition-colors rounded-2xl">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-base truncate">
-                    {r.run_name ?? r.id}
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(r.created_at).toLocaleString()}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="text-sm flex flex-wrap gap-2 items-center">
-                {r.verdict_name && (
-                  <Badge className="bg-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent-foreground))] hover:bg-[hsl(var(--autopsy-accent))]/90">
-                    {r.verdict_name}
-                  </Badge>
-                )}
-                {r.scenario && <Badge variant="secondary">{humanize(r.scenario)}</Badge>}
-                {r.operator_class && <Badge variant="outline">{humanize(r.operator_class)}</Badge>}
-                {r.score_total != null && (
-                  <span className="text-muted-foreground">Score {r.score_total}</span>
-                )}
-                {r.weakest_dimension && (
-                  <span className="text-muted-foreground">
-                    · Weakest: {humanize(r.weakest_dimension)}
-                  </span>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
+        {completed.map((r) => (
+          <RunCard key={r.id} r={r} />
         ))}
-        {q.data && q.data.length === 0 && (
+        {inProgress.length > 0 && (
+          <div className="pt-4 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            In progress
+          </div>
+        )}
+        {inProgress.map((r) => (
+          <RunCard key={r.id} r={r} inProgress />
+        ))}
+        {rows.length === 0 && !q.isLoading && (
           <p className="text-sm text-muted-foreground">No runs yet.</p>
         )}
       </div>
       </div>
     </div>
+  );
+}
+
+function RunCard({ r, inProgress }: { r: RunRow; inProgress?: boolean }) {
+  const date = r.finalized_at ?? r.created_at;
+  const constraint = humanize(r.primary_risk ?? r.weakest_dimension);
+  return (
+    <Link to={`/autopsy/run/${r.id}`}>
+      <Card className={`hover:bg-muted/40 transition-colors rounded-2xl ${inProgress ? "opacity-80" : ""}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {r.verdict_name ? (
+                <Badge className="bg-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent-foreground))] hover:bg-[hsl(var(--autopsy-accent))]/90 shrink-0">
+                  {r.verdict_name}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="shrink-0 uppercase tracking-wider text-[10px]">
+                  In Progress
+                </Badge>
+              )}
+              <CardTitle className="text-base truncate">{r.run_name ?? r.id}</CardTitle>
+            </div>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {new Date(date).toLocaleString()}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="text-sm space-y-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            {r.industry && <Badge variant="secondary">{r.industry}</Badge>}
+            {r.scenario && <Badge variant="secondary">{humanize(r.scenario)}</Badge>}
+            {r.operator_class && <Badge variant="outline">{humanize(r.operator_class)}</Badge>}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+            {r.score_total != null && (
+              <span>
+                Score <span className="text-foreground font-medium">{r.score_total}</span> / 30
+              </span>
+            )}
+            {constraint && (
+              <span>
+                Primary constraint:{" "}
+                <span className="text-foreground font-medium">{constraint}</span>
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
