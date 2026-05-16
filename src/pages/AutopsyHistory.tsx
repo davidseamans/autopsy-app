@@ -5,6 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
+function humanize(value: any): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  return s
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
 interface RunRow {
   id: string;
   run_name: string | null;
@@ -72,14 +84,14 @@ export default function AutopsyHistory() {
                     {r.verdict_name}
                   </Badge>
                 )}
-                {r.scenario && <Badge variant="secondary">{r.scenario}</Badge>}
-                {r.operator_class && <Badge variant="outline">{r.operator_class}</Badge>}
+                {r.scenario && <Badge variant="secondary">{humanize(r.scenario)}</Badge>}
+                {r.operator_class && <Badge variant="outline">{humanize(r.operator_class)}</Badge>}
                 {r.score_total != null && (
                   <span className="text-muted-foreground">Score {r.score_total}</span>
                 )}
                 {r.weakest_dimension && (
                   <span className="text-muted-foreground">
-                    · Weakest: {r.weakest_dimension}
+                    · Weakest: {humanize(r.weakest_dimension)}
                   </span>
                 )}
               </CardContent>
