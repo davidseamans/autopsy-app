@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Skull,
+  History,
+  ArrowLeft,
+  ChevronRight,
+  Activity,
+  AlertTriangle,
+  Target,
+  Wrench,
+  HelpCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -20,7 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { isDebug } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import {
   GatewayPayload,
   GatewayQuestion,
@@ -49,14 +59,19 @@ const INDUSTRIES = [
   "Other",
 ];
 
-const SCENARIOS = ["startup", "existing_business", "acquisition", "franchise"];
+const SCENARIOS: Array<{ value: string; label: string }> = [
+  { value: "startup", label: "Startup" },
+  { value: "existing_business", label: "Existing business" },
+  { value: "acquisition", label: "Acquisition" },
+  { value: "franchise", label: "Franchise" },
+];
 
-const OPERATOR_CLASSES = [
-  "unproven",
-  "developing",
-  "experienced",
-  "operator",
-  "advanced_operator",
+const OPERATOR_CLASSES: Array<{ value: string; label: string }> = [
+  { value: "unproven", label: "1 — Unproven (first-time operator, no prior traction)" },
+  { value: "developing", label: "2 — Developing (some experience, limited proof)" },
+  { value: "experienced", label: "3 — Experienced (has operated before)" },
+  { value: "operator", label: "4 — Operator (proven operator with delivery discipline)" },
+  { value: "advanced_operator", label: "5 — Advanced operator (system builder / scaling experience)" },
 ];
 
 function normalizeOption(opt: any, idx: number) {
@@ -80,10 +95,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
   const [error, setError] = useState<RpcError | null>(null);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
+  const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
+  const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
 
   const [industry, setIndustry] = useState("Cleaning");
   const [scenario, setScenario] = useState("startup");
-  const [operatorClass, setOperatorClass] = useState("developing");
+  const [operatorClass, setOperatorClass] = useState("unproven");
   const [runName, setRunName] = useState("");
   const [testerEmail, setTesterEmail] = useState("");
 
@@ -140,6 +157,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         next.add(String(vars.question_id));
         return next;
       });
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [String(vars.question_id)]: vars.selected_option,
+      }));
+      setPendingSelection(null);
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
     onError: (e: any) =>
@@ -168,24 +190,40 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   });
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
+  const isAnswered = (q: GatewayQuestion) =>
+    !!q.answered || q.selected_option != null || answeredIds.has(String(q.question_id));
+
   const currentIndex = useMemo(() => {
-    const idx = questions.findIndex(
-      (q) =>
-        !q.answered &&
-        q.selected_option == null &&
-        !answeredIds.has(String(q.question_id)),
-    );
-    return idx === -1 ? questions.length - 1 : idx;
+    const idx = questions.findIndex((q) => !isAnswered(q));
+    return idx === -1 ? Math.max(0, questions.length - 1) : idx;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions, answeredIds]);
   const currentQuestion = questions[currentIndex];
-  const allAnswered =
-    questions.length > 0 &&
-    questions.every(
-      (q) =>
-        q.answered ||
-        q.selected_option != null ||
-        answeredIds.has(String(q.question_id)),
-    );
+  const allAnswered = questions.length > 0 && questions.every(isAnswered);
+
+  // Score so far (display only — sums numeric option values when available)
+  const { scoreSoFar, scoreMax, scoreNumeric } = useMemo(() => {
+    let sum = 0;
+    let max = 0;
+    let anyNumeric = false;
+    for (const q of questions) {
+      const opts = (q.options ?? []).map(normalizeOption);
+      const numericOpts = opts
+        .map((o) => (typeof o.value === "number" ? o.value : Number(o.value)))
+        .filter((n) => Number.isFinite(n));
+      if (numericOpts.length) {
+        anyNumeric = true;
+        max += Math.max(...numericOpts);
+      }
+      const sel =
+        q.selected_option ?? localAnswers[String(q.question_id)] ?? null;
+      if (sel != null) {
+        const n = Number(sel);
+        if (Number.isFinite(n)) sum += n;
+      }
+    }
+    return { scoreSoFar: sum, scoreMax: max, scoreNumeric: anyNumeric };
+  }, [questions, localAnswers]);
 
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
@@ -199,12 +237,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  function handleSelectOption(value: string | number) {
-    if (!runId || !currentQuestion) return;
+  function handleNext() {
+    if (!runId || !currentQuestion || pendingSelection == null) return;
     answerMutation.mutate({
       run_id: runId,
       question_id: currentQuestion.question_id,
-      selected_option: value,
+      selected_option: pendingSelection,
     });
   }
 
@@ -218,91 +256,95 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setView("start");
     setError(null);
     setAnsweredIds(new Set());
+    setLocalAnswers({});
+    setPendingSelection(null);
     setRunName("");
     setTesterEmail("");
     navigate("/autopsy");
   }
 
   const debug = isDebug();
-  const run = payloadQuery.data?.run ?? {};
 
   return (
-    <div className="container max-w-4xl py-10 space-y-6">
-      <header className="flex items-end justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">Autopsy</h1>
-          <p className="text-sm text-muted-foreground">
-            Diagnostic intake · backend is the source of truth
-          </p>
+    <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">
+      <div className="container max-w-3xl py-10 space-y-6">
+        <div className="flex items-center justify-between">
+          {view === "verdict" ? (
+            <Link
+              to="/autopsy/history"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Link>
+          ) : (
+            <span />
+          )}
+          <Link
+            to="/autopsy/history"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <History className="h-4 w-4" /> Run History
+          </Link>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate("/autopsy/history")}>
-          History
-        </Button>
-      </header>
 
-      {error && <ErrorPanel error={error} />}
+        {error && <ErrorPanel error={error} />}
 
-      {view === "start" && (
-        <StartView
-          industry={industry}
-          scenario={scenario}
-          operatorClass={operatorClass}
-          runName={runName}
-          testerEmail={testerEmail}
-          setIndustry={setIndustry}
-          setScenario={setScenario}
-          setOperatorClass={setOperatorClass}
-          setRunName={setRunName}
-          setTesterEmail={setTesterEmail}
-          onSubmit={handleStart}
-          loading={startMutation.isPending}
-        />
-      )}
-
-      {view === "question" && (
-        <>
-          <RunHeader
-            runName={(run.run_name as string) ?? runName}
-            scenario={(run.scenario as string) ?? scenario}
-            operatorClass={(run.operator_class as string) ?? operatorClass}
-            currentDimension={currentQuestion?.dimension_code}
-            position={currentIndex + 1}
-            total={questions.length}
+        {view === "start" && (
+          <StartView
+            industry={industry}
+            scenario={scenario}
+            operatorClass={operatorClass}
+            runName={runName}
+            testerEmail={testerEmail}
+            setIndustry={setIndustry}
+            setScenario={setScenario}
+            setOperatorClass={setOperatorClass}
+            setRunName={setRunName}
+            setTesterEmail={setTesterEmail}
+            onSubmit={handleStart}
+            loading={startMutation.isPending}
           />
+        )}
+
+        {view === "question" && (
           <QuestionView
             loading={payloadQuery.isLoading}
-            fetching={payloadQuery.isFetching || answerMutation.isPending}
+            saving={answerMutation.isPending}
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
             allAnswered={allAnswered}
-            onSelect={handleSelectOption}
+            pendingSelection={pendingSelection}
+            onSelect={setPendingSelection}
+            onNext={handleNext}
             onFinalize={handleFinalize}
             finalizing={finalizeMutation.isPending}
+            scoreSoFar={scoreSoFar}
+            scoreMax={scoreMax}
+            scoreNumeric={scoreNumeric}
           />
-        </>
-      )}
+        )}
 
-      {view === "verdict" && (
-        <VerdictView
-          payload={payloadQuery.data}
-          loading={payloadQuery.isLoading}
-          onReset={handleReset}
-        />
-      )}
+        {view === "verdict" && (
+          <VerdictView
+            payload={payloadQuery.data}
+            loading={payloadQuery.isLoading}
+            runId={runId}
+            onReset={handleReset}
+          />
+        )}
 
-      {debug && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Debug</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {debug && (
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Debug
+            </div>
             <pre className="text-xs overflow-auto max-h-96 bg-muted p-3 rounded">
 {JSON.stringify({ view, runId, payload: payloadQuery.data }, null, 2)}
             </pre>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -327,6 +369,8 @@ function ErrorPanel({ error }: { error: RpcError }) {
   );
 }
 
+/* -------------------------------- StartView -------------------------------- */
+
 function StartView(props: {
   industry: string;
   scenario: string;
@@ -348,18 +392,39 @@ function StartView(props: {
     !props.runName.trim() ||
     !props.testerEmail.trim() ||
     props.loading;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>New autopsy run</CardTitle>
-        <CardDescription>
-          Establish the operating context. These values frame the diagnostic and
-          are recorded on the run.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={props.onSubmit}>
-          <Field label="Industry" hint="Sector of the operating business.">
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm">
+      <div className="p-8">
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="h-14 w-14 rounded-xl bg-[hsl(var(--autopsy-accent-soft))] flex items-center justify-center mb-4">
+            <Skull className="h-7 w-7 text-[hsl(var(--autopsy-accent))]" />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">New Autopsy Run</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Set up a new assessment to diagnose business health.
+          </p>
+        </div>
+
+        <form className="space-y-4" onSubmit={props.onSubmit}>
+          <Field label="Your email (for test tracking only)">
+            <Input
+              type="email"
+              value={props.testerEmail}
+              onChange={(e) => props.setTesterEmail(e.target.value)}
+              placeholder="operator@example.com"
+            />
+          </Field>
+
+          <Field label="Run Name">
+            <Input
+              value={props.runName}
+              onChange={(e) => props.setRunName(e.target.value)}
+              placeholder="e.g. Q2 cleaning startup review"
+            />
+          </Field>
+
+          <Field label="Industry">
             <Select value={props.industry} onValueChange={props.setIndustry}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -370,56 +435,38 @@ function StartView(props: {
             </Select>
           </Field>
 
-          <Field label="Scenario" hint="Lifecycle stage being diagnosed.">
+          <Field label="Scenario">
             <Select value={props.scenario} onValueChange={props.setScenario}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {SCENARIOS.map((s) => (
-                  <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
 
-          <Field
-            label="Operator competency"
-            hint="Self-classified operator class. Calibrates pressure interpretation."
-          >
+          <Field label="Operator profile">
             <Select value={props.operatorClass} onValueChange={props.setOperatorClass}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {OPERATOR_CLASSES.map((o) => (
-                  <SelectItem key={o} value={o}>{o.replace("_", " ")}</SelectItem>
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
 
-          <Field label="Run name" hint="Internal label for this diagnostic.">
-            <Input
-              value={props.runName}
-              onChange={(e) => props.setRunName(e.target.value)}
-              placeholder="e.g. Q2 cleaning startup review"
-            />
-          </Field>
-
-          <Field label="Tester email" hint="Operator or analyst running this autopsy.">
-            <Input
-              type="email"
-              value={props.testerEmail}
-              onChange={(e) => props.setTesterEmail(e.target.value)}
-              placeholder="operator@example.com"
-            />
-          </Field>
-
-          <div className="md:col-span-2">
-            <Button type="submit" disabled={disabled} className="w-full">
-              {props.loading ? "Creating run…" : "Begin diagnostic"}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            disabled={disabled}
+            className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+          >
+            {props.loading ? "Creating run…" : "Begin Autopsy"}
+          </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -434,55 +481,30 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label className="text-sm font-medium">{label}</Label>
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
-function RunHeader(props: {
-  runName: string;
-  scenario: string;
-  operatorClass: string;
-  currentDimension?: string;
-  position: number;
-  total: number;
-}) {
-  return (
-    <Card>
-      <CardContent className="py-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-        <HeaderStat label="Progress" value={`${props.position} / ${props.total}`} />
-        <HeaderStat label="Dimension" value={props.currentDimension ?? "—"} />
-        <HeaderStat label="Run" value={props.runName || "—"} />
-        <HeaderStat label="Scenario" value={props.scenario || "—"} />
-        <HeaderStat label="Operator" value={props.operatorClass || "—"} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function HeaderStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="truncate font-medium">{value}</div>
-    </div>
-  );
-}
+/* ------------------------------- QuestionView ------------------------------ */
 
 function QuestionView(props: {
   loading: boolean;
-  fetching: boolean;
+  saving: boolean;
   currentQuestion: GatewayQuestion | undefined;
   currentIndex: number;
   total: number;
   allAnswered: boolean;
+  pendingSelection: string | number | null;
   onSelect: (v: string | number) => void;
+  onNext: () => void;
   onFinalize: () => void;
   finalizing: boolean;
+  scoreSoFar: number;
+  scoreMax: number;
+  scoreNumeric: boolean;
 }) {
   if (props.loading) {
     return <p className="text-sm text-muted-foreground">Loading questions…</p>;
@@ -490,162 +512,409 @@ function QuestionView(props: {
   if (props.total === 0) {
     return <p className="text-sm text-muted-foreground">No questions returned.</p>;
   }
+
+  const pct = ((props.currentIndex + (props.allAnswered ? 1 : 0)) / props.total) * 100;
+
   if (props.allAnswered) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>All questions answered</CardTitle>
-          <CardDescription>Finalize to compute the verdict.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={props.onFinalize} disabled={props.finalizing} className="w-full">
-            {props.finalizing ? "Finalizing…" : "Finalize run"}
+      <div className="space-y-4">
+        <ProgressHeader
+          currentIndex={props.currentIndex}
+          total={props.total}
+          pct={100}
+          scoreSoFar={props.scoreSoFar}
+          scoreMax={props.scoreMax}
+          scoreNumeric={props.scoreNumeric}
+        />
+        <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 text-center">
+          <h2 className="text-xl font-semibold">All questions answered</h2>
+          <p className="text-sm text-muted-foreground mt-1 mb-6">
+            Finalize to compute the verdict from the backend.
+          </p>
+          <Button
+            onClick={props.onFinalize}
+            disabled={props.finalizing}
+            className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+          >
+            {props.finalizing ? "Finalizing…" : "Finalize Autopsy"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
+
   const q = props.currentQuestion;
   if (!q) return null;
   const options = (q.options ?? []).map(normalizeOption);
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary">{q.dimension_code}</Badge>
-          <span className="text-xs text-muted-foreground">
-            {props.currentIndex + 1} / {props.total}
-          </span>
+    <div className="space-y-4">
+      <ProgressHeader
+        currentIndex={props.currentIndex}
+        total={props.total}
+        pct={pct}
+        scoreSoFar={props.scoreSoFar}
+        scoreMax={props.scoreMax}
+        scoreNumeric={props.scoreNumeric}
+      />
+
+      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8">
+        <Badge variant="secondary" className="mb-4 uppercase tracking-wider text-[10px]">
+          {q.dimension_code}
+        </Badge>
+        <h2 className="text-xl font-semibold leading-snug mb-6">{q.prompt}</h2>
+
+        <div className="space-y-3">
+          {options.map((opt) => {
+            const selected = props.pendingSelection === opt.value;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => props.onSelect(opt.value as any)}
+                disabled={props.saving}
+                className={cn(
+                  "w-full text-left flex items-start gap-3 rounded-lg border p-4 transition-colors",
+                  selected
+                    ? "border-[hsl(var(--autopsy-accent))] bg-[hsl(var(--autopsy-accent-soft))]"
+                    : "border-[hsl(var(--autopsy-border))] hover:bg-muted/40",
+                  props.saving && "opacity-60 cursor-not-allowed",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0",
+                    selected
+                      ? "border-[hsl(var(--autopsy-accent))]"
+                      : "border-muted-foreground/40",
+                  )}
+                >
+                  {selected && (
+                    <span className="h-2 w-2 rounded-full bg-[hsl(var(--autopsy-accent))]" />
+                  )}
+                </span>
+                <span className="text-sm leading-relaxed">{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <CardTitle className="text-lg leading-snug pt-2">{q.prompt}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {options.map((opt) => (
-          <Button
-            key={opt.key}
-            variant={opt.selected ? "default" : "outline"}
-            className="w-full justify-start text-left h-auto py-3 whitespace-normal"
-            onClick={() => props.onSelect(opt.value as any)}
-            disabled={props.fetching}
-          >
-            {props.fetching ? "Saving…" : opt.label}
-          </Button>
-        ))}
-      </CardContent>
-    </Card>
+
+        <Button
+          onClick={props.onNext}
+          disabled={props.pendingSelection == null || props.saving}
+          className="w-full h-11 mt-6 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+        >
+          {props.saving ? "Saving…" : (
+            <span className="inline-flex items-center gap-1.5">
+              Next <ChevronRight className="h-4 w-4" />
+            </span>
+          )}
+        </Button>
+      </div>
+    </div>
   );
 }
+
+function ProgressHeader({
+  currentIndex,
+  total,
+  pct,
+  scoreSoFar,
+  scoreMax,
+  scoreNumeric,
+}: {
+  currentIndex: number;
+  total: number;
+  pct: number;
+  scoreSoFar: number;
+  scoreMax: number;
+  scoreNumeric: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm mb-2">
+        <span className="font-medium">
+          Question {Math.min(currentIndex + 1, total)} of {total}
+        </span>
+        {scoreNumeric ? (
+          <span className="text-muted-foreground">
+            Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / {scoreMax}
+          </span>
+        ) : null}
+      </div>
+      <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
+        <div
+          className="h-full bg-[hsl(var(--autopsy-accent))] transition-all"
+          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------- VerdictView ------------------------------ */
 
 function VerdictView({
   payload,
   loading,
+  runId,
   onReset,
 }: {
   payload: GatewayPayload | undefined;
   loading: boolean;
+  runId: string | null;
   onReset: () => void;
 }) {
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
-  const structuralSignals = [
-    ["Failure shape", run.failure_shape],
-    ["Pressure stage", run.pressure_stage],
-    ["Progression state", run.progression_state],
-    ["Collapse pattern", run.collapse_pattern],
-  ].filter(([, v]) => v != null && v !== "");
+  const dimensionScores = parseDimensionScores(run.dimension_scores);
+  const weakest = (run.weakest_dimension as string) ?? "";
+
+  const completedAt = run.finalized_at ?? run.completed_at ?? run.updated_at ?? run.created_at;
+  const completedLabel = completedAt
+    ? new Date(completedAt as string).toLocaleString()
+    : "—";
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardDescription>Verdict</CardDescription>
-          <CardTitle className="text-2xl">{(run.verdict_name as string) ?? "—"}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <Stat label="Score total" value={run.score_total} />
-          <Stat label="Permission level" value={run.permission_level} />
-          <Stat label="Weakest dimension" value={run.weakest_dimension} />
-          <Stat label="Adjusted score" value={run.adjusted_score} />
-        </CardContent>
-      </Card>
+      {/* Hero */}
+      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8">
+        <div className="flex items-center justify-between mb-4">
+          <Badge className="bg-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent-foreground))] hover:bg-[hsl(var(--autopsy-accent))]/90">
+            STATUS: COMPLETED
+          </Badge>
+          <span className="text-xs text-muted-foreground">{completedLabel}</span>
+        </div>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {(run.verdict_name as string) ?? "—"}
+        </h1>
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          {run.score_total != null && (
+            <div className="text-sm">
+              <span className="font-medium text-lg">{String(run.score_total)}</span>
+              <span className="text-muted-foreground"> / 30</span>
+            </div>
+          )}
+          {run.primary_risk && (
+            <Badge variant="outline" className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]">
+              Primary constraint: {String(run.primary_risk)}
+            </Badge>
+          )}
+        </div>
+      </div>
 
-      <Section title="Structural diagnosis">
-        <Block label="Narrative" value={run.narrative_output} />
-        <Block label="Execution diagnosis" value={run.execution_diagnosis} />
-        <Block label="Final outcome" value={run.final_outcome} />
-      </Section>
+      {/* Run details */}
+      <SurfaceCard title="Run details">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <KV label="Run name" value={run.run_name} />
+          <KV label="Tester email" value={run.tester_email} />
+          <KV label="Industry" value={run.industry} />
+          <KV label="Scenario" value={run.scenario} />
+          <KV label="Operator profile" value={run.operator_class} />
+        </div>
+      </SurfaceCard>
 
-      <Section title="Mechanism">
-        <Block label="Step 1" value={run.mechanism_step_1} />
-        <Block label="Step 2" value={run.mechanism_step_2} />
-        <Block label="Step 3" value={run.mechanism_step_3} />
-      </Section>
+      {/* Dimension Pressure Profile */}
+      <SurfaceCard title="Dimension Pressure Profile">
+        <p className="text-sm text-muted-foreground mb-4">
+          Scores per dimension, sorted weakest to strongest. The weakest dimension
+          drives the primary constraint.
+        </p>
+        {dimensionScores.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No dimension scores available.</p>
+        ) : (
+          <div className="space-y-2">
+            {dimensionScores.map((d) => {
+              const max = Math.max(...dimensionScores.map((x) => x.score || 0), 1);
+              const pct = ((d.score ?? 0) / max) * 100;
+              const isWeakest =
+                weakest && (d.code === weakest || d.label === weakest);
+              return (
+                <div key={d.code}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className={cn("font-medium", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
+                      {d.label || d.code}
+                      {isWeakest && " · primary constraint"}
+                    </span>
+                    <span className="text-muted-foreground">{d.score}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
+                    <div
+                      className="h-full bg-[hsl(var(--autopsy-accent))]"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-      <Section title="Worksheet">
-        <Block label="Worksheet" value={run.worksheet_output} />
-      </Section>
+        <Collapsible className="mt-4">
+          <CollapsibleTrigger className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
+            <HelpCircle className="h-3.5 w-3.5" /> What the dimensions mean
+          </CollapsibleTrigger>
+          <CollapsibleContent className="text-sm text-muted-foreground pt-2">
+            Each dimension reflects one structural pressure axis evaluated by the backend.
+            Lower scores indicate higher constraint pressure on that axis.
+          </CollapsibleContent>
+        </Collapsible>
+      </SurfaceCard>
 
-      <Section title="Retest">
-        <Block label="Retest condition" value={run.retest_condition} />
-      </Section>
+      {/* Mechanical Failure Chain */}
+      <SurfaceCard title="Mechanical Failure Chain">
+        <div className="space-y-3">
+          <ChainItem
+            icon={<Activity className="h-4 w-4" />}
+            label="Weakest Dimension"
+            value={run.weakest_dimension}
+          />
+          <ChainItem
+            icon={<AlertTriangle className="h-4 w-4" />}
+            label="Constraint Effect"
+            value={run.pressure_summary ?? run.failure_shape}
+          />
+          <ChainItem
+            icon={<Target className="h-4 w-4" />}
+            label="Failure Path"
+            value={run.collapse_pattern ?? run.progression_state}
+          />
+          <ChainItem
+            icon={<Wrench className="h-4 w-4" />}
+            label="Required Breakpoint"
+            value={run.permission_bias ?? run.required_breakpoint}
+          />
+        </div>
+      </SurfaceCard>
 
-      {structuralSignals.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Structural signals</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 text-sm">
-            {structuralSignals.map(([k, v]) => (
-              <Stat key={k as string} label={k as string} value={v} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <SurfaceCard title="What this verdict means">
+        <Prose value={run.narrative_output} />
+      </SurfaceCard>
+      <SurfaceCard title="Execution diagnosis">
+        <Prose value={run.execution_diagnosis} />
+      </SurfaceCard>
+      <SurfaceCard title="Mechanism — Step 1">
+        <Prose value={run.mechanism_step_1} />
+      </SurfaceCard>
+      <SurfaceCard title="Mechanism — Step 2">
+        <Prose value={run.mechanism_step_2} />
+      </SurfaceCard>
+      <SurfaceCard title="Mechanism — Step 3">
+        <Prose value={run.mechanism_step_3} />
+      </SurfaceCard>
+      <SurfaceCard title="Final outcome">
+        <Prose value={run.final_outcome} />
+      </SurfaceCard>
+      <SurfaceCard title="Worksheet">
+        <Prose value={run.worksheet_output} />
+      </SurfaceCard>
+      <SurfaceCard title="Retest condition">
+        <Prose value={run.retest_condition} />
+      </SurfaceCard>
 
-      <Button variant="outline" onClick={onReset}>Start another run</Button>
+      <div className="flex flex-wrap gap-2 pt-2">
+        {runId && (
+          <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
+            <Link to={`/autopsy/run/${runId}/worksheet`}>Open Worksheet</Link>
+          </Button>
+        )}
+        <Button variant="outline" onClick={onReset}>Start New Analysis</Button>
+        <Button asChild variant="outline">
+          <Link to="/autopsy/history">View History</Link>
+        </Button>
+      </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/* --------------------------------- helpers --------------------------------- */
+
+function SurfaceCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
-    </Card>
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3">
+        {title}
+      </div>
+      {children}
+    </div>
   );
 }
 
-function Block({ label, value }: { label: string; value: any }) {
-  if (value == null || value === "") {
-    return (
-      <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="text-sm text-muted-foreground">—</div>
+function KV({ label, value }: { label: string; value: any }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
       </div>
-    );
+      <div className="font-medium break-words">
+        {value == null || value === "" ? "—" : String(value)}
+      </div>
+    </div>
+  );
+}
+
+function ChainItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: any;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-[hsl(var(--autopsy-border))] p-3">
+      <span className="h-8 w-8 rounded-md bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {label}
+        </div>
+        <div className="text-sm break-words">
+          {value == null || value === "" ? "—" : typeof value === "string" ? value : JSON.stringify(value)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Prose({ value }: { value: any }) {
+  if (value == null || value === "") {
+    return <p className="text-sm text-muted-foreground">—</p>;
   }
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return (
-    <div>
-      <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-        {label}
-      </div>
-      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{text}</pre>
-    </div>
+    <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{text}</pre>
   );
 }
 
-function Stat({ label, value }: { label: string; value: any }) {
-  const display =
-    value == null || value === ""
-      ? "—"
-      : typeof value === "object"
-      ? JSON.stringify(value)
-      : String(value);
-  return (
-    <div className="rounded-md border p-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="font-medium break-words">{display}</div>
-    </div>
-  );
+interface DimensionScoreRow {
+  code: string;
+  label?: string;
+  score: number;
+}
+
+function parseDimensionScores(raw: any): DimensionScoreRow[] {
+  if (!raw) return [];
+  const rows: DimensionScoreRow[] = [];
+  if (Array.isArray(raw)) {
+    for (const r of raw) {
+      if (r == null) continue;
+      if (typeof r === "object") {
+        const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
+        const label = r.label ?? r.name ?? code;
+        const score = Number(r.score ?? r.value ?? 0);
+        if (code) rows.push({ code, label, score });
+      }
+    }
+  } else if (typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      const score = typeof v === "number" ? v : Number((v as any)?.score ?? v);
+      rows.push({ code: k, label: k, score: Number.isFinite(score) ? score : 0 });
+    }
+  }
+  rows.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+  return rows;
 }
