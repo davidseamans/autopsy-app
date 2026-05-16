@@ -643,6 +643,9 @@ function QuestionView(props: {
         <div className="space-y-3">
           {options.map((opt) => {
             const selected = props.pendingSelection === opt.value;
+            const rawOpt = (q.options ?? [])[options.indexOf(opt)] as any;
+            const isHardFail =
+              rawOpt && typeof rawOpt === "object" && rawOpt.hard_fail === true;
             return (
               <button
                 key={opt.key}
@@ -669,7 +672,12 @@ function QuestionView(props: {
                     <span className="h-2 w-2 rounded-full bg-[hsl(var(--autopsy-accent))]" />
                   )}
                 </span>
-                <span className="text-sm leading-relaxed">{opt.label}</span>
+                <span className="text-sm leading-relaxed flex-1">{opt.label}</span>
+                {isHardFail && (
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-destructive shrink-0">
+                    Critical
+                  </span>
+                )}
               </button>
             );
           })}
