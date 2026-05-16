@@ -550,7 +550,6 @@ function QuestionView(props: {
   pendingSelection: string | number | null;
   onSelect: (v: string | number) => void;
   onNext: () => void;
-  onFinalize: () => void;
   finalizing: boolean;
   scoreSoFar: number;
   scoreMax: number;
@@ -567,28 +566,9 @@ function QuestionView(props: {
 
   if (props.allAnswered) {
     return (
-      <div className="space-y-4">
-        <ProgressHeader
-          currentIndex={props.currentIndex}
-          total={props.total}
-          pct={100}
-          scoreSoFar={props.scoreSoFar}
-          scoreMax={props.scoreMax}
-          scoreNumeric={props.scoreNumeric}
-        />
-        <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 text-center">
-          <h2 className="text-xl font-semibold">All questions answered</h2>
-          <p className="text-sm text-muted-foreground mt-1 mb-6">
-            Finalize to compute the verdict from the backend.
-          </p>
-          <Button
-            onClick={props.onFinalize}
-            disabled={props.finalizing}
-            className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
-          >
-            {props.finalizing ? "Finalizing…" : "Finalize Autopsy"}
-          </Button>
-        </div>
+      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-12 text-center">
+        <div className="inline-block h-6 w-6 rounded-full border-2 border-[hsl(var(--autopsy-accent))] border-t-transparent animate-spin mb-4" />
+        <p className="text-sm text-muted-foreground">Computing verdict…</p>
       </div>
     );
   }
@@ -610,7 +590,7 @@ function QuestionView(props: {
 
       <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8">
         <Badge variant="secondary" className="mb-4 uppercase tracking-wider text-[10px]">
-          {q.dimension_code}
+          {humanize(q.dimension_code)}
         </Badge>
         <h2 className="text-xl font-semibold leading-snug mb-6">{q.prompt}</h2>
 
@@ -748,7 +728,7 @@ function VerdictView({
           )}
           {run.primary_risk && (
             <Badge variant="outline" className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]">
-              Primary constraint: {String(run.primary_risk)}
+              Primary constraint: {humanize(run.primary_risk)}
             </Badge>
           )}
         </div>
@@ -760,8 +740,8 @@ function VerdictView({
           <KV label="Run name" value={run.run_name} />
           <KV label="Tester email" value={run.tester_email} />
           <KV label="Industry" value={run.industry} />
-          <KV label="Scenario" value={run.scenario} />
-          <KV label="Operator profile" value={run.operator_class} />
+          <KV label="Scenario" value={humanize(run.scenario)} />
+          <KV label="Operator profile" value={humanize(run.operator_class)} />
         </div>
       </SurfaceCard>
 
@@ -783,9 +763,13 @@ function VerdictView({
               return (
                 <div key={d.code}>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className={cn("font-medium", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
-                      {d.label || d.code}
-                      {isWeakest && " · primary constraint"}
+                    <span className={cn("font-medium inline-flex items-center gap-2", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
+                      {humanize(d.label || d.code)}
+                      {isWeakest && (
+                        <span className="inline-flex items-center rounded-full bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-accent))]/30 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                          Primary Constraint
+                        </span>
+                      )}
                     </span>
                     <span className="text-muted-foreground">{d.score}</span>
                   </div>
@@ -818,7 +802,7 @@ function VerdictView({
           <ChainItem
             icon={<Activity className="h-4 w-4" />}
             label="Weakest Dimension"
-            value={run.weakest_dimension}
+            value={humanize(run.weakest_dimension)}
           />
           <ChainItem
             icon={<AlertTriangle className="h-4 w-4" />}
@@ -838,30 +822,46 @@ function VerdictView({
         </div>
       </SurfaceCard>
 
-      <SurfaceCard title="What this verdict means">
-        <Prose value={run.narrative_output} />
-      </SurfaceCard>
-      <SurfaceCard title="Execution diagnosis">
-        <Prose value={run.execution_diagnosis} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 1">
-        <Prose value={run.mechanism_step_1} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 2">
-        <Prose value={run.mechanism_step_2} />
-      </SurfaceCard>
-      <SurfaceCard title="Mechanism — Step 3">
-        <Prose value={run.mechanism_step_3} />
-      </SurfaceCard>
-      <SurfaceCard title="Final outcome">
-        <Prose value={run.final_outcome} />
-      </SurfaceCard>
-      <SurfaceCard title="Worksheet">
-        <Prose value={run.worksheet_output} />
-      </SurfaceCard>
-      <SurfaceCard title="Retest condition">
-        <Prose value={run.retest_condition} />
-      </SurfaceCard>
+      {hasContent(run.narrative_output) && (
+        <SurfaceCard title="What this verdict means">
+          <Prose value={run.narrative_output} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.execution_diagnosis) && (
+        <SurfaceCard title="Execution diagnosis">
+          <Prose value={run.execution_diagnosis} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_1) && (
+        <SurfaceCard title="Mechanism — Step 1">
+          <Prose value={run.mechanism_step_1} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_2) && (
+        <SurfaceCard title="Mechanism — Step 2">
+          <Prose value={run.mechanism_step_2} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.mechanism_step_3) && (
+        <SurfaceCard title="Mechanism — Step 3">
+          <Prose value={run.mechanism_step_3} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.final_outcome) && (
+        <SurfaceCard title="Final outcome">
+          <Prose value={run.final_outcome} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.worksheet_output) && (
+        <SurfaceCard title="Worksheet">
+          <Prose value={run.worksheet_output} />
+        </SurfaceCard>
+      )}
+      {hasContent(run.retest_condition) && (
+        <SurfaceCard title="Retest condition">
+          <Prose value={run.retest_condition} />
+        </SurfaceCard>
+      )}
 
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
