@@ -57,6 +57,16 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        autopsy: {
+          bg: "hsl(var(--autopsy-bg))",
+          surface: "hsl(var(--autopsy-surface))",
+          border: "hsl(var(--autopsy-border))",
+          accent: "hsl(var(--autopsy-accent))",
+          "accent-foreground": "hsl(var(--autopsy-accent-foreground))",
+          "accent-soft": "hsl(var(--autopsy-accent-soft))",
+          "warning-soft": "hsl(var(--autopsy-warning-soft))",
+          "warning-border": "hsl(var(--autopsy-warning-border))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
