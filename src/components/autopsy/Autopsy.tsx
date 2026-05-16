@@ -643,9 +643,6 @@ function QuestionView(props: {
         <div className="space-y-3">
           {options.map((opt) => {
             const selected = props.pendingSelection === opt.value;
-            const rawOpt = (q.options ?? [])[options.indexOf(opt)] as any;
-            const isHardFail =
-              rawOpt && typeof rawOpt === "object" && rawOpt.hard_fail === true;
             return (
               <button
                 key={opt.key}
@@ -673,11 +670,6 @@ function QuestionView(props: {
                   )}
                 </span>
                 <span className="text-sm leading-relaxed flex-1">{opt.label}</span>
-                {isHardFail && (
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-destructive shrink-0">
-                    Critical
-                  </span>
-                )}
               </button>
             );
           })}
@@ -758,34 +750,38 @@ function VerdictView({
     ? new Date(completedAt as string).toLocaleString()
     : "—";
 
+  const verdictBody = run.narrative_output ?? run.verdict_body;
+  const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Hero */}
-      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8">
-        <div className="flex items-center justify-between mb-4">
-          <Badge className="bg-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent-foreground))] hover:bg-[hsl(var(--autopsy-accent))]/90">
-            STATUS: COMPLETED
-          </Badge>
+      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-10">
+        <div className="flex items-center justify-between mb-8">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Status: Completed
+          </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {(run.verdict_name as string) ?? "—"}
-        </h1>
-        <div className="flex flex-wrap items-center gap-3 mt-3">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-[hsl(var(--autopsy-accent))]">
+            {(run.verdict_name as string) ?? "Verdict"}
+          </h1>
           {run.score_total != null && (
-            <div className="text-sm">
-              <span className="font-medium text-lg">{String(run.score_total)}</span>
+            <div className="text-base">
+              <span className="text-muted-foreground">Score: </span>
+              <span className="font-semibold text-foreground text-lg">
+                {String(run.score_total)}
+              </span>
               <span className="text-muted-foreground"> / 30</span>
             </div>
           )}
-          {run.primary_risk && (
-            <Badge variant="outline" className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]">
-              Primary constraint: {humanize(run.primary_risk)}
-            </Badge>
-          )}
-          {run.hard_fail_question_id && (
-            <Badge variant="destructive" className="uppercase tracking-wider">
-              Hard fail triggered
+          {primaryConstraint && (
+            <Badge
+              variant="outline"
+              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+            >
+              Primary Constraint · {primaryConstraint}
             </Badge>
           )}
         </div>
@@ -889,9 +885,22 @@ function VerdictView({
         </div>
       </SurfaceCard>
 
-      {hasContent(run.narrative_output) && (
+      {run.hard_fail_question_id && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
+          <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
+            Hard Fail Triggered
+          </div>
+          <p className="text-sm leading-relaxed">
+            A critical failure condition was triggered during the assessment.
+            The final verdict has been restricted until the failed constraint is
+            corrected and retested.
+          </p>
+        </div>
+      )}
+
+      {hasContent(verdictBody) && (
         <SurfaceCard title="What this verdict means">
-          <Prose value={run.narrative_output} />
+          <Prose value={verdictBody} />
         </SurfaceCard>
       )}
       {hasContent(run.execution_diagnosis) && (
@@ -995,9 +1004,7 @@ function ChainItem({
 }
 
 function Prose({ value }: { value: any }) {
-  if (value == null || value === "") {
-    return <p className="text-sm text-muted-foreground">—</p>;
-  }
+  if (value == null || value === "") return null;
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return (
     <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{text}</pre>
