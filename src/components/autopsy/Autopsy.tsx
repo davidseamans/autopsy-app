@@ -274,8 +274,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         if (Number.isFinite(n)) sum += n;
       }
     }
-    return { scoreSoFar: sum, scoreMax: max, scoreNumeric: anyNumeric };
-  }, [questions, localAnswers]);
+    const backendScore = Number((payloadQuery.data?.run as any)?.score_total);
+    const finalScore = Number.isFinite(backendScore) ? backendScore : sum;
+    return { scoreSoFar: finalScore, scoreMax: max, scoreNumeric: anyNumeric };
+  }, [questions, localAnswers, payloadQuery.data]);
 
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
