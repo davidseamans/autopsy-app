@@ -112,6 +112,20 @@ function hasContent(value: any): boolean {
   return true;
 }
 
+function humanizeDeep(value: any): any {
+  if (value == null) return value;
+  if (typeof value === "string") {
+    return value.replace(/\b[A-Z][A-Z0-9_]{2,}\b/g, (m) => humanize(m));
+  }
+  if (Array.isArray(value)) return value.map(humanizeDeep);
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) out[humanize(k)] = humanizeDeep(v);
+    return out;
+  }
+  return value;
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -843,44 +857,67 @@ function VerdictView({
             <HelpCircle className="h-3.5 w-3.5" /> What the dimensions mean
           </CollapsibleTrigger>
           <CollapsibleContent className="text-sm text-muted-foreground pt-3 space-y-2">
-            {[
-              ["Cash Reality", "Whether the business has the cash position and runway to survive the next stage of pressure."],
-              ["Economic Literacy", "Whether the operator understands unit economics, margins, and how money actually moves through the business."],
-              ["Market Reality", "Whether the market is real, reachable, and willing to pay — not assumed or projected."],
-              ["Operational Capacity", "Whether the business can actually deliver the work consistently at the required scale."],
-              ["Execution Discipline", "Whether the operator follows through on commitments, systems, and decisions under pressure."],
-              ["Psychological Resilience", "Whether the operator can sustain effort and judgment through stress, setbacks, and uncertainty."],
-            ].map(([name, desc]) => (
-              <div key={name}>
-                <span className="font-medium text-foreground">{name}.</span> {desc}
-              </div>
-            ))}
+            {(() => {
+              const dict = parseDimensionDictionary((payload as any)?.dimension_dictionary);
+              const entries = dict.length
+                ? dict
+                : [
+                    ["Cash Reality", "Whether the business has the cash position and runway to survive the next stage of pressure."],
+                    ["Economic Literacy", "Whether the operator understands unit economics, margins, and how money actually moves through the business."],
+                    ["Market Reality", "Whether the market is real, reachable, and willing to pay — not assumed or projected."],
+                    ["Operational Capacity", "Whether the business can actually deliver the work consistently at the required scale."],
+                    ["Execution Discipline", "Whether the operator follows through on commitments, systems, and decisions under pressure."],
+                    ["Psychological Resilience", "Whether the operator can sustain effort and judgment through stress, setbacks, and uncertainty."],
+                  ] as Array<[string, string]>;
+              return entries.map(([name, desc]) => (
+                <div key={name}>
+                  <span className="font-medium text-foreground">{name}.</span> {desc}
+                </div>
+              ));
+            })()}
           </CollapsibleContent>
         </Collapsible>
       </SurfaceCard>
 
       {/* Mechanical Failure Chain */}
       <SurfaceCard title="Mechanical Failure Chain">
-        <div className="space-y-3">
-          <ChainItem
+        <div className="space-y-4">
+          <ChainCard
             icon={<Activity className="h-4 w-4" />}
-            label="Weakest Dimension"
-            value={humanize(run.weakest_dimension)}
+            title="Primary Constraint"
+            rows={[
+              { label: "Weakest dimension", value: humanize(run.weakest_dimension ?? run.primary_risk) },
+              { label: "Pressure stage", value: humanize(run.pressure_stage) },
+              { label: "Summary", value: run.pressure_summary, prose: true },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<AlertTriangle className="h-4 w-4" />}
-            label="Constraint Effect"
-            value={run.pressure_summary ?? run.failure_shape}
+            title="Constraint Effect"
+            rows={[
+              { label: "Failure type", value: humanize(run.failure_type) },
+              { label: "Failure speed", value: humanize(run.failure_speed) },
+              { label: "Visibility", value: humanize(run.visibility) },
+              { label: "Narrative tone", value: humanize(run.narrative_tone) },
+              { label: "Recoverability", value: humanize(run.recoverability) },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<Target className="h-4 w-4" />}
-            label="Failure Path"
-            value={run.collapse_pattern ?? run.progression_state}
+            title="Failure Path"
+            rows={[
+              { label: "Collapse pattern", value: run.collapse_pattern, prose: true },
+              { label: "Failure shape", value: humanize(run.failure_shape) },
+            ]}
           />
-          <ChainItem
+          <ChainCard
             icon={<Wrench className="h-4 w-4" />}
-            label="Required Breakpoint"
-            value={run.permission_bias ?? run.required_breakpoint}
+            title="Required Breakpoint"
+            rows={[
+              { label: "Progression state", value: humanize(run.progression_state) },
+              { label: "Permission bias", value: humanize(run.permission_bias) },
+              { label: "Retest condition", value: run.retest_condition, prose: true },
+            ]}
           />
         </div>
       </SurfaceCard>
@@ -930,12 +967,12 @@ function VerdictView({
       )}
       {hasContent(run.worksheet_output) && (
         <SurfaceCard title="Worksheet">
-          <Prose value={run.worksheet_output} />
+          <Prose value={humanizeDeep(run.worksheet_output)} />
         </SurfaceCard>
       )}
       {hasContent(run.retest_condition) && (
         <SurfaceCard title="Retest condition">
-          <Prose value={run.retest_condition} />
+          <Prose value={humanizeDeep(run.retest_condition)} />
         </SurfaceCard>
       )}
 
@@ -1001,6 +1038,74 @@ function ChainItem({
       </div>
     </div>
   );
+}
+
+function ChainCard({
+  icon,
+  title,
+  rows,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  rows: Array<{ label: string; value: any; prose?: boolean }>;
+}) {
+  const visible = rows.filter((r) => hasContent(r.value));
+  if (visible.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-[hsl(var(--autopsy-border))] p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="h-7 w-7 rounded-md bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] flex items-center justify-center shrink-0">
+          {icon}
+        </span>
+        <div className="text-sm font-semibold tracking-tight">{title}</div>
+      </div>
+      <div className="space-y-3">
+        {visible.map((r) => (
+          <div key={r.label}>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {r.label}
+            </div>
+            {r.prose ? (
+              <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                {typeof r.value === "string" ? r.value : JSON.stringify(humanizeDeep(r.value), null, 2)}
+              </div>
+            ) : (
+              <div className="text-sm font-medium break-words">{String(r.value)}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function parseDimensionDictionary(raw: any): Array<[string, string]> {
+  if (!raw) return [];
+  const out: Array<[string, string]> = [];
+  const push = (name: any, desc: any) => {
+    const n = humanize(name);
+    const d = typeof desc === "string" ? desc : "";
+    if (n && d) out.push([n, d]);
+  };
+  if (Array.isArray(raw)) {
+    for (const r of raw) {
+      if (!r || typeof r !== "object") continue;
+      push(
+        r.label ?? r.name ?? r.dimension_code ?? r.code ?? r.dimension,
+        r.description ?? r.definition ?? r.explanation ?? r.summary,
+      );
+    }
+  } else if (typeof raw === "object") {
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string") push(k, v);
+      else if (v && typeof v === "object")
+        push(
+          (v as any).label ?? (v as any).name ?? k,
+          (v as any).description ?? (v as any).definition ?? (v as any).explanation,
+        );
+    }
+  }
+  return out;
 }
 
 function Prose({ value }: { value: any }) {
