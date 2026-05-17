@@ -135,6 +135,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
+  const [loadingStuck, setLoadingStuck] = useState(false);
 
   const [industry, setIndustry] = useState(
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
@@ -248,8 +249,18 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     mutationFn: finalizeAutopsyRun,
     onSuccess: async () => {
       setError(null);
-      await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
-      setView("verdict");
+      const fresh = await qc.fetchQuery({
+        queryKey: ["autopsy", "payload", runId],
+        queryFn: () => getGatewayPayload(runId as string),
+      });
+      const status = (fresh as any)?.run?.status;
+      const hasVerdict = !!(fresh as any)?.run?.verdict_name;
+      if (status === "completed" || hasVerdict) {
+        setLoadingStuck(false);
+        setView("verdict");
+      } else {
+        setView("verdict");
+      }
     },
     onError: (e: any) =>
       setError({
@@ -271,6 +282,47 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   }, [questions, answeredIds]);
   const currentQuestion = questions[currentIndex];
   const allAnswered = questions.length > 0 && questions.every(isAnswered);
+
+  // Deterministic flip to verdict whenever backend payload says completed.
+  useEffect(() => {
+    const run: any = payloadQuery.data?.run;
+    if (!run) return;
+    if ((run.status === "completed" || !!run.verdict_name) && view !== "verdict") {
+      setLoadingStuck(false);
+      setView("verdict");
+    }
+  }, [payloadQuery.data, view]);
+
+  // 8s timeout fallback when sitting on the post-Q10 spinner.
+  useEffect(() => {
+    if (view !== "question") {
+      setLoadingStuck(false);
+      return;
+    }
+    if (!allAnswered && !finalizeMutation.isPending) {
+      setLoadingStuck(false);
+      return;
+    }
+    const t = window.setTimeout(async () => {
+      if (!runId) return;
+      try {
+        const fresh = await qc.fetchQuery({
+          queryKey: ["autopsy", "payload", runId],
+          queryFn: () => getGatewayPayload(runId),
+        });
+        const run: any = (fresh as any)?.run;
+        if (run?.status === "completed" || run?.verdict_name) {
+          setView("verdict");
+          setLoadingStuck(false);
+        } else {
+          setLoadingStuck(true);
+        }
+      } catch {
+        setLoadingStuck(true);
+      }
+    }, 8000);
+    return () => window.clearTimeout(t);
+  }, [view, allAnswered, finalizeMutation.isPending, runId, qc]);
 
   // Score so far (display only — sums numeric option values when available)
   const { scoreSoFar, scoreMax, scoreNumeric } = useMemo(() => {
@@ -340,23 +392,33 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       handleReset();
       return;
     }
+    if (view === "question" && (allAnswered || finalizeMutation.isPending || loadingStuck)) {
+      handleReset();
+      return;
+    }
     if (view === "question" && currentIndex === 0) {
       handleReset();
       return;
     }
     if (view === "question" && currentIndex > 0) {
-      const prevQ = questions[currentIndex - 1];
-      if (!prevQ) return;
-      const prevId = String(prevQ.question_id);
-      setAnsweredIds((prev) => {
-        const next = new Set(prev);
-        next.delete(prevId);
-        return next;
-      });
-      const prevSel =
-        localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
-      setPendingSelection(prevSel as any);
+      goPrevious();
     }
+  }
+
+  function goPrevious() {
+    if (view !== "question" || currentIndex <= 0) return;
+    const prevQ = questions[currentIndex - 1];
+    if (!prevQ) return;
+    const prevId = String(prevQ.question_id);
+    // Local index decrement only — do NOT call backend, do NOT delete answers.
+    setAnsweredIds((prev) => {
+      const next = new Set(prev);
+      next.delete(prevId);
+      return next;
+    });
+    const prevSel =
+      localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
+    setPendingSelection(prevSel as any);
   }
 
   function handleReset() {
@@ -367,6 +429,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setLocalAnswers({});
     setPendingSelection(null);
     setRunName("");
+    setLoadingStuck(false);
     navigate("/autopsy");
   }
 
@@ -433,6 +496,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             scoreSoFar={scoreSoFar}
             scoreMax={scoreMax}
             scoreNumeric={scoreNumeric}
+            onPrevious={goPrevious}
+            canGoPrevious={currentIndex > 0}
+            loadingStuck={loadingStuck}
+            onViewHistory={() => navigate("/autopsy/history")}
+            onStartNew={handleReset}
           />
         )}
 
