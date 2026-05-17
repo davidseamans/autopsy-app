@@ -1339,25 +1339,44 @@ interface DimensionScoreRow {
   score: number;
 }
 
-function parseDimensionScores(raw: any): DimensionScoreRow[] {
-  if (!raw) return [];
+function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: boolean } {
+  if (raw == null) return { rows: [], hasData: false };
   const rows: DimensionScoreRow[] = [];
+  let anyExplicitScore = false;
+  const readScore = (v: any): number | null => {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   if (Array.isArray(raw)) {
     for (const r of raw) {
-      if (r == null) continue;
-      if (typeof r === "object") {
-        const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
-        const label = r.label ?? r.name ?? code;
-        const score = Number(r.score ?? r.value ?? 0);
-        if (code) rows.push({ code, label, score });
+      if (r == null || typeof r !== "object") continue;
+      const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
+      const label = r.label ?? r.name ?? code;
+      const rawScore = r.score ?? r.value ?? r.total;
+      const score = readScore(rawScore);
+      if (!code) continue;
+      if (score != null) {
+        anyExplicitScore = true;
+        rows.push({ code, label, score });
+      } else {
+        rows.push({ code, label, score: 0 });
       }
     }
   } else if (typeof raw === "object") {
     for (const [k, v] of Object.entries(raw)) {
-      const score = typeof v === "number" ? v : Number((v as any)?.score ?? v);
-      rows.push({ code: k, label: k, score: Number.isFinite(score) ? score : 0 });
+      let score: number | null = null;
+      if (typeof v === "number") score = v;
+      else if (v && typeof v === "object") score = readScore((v as any).score ?? (v as any).value ?? (v as any).total);
+      else score = readScore(v);
+      if (score != null) {
+        anyExplicitScore = true;
+        rows.push({ code: k, label: k, score });
+      } else {
+        rows.push({ code: k, label: k, score: 0 });
+      }
     }
   }
   rows.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
-  return rows;
+  return { rows, hasData: anyExplicitScore };
 }
