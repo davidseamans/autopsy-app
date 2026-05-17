@@ -136,6 +136,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
+  const [manualIndex, setManualIndex] = useState<number | null>(null);
 
   const [industry, setIndustry] = useState(
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
@@ -276,10 +277,13 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     !!q.answered || q.selected_option != null || answeredIds.has(String(q.question_id));
 
   const currentIndex = useMemo(() => {
+    if (manualIndex != null) {
+      return Math.max(0, Math.min(manualIndex, Math.max(0, questions.length - 1)));
+    }
     const idx = questions.findIndex((q) => !isAnswered(q));
     return idx === -1 ? Math.max(0, questions.length - 1) : idx;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questions, answeredIds]);
+  }, [questions, answeredIds, manualIndex]);
   const currentQuestion = questions[currentIndex];
   const allAnswered = questions.length > 0 && questions.every(isAnswered);
 
@@ -381,6 +385,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function handleNext() {
     if (!runId || !currentQuestion || pendingSelection == null) return;
     const isFinal = currentIndex >= questions.length - 1;
+    // Advance past the manually navigated index on Next.
+    if (manualIndex != null) {
+      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
+    }
     try {
       await answerMutation.mutateAsync({
         run_id: runId,
@@ -441,12 +449,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const prevQ = questions[currentIndex - 1];
     if (!prevQ) return;
     const prevId = String(prevQ.question_id);
-    // Local index decrement only — do NOT call backend, do NOT delete answers.
-    setAnsweredIds((prev) => {
-      const next = new Set(prev);
-      next.delete(prevId);
-      return next;
-    });
+    // Explicit local navigation — set manual index so findIndex logic
+    // doesn't immediately jump back to the next unanswered question.
+    setManualIndex(currentIndex - 1);
     const prevSel =
       localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
     setPendingSelection(prevSel as any);
@@ -461,6 +466,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
+    setManualIndex(null);
     navigate("/autopsy");
   }
 
@@ -481,7 +487,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           ) : (
             <span />
           )}
-          {view === "verdict" ? (
+          {view === "verdict" || view === "start" ? (
             <Link
               to="/autopsy/history"
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -904,8 +910,24 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
-  const dimensionScores = parseDimensionScores(run.dimension_scores);
+  const rawDimensions =
+    run.dimension_scores ??
+    run.dimension_totals ??
+    run.dimension_pressure_profile ??
+    (payload as any)?.dimension_scores ??
+    (payload as any)?.dimension_totals ??
+    null;
+  const { rows: dimensionScores, hasData: hasDimensionData } =
+    parseDimensionScores(rawDimensions);
   const weakest = (run.weakest_dimension as string) ?? "";
+
+  const verdictName = String(run.verdict_name ?? "");
+  const permissionLevel = String(run.permission_level ?? "");
+  const isViable =
+    /viable/i.test(verdictName) ||
+    permissionLevel.toLowerCase() === "granted";
+  const hasMeaningfulWeakest = !!(weakest && String(weakest).trim());
+  const suppressFailureLanguage = isViable && !hasMeaningfulWeakest;
 
   const completedAt = run.finalized_at ?? run.completed_at ?? run.updated_at ?? run.created_at;
   const completedLabel = completedAt
@@ -938,12 +960,20 @@ function VerdictView({
               <span className="text-muted-foreground"> / 30</span>
             </div>
           )}
-          {primaryConstraint && (
+          {primaryConstraint && !suppressFailureLanguage && (
             <Badge
               variant="outline"
               className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
             >
               Primary Constraint · {primaryConstraint}
+            </Badge>
+          )}
+          {suppressFailureLanguage && (
+            <Badge
+              variant="outline"
+              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+            >
+              Balanced Profile · No Dominant Constraint
             </Badge>
           )}
         </div>
@@ -963,10 +993,16 @@ function VerdictView({
       {/* Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
         <p className="text-sm text-muted-foreground mb-4">
-          Scores per dimension, sorted weakest to strongest. The weakest dimension
-          drives the primary constraint.
+          {suppressFailureLanguage
+            ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
+            : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
         </p>
-        {dimensionScores.length === 0 ? (
+        {!hasDimensionData ? (
+          <p className="text-sm text-muted-foreground">
+            Dimension profile not returned by backend for this run. Refresh or
+            re-open from History once finalized data is available.
+          </p>
+        ) : dimensionScores.length === 0 ? (
           <p className="text-sm text-muted-foreground">No dimension scores available.</p>
         ) : (
           <div className="space-y-2">
@@ -974,6 +1010,7 @@ function VerdictView({
               const max = Math.max(...dimensionScores.map((x) => x.score || 0), 1);
               const pct = ((d.score ?? 0) / max) * 100;
               const isWeakest =
+                !suppressFailureLanguage &&
                 weakest && (d.code === weakest || d.label === weakest);
               return (
                 <div key={d.code}>
@@ -1028,6 +1065,37 @@ function VerdictView({
       </SurfaceCard>
 
       {/* Mechanical Failure Chain */}
+      {suppressFailureLanguage ? (
+        <SurfaceCard title="Structural Profile">
+          <div className="space-y-3 text-sm leading-relaxed">
+            <p>
+              This run shows a balanced dimension profile with no dominant
+              failure pressure. No primary constraint is being flagged.
+            </p>
+            <p className="text-muted-foreground">
+              Focus shifts from constraint removal to progression and
+              governance: maintain the disciplines that produced this profile
+              and prepare for controlled scaling rather than emergency repair.
+            </p>
+            {hasContent(run.progression_state) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Progression state
+                </div>
+                <div className="font-medium">{humanize(run.progression_state)}</div>
+              </div>
+            )}
+            {hasContent(run.permission_level) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Permission level
+                </div>
+                <div className="font-medium">{humanize(run.permission_level)}</div>
+              </div>
+            )}
+          </div>
+        </SurfaceCard>
+      ) : (
       <SurfaceCard title="Mechanical Failure Chain">
         <div className="space-y-4">
           <ChainCard
@@ -1069,6 +1137,7 @@ function VerdictView({
           />
         </div>
       </SurfaceCard>
+      )}
 
       {run.hard_fail_question_id && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
@@ -1270,25 +1339,44 @@ interface DimensionScoreRow {
   score: number;
 }
 
-function parseDimensionScores(raw: any): DimensionScoreRow[] {
-  if (!raw) return [];
+function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: boolean } {
+  if (raw == null) return { rows: [], hasData: false };
   const rows: DimensionScoreRow[] = [];
+  let anyExplicitScore = false;
+  const readScore = (v: any): number | null => {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   if (Array.isArray(raw)) {
     for (const r of raw) {
-      if (r == null) continue;
-      if (typeof r === "object") {
-        const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
-        const label = r.label ?? r.name ?? code;
-        const score = Number(r.score ?? r.value ?? 0);
-        if (code) rows.push({ code, label, score });
+      if (r == null || typeof r !== "object") continue;
+      const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
+      const label = r.label ?? r.name ?? code;
+      const rawScore = r.score ?? r.value ?? r.total;
+      const score = readScore(rawScore);
+      if (!code) continue;
+      if (score != null) {
+        anyExplicitScore = true;
+        rows.push({ code, label, score });
+      } else {
+        rows.push({ code, label, score: 0 });
       }
     }
   } else if (typeof raw === "object") {
     for (const [k, v] of Object.entries(raw)) {
-      const score = typeof v === "number" ? v : Number((v as any)?.score ?? v);
-      rows.push({ code: k, label: k, score: Number.isFinite(score) ? score : 0 });
+      let score: number | null = null;
+      if (typeof v === "number") score = v;
+      else if (v && typeof v === "object") score = readScore((v as any).score ?? (v as any).value ?? (v as any).total);
+      else score = readScore(v);
+      if (score != null) {
+        anyExplicitScore = true;
+        rows.push({ code: k, label: k, score });
+      } else {
+        rows.push({ code: k, label: k, score: 0 });
+      }
     }
   }
   rows.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
-  return rows;
+  return { rows, hasData: anyExplicitScore };
 }
