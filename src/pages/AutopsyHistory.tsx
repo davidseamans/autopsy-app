@@ -53,8 +53,7 @@ export default function AutopsyHistory() {
   const inProgress = rows.filter((r) => !r.verdict_name);
 
   function handleBack() {
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/autopsy");
+    navigate("/autopsy");
   }
 
   return (
