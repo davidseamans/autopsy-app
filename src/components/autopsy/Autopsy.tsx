@@ -683,6 +683,11 @@ function QuestionView(props: {
   scoreSoFar: number;
   scoreMax: number;
   scoreNumeric: boolean;
+  onPrevious: () => void;
+  canGoPrevious: boolean;
+  loadingStuck: boolean;
+  onViewHistory: () => void;
+  onStartNew: () => void;
 }) {
   if (props.loading) {
     return <p className="text-sm text-muted-foreground">Loading questions…</p>;
@@ -694,6 +699,27 @@ function QuestionView(props: {
   const pct = ((props.currentIndex + (props.allAnswered ? 1 : 0)) / props.total) * 100;
 
   if (props.allAnswered) {
+    if (props.loadingStuck) {
+      return (
+        <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 space-y-4 text-center">
+          <h2 className="text-lg font-semibold">Run may have completed.</h2>
+          <p className="text-sm text-muted-foreground">
+            We didn't receive the verdict in time. Please check History to confirm.
+          </p>
+          <div className="flex justify-center gap-3 pt-2">
+            <Button variant="outline" onClick={props.onViewHistory}>
+              View History
+            </Button>
+            <Button
+              onClick={props.onStartNew}
+              className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+            >
+              Start New Run
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center py-6">
         <div className="h-5 w-5 rounded-full border-2 border-[hsl(var(--autopsy-accent))] border-t-transparent animate-spin" />
@@ -757,17 +783,32 @@ function QuestionView(props: {
           })}
         </div>
 
-        <Button
-          onClick={props.onNext}
-          disabled={props.pendingSelection == null || props.saving}
-          className="w-full h-11 mt-6 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
-        >
-          {props.saving ? "Saving…" : (
-            <span className="inline-flex items-center gap-1.5">
-              Next <ChevronRight className="h-4 w-4" />
-            </span>
+        <div className="flex gap-3 mt-6">
+          {props.canGoPrevious && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={props.onPrevious}
+              disabled={props.saving}
+              className="h-11"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> Previous
+              </span>
+            </Button>
           )}
-        </Button>
+          <Button
+            onClick={props.onNext}
+            disabled={props.pendingSelection == null || props.saving}
+            className="flex-1 h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+          >
+            {props.saving ? "Saving…" : (
+              <span className="inline-flex items-center gap-1.5">
+                Next <ChevronRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
