@@ -910,8 +910,24 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
-  const dimensionScores = parseDimensionScores(run.dimension_scores);
+  const rawDimensions =
+    run.dimension_scores ??
+    run.dimension_totals ??
+    run.dimension_pressure_profile ??
+    (payload as any)?.dimension_scores ??
+    (payload as any)?.dimension_totals ??
+    null;
+  const { rows: dimensionScores, hasData: hasDimensionData } =
+    parseDimensionScores(rawDimensions);
   const weakest = (run.weakest_dimension as string) ?? "";
+
+  const verdictName = String(run.verdict_name ?? "");
+  const permissionLevel = String(run.permission_level ?? "");
+  const isViable =
+    /viable/i.test(verdictName) ||
+    permissionLevel.toLowerCase() === "granted";
+  const hasMeaningfulWeakest = !!(weakest && String(weakest).trim());
+  const suppressFailureLanguage = isViable && !hasMeaningfulWeakest;
 
   const completedAt = run.finalized_at ?? run.completed_at ?? run.updated_at ?? run.created_at;
   const completedLabel = completedAt
@@ -944,12 +960,20 @@ function VerdictView({
               <span className="text-muted-foreground"> / 30</span>
             </div>
           )}
-          {primaryConstraint && (
+          {primaryConstraint && !suppressFailureLanguage && (
             <Badge
               variant="outline"
               className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
             >
               Primary Constraint · {primaryConstraint}
+            </Badge>
+          )}
+          {suppressFailureLanguage && (
+            <Badge
+              variant="outline"
+              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+            >
+              Balanced Profile · No Dominant Constraint
             </Badge>
           )}
         </div>
@@ -969,10 +993,16 @@ function VerdictView({
       {/* Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
         <p className="text-sm text-muted-foreground mb-4">
-          Scores per dimension, sorted weakest to strongest. The weakest dimension
-          drives the primary constraint.
+          {suppressFailureLanguage
+            ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
+            : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
         </p>
-        {dimensionScores.length === 0 ? (
+        {!hasDimensionData ? (
+          <p className="text-sm text-muted-foreground">
+            Dimension profile not returned by backend for this run. Refresh or
+            re-open from History once finalized data is available.
+          </p>
+        ) : dimensionScores.length === 0 ? (
           <p className="text-sm text-muted-foreground">No dimension scores available.</p>
         ) : (
           <div className="space-y-2">
@@ -980,6 +1010,7 @@ function VerdictView({
               const max = Math.max(...dimensionScores.map((x) => x.score || 0), 1);
               const pct = ((d.score ?? 0) / max) * 100;
               const isWeakest =
+                !suppressFailureLanguage &&
                 weakest && (d.code === weakest || d.label === weakest);
               return (
                 <div key={d.code}>
@@ -1034,6 +1065,37 @@ function VerdictView({
       </SurfaceCard>
 
       {/* Mechanical Failure Chain */}
+      {suppressFailureLanguage ? (
+        <SurfaceCard title="Structural Profile">
+          <div className="space-y-3 text-sm leading-relaxed">
+            <p>
+              This run shows a balanced dimension profile with no dominant
+              failure pressure. No primary constraint is being flagged.
+            </p>
+            <p className="text-muted-foreground">
+              Focus shifts from constraint removal to progression and
+              governance: maintain the disciplines that produced this profile
+              and prepare for controlled scaling rather than emergency repair.
+            </p>
+            {hasContent(run.progression_state) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Progression state
+                </div>
+                <div className="font-medium">{humanize(run.progression_state)}</div>
+              </div>
+            )}
+            {hasContent(run.permission_level) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Permission level
+                </div>
+                <div className="font-medium">{humanize(run.permission_level)}</div>
+              </div>
+            )}
+          </div>
+        </SurfaceCard>
+      ) : (
       <SurfaceCard title="Mechanical Failure Chain">
         <div className="space-y-4">
           <ChainCard
@@ -1075,6 +1137,7 @@ function VerdictView({
           />
         </div>
       </SurfaceCard>
+      )}
 
       {run.hard_fail_question_id && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
