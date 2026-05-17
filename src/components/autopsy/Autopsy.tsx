@@ -487,7 +487,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           ) : (
             <span />
           )}
-          {view === "verdict" ? (
+          {view === "verdict" || view === "start" ? (
             <Link
               to="/autopsy/history"
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
