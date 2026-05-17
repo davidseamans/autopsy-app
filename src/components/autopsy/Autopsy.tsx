@@ -521,6 +521,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             loadingStuck={loadingStuck}
             onViewHistory={() => navigate("/autopsy/history")}
             onStartNew={handleReset}
+            onRetryFinalize={retryFinalize}
+            retryPending={finalizeMutation.isPending}
           />
         )}
 
@@ -708,6 +710,8 @@ function QuestionView(props: {
   loadingStuck: boolean;
   onViewHistory: () => void;
   onStartNew: () => void;
+  onRetryFinalize: () => void;
+  retryPending: boolean;
 }) {
   if (props.loading) {
     return <p className="text-sm text-muted-foreground">Loading questions…</p>;
@@ -726,14 +730,18 @@ function QuestionView(props: {
           <p className="text-sm text-muted-foreground">
             We didn't receive the verdict in time. Please check History to confirm.
           </p>
-          <div className="flex justify-center gap-3 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <Button
+              onClick={props.onRetryFinalize}
+              disabled={props.retryPending}
+              className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+            >
+              {props.retryPending ? "Retrying…" : "Retry Finalize"}
+            </Button>
             <Button variant="outline" onClick={props.onViewHistory}>
               View History
             </Button>
-            <Button
-              onClick={props.onStartNew}
-              className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
-            >
+            <Button variant="outline" onClick={props.onStartNew}>
               Start New Run
             </Button>
           </div>
