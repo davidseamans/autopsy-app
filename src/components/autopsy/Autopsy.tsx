@@ -136,6 +136,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
+  const [manualIndex, setManualIndex] = useState<number | null>(null);
 
   const [industry, setIndustry] = useState(
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
@@ -276,10 +277,13 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     !!q.answered || q.selected_option != null || answeredIds.has(String(q.question_id));
 
   const currentIndex = useMemo(() => {
+    if (manualIndex != null) {
+      return Math.max(0, Math.min(manualIndex, Math.max(0, questions.length - 1)));
+    }
     const idx = questions.findIndex((q) => !isAnswered(q));
     return idx === -1 ? Math.max(0, questions.length - 1) : idx;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questions, answeredIds]);
+  }, [questions, answeredIds, manualIndex]);
   const currentQuestion = questions[currentIndex];
   const allAnswered = questions.length > 0 && questions.every(isAnswered);
 
@@ -381,6 +385,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function handleNext() {
     if (!runId || !currentQuestion || pendingSelection == null) return;
     const isFinal = currentIndex >= questions.length - 1;
+    // Advance past the manually navigated index on Next.
+    if (manualIndex != null) {
+      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
+    }
     try {
       await answerMutation.mutateAsync({
         run_id: runId,
@@ -441,12 +449,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const prevQ = questions[currentIndex - 1];
     if (!prevQ) return;
     const prevId = String(prevQ.question_id);
-    // Local index decrement only — do NOT call backend, do NOT delete answers.
-    setAnsweredIds((prev) => {
-      const next = new Set(prev);
-      next.delete(prevId);
-      return next;
-    });
+    // Explicit local navigation — set manual index so findIndex logic
+    // doesn't immediately jump back to the next unanswered question.
+    setManualIndex(currentIndex - 1);
     const prevSel =
       localAnswers[prevId] ?? (prevQ.selected_option as any) ?? null;
     setPendingSelection(prevSel as any);
@@ -461,6 +466,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
+    setManualIndex(null);
     navigate("/autopsy");
   }
 
