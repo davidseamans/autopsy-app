@@ -29,7 +29,6 @@ interface RunRow {
   operator_class: string | null;
   industry: string | null;
   primary_risk: string | null;
-  finalized_at: string | null;
 }
 
 export default function AutopsyHistory() {
@@ -40,7 +39,7 @@ export default function AutopsyHistory() {
       const { data, error } = await supabase
         .from("autopsy_runs")
         .select(
-          "id, run_name, created_at, score_total, verdict_name, weakest_dimension, scenario, operator_class, industry, primary_risk, finalized_at",
+          "id, run_name, created_at, score_total, verdict_name, weakest_dimension, scenario, operator_class, industry, primary_risk",
         )
         .order("created_at", { ascending: false })
         .limit(100);
@@ -113,7 +112,7 @@ export default function AutopsyHistory() {
 }
 
 function RunCard({ r, inProgress }: { r: RunRow; inProgress?: boolean }) {
-  const date = r.finalized_at ?? r.created_at;
+  const date = r.created_at;
   const constraint = humanize(r.primary_risk ?? r.weakest_dimension);
   return (
     <Link to={`/autopsy/run/${r.id}`}>
