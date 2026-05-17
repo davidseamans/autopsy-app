@@ -378,29 +378,49 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (!runId || !currentQuestion || pendingSelection == null) return;
-    answerMutation.mutate({
-      run_id: runId,
-      question_id: currentQuestion.question_id,
-      selected_option: pendingSelection,
-    });
+    const isFinal = currentIndex >= questions.length - 1;
+    try {
+      await answerMutation.mutateAsync({
+        run_id: runId,
+        question_id: currentQuestion.question_id,
+        selected_option: pendingSelection,
+      });
+    } catch {
+      return; // onError captured it
+    }
+    if (isFinal) {
+      await finalizeAndLoad();
+    }
+  }
+
+  async function finalizeAndLoad() {
+    if (!runId) return;
+    setError(null);
+    try {
+      await finalizeMutation.mutateAsync(runId);
+    } catch {
+      // onError captured exact finalize error already
+    }
+  }
+
+  async function retryFinalize() {
+    setLoadingStuck(false);
+    await finalizeAndLoad();
   }
 
   function handleBack() {
+    setLoadingStuck(false);
     if (view === "verdict") {
       handleReset();
       return;
     }
-    if (view === "question" && (allAnswered || finalizeMutation.isPending || loadingStuck)) {
-      handleReset();
-      return;
-    }
-    if (view === "question" && currentIndex === 0) {
-      handleReset();
-      return;
-    }
-    if (view === "question" && currentIndex > 0) {
+    if (view === "question") {
+      if (allAnswered || finalizeMutation.isPending || loadingStuck || currentIndex === 0) {
+        handleReset();
+        return;
+      }
       goPrevious();
     }
   }
@@ -501,6 +521,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             loadingStuck={loadingStuck}
             onViewHistory={() => navigate("/autopsy/history")}
             onStartNew={handleReset}
+            onRetryFinalize={retryFinalize}
+            retryPending={finalizeMutation.isPending}
           />
         )}
 
@@ -688,6 +710,8 @@ function QuestionView(props: {
   loadingStuck: boolean;
   onViewHistory: () => void;
   onStartNew: () => void;
+  onRetryFinalize: () => void;
+  retryPending: boolean;
 }) {
   if (props.loading) {
     return <p className="text-sm text-muted-foreground">Loading questions…</p>;
@@ -706,14 +730,18 @@ function QuestionView(props: {
           <p className="text-sm text-muted-foreground">
             We didn't receive the verdict in time. Please check History to confirm.
           </p>
-          <div className="flex justify-center gap-3 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <Button
+              onClick={props.onRetryFinalize}
+              disabled={props.retryPending}
+              className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
+            >
+              {props.retryPending ? "Retrying…" : "Retry Finalize"}
+            </Button>
             <Button variant="outline" onClick={props.onViewHistory}>
               View History
             </Button>
-            <Button
-              onClick={props.onStartNew}
-              className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
-            >
+            <Button variant="outline" onClick={props.onStartNew}>
               Start New Run
             </Button>
           </div>
