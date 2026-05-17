@@ -411,17 +411,28 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   }
 
   function handleBack() {
-    setLoadingStuck(false);
+    // Verdict: always go to History.
     if (view === "verdict") {
-      handleReset();
+      navigate("/autopsy/history");
       return;
     }
+    // Fallback / loading state on question screen: clear and go to History.
+    if (view === "question" && (loadingStuck || allAnswered || finalizeMutation.isPending)) {
+      setLoadingStuck(false);
+      setError(null);
+      navigate("/autopsy/history");
+      return;
+    }
+    // Question screen top Back: return to Start, confirm if answers exist.
     if (view === "question") {
-      if (allAnswered || finalizeMutation.isPending || loadingStuck || currentIndex === 0) {
-        handleReset();
-        return;
+      const hasAnswers = answeredIds.size > 0 || Object.keys(localAnswers).length > 0;
+      if (hasAnswers) {
+        const ok = window.confirm(
+          "Leave this autopsy and return to the start screen? Your in-progress answers will be discarded from this session.",
+        );
+        if (!ok) return;
       }
-      goPrevious();
+      handleReset();
     }
   }
 
