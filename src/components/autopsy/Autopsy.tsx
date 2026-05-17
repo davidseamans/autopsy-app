@@ -378,29 +378,49 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (!runId || !currentQuestion || pendingSelection == null) return;
-    answerMutation.mutate({
-      run_id: runId,
-      question_id: currentQuestion.question_id,
-      selected_option: pendingSelection,
-    });
+    const isFinal = currentIndex >= questions.length - 1;
+    try {
+      await answerMutation.mutateAsync({
+        run_id: runId,
+        question_id: currentQuestion.question_id,
+        selected_option: pendingSelection,
+      });
+    } catch {
+      return; // onError captured it
+    }
+    if (isFinal) {
+      await finalizeAndLoad();
+    }
+  }
+
+  async function finalizeAndLoad() {
+    if (!runId) return;
+    setError(null);
+    try {
+      await finalizeMutation.mutateAsync(runId);
+    } catch {
+      // onError captured exact finalize error already
+    }
+  }
+
+  async function retryFinalize() {
+    setLoadingStuck(false);
+    await finalizeAndLoad();
   }
 
   function handleBack() {
+    setLoadingStuck(false);
     if (view === "verdict") {
       handleReset();
       return;
     }
-    if (view === "question" && (allAnswered || finalizeMutation.isPending || loadingStuck)) {
-      handleReset();
-      return;
-    }
-    if (view === "question" && currentIndex === 0) {
-      handleReset();
-      return;
-    }
-    if (view === "question" && currentIndex > 0) {
+    if (view === "question") {
+      if (allAnswered || finalizeMutation.isPending || loadingStuck || currentIndex === 0) {
+        handleReset();
+        return;
+      }
       goPrevious();
     }
   }
