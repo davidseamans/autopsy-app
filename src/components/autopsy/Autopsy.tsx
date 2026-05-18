@@ -911,19 +911,25 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
-  const rawDimensions =
-    run.dimension_scores ??
-    run.dimension_totals ??
-    run.dimension_pressure_profile ??
-    run.run_dimension_scores ??
-    run.primary_risks ??
-    (payload as any)?.dimension_scores ??
-    (payload as any)?.dimension_totals ??
-    (payload as any)?.run_dimension_scores ??
-    (payload as any)?.primary_risks ??
-    null;
-  const { rows: dimensionScores, hasData: hasDimensionData } =
-    parseDimensionScores(rawDimensions);
+  // Canonical normalized dimension scores from any backend shape.
+  const normalizedDims = normalizeDimensionScores(run);
+  // Fallback: also check payload-level fields if run is empty.
+  const fallbackDims =
+    normalizedDims.length === 0
+      ? normalizeDimensionScores({
+          dimension_scores:
+            (payload as any)?.dimension_scores ??
+            (payload as any)?.dimension_totals ??
+            (payload as any)?.run_dimension_scores,
+          primary_risks: (payload as any)?.primary_risks,
+        })
+      : normalizedDims;
+  const dimensionScores: DimensionScoreRow[] = fallbackDims.map((d) => ({
+    code: d.dimension_code,
+    label: d.dimension_code,
+    score: d.score_total,
+  }));
+  const hasDimensionData = dimensionScores.length > 0;
   const weakest = (run.weakest_dimension as string) ?? "";
 
   const verdictName = String(run.verdict_name ?? "");
