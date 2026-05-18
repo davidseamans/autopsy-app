@@ -1212,7 +1212,8 @@ function VerdictView({
                   <div className="text-sm leading-relaxed text-foreground">
                     {hasContent(cascadeSeverity.operating_instruction)
                       ? cascadeSeverity.operating_instruction
-                      : translatePermissionState(cascadeSeverity.permission_state)}
+                      : (supportingBlocks?.required_actions?.[0]?.body
+                          || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
                   </div>
                 </div>
               )}
