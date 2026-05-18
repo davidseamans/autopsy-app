@@ -1946,8 +1946,13 @@ function PressureTopology({
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
-          const label = t.data.plain_label ?? t.data.dimension_label ?? humanize(t.data.dimension_code);
           const dim = t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const plain = t.data.plain_label;
+          // Avoid repeating the rank as both header and value (e.g. "Main Blocker / Main Blocker")
+          const showPlain =
+            hasContent(plain) &&
+            String(plain).trim().toLowerCase() !== String(t.rank).trim().toLowerCase() &&
+            String(plain).trim().toLowerCase() !== String(dim).trim().toLowerCase();
           const score = t.data.score_total;
           const isMain = t.emphasis === "primary";
           const isMid = t.emphasis === "secondary";
@@ -1986,10 +1991,10 @@ function PressureTopology({
                   isMain ? "text-xl" : isMid ? "text-base" : "text-sm",
                 )}
               >
-                {label || "—"}
+                {dim || "—"}
               </div>
-              {dim && dim !== label && (
-                <div className="text-xs text-muted-foreground mb-3">{dim}</div>
+              {showPlain && (
+                <div className="text-xs text-muted-foreground mb-3">{plain}</div>
               )}
               {score != null && (
                 <div
