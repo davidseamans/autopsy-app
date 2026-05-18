@@ -915,8 +915,12 @@ function VerdictView({
     run.dimension_scores ??
     run.dimension_totals ??
     run.dimension_pressure_profile ??
+    run.run_dimension_scores ??
+    run.primary_risks ??
     (payload as any)?.dimension_scores ??
     (payload as any)?.dimension_totals ??
+    (payload as any)?.run_dimension_scores ??
+    (payload as any)?.primary_risks ??
     null;
   const { rows: dimensionScores, hasData: hasDimensionData } =
     parseDimensionScores(rawDimensions);
@@ -1509,7 +1513,9 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
       if (r == null || typeof r !== "object") continue;
       const code = String(r.code ?? r.dimension_code ?? r.dimension ?? r.label ?? "");
       const label = r.label ?? r.name ?? code;
-      const rawScore = r.score ?? r.value ?? r.total;
+      const rawScore =
+        r.score ?? r.value ?? r.total ?? r.raw_score ?? r.total_score ??
+        r.points ?? r.sum ?? r.dimension_score;
       const score = readScore(rawScore);
       if (!code) continue;
       if (score != null) {
@@ -1523,7 +1529,12 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
     for (const [k, v] of Object.entries(raw)) {
       let score: number | null = null;
       if (typeof v === "number") score = v;
-      else if (v && typeof v === "object") score = readScore((v as any).score ?? (v as any).value ?? (v as any).total);
+      else if (v && typeof v === "object")
+        score = readScore(
+          (v as any).score ?? (v as any).value ?? (v as any).total ??
+          (v as any).raw_score ?? (v as any).total_score ??
+          (v as any).points ?? (v as any).sum ?? (v as any).dimension_score,
+        );
       else score = readScore(v);
       if (score != null) {
         anyExplicitScore = true;
