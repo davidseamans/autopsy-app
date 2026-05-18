@@ -938,18 +938,38 @@ function VerdictView({
   const verdictBody = run.narrative_output ?? run.verdict_body;
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
+  // Hard-fail / blocked classification (display only — backend values untouched)
+  const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
+  const isBlocked =
+    opStateKey === "blocked" ||
+    !!run.hard_fail_question_id ||
+    /not[\s_-]?viable/i.test(verdictName) ||
+    String(run.permission_level ?? "").toLowerCase() === "locked";
+  const effectiveOpState = isBlocked && !opStateKey ? "blocked" : opStateKey;
+  const opStyle = operationalStyle(effectiveOpState);
+
   return (
     <div className="space-y-6">
-      {/* Hero */}
-      <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-10">
+      {/* 1. Verdict Header */}
+      <div
+        className={cn(
+          "rounded-2xl border-2 shadow-sm p-10",
+          isBlocked ? opStyle.container : "bg-[hsl(var(--autopsy-surface))] border-[hsl(var(--autopsy-border))]",
+        )}
+      >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Status: Completed
+            {isBlocked ? "Status: Completed · Blocking Failure" : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
         </div>
         <div className="flex flex-col items-center text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-[hsl(var(--autopsy-accent))]">
+          <h1
+            className={cn(
+              "text-4xl md:text-5xl font-semibold tracking-tight",
+              isBlocked ? opStyle.text : "text-[hsl(var(--autopsy-accent))]",
+            )}
+          >
             {(run.verdict_name as string) ?? "Verdict"}
           </h1>
           {run.score_total != null && (
@@ -964,7 +984,12 @@ function VerdictView({
           {primaryConstraint && !suppressFailureLanguage && (
             <Badge
               variant="outline"
-              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+              className={cn(
+                "uppercase tracking-wider text-[10px] px-3 py-1",
+                isBlocked
+                  ? cn("border-red-600 text-red-700 bg-red-500/10")
+                  : "border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]",
+              )}
             >
               Primary Constraint · {primaryConstraint}
             </Badge>
@@ -980,72 +1005,27 @@ function VerdictView({
         </div>
       </div>
 
-      {/* SECTION 1 — Operational State Header */}
-      <OperationalStatePanel run={run} />
+      {/* 2. Run Details — visually understated */}
+      <RunDetailsStrip run={run} />
 
-      {/* SECTION 2 — Pressure & Collapse */}
-      <PressureCollapsePanel run={run} />
+      {/* 3. Operational Governance Layer */}
+      <OperationalStatePanel run={run} isBlocked={isBlocked} />
+      <ProgressionFlow current={run.operational_state} isBlocked={isBlocked} />
 
-      {/* SECTION 3 — Recovery & Retest */}
-      <RecoveryRetestPanel run={run} />
-
-      {/* Run details */}
-      <SurfaceCard title="Run details">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <KV label="Run name" value={run.run_name} />
-          <KV label="Tester email" value={run.tester_email} />
-          <KV label="Industry" value={run.industry} />
-          <KV label="Scenario" value={humanize(run.scenario)} />
-          <KV label="Operator profile" value={humanize(run.operator_class)} />
-        </div>
-      </SurfaceCard>
-
-      {/* Dimension Pressure Profile */}
+      {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
         <p className="text-sm text-muted-foreground mb-4">
           {suppressFailureLanguage
             ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
             : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
         </p>
-        {!hasDimensionData ? (
-          <p className="text-sm text-muted-foreground">
-            Dimension profile not returned by backend for this run. Refresh or
-            re-open from History once finalized data is available.
-          </p>
-        ) : dimensionScores.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No dimension scores available.</p>
-        ) : (
-          <div className="space-y-2">
-            {dimensionScores.map((d) => {
-              const max = Math.max(...dimensionScores.map((x) => x.score || 0), 1);
-              const pct = ((d.score ?? 0) / max) * 100;
-              const isWeakest =
-                !suppressFailureLanguage &&
-                weakest && (d.code === weakest || d.label === weakest);
-              return (
-                <div key={d.code}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className={cn("font-medium inline-flex items-center gap-2", isWeakest && "text-[hsl(var(--autopsy-accent))]")}>
-                      {humanize(d.label || d.code)}
-                      {isWeakest && (
-                        <span className="inline-flex items-center rounded-full bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-accent))]/30 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-                          Primary Constraint
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">{d.score}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
-                    <div
-                      className="h-full bg-[hsl(var(--autopsy-accent))]"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <DimensionPressureGraph
+          rows={dimensionScores}
+          hasData={hasDimensionData}
+          weakest={weakest}
+          suppress={suppressFailureLanguage}
+          opState={effectiveOpState}
+        />
 
         <Collapsible className="mt-4">
           <CollapsibleTrigger className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
@@ -1074,7 +1054,10 @@ function VerdictView({
         </Collapsible>
       </SurfaceCard>
 
-      {/* Mechanical Failure Chain */}
+      {/* 5. Structural Diagnostics */}
+      <PressureCollapsePanel run={run} isBlocked={isBlocked} />
+
+      {/* 6. Mechanical Failure Chain — visual chain */}
       {suppressFailureLanguage ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
@@ -1106,62 +1089,27 @@ function VerdictView({
           </div>
         </SurfaceCard>
       ) : (
-      <SurfaceCard title="Mechanical Failure Chain">
-        <div className="space-y-4">
-          <ChainCard
-            icon={<Activity className="h-4 w-4" />}
-            title="Primary Constraint"
-            rows={[
-              { label: "Weakest dimension", value: humanize(run.weakest_dimension ?? run.primary_risk) },
-              { label: "Pressure stage", value: humanize(run.pressure_stage) },
-              { label: "Summary", value: run.pressure_summary, prose: true },
-            ]}
-          />
-          <ChainCard
-            icon={<AlertTriangle className="h-4 w-4" />}
-            title="Constraint Effect"
-            rows={[
-              { label: "Failure type", value: humanize(run.failure_type) },
-              { label: "Failure speed", value: humanize(run.failure_speed) },
-              { label: "Visibility", value: humanize(run.visibility) },
-              { label: "Narrative tone", value: humanize(run.narrative_tone) },
-              { label: "Recoverability", value: humanize(run.recoverability) },
-            ]}
-          />
-          <ChainCard
-            icon={<Target className="h-4 w-4" />}
-            title="Failure Path"
-            rows={[
-              { label: "Collapse pattern", value: run.collapse_pattern, prose: true },
-              { label: "Failure shape", value: humanize(run.failure_shape) },
-            ]}
-          />
-          <ChainCard
-            icon={<Wrench className="h-4 w-4" />}
-            title="Required Breakpoint"
-            rows={[
-              { label: "Progression state", value: humanize(run.progression_state) },
-              { label: "Permission bias", value: humanize(run.permission_bias) },
-              { label: "Retest condition", value: run.retest_condition, prose: true },
-            ]}
-          />
-        </div>
-      </SurfaceCard>
+        <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
+
+      {/* 7. Recovery & Retest Gate */}
+      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
 
       {run.hard_fail_question_id && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
-            Hard Fail Triggered
+            Blocking Failure Triggered
           </div>
           <p className="text-sm leading-relaxed">
-            A critical failure condition was triggered during the assessment.
-            The final verdict has been restricted until the failed constraint is
-            corrected and retested.
+            A hard-fail condition was triggered during the assessment.
+            Progression is blocked. The business is not viable in its current
+            form. The hard-fail condition must be corrected and retested before
+            progression can be reconsidered.
           </p>
         </div>
       )}
 
+      {/* 8–11. Narrative */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="What this verdict means">
           <Prose value={verdictBody} />
@@ -1192,6 +1140,7 @@ function VerdictView({
           <Prose value={run.final_outcome} />
         </SurfaceCard>
       )}
+      {/* 12. Worksheet link */}
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
           <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
