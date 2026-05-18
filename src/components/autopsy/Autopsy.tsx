@@ -127,6 +127,33 @@ function humanizeDeep(value: any): any {
   return value;
 }
 
+function translatePermissionState(value: any): string {
+  if (!hasContent(value)) return "—";
+  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const map: Record<string, string> = {
+    PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
+    STOP: "Stop. Do not proceed.",
+    CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
+    PROCEED: "Proceed with disciplined execution.",
+  };
+  return map[key] ?? humanize(value);
+}
+
+function translateSeverityLabel(value: any): string {
+  if (!hasContent(value)) return "—";
+  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const map: Record<string, string> = {
+    BLOCKING: "Blocking",
+    CRITICAL: "Critical",
+    HIGH: "High",
+    ELEVATED: "Elevated",
+    MODERATE: "Moderate",
+    LOW: "Low",
+    STABLE: "Stable",
+  };
+  return map[key] ?? humanize(value);
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
