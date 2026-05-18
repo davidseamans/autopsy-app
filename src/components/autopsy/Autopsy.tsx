@@ -946,6 +946,7 @@ function VerdictView({
     : "—";
 
   const verdictBody = run.narrative_output ?? run.verdict_body;
+  const hasNarrativeOutput = hasContent(run.narrative_output);
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
   // Hard-fail / blocked classification (display only — backend values untouched)
@@ -1067,7 +1068,33 @@ function VerdictView({
       {/* 5. Structural Diagnostics */}
       <PressureCollapsePanel run={run} isBlocked={isBlocked} />
 
-      {/* 6. Mechanical Failure Chain — visual chain */}
+      {/* 6. Recovery & Retest Gate */}
+      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
+
+      {run.hard_fail_question_id && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
+          <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
+            Blocking Failure Triggered
+          </div>
+          <p className="text-sm leading-relaxed">
+            A hard-fail condition was triggered during the assessment.
+            Progression is blocked. The business is not viable in its current
+            form. The hard-fail condition must be corrected and retested before
+            progression can be reconsidered.
+          </p>
+        </div>
+      )}
+
+      {/* 7. Narrative Judgement — lead voice */}
+      {hasContent(verdictBody) && (
+        <SurfaceCard title="Verdict Judgement">
+          <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
+            <Prose value={verdictBody} />
+          </div>
+        </SurfaceCard>
+      )}
+
+      {/* 8. Mechanical Failure Chain — causal diagram */}
       {suppressFailureLanguage ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
@@ -1102,53 +1129,35 @@ function VerdictView({
         <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
 
-      {/* 7. Recovery & Retest Gate */}
-      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
-
-      {run.hard_fail_question_id && (
-        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
-          <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
-            Blocking Failure Triggered
-          </div>
-          <p className="text-sm leading-relaxed">
-            A hard-fail condition was triggered during the assessment.
-            Progression is blocked. The business is not viable in its current
-            form. The hard-fail condition must be corrected and retested before
-            progression can be reconsidered.
-          </p>
-        </div>
-      )}
-
-      {/* 8–11. Narrative */}
-      {hasContent(verdictBody) && (
-        <SurfaceCard title="What this verdict means">
-          <Prose value={verdictBody} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.execution_diagnosis) && (
-        <SurfaceCard title="Execution diagnosis">
-          <Prose value={run.execution_diagnosis} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.mechanism_step_1) && (
-        <SurfaceCard title="Mechanism — Step 1">
-          <Prose value={run.mechanism_step_1} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.mechanism_step_2) && (
-        <SurfaceCard title="Mechanism — Step 2">
-          <Prose value={run.mechanism_step_2} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.mechanism_step_3) && (
-        <SurfaceCard title="Mechanism — Step 3">
-          <Prose value={run.mechanism_step_3} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.final_outcome) && (
-        <SurfaceCard title="Final outcome">
-          <Prose value={run.final_outcome} />
-        </SurfaceCard>
+      {/* 9. Legacy mechanism sections — only when narrative_output is absent */}
+      {!hasNarrativeOutput && (
+        <>
+          {hasContent(run.execution_diagnosis) && (
+            <SurfaceCard title="Execution diagnosis">
+              <Prose value={run.execution_diagnosis} />
+            </SurfaceCard>
+          )}
+          {hasContent(run.mechanism_step_1) && (
+            <SurfaceCard title="Mechanism — Step 1">
+              <Prose value={run.mechanism_step_1} />
+            </SurfaceCard>
+          )}
+          {hasContent(run.mechanism_step_2) && (
+            <SurfaceCard title="Mechanism — Step 2">
+              <Prose value={run.mechanism_step_2} />
+            </SurfaceCard>
+          )}
+          {hasContent(run.mechanism_step_3) && (
+            <SurfaceCard title="Mechanism — Step 3">
+              <Prose value={run.mechanism_step_3} />
+            </SurfaceCard>
+          )}
+          {hasContent(run.final_outcome) && (
+            <SurfaceCard title="Final outcome">
+              <Prose value={run.final_outcome} />
+            </SurfaceCard>
+          )}
+        </>
       )}
       {/* 12. Worksheet link */}
       <div className="flex flex-wrap gap-2 pt-2">
