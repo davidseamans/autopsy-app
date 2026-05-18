@@ -1074,7 +1074,12 @@ function VerdictView({
       <RunDetailsStrip run={run} />
 
       {/* 3. Operational Governance Layer */}
-      <OperationalStatePanel run={run} isBlocked={isBlocked} />
+      <OperationalStatePanel
+        run={run}
+        isBlocked={isBlocked}
+        operatingInstruction={cascadeSeverity?.operating_instruction}
+        requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+      />
       <ProgressionFlow current={run.operational_state} isBlocked={isBlocked} />
 
       {/* 4. Dimension Pressure Profile */}
