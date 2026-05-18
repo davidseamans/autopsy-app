@@ -2093,7 +2093,19 @@ function PressureTopology({
   );
 }
 
-function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function MechanicalFailureChain({
+  run,
+  isBlocked,
+  operatingInstruction,
+  requiredActionFallback,
+  evidenceFallback,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  operatingInstruction?: string | null;
+  requiredActionFallback?: string | null;
+  evidenceFallback?: string | null;
+}) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
   const failurePath =
@@ -2101,14 +2113,20 @@ function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: bool
     humanize(run.failure_shape) ||
     humanize(run.failure_type) ||
     "Failure path not specified";
-  const breakpoint =
+  const rawBreakpoint =
     (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
     (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
-    "Required breakpoint not specified";
-  const outcome = isBlocked
+    "";
+  const breakpoint =
+    cleanProceedOnlyIf(rawBreakpoint, evidenceFallback || operatingInstruction) ||
+    "Required proof not specified";
+  const rawOutcome = isBlocked
     ? "Progression is blocked. Not viable in current form until the hard-fail condition is corrected and retested."
     : humanize(run.progression_state) ||
       "Operational outcome pending recovery signal verification.";
+  const outcome =
+    cleanProceedOnlyIf(rawOutcome, operatingInstruction || requiredActionFallback) ||
+    rawOutcome;
 
   const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
     { icon: <Activity className="h-4 w-4" />, label: "Main Blocker", value: primary, tone: "primary" },
