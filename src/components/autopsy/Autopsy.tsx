@@ -1912,11 +1912,6 @@ function ProgressionFlow({ current, isBlocked }: { current: any; isBlocked?: boo
   );
 }
 
-function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
-  void 0;
-  return _MechanicalFailureChain({ run, isBlocked });
-}
-
 function PressureTopology({
   primary,
   secondary,
@@ -2013,7 +2008,7 @@ function PressureTopology({
   );
 }
 
-function _MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
   const failurePath =
