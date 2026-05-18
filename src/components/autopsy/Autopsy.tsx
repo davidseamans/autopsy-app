@@ -1913,6 +1913,107 @@ function ProgressionFlow({ current, isBlocked }: { current: any; isBlocked?: boo
 }
 
 function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+  void 0;
+  return _MechanicalFailureChain({ run, isBlocked });
+}
+
+function PressureTopology({
+  primary,
+  secondary,
+  tertiary,
+  isBlocked,
+}: {
+  primary: any;
+  secondary: any;
+  tertiary: any;
+  isBlocked?: boolean;
+}) {
+  const tiers: Array<{
+    rank: "Main Blocker" | "Next Pressure" | "Third Pressure";
+    data: any;
+    emphasis: "primary" | "secondary" | "tertiary";
+  }> = [
+    { rank: "Main Blocker", data: primary, emphasis: "primary" },
+    { rank: "Next Pressure", data: secondary, emphasis: "secondary" },
+    { rank: "Third Pressure", data: tertiary, emphasis: "tertiary" },
+  ].filter((t) => t.data) as any;
+
+  if (tiers.length === 0) return null;
+
+  return (
+    <SurfaceCard title="Pressure Topology">
+      <p className="text-sm text-muted-foreground mb-4">
+        Interacting business pressures, ranked by structural weight on the verdict.
+      </p>
+      <div className="grid gap-4 md:grid-cols-3">
+        {tiers.map((t) => {
+          const label = t.data.plain_label ?? t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const dim = t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const score = t.data.score_total;
+          const isMain = t.emphasis === "primary";
+          const isMid = t.emphasis === "secondary";
+          return (
+            <div
+              key={t.rank}
+              className={cn(
+                "rounded-xl border p-5 transition-all",
+                isMain
+                  ? cn(
+                      "border-2 shadow-sm",
+                      isBlocked
+                        ? "border-red-600/60 bg-red-500/5"
+                        : "border-[hsl(var(--autopsy-accent))]/60 bg-[hsl(var(--autopsy-accent))]/5",
+                    )
+                  : isMid
+                    ? "border-[hsl(var(--autopsy-border))] bg-[hsl(var(--autopsy-surface))]"
+                    : "border-[hsl(var(--autopsy-border))]/60 bg-background opacity-90",
+              )}
+            >
+              <div
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider mb-2",
+                  isMain
+                    ? isBlocked
+                      ? "text-red-700"
+                      : "text-[hsl(var(--autopsy-accent))]"
+                    : "text-muted-foreground",
+                )}
+              >
+                {t.rank}
+              </div>
+              <div
+                className={cn(
+                  "font-semibold leading-tight mb-1 text-foreground",
+                  isMain ? "text-xl" : isMid ? "text-base" : "text-sm",
+                )}
+              >
+                {label || "—"}
+              </div>
+              {dim && dim !== label && (
+                <div className="text-xs text-muted-foreground mb-3">{dim}</div>
+              )}
+              {score != null && (
+                <div
+                  className={cn(
+                    "inline-flex items-baseline gap-1.5 rounded-md border px-2.5 py-1",
+                    "border-[hsl(var(--autopsy-border))] bg-background",
+                  )}
+                >
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Score</span>
+                  <span className={cn("font-mono font-semibold", isMain ? "text-base" : "text-sm")}>
+                    {String(score)}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </SurfaceCard>
+  );
+}
+
+function _MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
   const failurePath =
