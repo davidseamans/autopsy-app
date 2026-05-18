@@ -1575,6 +1575,121 @@ function cleanProceedOnlyIf(value: string | null | undefined, replacement?: stri
   return v;
 }
 
+/* ----------------------- Band-aware verdict framing ---------------------- */
+
+export type VerdictBand = "not_viable" | "high_risk" | "viable" | "structurally_viable";
+
+export function getVerdictBand(opts: {
+  verdictName: string;
+  isBlocked: boolean;
+  score: number | null | undefined;
+}): VerdictBand {
+  const { verdictName, isBlocked, score } = opts;
+  if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
+  if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
+  if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
+  if (/viable/i.test(verdictName)) return "viable";
+  const s = typeof score === "number" ? score : Number(score);
+  if (Number.isFinite(s)) {
+    if (s >= 26) return "structurally_viable";
+    if (s >= 20) return "viable";
+    if (s >= 12) return "high_risk";
+    return "not_viable";
+  }
+  return "high_risk";
+}
+
+export interface BandFraming {
+  rankPrimary: string;
+  rankSecondary: string;
+  rankTertiary: string;
+  topologyTitle: string;
+  topologyIntro: string;
+  chainTitle: string;
+  chainNote?: string;
+  pathLabel: string;
+  proofLabel: string;
+  outcomeLabel: string;
+  decisionStatusOverride?: string;
+  allowedNextOverride?: string;
+  headerTextClass: string;
+  headerContainerClass: string;
+  badgeClass: string;
+  failureOriented: boolean;
+}
+
+export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
+  not_viable: {
+    rankPrimary: "Main Blocker",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
+    chainTitle: "Failure Chain",
+    pathLabel: "Failure Path",
+    proofLabel: "Proof Required Before Proceeding",
+    outcomeLabel: "Stop — Do Not Proceed",
+    headerTextClass: "text-red-700",
+    headerContainerClass: "border-red-600/60 bg-red-500/5",
+    badgeClass: "border-red-600 text-red-700 bg-red-500/10",
+    failureOriented: true,
+  },
+  high_risk: {
+    rankPrimary: "Main Blocker",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
+    chainTitle: "Pressure Chain",
+    pathLabel: "Pressure Path",
+    proofLabel: "Evidence Required",
+    outcomeLabel: "Proceed Only If",
+    headerTextClass: "text-orange-600",
+    headerContainerClass: "border-orange-500/60 bg-orange-500/5",
+    badgeClass: "border-orange-500 text-orange-700 bg-orange-500/10",
+    failureOriented: true,
+  },
+  viable: {
+    rankPrimary: "Primary Watchpoint",
+    rankSecondary: "Secondary Watchpoint",
+    rankTertiary: "Third Watchpoint",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Watchpoints ranked by structural weight. These are the areas most likely to weaken first if operating pressure increases.",
+    chainTitle: "Stability Risks",
+    pathLabel: "Stability Risk",
+    proofLabel: "Required Controls",
+    outcomeLabel: "Execution Conditions",
+    headerTextClass: "text-amber-600",
+    headerContainerClass: "border-amber-500/60 bg-amber-500/5",
+    badgeClass: "border-amber-500 text-amber-700 bg-amber-500/10",
+    failureOriented: false,
+  },
+  structurally_viable: {
+    rankPrimary: "Primary Watchpoint",
+    rankSecondary: "Secondary Watchpoint",
+    rankTertiary: "Third Watchpoint",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Areas to monitor under operating load. Permission is granted under discipline — not guaranteed performance.",
+    chainTitle: "Execution Watchpoints",
+    chainNote:
+      "These are the areas most likely to weaken first if operating pressure increases.",
+    pathLabel: "Execution Watchpoint",
+    proofLabel: "Execution Controls",
+    outcomeLabel: "Operating Discipline",
+    decisionStatusOverride: "Proceed with disciplined execution.",
+    allowedNextOverride:
+      "Proceed with execution and ongoing telemetry. Retest if assumptions or operating load materially change.",
+    headerTextClass: "text-emerald-700",
+    headerContainerClass: "border-emerald-600/60 bg-emerald-500/5",
+    badgeClass: "border-emerald-600 text-emerald-700 bg-emerald-500/10",
+    failureOriented: false,
+  },
+};
+
 /* -------------------------- SupportingDiagnosis -------------------------- */
 
 function SupportingDiagnosis({ blocks }: { blocks?: SupportingBlocks }) {
