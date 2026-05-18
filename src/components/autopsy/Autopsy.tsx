@@ -2120,11 +2120,13 @@ function PressureTopology({
   secondary,
   tertiary,
   isBlocked,
+  failureDrivers,
 }: {
   primary: any;
   secondary: any;
   tertiary: any;
   isBlocked?: boolean;
+  failureDrivers?: SupportingBlockItem[];
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -2155,6 +2157,18 @@ function PressureTopology({
   };
   const explanationFor = (data: any): string | null => {
     const code = String(data?.dimension_code ?? "").toLowerCase().trim();
+    const rank = String(data?.rank ?? "").toLowerCase().trim();
+    const driver = (failureDrivers ?? []).find((d) => {
+      const dCode = String(d?.dimension_code ?? "").toLowerCase().trim();
+      const dRank = String(d?.rank ?? "").toLowerCase().trim();
+      return (code && dCode === code) || (rank && dRank === rank);
+    });
+    const body = (driver?.body ?? "").toString().trim();
+    if (body) {
+      // Keep micro-explanation to one short sentence.
+      const firstSentence = body.split(/(?<=[.!?])\s+/)[0];
+      return firstSentence || body;
+    }
     return DIM_EXPLANATION[code] ?? null;
   };
   const tiers: Array<{
