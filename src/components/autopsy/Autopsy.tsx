@@ -1320,7 +1320,17 @@ function operationalStyle(state: any) {
   );
 }
 
-function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function OperationalStatePanel({
+  run,
+  isBlocked,
+  operatingInstruction,
+  requiredActionFallback,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  operatingInstruction?: string | null;
+  requiredActionFallback?: string | null;
+}) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
   const effective = isBlocked && !opKey ? "blocked" : opKey;
   const style = operationalStyle(effective);
@@ -1328,9 +1338,13 @@ function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const progressionDisplay = isBlocked
     ? "PROGRESSION BLOCKED"
     : humanize(run.progression_state) || "—";
-  const permissionBiasDisplay = isBlocked
+  const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
     : humanize(run.permission_bias) || "—";
+  const permissionBiasDisplay = cleanProceedOnlyIf(
+    rawPermissionBias,
+    operatingInstruction || requiredActionFallback,
+  );
   const recoveryDisplay = resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
