@@ -949,6 +949,18 @@ function VerdictView({
   const hasNarrativeOutput = hasContent(run.narrative_output);
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
+  // Diagnostic cascade (pressure topology) — new backend source of truth.
+  const cascade =
+    (run as any)?.diagnosis?.cascade ??
+    (run as any)?.failure_cascade?.diagnostic_cascade ??
+    (run as any)?.failure_cascade?.cascade ??
+    null;
+  const cascadePrimary = cascade?.primary ?? null;
+  const cascadeSecondary = cascade?.secondary ?? null;
+  const cascadeTertiary = cascade?.tertiary ?? null;
+  const cascadeSeverity = cascade?.severity ?? null;
+  const hasCascade = !!(cascadePrimary || cascadeSecondary || cascadeTertiary);
+
   // Hard-fail / blocked classification (display only — backend values untouched)
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
   const isBlocked =
@@ -992,7 +1004,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / 30</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && (
             <Badge
               variant="outline"
               className={cn(
@@ -1085,6 +1097,36 @@ function VerdictView({
         </div>
       )}
 
+      {/* 6b. Pressure Topology — interacting business pressures */}
+      {hasCascade && (
+        <PressureTopology
+          primary={cascadePrimary}
+          secondary={cascadeSecondary}
+          tertiary={cascadeTertiary}
+          isBlocked={isBlocked}
+        />
+      )}
+
+      {/* 6c. Risk State / Allowed Next Move */}
+      {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state)) && (
+        <SurfaceCard title="Risk State">
+          <div className="grid gap-4 md:grid-cols-2">
+            {hasContent(cascadeSeverity.severity_label) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
+                <div className="text-base font-semibold text-foreground">{cascadeSeverity.severity_label}</div>
+              </div>
+            )}
+            {hasContent(cascadeSeverity.permission_state) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                <div className="text-sm leading-relaxed text-foreground">{cascadeSeverity.permission_state}</div>
+              </div>
+            )}
+          </div>
+        </SurfaceCard>
+      )}
+
       {/* 7. Narrative Judgement — lead voice */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
@@ -1130,7 +1172,7 @@ function VerdictView({
       )}
 
       {/* 9. Legacy mechanism sections — only when narrative_output is absent */}
-      {!hasNarrativeOutput && (
+      {!hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
@@ -1867,6 +1909,102 @@ function ProgressionFlow({ current, isBlocked }: { current: any; isBlocked?: boo
         })}
       </div>
     </div>
+  );
+}
+
+function PressureTopology({
+  primary,
+  secondary,
+  tertiary,
+  isBlocked,
+}: {
+  primary: any;
+  secondary: any;
+  tertiary: any;
+  isBlocked?: boolean;
+}) {
+  const tiers: Array<{
+    rank: "Main Blocker" | "Next Pressure" | "Third Pressure";
+    data: any;
+    emphasis: "primary" | "secondary" | "tertiary";
+  }> = [
+    { rank: "Main Blocker", data: primary, emphasis: "primary" },
+    { rank: "Next Pressure", data: secondary, emphasis: "secondary" },
+    { rank: "Third Pressure", data: tertiary, emphasis: "tertiary" },
+  ].filter((t) => t.data) as any;
+
+  if (tiers.length === 0) return null;
+
+  return (
+    <SurfaceCard title="Pressure Topology">
+      <p className="text-sm text-muted-foreground mb-4">
+        Interacting business pressures, ranked by structural weight on the verdict.
+      </p>
+      <div className="grid gap-4 md:grid-cols-3">
+        {tiers.map((t) => {
+          const label = t.data.plain_label ?? t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const dim = t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const score = t.data.score_total;
+          const isMain = t.emphasis === "primary";
+          const isMid = t.emphasis === "secondary";
+          return (
+            <div
+              key={t.rank}
+              className={cn(
+                "rounded-xl border p-5 transition-all",
+                isMain
+                  ? cn(
+                      "border-2 shadow-sm",
+                      isBlocked
+                        ? "border-red-600/60 bg-red-500/5"
+                        : "border-[hsl(var(--autopsy-accent))]/60 bg-[hsl(var(--autopsy-accent))]/5",
+                    )
+                  : isMid
+                    ? "border-[hsl(var(--autopsy-border))] bg-[hsl(var(--autopsy-surface))]"
+                    : "border-[hsl(var(--autopsy-border))]/60 bg-background opacity-90",
+              )}
+            >
+              <div
+                className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider mb-2",
+                  isMain
+                    ? isBlocked
+                      ? "text-red-700"
+                      : "text-[hsl(var(--autopsy-accent))]"
+                    : "text-muted-foreground",
+                )}
+              >
+                {t.rank}
+              </div>
+              <div
+                className={cn(
+                  "font-semibold leading-tight mb-1 text-foreground",
+                  isMain ? "text-xl" : isMid ? "text-base" : "text-sm",
+                )}
+              >
+                {label || "—"}
+              </div>
+              {dim && dim !== label && (
+                <div className="text-xs text-muted-foreground mb-3">{dim}</div>
+              )}
+              {score != null && (
+                <div
+                  className={cn(
+                    "inline-flex items-baseline gap-1.5 rounded-md border px-2.5 py-1",
+                    "border-[hsl(var(--autopsy-border))] bg-background",
+                  )}
+                >
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Score</span>
+                  <span className={cn("font-mono font-semibold", isMain ? "text-base" : "text-sm")}>
+                    {String(score)}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </SurfaceCard>
   );
 }
 
