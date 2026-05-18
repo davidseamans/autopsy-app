@@ -129,10 +129,13 @@ function humanizeDeep(value: any): any {
 
 function translatePermissionState(value: any): string {
   if (!hasContent(value)) return "—";
-  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const key = String(value).trim().toUpperCase().replace(/[\s\-/]+/g, "_");
   const map: Record<string, string> = {
     PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
     STOP: "Stop. Do not proceed.",
+    STOP_UNLESS_REBUILT: "Stop until the business is rebuilt and retested.",
+    STOP_PROOF_REQUIRED: "Stop until the required proof is produced.",
+    PROCEED_WITH_CONSTRAINTS: "Proceed with controls in place.",
     CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
     PROCEED: "Proceed with disciplined execution.",
   };
@@ -1166,43 +1169,39 @@ function VerdictView({
         <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
 
-      {/* 8. Risk State / Allowed Next Move */}
-    {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
-        <SurfaceCard title="Risk State">
-          <div className="grid gap-4 md:grid-cols-2">
-            {hasContent(cascadeSeverity.severity_label) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
-                <div className="text-base font-semibold text-foreground">{translateSeverityLabel(cascadeSeverity.severity_label)}</div>
-              </div>
-            )}
-            {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
-                <div className="text-sm leading-relaxed text-foreground">
-                  {hasContent(cascadeSeverity.operating_instruction)
-                    ? cascadeSeverity.operating_instruction
-                    : translatePermissionState(cascadeSeverity.permission_state)}
-                </div>
-              </div>
-            )}
-          </div>
-        </SurfaceCard>
-      )}
-
-      {/* 9. Narrative Judgement — lead voice */}
+      {/* 8. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
+          {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+            <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
+              {hasContent(cascadeSeverity.permission_state) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
+                  <div className="text-base font-semibold text-foreground">{translatePermissionState(cascadeSeverity.permission_state)}</div>
+                </div>
+              )}
+              {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                  <div className="text-sm leading-relaxed text-foreground">
+                    {hasContent(cascadeSeverity.operating_instruction)
+                      ? cascadeSeverity.operating_instruction
+                      : translatePermissionState(cascadeSeverity.permission_state)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
             <Prose value={verdictBody} />
           </div>
         </SurfaceCard>
       )}
 
-      {/* 10. Recovery & Retest Gate */}
+      {/* 9. Recovery & Retest Gate */}
       <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
 
-      {/* 11. Legacy mechanism sections — only when narrative_output is absent */}
+      {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
       {!hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
@@ -1232,7 +1231,7 @@ function VerdictView({
           )}
         </>
       )}
-      {/* 12. Worksheet link */}
+      {/* 11. Worksheet link */}
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
           <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
