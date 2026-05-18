@@ -2248,12 +2248,14 @@ function PressureTopology({
   tertiary,
   isBlocked,
   failureDrivers,
+  framing,
 }: {
   primary: any;
   secondary: any;
   tertiary: any;
   isBlocked?: boolean;
   failureDrivers?: SupportingBlockItem[];
+  framing?: BandFraming;
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -2299,21 +2301,21 @@ function PressureTopology({
     return DIM_EXPLANATION[code] ?? null;
   };
   const tiers: Array<{
-    rank: "Main Blocker" | "Next Pressure" | "Third Pressure";
+    rank: string;
     data: any;
     emphasis: "primary" | "secondary" | "tertiary";
   }> = [
-    { rank: "Main Blocker", data: primary, emphasis: "primary" },
-    { rank: "Next Pressure", data: secondary, emphasis: "secondary" },
-    { rank: "Third Pressure", data: tertiary, emphasis: "tertiary" },
+    { rank: framing?.rankPrimary ?? "Main Blocker", data: primary, emphasis: "primary" },
+    { rank: framing?.rankSecondary ?? "Next Pressure", data: secondary, emphasis: "secondary" },
+    { rank: framing?.rankTertiary ?? "Third Pressure", data: tertiary, emphasis: "tertiary" },
   ].filter((t) => t.data) as any;
 
   if (tiers.length === 0) return null;
 
   return (
-    <SurfaceCard title="Pressure Topology">
+    <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
       <p className="text-sm text-muted-foreground mb-4">
-        Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it.
+        {framing?.topologyIntro ?? "Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it."}
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
@@ -2389,12 +2391,14 @@ function MechanicalFailureChain({
   operatingInstruction,
   requiredActionFallback,
   evidenceFallback,
+  framing,
 }: {
   run: any;
   isBlocked?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
+  framing?: BandFraming;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
@@ -2419,10 +2423,10 @@ function MechanicalFailureChain({
     rawOutcome;
 
   const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
-    { icon: <Activity className="h-4 w-4" />, label: "Main Blocker", value: primary, tone: "primary" },
-    { icon: <Target className="h-4 w-4" />, label: "Failure Path", value: failurePath, prose: true, tone: "step" },
-    { icon: <Wrench className="h-4 w-4" />, label: "Proof Required", value: breakpoint, prose: true, tone: "breakpoint" },
-    { icon: <AlertTriangle className="h-4 w-4" />, label: "Allowed Next Move", value: outcome, prose: true, tone: "outcome" },
+    { icon: <Activity className="h-4 w-4" />, label: framing?.rankPrimary ?? "Main Blocker", value: primary, tone: "primary" },
+    { icon: <Target className="h-4 w-4" />, label: framing?.pathLabel ?? "Failure Path", value: failurePath, prose: true, tone: "step" },
+    { icon: <Wrench className="h-4 w-4" />, label: framing?.proofLabel ?? "Proof Required", value: breakpoint, prose: true, tone: "breakpoint" },
+    { icon: <AlertTriangle className="h-4 w-4" />, label: framing?.outcomeLabel ?? "Allowed Next Move", value: outcome, prose: true, tone: "outcome" },
   ];
 
   const toneClass = (tone: string) => {
@@ -2435,12 +2439,15 @@ function MechanicalFailureChain({
     <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          Mechanical Failure Chain
+          {framing?.chainTitle ?? "Mechanical Failure Chain"}
         </span>
         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
           Causal Sequence
         </span>
       </div>
+      {framing?.chainNote && (
+        <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
+      )}
       <div className="flex flex-col items-stretch">
         {nodes.map((n, idx) => (
           <div key={n.label} className="flex flex-col items-stretch">
