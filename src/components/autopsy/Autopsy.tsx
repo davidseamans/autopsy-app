@@ -1148,6 +1148,7 @@ function VerdictView({
           secondary={cascadeSecondary}
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
+          failureDrivers={supportingBlocks?.failure_drivers}
         />
       )}
 
@@ -1192,10 +1193,7 @@ function VerdictView({
         />
       )}
 
-      {/* 7b. Supporting Diagnosis — failure drivers, evidence, actions */}
-      <SupportingDiagnosis blocks={supportingBlocks} />
-
-      {/* 8. Verdict Judgement — lead voice with integrated decision block */}
+      {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
           {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
@@ -1225,11 +1223,12 @@ function VerdictView({
         </SurfaceCard>
       )}
 
-      {/* 9. Recovery & Retest Gate */}
+      {/* 8. Recovery & Retest Gate */}
       <RecoveryRetestPanel
         run={run}
         isBlocked={isBlocked}
         evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
+        actionOverride={supportingBlocks?.required_actions?.[0]?.body}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
@@ -1447,10 +1446,12 @@ function RecoveryRetestPanel({
   run,
   isBlocked,
   evidenceOverride,
+  actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
   evidenceOverride?: string | null;
+  actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
@@ -1459,7 +1460,11 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : resolved;
-  const retest = hasContent(evidenceOverride) ? null : run.retest_condition;
+  const retest = hasContent(actionOverride)
+    ? actionOverride
+    : hasContent(evidenceOverride)
+      ? null
+      : run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
@@ -1491,11 +1496,17 @@ function RecoveryRetestPanel({
         {hasContent(retest) && (
           <div className="rounded-lg border-l-4 border-l-blue-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              What must be proven before trying again
+              Action required before retesting
             </div>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
-              {renderBlock(retest)}
-            </pre>
+            {hasContent(actionOverride) ? (
+              <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {retest as string}
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {renderBlock(retest)}
+              </pre>
+            )}
           </div>
         )}
         {hasContent(worksheet) && (
@@ -2109,11 +2120,13 @@ function PressureTopology({
   secondary,
   tertiary,
   isBlocked,
+  failureDrivers,
 }: {
   primary: any;
   secondary: any;
   tertiary: any;
   isBlocked?: boolean;
+  failureDrivers?: SupportingBlockItem[];
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -2144,6 +2157,18 @@ function PressureTopology({
   };
   const explanationFor = (data: any): string | null => {
     const code = String(data?.dimension_code ?? "").toLowerCase().trim();
+    const rank = String(data?.rank ?? "").toLowerCase().trim();
+    const driver = (failureDrivers ?? []).find((d) => {
+      const dCode = String(d?.dimension_code ?? "").toLowerCase().trim();
+      const dRank = String(d?.rank ?? "").toLowerCase().trim();
+      return (code && dCode === code) || (rank && dRank === rank);
+    });
+    const body = (driver?.body ?? "").toString().trim();
+    if (body) {
+      // Keep micro-explanation to one short sentence.
+      const firstSentence = body.split(/(?<=[.!?])\s+/)[0];
+      return firstSentence || body;
+    }
     return DIM_EXPLANATION[code] ?? null;
   };
   const tiers: Array<{
