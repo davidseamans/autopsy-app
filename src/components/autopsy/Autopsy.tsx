@@ -1224,10 +1224,7 @@ function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const permissionBiasDisplay = isBlocked
     ? "STRONG RESTRICTION"
     : humanize(run.permission_bias) || "—";
-  const recoveryDisplay =
-    isBlocked && !hasContent(run.required_recovery_signal)
-      ? "Hard-fail condition must be corrected and retested."
-      : run.required_recovery_signal;
+  const recoveryDisplay = resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Permission Bias", permissionBiasDisplay],
