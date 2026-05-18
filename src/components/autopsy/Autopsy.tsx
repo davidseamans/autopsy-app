@@ -129,10 +129,13 @@ function humanizeDeep(value: any): any {
 
 function translatePermissionState(value: any): string {
   if (!hasContent(value)) return "—";
-  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const key = String(value).trim().toUpperCase().replace(/[\s\-/]+/g, "_");
   const map: Record<string, string> = {
     PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
     STOP: "Stop. Do not proceed.",
+    STOP_UNLESS_REBUILT: "Stop until the business is rebuilt and retested.",
+    STOP_PROOF_REQUIRED: "Stop until the required proof is produced.",
+    PROCEED_WITH_CONSTRAINTS: "Proceed with controls in place.",
     CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
     PROCEED: "Proceed with disciplined execution.",
   };
