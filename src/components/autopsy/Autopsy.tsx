@@ -1013,13 +1013,21 @@ function VerdictView({
   const effectiveOpState = isBlocked && !opStateKey ? "blocked" : opStateKey;
   const opStyle = operationalStyle(effectiveOpState);
 
+  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
+  const band: VerdictBand = getVerdictBand({
+    verdictName,
+    isBlocked,
+    score: scoreNumeric,
+  });
+  const framing = BAND_FRAMING[band];
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
       <div
         className={cn(
           "rounded-2xl border-2 shadow-sm p-10",
-          isBlocked ? opStyle.container : "bg-[hsl(var(--autopsy-surface))] border-[hsl(var(--autopsy-border))]",
+          framing.headerContainerClass,
         )}
       >
         <div className="flex items-center justify-between mb-8">
@@ -1032,7 +1040,7 @@ function VerdictView({
           <h1
             className={cn(
               "text-4xl md:text-5xl font-semibold tracking-tight",
-              isBlocked ? opStyle.text : "text-[hsl(var(--autopsy-accent))]",
+              framing.headerTextClass,
             )}
           >
             {(run.verdict_name as string) ?? "Verdict"}
@@ -1051,18 +1059,16 @@ function VerdictView({
               variant="outline"
               className={cn(
                 "uppercase tracking-wider text-[10px] px-3 py-1",
-                isBlocked
-                  ? cn("border-red-600 text-red-700 bg-red-500/10")
-                  : "border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]",
+                framing.badgeClass,
               )}
             >
-              Main Blocker · {primaryConstraint}
+              {framing.rankPrimary} · {primaryConstraint}
             </Badge>
           )}
           {suppressFailureLanguage && (
             <Badge
               variant="outline"
-              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
               Balanced Profile · No Dominant Constraint
             </Badge>
@@ -1149,6 +1155,7 @@ function VerdictView({
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
           failureDrivers={supportingBlocks?.failure_drivers}
+          framing={framing}
         />
       )}
 
@@ -1190,6 +1197,7 @@ function VerdictView({
           operatingInstruction={cascadeSeverity?.operating_instruction}
           requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
           evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+          framing={framing}
         />
       )}
 
@@ -1201,14 +1209,18 @@ function VerdictView({
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
-                  <div className="text-base font-semibold text-foreground">{translatePermissionState(cascadeSeverity.permission_state)}</div>
+                  <div className="text-base font-semibold text-foreground">
+                    {framing.decisionStatusOverride ?? translatePermissionState(cascadeSeverity.permission_state)}
+                  </div>
                 </div>
               )}
               {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
                   <div className="text-sm leading-relaxed text-foreground">
-                    {hasContent(cascadeSeverity.operating_instruction)
+                    {framing.allowedNextOverride
+                      ? framing.allowedNextOverride
+                      : hasContent(cascadeSeverity.operating_instruction)
                       ? cascadeSeverity.operating_instruction
                       : (supportingBlocks?.required_actions?.[0]?.body
                           || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
