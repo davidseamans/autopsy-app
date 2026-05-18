@@ -1315,7 +1315,9 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
 }
 
 function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
-  const recovery = run.required_recovery_signal;
+  const resolved = resolveRecoverySignal(run);
+  const recovery =
+    resolved === "Recovery signal not returned" ? null : resolved;
   const retest = run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
