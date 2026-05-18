@@ -949,6 +949,18 @@ function VerdictView({
   const hasNarrativeOutput = hasContent(run.narrative_output);
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
+  // Diagnostic cascade (pressure topology) — new backend source of truth.
+  const cascade =
+    (run as any)?.diagnosis?.cascade ??
+    (run as any)?.failure_cascade?.diagnostic_cascade ??
+    (run as any)?.failure_cascade?.cascade ??
+    null;
+  const cascadePrimary = cascade?.primary ?? null;
+  const cascadeSecondary = cascade?.secondary ?? null;
+  const cascadeTertiary = cascade?.tertiary ?? null;
+  const cascadeSeverity = cascade?.severity ?? null;
+  const hasCascade = !!(cascadePrimary || cascadeSecondary || cascadeTertiary);
+
   // Hard-fail / blocked classification (display only — backend values untouched)
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
   const isBlocked =
@@ -992,7 +1004,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / 30</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && (
             <Badge
               variant="outline"
               className={cn(
@@ -1085,6 +1097,36 @@ function VerdictView({
         </div>
       )}
 
+      {/* 6b. Pressure Topology — interacting business pressures */}
+      {hasCascade && (
+        <PressureTopology
+          primary={cascadePrimary}
+          secondary={cascadeSecondary}
+          tertiary={cascadeTertiary}
+          isBlocked={isBlocked}
+        />
+      )}
+
+      {/* 6c. Risk State / Allowed Next Move */}
+      {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state)) && (
+        <SurfaceCard title="Risk State">
+          <div className="grid gap-4 md:grid-cols-2">
+            {hasContent(cascadeSeverity.severity_label) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
+                <div className="text-base font-semibold text-foreground">{cascadeSeverity.severity_label}</div>
+              </div>
+            )}
+            {hasContent(cascadeSeverity.permission_state) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                <div className="text-sm leading-relaxed text-foreground">{cascadeSeverity.permission_state}</div>
+              </div>
+            )}
+          </div>
+        </SurfaceCard>
+      )}
+
       {/* 7. Narrative Judgement — lead voice */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
@@ -1130,7 +1172,7 @@ function VerdictView({
       )}
 
       {/* 9. Legacy mechanism sections — only when narrative_output is absent */}
-      {!hasNarrativeOutput && (
+      {!hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
