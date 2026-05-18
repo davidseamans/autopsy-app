@@ -1169,19 +1169,39 @@ function VerdictView({
         <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
 
-      {/* 8. Verdict Judgement — lead voice */}
+      {/* 8. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
+          {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+            <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
+              {hasContent(cascadeSeverity.permission_state) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
+                  <div className="text-base font-semibold text-foreground">{translatePermissionState(cascadeSeverity.permission_state)}</div>
+                </div>
+              )}
+              {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                  <div className="text-sm leading-relaxed text-foreground">
+                    {hasContent(cascadeSeverity.operating_instruction)
+                      ? cascadeSeverity.operating_instruction
+                      : translatePermissionState(cascadeSeverity.permission_state)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
             <Prose value={verdictBody} />
           </div>
         </SurfaceCard>
       )}
 
-      {/* 10. Recovery & Retest Gate */}
+      {/* 9. Recovery & Retest Gate */}
       <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
 
-      {/* 11. Legacy mechanism sections — only when narrative_output is absent */}
+      {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
       {!hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
