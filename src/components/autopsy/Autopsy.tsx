@@ -1013,13 +1013,21 @@ function VerdictView({
   const effectiveOpState = isBlocked && !opStateKey ? "blocked" : opStateKey;
   const opStyle = operationalStyle(effectiveOpState);
 
+  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
+  const band: VerdictBand = getVerdictBand({
+    verdictName,
+    isBlocked,
+    score: scoreNumeric,
+  });
+  const framing = BAND_FRAMING[band];
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
       <div
         className={cn(
           "rounded-2xl border-2 shadow-sm p-10",
-          isBlocked ? opStyle.container : "bg-[hsl(var(--autopsy-surface))] border-[hsl(var(--autopsy-border))]",
+          framing.headerContainerClass,
         )}
       >
         <div className="flex items-center justify-between mb-8">
@@ -1032,7 +1040,7 @@ function VerdictView({
           <h1
             className={cn(
               "text-4xl md:text-5xl font-semibold tracking-tight",
-              isBlocked ? opStyle.text : "text-[hsl(var(--autopsy-accent))]",
+              framing.headerTextClass,
             )}
           >
             {(run.verdict_name as string) ?? "Verdict"}
@@ -1051,18 +1059,16 @@ function VerdictView({
               variant="outline"
               className={cn(
                 "uppercase tracking-wider text-[10px] px-3 py-1",
-                isBlocked
-                  ? cn("border-red-600 text-red-700 bg-red-500/10")
-                  : "border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]",
+                framing.badgeClass,
               )}
             >
-              Main Blocker · {primaryConstraint}
+              {framing.rankPrimary} · {primaryConstraint}
             </Badge>
           )}
           {suppressFailureLanguage && (
             <Badge
               variant="outline"
-              className="border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))] uppercase tracking-wider text-[10px] px-3 py-1"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
               Balanced Profile · No Dominant Constraint
             </Badge>
@@ -1149,6 +1155,7 @@ function VerdictView({
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
           failureDrivers={supportingBlocks?.failure_drivers}
+          framing={framing}
         />
       )}
 
@@ -1190,6 +1197,7 @@ function VerdictView({
           operatingInstruction={cascadeSeverity?.operating_instruction}
           requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
           evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+          framing={framing}
         />
       )}
 
@@ -1201,14 +1209,18 @@ function VerdictView({
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
-                  <div className="text-base font-semibold text-foreground">{translatePermissionState(cascadeSeverity.permission_state)}</div>
+                  <div className="text-base font-semibold text-foreground">
+                    {framing.decisionStatusOverride ?? translatePermissionState(cascadeSeverity.permission_state)}
+                  </div>
                 </div>
               )}
               {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
                   <div className="text-sm leading-relaxed text-foreground">
-                    {hasContent(cascadeSeverity.operating_instruction)
+                    {framing.allowedNextOverride
+                      ? framing.allowedNextOverride
+                      : hasContent(cascadeSeverity.operating_instruction)
                       ? cascadeSeverity.operating_instruction
                       : (supportingBlocks?.required_actions?.[0]?.body
                           || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
@@ -1574,6 +1586,121 @@ function cleanProceedOnlyIf(value: string | null | undefined, replacement?: stri
   }
   return v;
 }
+
+/* ----------------------- Band-aware verdict framing ---------------------- */
+
+export type VerdictBand = "not_viable" | "high_risk" | "viable" | "structurally_viable";
+
+export function getVerdictBand(opts: {
+  verdictName: string;
+  isBlocked: boolean;
+  score: number | null | undefined;
+}): VerdictBand {
+  const { verdictName, isBlocked, score } = opts;
+  if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
+  if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
+  if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
+  if (/viable/i.test(verdictName)) return "viable";
+  const s = typeof score === "number" ? score : Number(score);
+  if (Number.isFinite(s)) {
+    if (s >= 26) return "structurally_viable";
+    if (s >= 20) return "viable";
+    if (s >= 12) return "high_risk";
+    return "not_viable";
+  }
+  return "high_risk";
+}
+
+export interface BandFraming {
+  rankPrimary: string;
+  rankSecondary: string;
+  rankTertiary: string;
+  topologyTitle: string;
+  topologyIntro: string;
+  chainTitle: string;
+  chainNote?: string;
+  pathLabel: string;
+  proofLabel: string;
+  outcomeLabel: string;
+  decisionStatusOverride?: string;
+  allowedNextOverride?: string;
+  headerTextClass: string;
+  headerContainerClass: string;
+  badgeClass: string;
+  failureOriented: boolean;
+}
+
+export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
+  not_viable: {
+    rankPrimary: "Main Blocker",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
+    chainTitle: "Failure Chain",
+    pathLabel: "Failure Path",
+    proofLabel: "Proof Required Before Proceeding",
+    outcomeLabel: "Stop — Do Not Proceed",
+    headerTextClass: "text-red-700",
+    headerContainerClass: "border-red-600/60 bg-red-500/5",
+    badgeClass: "border-red-600 text-red-700 bg-red-500/10",
+    failureOriented: true,
+  },
+  high_risk: {
+    rankPrimary: "Main Blocker",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
+    chainTitle: "Pressure Chain",
+    pathLabel: "Pressure Path",
+    proofLabel: "Evidence Required",
+    outcomeLabel: "Proceed Only If",
+    headerTextClass: "text-orange-600",
+    headerContainerClass: "border-orange-500/60 bg-orange-500/5",
+    badgeClass: "border-orange-500 text-orange-700 bg-orange-500/10",
+    failureOriented: true,
+  },
+  viable: {
+    rankPrimary: "Primary Watchpoint",
+    rankSecondary: "Secondary Watchpoint",
+    rankTertiary: "Third Watchpoint",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Watchpoints ranked by structural weight. These are the areas most likely to weaken first if operating pressure increases.",
+    chainTitle: "Stability Risks",
+    pathLabel: "Stability Risk",
+    proofLabel: "Required Controls",
+    outcomeLabel: "Execution Conditions",
+    headerTextClass: "text-amber-600",
+    headerContainerClass: "border-amber-500/60 bg-amber-500/5",
+    badgeClass: "border-amber-500 text-amber-700 bg-amber-500/10",
+    failureOriented: false,
+  },
+  structurally_viable: {
+    rankPrimary: "Primary Watchpoint",
+    rankSecondary: "Secondary Watchpoint",
+    rankTertiary: "Third Watchpoint",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Areas to monitor under operating load. Permission is granted under discipline — not guaranteed performance.",
+    chainTitle: "Execution Watchpoints",
+    chainNote:
+      "These are the areas most likely to weaken first if operating pressure increases.",
+    pathLabel: "Execution Watchpoint",
+    proofLabel: "Execution Controls",
+    outcomeLabel: "Operating Discipline",
+    decisionStatusOverride: "Proceed with disciplined execution.",
+    allowedNextOverride:
+      "Proceed with execution and ongoing telemetry. Retest if assumptions or operating load materially change.",
+    headerTextClass: "text-emerald-700",
+    headerContainerClass: "border-emerald-600/60 bg-emerald-500/5",
+    badgeClass: "border-emerald-600 text-emerald-700 bg-emerald-500/10",
+    failureOriented: false,
+  },
+};
 
 /* -------------------------- SupportingDiagnosis -------------------------- */
 
@@ -2121,12 +2248,14 @@ function PressureTopology({
   tertiary,
   isBlocked,
   failureDrivers,
+  framing,
 }: {
   primary: any;
   secondary: any;
   tertiary: any;
   isBlocked?: boolean;
   failureDrivers?: SupportingBlockItem[];
+  framing?: BandFraming;
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -2172,21 +2301,21 @@ function PressureTopology({
     return DIM_EXPLANATION[code] ?? null;
   };
   const tiers: Array<{
-    rank: "Main Blocker" | "Next Pressure" | "Third Pressure";
+    rank: string;
     data: any;
     emphasis: "primary" | "secondary" | "tertiary";
   }> = [
-    { rank: "Main Blocker", data: primary, emphasis: "primary" },
-    { rank: "Next Pressure", data: secondary, emphasis: "secondary" },
-    { rank: "Third Pressure", data: tertiary, emphasis: "tertiary" },
+    { rank: framing?.rankPrimary ?? "Main Blocker", data: primary, emphasis: "primary" },
+    { rank: framing?.rankSecondary ?? "Next Pressure", data: secondary, emphasis: "secondary" },
+    { rank: framing?.rankTertiary ?? "Third Pressure", data: tertiary, emphasis: "tertiary" },
   ].filter((t) => t.data) as any;
 
   if (tiers.length === 0) return null;
 
   return (
-    <SurfaceCard title="Pressure Topology">
+    <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
       <p className="text-sm text-muted-foreground mb-4">
-        Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it.
+        {framing?.topologyIntro ?? "Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it."}
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
@@ -2262,12 +2391,14 @@ function MechanicalFailureChain({
   operatingInstruction,
   requiredActionFallback,
   evidenceFallback,
+  framing,
 }: {
   run: any;
   isBlocked?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
+  framing?: BandFraming;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
@@ -2292,10 +2423,10 @@ function MechanicalFailureChain({
     rawOutcome;
 
   const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
-    { icon: <Activity className="h-4 w-4" />, label: "Main Blocker", value: primary, tone: "primary" },
-    { icon: <Target className="h-4 w-4" />, label: "Failure Path", value: failurePath, prose: true, tone: "step" },
-    { icon: <Wrench className="h-4 w-4" />, label: "Proof Required", value: breakpoint, prose: true, tone: "breakpoint" },
-    { icon: <AlertTriangle className="h-4 w-4" />, label: "Allowed Next Move", value: outcome, prose: true, tone: "outcome" },
+    { icon: <Activity className="h-4 w-4" />, label: framing?.rankPrimary ?? "Main Blocker", value: primary, tone: "primary" },
+    { icon: <Target className="h-4 w-4" />, label: framing?.pathLabel ?? "Failure Path", value: failurePath, prose: true, tone: "step" },
+    { icon: <Wrench className="h-4 w-4" />, label: framing?.proofLabel ?? "Proof Required", value: breakpoint, prose: true, tone: "breakpoint" },
+    { icon: <AlertTriangle className="h-4 w-4" />, label: framing?.outcomeLabel ?? "Allowed Next Move", value: outcome, prose: true, tone: "outcome" },
   ];
 
   const toneClass = (tone: string) => {
@@ -2308,12 +2439,15 @@ function MechanicalFailureChain({
     <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          Mechanical Failure Chain
+          {framing?.chainTitle ?? "Mechanical Failure Chain"}
         </span>
         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
           Causal Sequence
         </span>
       </div>
+      {framing?.chainNote && (
+        <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
+      )}
       <div className="flex flex-col items-stretch">
         {nodes.map((n, idx) => (
           <div key={n.label} className="flex flex-col items-stretch">
