@@ -1169,31 +1169,7 @@ function VerdictView({
         <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
 
-      {/* 8. Risk State / Allowed Next Move */}
-    {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
-        <SurfaceCard title="Risk State">
-          <div className="grid gap-4 md:grid-cols-2">
-            {hasContent(cascadeSeverity.severity_label) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
-                <div className="text-base font-semibold text-foreground">{translateSeverityLabel(cascadeSeverity.severity_label)}</div>
-              </div>
-            )}
-            {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
-                <div className="text-sm leading-relaxed text-foreground">
-                  {hasContent(cascadeSeverity.operating_instruction)
-                    ? cascadeSeverity.operating_instruction
-                    : translatePermissionState(cascadeSeverity.permission_state)}
-                </div>
-              </div>
-            )}
-          </div>
-        </SurfaceCard>
-      )}
-
-      {/* 9. Narrative Judgement — lead voice */}
+      {/* 8. Verdict Judgement — lead voice */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
