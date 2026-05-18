@@ -1107,9 +1107,6 @@ function VerdictView({
       {/* 5. Structural Diagnostics */}
       <PressureCollapsePanel run={run} isBlocked={isBlocked} />
 
-      {/* 6. Recovery & Retest Gate */}
-      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
-
       {run.hard_fail_question_id && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
@@ -1124,7 +1121,7 @@ function VerdictView({
         </div>
       )}
 
-      {/* 6b. Pressure Topology — interacting business pressures */}
+      {/* 6. Pressure Topology — interacting business pressures */}
       {hasCascade && (
         <PressureTopology
           primary={cascadePrimary}
@@ -1134,40 +1131,7 @@ function VerdictView({
         />
       )}
 
-      {/* 6c. Risk State / Allowed Next Move */}
-    {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
-        <SurfaceCard title="Risk State">
-          <div className="grid gap-4 md:grid-cols-2">
-            {hasContent(cascadeSeverity.severity_label) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
-                <div className="text-base font-semibold text-foreground">{translateSeverityLabel(cascadeSeverity.severity_label)}</div>
-              </div>
-            )}
-            {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
-                <div className="text-sm leading-relaxed text-foreground">
-                  {hasContent(cascadeSeverity.operating_instruction)
-                    ? cascadeSeverity.operating_instruction
-                    : translatePermissionState(cascadeSeverity.permission_state)}
-                </div>
-              </div>
-            )}
-          </div>
-        </SurfaceCard>
-      )}
-
-      {/* 7. Narrative Judgement — lead voice */}
-      {hasContent(verdictBody) && (
-        <SurfaceCard title="Verdict Judgement">
-          <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
-            <Prose value={verdictBody} />
-          </div>
-        </SurfaceCard>
-      )}
-
-      {/* 8. Mechanical Failure Chain — causal diagram */}
+      {/* 7. Mechanical Failure Chain — causal diagram */}
       {suppressFailureLanguage ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
@@ -1202,7 +1166,43 @@ function VerdictView({
         <MechanicalFailureChain run={run} isBlocked={isBlocked} />
       )}
 
-      {/* 9. Legacy mechanism sections — only when narrative_output is absent */}
+      {/* 8. Risk State / Allowed Next Move */}
+    {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+        <SurfaceCard title="Risk State">
+          <div className="grid gap-4 md:grid-cols-2">
+            {hasContent(cascadeSeverity.severity_label) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
+                <div className="text-base font-semibold text-foreground">{translateSeverityLabel(cascadeSeverity.severity_label)}</div>
+              </div>
+            )}
+            {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                <div className="text-sm leading-relaxed text-foreground">
+                  {hasContent(cascadeSeverity.operating_instruction)
+                    ? cascadeSeverity.operating_instruction
+                    : translatePermissionState(cascadeSeverity.permission_state)}
+                </div>
+              </div>
+            )}
+          </div>
+        </SurfaceCard>
+      )}
+
+      {/* 9. Narrative Judgement — lead voice */}
+      {hasContent(verdictBody) && (
+        <SurfaceCard title="Verdict Judgement">
+          <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
+            <Prose value={verdictBody} />
+          </div>
+        </SurfaceCard>
+      )}
+
+      {/* 10. Recovery & Retest Gate */}
+      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
+
+      {/* 11. Legacy mechanism sections — only when narrative_output is absent */}
       {!hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
@@ -1954,6 +1954,37 @@ function PressureTopology({
   tertiary: any;
   isBlocked?: boolean;
 }) {
+  const PUBLIC_DIM_NAME: Record<string, string> = {
+    cash_reality: "Cash Runway",
+    economic_literacy: "Knowing Your Numbers",
+    market_reality: "Real Customer Demand",
+    operational_capacity: "Delivery Reliability",
+    execution_discipline: "Follow-Through",
+    psychological_resilience: "Pressure Tolerance",
+  };
+  const DIM_EXPLANATION: Record<string, string> = {
+    cash_reality:
+      "Cash runway is exposed. Limited buffer increases pressure and reduces room for mistakes.",
+    economic_literacy:
+      "The business economics are not clear enough. Pricing, margin, or cost drivers may be hiding the real risk.",
+    market_reality:
+      "Demand is not yet proven strongly enough. Interest is not the same as reliable paying customers.",
+    operational_capacity:
+      "Delivery reliability is still weak. The business has not proven it can perform consistently under real operating pressure.",
+    execution_discipline:
+      "Execution rhythm is not yet reliable. The business may depend too heavily on intention rather than completed action.",
+    psychological_resilience:
+      "Pressure tolerance is not yet proven. Stress, uncertainty, or setbacks may distort decisions before the business stabilises.",
+  };
+  const publicNameFor = (data: any): string => {
+    const code = String(data?.dimension_code ?? "").toLowerCase().trim();
+    if (PUBLIC_DIM_NAME[code]) return PUBLIC_DIM_NAME[code];
+    return data?.dimension_label ?? humanize(data?.dimension_code) ?? "—";
+  };
+  const explanationFor = (data: any): string | null => {
+    const code = String(data?.dimension_code ?? "").toLowerCase().trim();
+    return DIM_EXPLANATION[code] ?? null;
+  };
   const tiers: Array<{
     rank: "Main Blocker" | "Next Pressure" | "Third Pressure";
     data: any;
@@ -1969,17 +2000,12 @@ function PressureTopology({
   return (
     <SurfaceCard title="Pressure Topology">
       <p className="text-sm text-muted-foreground mb-4">
-        Interacting business pressures, ranked by structural weight on the verdict.
+        Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it.
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
-          const dim = t.data.dimension_label ?? humanize(t.data.dimension_code);
-          const plain = t.data.plain_label;
-          // Avoid repeating the rank as both header and value (e.g. "Main Blocker / Main Blocker")
-          const showPlain =
-            hasContent(plain) &&
-            String(plain).trim().toLowerCase() !== String(t.rank).trim().toLowerCase() &&
-            String(plain).trim().toLowerCase() !== String(dim).trim().toLowerCase();
+          const dim = publicNameFor(t.data);
+          const explanation = explanationFor(t.data);
           const score = t.data.score_total;
           const isMain = t.emphasis === "primary";
           const isMid = t.emphasis === "secondary";
@@ -2020,13 +2046,10 @@ function PressureTopology({
               >
                 {dim || "—"}
               </div>
-              {showPlain && (
-                <div className="text-xs text-muted-foreground mb-3">{plain}</div>
-              )}
               {score != null && (
                 <div
                   className={cn(
-                    "inline-flex items-baseline gap-1.5 rounded-md border px-2.5 py-1",
+                    "inline-flex items-baseline gap-1.5 rounded-md border px-2.5 py-1 mb-3",
                     "border-[hsl(var(--autopsy-border))] bg-background",
                   )}
                 >
@@ -2035,6 +2058,9 @@ function PressureTopology({
                     {String(score)}
                   </span>
                 </div>
+              )}
+              {explanation && (
+                <p className="text-xs leading-relaxed text-muted-foreground">{explanation}</p>
               )}
             </div>
           );
