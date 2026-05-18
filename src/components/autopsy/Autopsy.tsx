@@ -1203,12 +1203,25 @@ function operationalStyle(state: any) {
   );
 }
 
-function OperationalStatePanel({ run }: { run: any }) {
-  const style = operationalStyle(run.operational_state);
+function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+  const opKey = String(run.operational_state ?? "").trim().toLowerCase();
+  const effective = isBlocked && !opKey ? "blocked" : opKey;
+  const style = operationalStyle(effective);
+  // Hard-fail display relabelling (does not mutate backend values)
+  const progressionDisplay = isBlocked
+    ? "PROGRESSION BLOCKED"
+    : humanize(run.progression_state) || "—";
+  const permissionBiasDisplay = isBlocked
+    ? "STRONG RESTRICTION"
+    : humanize(run.permission_bias) || "—";
+  const recoveryDisplay =
+    isBlocked && !hasContent(run.required_recovery_signal)
+      ? "Hard-fail condition must be corrected and retested."
+      : run.required_recovery_signal;
   const rows: Array<[string, any]> = [
-    ["Progression State", humanize(run.progression_state)],
-    ["Permission Bias", humanize(run.permission_bias)],
-    ["Required Recovery Signal", run.required_recovery_signal],
+    ["Progression State", progressionDisplay],
+    ["Permission Bias", permissionBiasDisplay],
+    ["Required Recovery Signal", recoveryDisplay],
   ];
   return (
     <div className={cn("rounded-2xl border-2 shadow-sm p-6", style.container)}>
@@ -1242,10 +1255,16 @@ function OperationalStatePanel({ run }: { run: any }) {
   );
 }
 
-function PressureCollapsePanel({ run }: { run: any }) {
+function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+  const stageDisplay = isBlocked
+    ? "BLOCKING FAILURE"
+    : humanize(run.pressure_stage);
+  const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
+    ? "HARD FAIL"
+    : humanize(run.failure_type);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
-    { label: "Pressure Stage", value: humanize(run.pressure_stage) },
-    { label: "Failure Type", value: humanize(run.failure_type) },
+    { label: "Pressure Stage", value: stageDisplay },
+    { label: "Failure Type", value: failureTypeDisplay },
     { label: "Pressure Summary", value: run.pressure_summary, prose: true },
     { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
   ];
@@ -1288,7 +1307,7 @@ function PressureCollapsePanel({ run }: { run: any }) {
   );
 }
 
-function RecoveryRetestPanel({ run }: { run: any }) {
+function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
   const recovery = run.required_recovery_signal;
   const retest = run.retest_condition;
   const worksheet = run.worksheet_output;
