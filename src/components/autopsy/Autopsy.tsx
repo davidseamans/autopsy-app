@@ -1231,7 +1231,7 @@ function VerdictView({
           )}
         </>
       )}
-      {/* 12. Worksheet link */}
+      {/* 11. Worksheet link */}
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
           <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
