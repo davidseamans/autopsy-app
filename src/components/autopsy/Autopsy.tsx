@@ -1446,10 +1446,12 @@ function RecoveryRetestPanel({
   run,
   isBlocked,
   evidenceOverride,
+  actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
   evidenceOverride?: string | null;
+  actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
@@ -1458,7 +1460,11 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : resolved;
-  const retest = hasContent(evidenceOverride) ? null : run.retest_condition;
+  const retest = hasContent(actionOverride)
+    ? actionOverride
+    : hasContent(evidenceOverride)
+      ? null
+      : run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
@@ -1490,11 +1496,17 @@ function RecoveryRetestPanel({
         {hasContent(retest) && (
           <div className="rounded-lg border-l-4 border-l-blue-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              What must be proven before trying again
+              Action required before retesting
             </div>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
-              {renderBlock(retest)}
-            </pre>
+            {hasContent(actionOverride) ? (
+              <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {retest as string}
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {renderBlock(retest)}
+              </pre>
+            )}
           </div>
         )}
         {hasContent(worksheet) && (
