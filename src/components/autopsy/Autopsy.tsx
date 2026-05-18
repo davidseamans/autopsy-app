@@ -979,6 +979,15 @@ function VerdictView({
         </div>
       </div>
 
+      {/* SECTION 1 — Operational State Header */}
+      <OperationalStatePanel run={run} />
+
+      {/* SECTION 2 — Pressure & Collapse */}
+      <PressureCollapsePanel run={run} />
+
+      {/* SECTION 3 — Recovery & Retest */}
+      <RecoveryRetestPanel run={run} />
+
       {/* Run details */}
       <SurfaceCard title="Run details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -1182,17 +1191,6 @@ function VerdictView({
           <Prose value={run.final_outcome} />
         </SurfaceCard>
       )}
-      {hasContent(run.worksheet_output) && (
-        <SurfaceCard title="Worksheet">
-          <Prose value={humanizeDeep(run.worksheet_output)} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.retest_condition) && (
-        <SurfaceCard title="Retest condition">
-          <Prose value={humanizeDeep(run.retest_condition)} />
-        </SurfaceCard>
-      )}
-
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
           <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
