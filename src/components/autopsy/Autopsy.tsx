@@ -1536,3 +1536,268 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
   rows.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
   return { rows, hasData: anyExplicitScore };
 }
+
+/* --------------------------- Verdict UX components ------------------------- */
+
+const CANONICAL_DIMENSIONS: Array<{ code: string; label: string }> = [
+  { code: "cash_reality", label: "Cash Reality" },
+  { code: "economic_literacy", label: "Economic Literacy" },
+  { code: "market_reality", label: "Market Reality" },
+  { code: "operational_capacity", label: "Operational Capacity" },
+  { code: "execution_discipline", label: "Execution Discipline" },
+  { code: "psychological_resilience", label: "Psychological Resilience" },
+];
+
+function normalizeDimKey(s: any): string {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function RunDetailsStrip({ run }: { run: any }) {
+  const items: Array<[string, any]> = [
+    ["Run", run.run_name],
+    ["Tester", run.tester_email],
+    ["Industry", run.industry],
+    ["Scenario", humanize(run.scenario)],
+    ["Operator", humanize(run.operator_class)],
+  ];
+  return (
+    <div className="rounded-lg border border-[hsl(var(--autopsy-border))] bg-background/40 px-4 py-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-2">
+        {items.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+              {label}
+            </div>
+            <div className="text-xs text-foreground/80 truncate">
+              {value == null || value === "" ? "—" : String(value)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DimensionPressureGraph({
+  rows,
+  hasData,
+  weakest,
+  suppress,
+  opState,
+}: {
+  rows: DimensionScoreRow[];
+  hasData: boolean;
+  weakest: string;
+  suppress: boolean;
+  opState: string;
+}) {
+  // Merge backend rows with canonical 6 so all dimensions are always shown.
+  const byKey = new Map<string, DimensionScoreRow>();
+  for (const r of rows) byKey.set(normalizeDimKey(r.code), r);
+  const merged = CANONICAL_DIMENSIONS.map((c) => {
+    const found = byKey.get(c.code);
+    return {
+      code: c.code,
+      label: c.label,
+      score: found?.score ?? 0,
+      present: !!found && hasData,
+    };
+  });
+  // sort weakest -> strongest when data exists
+  if (hasData) merged.sort((a, b) => a.score - b.score);
+
+  const max = Math.max(...merged.map((m) => m.score), 5);
+  const weakestKey = normalizeDimKey(weakest);
+  const style = operationalStyle(opState);
+  // Bar color by operational state band
+  const barColorClass =
+    opState === "blocked"
+      ? "bg-red-600"
+      : opState === "constrained"
+      ? "bg-amber-500"
+      : opState === "stabilizing"
+      ? "bg-blue-500"
+      : opState === "operationally_viable"
+      ? "bg-green-600"
+      : opState === "scalable"
+      ? "bg-emerald-600"
+      : "bg-[hsl(var(--autopsy-accent))]";
+
+  return (
+    <div className="space-y-3">
+      {!hasData && (
+        <p className="text-xs text-muted-foreground italic">
+          Backend did not return per-dimension scores for this run. Showing
+          canonical dimensions only.
+        </p>
+      )}
+      {merged.map((d) => {
+        const isWeakest =
+          !suppress &&
+          weakestKey &&
+          (normalizeDimKey(d.code) === weakestKey ||
+            normalizeDimKey(d.label) === weakestKey);
+        const pct = Math.max(2, (d.score / max) * 100);
+        return (
+          <div key={d.code}>
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span className={cn("font-medium inline-flex items-center gap-2", isWeakest && style.text)}>
+                {d.label}
+                {isWeakest && (
+                  <span className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                    opState === "blocked"
+                      ? "bg-red-500/10 text-red-700 border-red-600/40"
+                      : "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border-[hsl(var(--autopsy-accent))]/30",
+                  )}>
+                    Primary Constraint
+                  </span>
+                )}
+              </span>
+              <span className="text-muted-foreground tabular-nums">{d.present ? d.score : "—"}</span>
+            </div>
+            <div className="h-2.5 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
+              <div
+                className={cn(
+                  "h-full transition-all",
+                  isWeakest ? "bg-red-600" : barColorClass,
+                  !d.present && "opacity-30",
+                )}
+                style={{ width: `${d.present ? pct : 0}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const PROGRESSION_STAGES = [
+  { key: "blocked", label: "Blocked" },
+  { key: "constrained", label: "Constrained" },
+  { key: "stabilizing", label: "Stabilizing" },
+  { key: "operationally_viable", label: "Operationally Viable" },
+  { key: "scalable", label: "Scalable" },
+];
+
+function ProgressionFlow({ current, isBlocked }: { current: any; isBlocked?: boolean }) {
+  const key = String(current ?? "").trim().toLowerCase();
+  const activeKey = isBlocked && !key ? "blocked" : key;
+  const activeIdx = PROGRESSION_STAGES.findIndex((s) => s.key === activeKey);
+  return (
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Progression State Flow
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          Operational Permission Ladder
+        </span>
+      </div>
+      <div className="flex items-stretch gap-1 overflow-x-auto">
+        {PROGRESSION_STAGES.map((s, idx) => {
+          const isActive = idx === activeIdx;
+          const style = operationalStyle(s.key);
+          return (
+            <div key={s.key} className="flex items-center gap-1 flex-1 min-w-0">
+              <div
+                className={cn(
+                  "flex-1 rounded-md border px-2 py-2 text-center transition-all min-w-0",
+                  isActive
+                    ? cn("border-2 shadow-sm", style.container, style.text)
+                    : "border-[hsl(var(--autopsy-border))] text-muted-foreground/70 bg-background",
+                )}
+              >
+                <div className={cn("h-2 w-2 rounded-full mx-auto mb-1", isActive ? style.dot : "bg-muted-foreground/30")} />
+                <div className={cn(
+                  "text-[10px] font-semibold uppercase tracking-wider truncate",
+                  isActive && "font-mono",
+                )}>
+                  {s.label}
+                </div>
+              </div>
+              {idx < PROGRESSION_STAGES.length - 1 && (
+                <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+  const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
+  const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
+  const failurePath =
+    (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
+    humanize(run.failure_shape) ||
+    humanize(run.failure_type) ||
+    "Failure path not specified";
+  const breakpoint =
+    (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
+    (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
+    "Required breakpoint not specified";
+  const outcome = isBlocked
+    ? "Progression is blocked. Not viable in current form until the hard-fail condition is corrected and retested."
+    : humanize(run.progression_state) ||
+      "Operational outcome pending recovery signal verification.";
+
+  const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
+    { icon: <Activity className="h-4 w-4" />, label: "Primary Constraint", value: primary, tone: "primary" },
+    { icon: <Target className="h-4 w-4" />, label: "Failure Path", value: failurePath, prose: true, tone: "step" },
+    { icon: <Wrench className="h-4 w-4" />, label: "Required Breakpoint", value: breakpoint, prose: true, tone: "breakpoint" },
+    { icon: <AlertTriangle className="h-4 w-4" />, label: "Operational Outcome", value: outcome, prose: true, tone: "outcome" },
+  ];
+
+  const toneClass = (tone: string) => {
+    if (tone === "primary") return cn("border-2", style.container);
+    if (tone === "outcome") return isBlocked ? "border-red-600/50 bg-red-500/5" : "border-[hsl(var(--autopsy-border))]";
+    return "border-[hsl(var(--autopsy-border))] bg-background";
+  };
+
+  return (
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Mechanical Failure Chain
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          Causal Sequence
+        </span>
+      </div>
+      <div className="flex flex-col items-stretch">
+        {nodes.map((n, idx) => (
+          <div key={n.label} className="flex flex-col items-stretch">
+            <div className={cn("rounded-lg border p-4", toneClass(n.tone))}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="h-6 w-6 rounded-md bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] flex items-center justify-center shrink-0">
+                  {n.icon}
+                </span>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {n.label}
+                </div>
+              </div>
+              <div className={cn(
+                "text-sm break-words",
+                n.prose ? "leading-relaxed whitespace-pre-wrap" : "font-semibold",
+              )}>
+                {n.value}
+              </div>
+            </div>
+            {idx < nodes.length - 1 && (
+              <div className="flex justify-center py-2" aria-hidden>
+                <ArrowDown className={cn("h-5 w-5", style.text, "opacity-70")} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
