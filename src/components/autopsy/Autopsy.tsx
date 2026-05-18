@@ -911,19 +911,25 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
-  const rawDimensions =
-    run.dimension_scores ??
-    run.dimension_totals ??
-    run.dimension_pressure_profile ??
-    run.run_dimension_scores ??
-    run.primary_risks ??
-    (payload as any)?.dimension_scores ??
-    (payload as any)?.dimension_totals ??
-    (payload as any)?.run_dimension_scores ??
-    (payload as any)?.primary_risks ??
-    null;
-  const { rows: dimensionScores, hasData: hasDimensionData } =
-    parseDimensionScores(rawDimensions);
+  // Canonical normalized dimension scores from any backend shape.
+  const normalizedDims = normalizeDimensionScores(run);
+  // Fallback: also check payload-level fields if run is empty.
+  const fallbackDims =
+    normalizedDims.length === 0
+      ? normalizeDimensionScores({
+          dimension_scores:
+            (payload as any)?.dimension_scores ??
+            (payload as any)?.dimension_totals ??
+            (payload as any)?.run_dimension_scores,
+          primary_risks: (payload as any)?.primary_risks,
+        })
+      : normalizedDims;
+  const dimensionScores: DimensionScoreRow[] = fallbackDims.map((d) => ({
+    code: d.dimension_code,
+    label: d.dimension_code,
+    score: d.score_total,
+  }));
+  const hasDimensionData = dimensionScores.length > 0;
   const weakest = (run.weakest_dimension as string) ?? "";
 
   const verdictName = String(run.verdict_name ?? "");
@@ -1218,10 +1224,7 @@ function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const permissionBiasDisplay = isBlocked
     ? "STRONG RESTRICTION"
     : humanize(run.permission_bias) || "—";
-  const recoveryDisplay =
-    isBlocked && !hasContent(run.required_recovery_signal)
-      ? "Hard-fail condition must be corrected and retested."
-      : run.required_recovery_signal;
+  const recoveryDisplay = resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Permission Bias", permissionBiasDisplay],
@@ -1312,7 +1315,9 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
 }
 
 function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
-  const recovery = run.required_recovery_signal;
+  const resolved = resolveRecoverySignal(run);
+  const recovery =
+    resolved === "Recovery signal not returned" ? null : resolved;
   const retest = run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
@@ -1515,7 +1520,7 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
       const label = r.label ?? r.name ?? code;
       const rawScore =
         r.score ?? r.value ?? r.total ?? r.raw_score ?? r.total_score ??
-        r.points ?? r.sum ?? r.dimension_score;
+        r.score_total ?? r.points ?? r.sum ?? r.dimension_score;
       const score = readScore(rawScore);
       if (!code) continue;
       if (score != null) {
@@ -1533,7 +1538,8 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
         score = readScore(
           (v as any).score ?? (v as any).value ?? (v as any).total ??
           (v as any).raw_score ?? (v as any).total_score ??
-          (v as any).points ?? (v as any).sum ?? (v as any).dimension_score,
+          (v as any).score_total ?? (v as any).points ?? (v as any).sum ??
+          (v as any).dimension_score,
         );
       else score = readScore(v);
       if (score != null) {
@@ -1546,6 +1552,119 @@ function parseDimensionScores(raw: any): { rows: DimensionScoreRow[]; hasData: b
   }
   rows.sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
   return { rows, hasData: anyExplicitScore };
+}
+
+/**
+ * Normalize dimension scores from any of the backend shapes into a canonical
+ * array of { dimension_code, score_total }.
+ * Shapes supported:
+ *   A. object map     run.dimension_scores = { cash_reality: 2, ... }
+ *   B. array          run.dimension_scores = [{ dimension_code, score_total }, ...]
+ *   C. primary_risks  run.primary_risks    = [{ dimension_code, score_total }, ...]
+ */
+function normalizeDimensionScores(
+  run: any,
+): Array<{ dimension_code: string; score_total: number }> {
+  if (!run || typeof run !== "object") return [];
+  const readNum = (v: any): number | null => {
+    if (v == null) return null;
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const fromArray = (
+    arr: any[],
+  ): Array<{ dimension_code: string; score_total: number }> => {
+    const out: Array<{ dimension_code: string; score_total: number }> = [];
+    for (const r of arr) {
+      if (!r || typeof r !== "object") continue;
+      const code = String(
+        r.dimension_code ?? r.code ?? r.dimension ?? r.label ?? "",
+      );
+      if (!code) continue;
+      const score =
+        readNum(r.score_total) ??
+        readNum(r.total_score) ??
+        readNum(r.score) ??
+        readNum(r.total) ??
+        readNum(r.raw_score) ??
+        readNum(r.value) ??
+        readNum(r.points) ??
+        readNum(r.sum) ??
+        readNum(r.dimension_score);
+      if (score == null) continue;
+      out.push({ dimension_code: normalizeDimKey(code), score_total: score });
+    }
+    return out;
+  };
+
+  const ds = run.dimension_scores;
+  if (ds != null) {
+    if (Array.isArray(ds)) {
+      const arr = fromArray(ds);
+      if (arr.length) return arr;
+    } else if (typeof ds === "object") {
+      const out: Array<{ dimension_code: string; score_total: number }> = [];
+      for (const [k, v] of Object.entries(ds)) {
+        let s: number | null = null;
+        if (typeof v === "number") s = v;
+        else if (v && typeof v === "object")
+          s =
+            readNum((v as any).score_total) ??
+            readNum((v as any).total_score) ??
+            readNum((v as any).score) ??
+            readNum((v as any).total) ??
+            readNum((v as any).value);
+        else s = readNum(v);
+        if (s == null) continue;
+        out.push({ dimension_code: normalizeDimKey(k), score_total: s });
+      }
+      if (out.length) return out;
+    }
+  }
+
+  if (Array.isArray(run.primary_risks)) {
+    const arr = fromArray(run.primary_risks);
+    if (arr.length) return arr;
+  }
+  if (Array.isArray(run.run_dimension_scores)) {
+    const arr = fromArray(run.run_dimension_scores);
+    if (arr.length) return arr;
+  }
+  return [];
+}
+
+/**
+ * Resolve the Required Recovery Signal display string from the run payload.
+ * Preference order:
+ *  1. run.required_recovery_signal
+ *  2. run.dimension_recovery_validation[primary_risk_code]
+ *  3. "Recovery signal not returned"
+ */
+function resolveRecoverySignal(run: any): string {
+  if (!run || typeof run !== "object") return "Recovery signal not returned";
+  const direct = run.required_recovery_signal;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  const key = normalizeDimKey(
+    run.primary_risk_code ?? run.primary_risk ?? run.weakest_dimension,
+  );
+  const map = run.dimension_recovery_validation;
+  if (key && map && typeof map === "object" && !Array.isArray(map)) {
+    for (const [k, v] of Object.entries(map)) {
+      if (normalizeDimKey(k) === key) {
+        if (typeof v === "string" && v.trim()) return v.trim();
+        if (v && typeof v === "object") {
+          const s =
+            (v as any).signal ??
+            (v as any).text ??
+            (v as any).description ??
+            (v as any).label;
+          if (typeof s === "string" && s.trim()) return s.trim();
+        }
+      }
+    }
+  }
+  return "Recovery signal not returned";
 }
 
 /* --------------------------- Verdict UX components ------------------------- */
