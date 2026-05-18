@@ -127,6 +127,33 @@ function humanizeDeep(value: any): any {
   return value;
 }
 
+function translatePermissionState(value: any): string {
+  if (!hasContent(value)) return "—";
+  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const map: Record<string, string> = {
+    PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
+    STOP: "Stop. Do not proceed.",
+    CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
+    PROCEED: "Proceed with disciplined execution.",
+  };
+  return map[key] ?? humanize(value);
+}
+
+function translateSeverityLabel(value: any): string {
+  if (!hasContent(value)) return "—";
+  const key = String(value).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const map: Record<string, string> = {
+    BLOCKING: "Blocking",
+    CRITICAL: "Critical",
+    HIGH: "High",
+    ELEVATED: "Elevated",
+    MODERATE: "Moderate",
+    LOW: "Low",
+    STABLE: "Stable",
+  };
+  return map[key] ?? humanize(value);
+}
+
 export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -1014,7 +1041,7 @@ function VerdictView({
                   : "border-[hsl(var(--autopsy-accent))] text-[hsl(var(--autopsy-accent))]",
               )}
             >
-              Primary Constraint · {primaryConstraint}
+              Main Blocker · {primaryConstraint}
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1108,19 +1135,23 @@ function VerdictView({
       )}
 
       {/* 6c. Risk State / Allowed Next Move */}
-      {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state)) && (
+    {cascadeSeverity && (hasContent(cascadeSeverity.severity_label) || hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
         <SurfaceCard title="Risk State">
           <div className="grid gap-4 md:grid-cols-2">
             {hasContent(cascadeSeverity.severity_label) && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Risk State</div>
-                <div className="text-base font-semibold text-foreground">{cascadeSeverity.severity_label}</div>
+                <div className="text-base font-semibold text-foreground">{translateSeverityLabel(cascadeSeverity.severity_label)}</div>
               </div>
             )}
-            {hasContent(cascadeSeverity.permission_state) && (
+            {(hasContent(cascadeSeverity.operating_instruction) || hasContent(cascadeSeverity.permission_state)) && (
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
-                <div className="text-sm leading-relaxed text-foreground">{cascadeSeverity.permission_state}</div>
+                <div className="text-sm leading-relaxed text-foreground">
+                  {hasContent(cascadeSeverity.operating_instruction)
+                    ? cascadeSeverity.operating_instruction
+                    : translatePermissionState(cascadeSeverity.permission_state)}
+                </div>
               </div>
             )}
           </div>
@@ -1278,7 +1309,7 @@ function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const recoveryDisplay = resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
-    ["Permission Bias", permissionBiasDisplay],
+    ["Allowed Next Move", permissionBiasDisplay],
     ["Required Recovery Signal", recoveryDisplay],
   ];
   return (
@@ -1321,7 +1352,7 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
     ? "HARD FAIL"
     : humanize(run.failure_type);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
-    { label: "Pressure Stage", value: stageDisplay },
+    { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
     { label: "Pressure Summary", value: run.pressure_summary, prose: true },
     { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
@@ -1401,7 +1432,7 @@ function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean
         {hasContent(retest) && (
           <div className="rounded-lg border-l-4 border-l-blue-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Retest Condition
+              What must be proven before trying again
             </div>
             <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
               {renderBlock(retest)}
@@ -1834,7 +1865,7 @@ function DimensionPressureGraph({
                       ? "bg-red-500/10 text-red-700 border-red-600/40"
                       : "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border-[hsl(var(--autopsy-accent))]/30",
                   )}>
-                    Primary Constraint
+                    Main Blocker
                   </span>
                 )}
               </span>
@@ -1942,8 +1973,13 @@ function PressureTopology({
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
-          const label = t.data.plain_label ?? t.data.dimension_label ?? humanize(t.data.dimension_code);
           const dim = t.data.dimension_label ?? humanize(t.data.dimension_code);
+          const plain = t.data.plain_label;
+          // Avoid repeating the rank as both header and value (e.g. "Main Blocker / Main Blocker")
+          const showPlain =
+            hasContent(plain) &&
+            String(plain).trim().toLowerCase() !== String(t.rank).trim().toLowerCase() &&
+            String(plain).trim().toLowerCase() !== String(dim).trim().toLowerCase();
           const score = t.data.score_total;
           const isMain = t.emphasis === "primary";
           const isMid = t.emphasis === "secondary";
@@ -1982,10 +2018,10 @@ function PressureTopology({
                   isMain ? "text-xl" : isMid ? "text-base" : "text-sm",
                 )}
               >
-                {label || "—"}
+                {dim || "—"}
               </div>
-              {dim && dim !== label && (
-                <div className="text-xs text-muted-foreground mb-3">{dim}</div>
+              {showPlain && (
+                <div className="text-xs text-muted-foreground mb-3">{plain}</div>
               )}
               {score != null && (
                 <div
@@ -2026,10 +2062,10 @@ function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: bool
       "Operational outcome pending recovery signal verification.";
 
   const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
-    { icon: <Activity className="h-4 w-4" />, label: "Primary Constraint", value: primary, tone: "primary" },
+    { icon: <Activity className="h-4 w-4" />, label: "Main Blocker", value: primary, tone: "primary" },
     { icon: <Target className="h-4 w-4" />, label: "Failure Path", value: failurePath, prose: true, tone: "step" },
-    { icon: <Wrench className="h-4 w-4" />, label: "Required Breakpoint", value: breakpoint, prose: true, tone: "breakpoint" },
-    { icon: <AlertTriangle className="h-4 w-4" />, label: "Operational Outcome", value: outcome, prose: true, tone: "outcome" },
+    { icon: <Wrench className="h-4 w-4" />, label: "Proof Required", value: breakpoint, prose: true, tone: "breakpoint" },
+    { icon: <AlertTriangle className="h-4 w-4" />, label: "Allowed Next Move", value: outcome, prose: true, tone: "outcome" },
   ];
 
   const toneClass = (tone: string) => {
