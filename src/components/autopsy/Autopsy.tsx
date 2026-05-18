@@ -39,6 +39,9 @@ import {
   finalizeAutopsyRun,
   getGatewayPayload,
   recordAutopsyAnswer,
+  generateSupportingBlocks,
+  SupportingBlocks,
+  SupportingBlockItem,
 } from "./rpc";
 
 type View = "start" | "question" | "verdict";
