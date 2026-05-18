@@ -39,6 +39,9 @@ import {
   finalizeAutopsyRun,
   getGatewayPayload,
   recordAutopsyAnswer,
+  generateSupportingBlocks,
+  SupportingBlocks,
+  SupportingBlockItem,
 } from "./rpc";
 
 type View = "start" | "question" | "verdict";
@@ -941,6 +944,15 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
+  // Supporting blocks: failure drivers, evidence required, required actions.
+  const supportingQuery = useQuery({
+    queryKey: ["autopsy", "supporting_blocks", runId],
+    queryFn: () => generateSupportingBlocks(runId as string),
+    enabled: !!runId,
+    retry: false,
+  });
+  const supportingBlocks: SupportingBlocks | undefined = supportingQuery.data as any;
+
   // Canonical normalized dimension scores from any backend shape.
   const normalizedDims = normalizeDimensionScores(run);
   // Fallback: also check payload-level fields if run is empty.
@@ -1062,7 +1074,12 @@ function VerdictView({
       <RunDetailsStrip run={run} />
 
       {/* 3. Operational Governance Layer */}
-      <OperationalStatePanel run={run} isBlocked={isBlocked} />
+      <OperationalStatePanel
+        run={run}
+        isBlocked={isBlocked}
+        operatingInstruction={cascadeSeverity?.operating_instruction}
+        requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+      />
       <ProgressionFlow current={run.operational_state} isBlocked={isBlocked} />
 
       {/* 4. Dimension Pressure Profile */}
@@ -1166,8 +1183,17 @@ function VerdictView({
           </div>
         </SurfaceCard>
       ) : (
-        <MechanicalFailureChain run={run} isBlocked={isBlocked} />
+        <MechanicalFailureChain
+          run={run}
+          isBlocked={isBlocked}
+          operatingInstruction={cascadeSeverity?.operating_instruction}
+          requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+          evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+        />
       )}
+
+      {/* 7b. Supporting Diagnosis — failure drivers, evidence, actions */}
+      <SupportingDiagnosis blocks={supportingBlocks} />
 
       {/* 8. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
@@ -1186,7 +1212,8 @@ function VerdictView({
                   <div className="text-sm leading-relaxed text-foreground">
                     {hasContent(cascadeSeverity.operating_instruction)
                       ? cascadeSeverity.operating_instruction
-                      : translatePermissionState(cascadeSeverity.permission_state)}
+                      : (supportingBlocks?.required_actions?.[0]?.body
+                          || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
                   </div>
                 </div>
               )}
@@ -1199,7 +1226,11 @@ function VerdictView({
       )}
 
       {/* 9. Recovery & Retest Gate */}
-      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
+      <RecoveryRetestPanel
+        run={run}
+        isBlocked={isBlocked}
+        evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
+      />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
       {!hasNarrativeOutput && !hasCascade && (
@@ -1294,7 +1325,17 @@ function operationalStyle(state: any) {
   );
 }
 
-function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function OperationalStatePanel({
+  run,
+  isBlocked,
+  operatingInstruction,
+  requiredActionFallback,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  operatingInstruction?: string | null;
+  requiredActionFallback?: string | null;
+}) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
   const effective = isBlocked && !opKey ? "blocked" : opKey;
   const style = operationalStyle(effective);
@@ -1302,9 +1343,13 @@ function OperationalStatePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const progressionDisplay = isBlocked
     ? "PROGRESSION BLOCKED"
     : humanize(run.progression_state) || "—";
-  const permissionBiasDisplay = isBlocked
+  const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
     : humanize(run.permission_bias) || "—";
+  const permissionBiasDisplay = cleanProceedOnlyIf(
+    rawPermissionBias,
+    operatingInstruction || requiredActionFallback,
+  );
   const recoveryDisplay = resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
@@ -1398,11 +1443,23 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   );
 }
 
-function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function RecoveryRetestPanel({
+  run,
+  isBlocked,
+  evidenceOverride,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  evidenceOverride?: string | null;
+}) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    resolved === "Recovery signal not returned" ? null : resolved;
-  const retest = run.retest_condition;
+    hasContent(evidenceOverride)
+      ? evidenceOverride
+      : resolved === "Recovery signal not returned"
+        ? null
+        : resolved;
+  const retest = hasContent(evidenceOverride) ? null : run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
@@ -1464,6 +1521,108 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
       </div>
       {children}
     </div>
+  );
+}
+
+/* ---------------------- Public-facing label helpers ---------------------- */
+
+const PUBLIC_DIM_NAME_MAP: Record<string, string> = {
+  cash_reality: "Cash Runway",
+  economic_literacy: "Knowing Your Numbers",
+  market_reality: "Real Customer Demand",
+  operational_capacity: "Delivery Reliability",
+  execution_discipline: "Follow-Through",
+  psychological_resilience: "Pressure Tolerance",
+};
+
+const RANK_LABEL_MAP: Record<string, string> = {
+  primary: "Main Blocker",
+  secondary: "Next Pressure",
+  tertiary: "Third Pressure",
+};
+
+function publicRankLabel(rank?: string): string {
+  if (!rank) return "";
+  const k = rank.toLowerCase().trim();
+  return RANK_LABEL_MAP[k] ?? humanize(rank);
+}
+
+function publicDimName(code?: string): string {
+  if (!code) return "";
+  const k = code.toLowerCase().trim();
+  return PUBLIC_DIM_NAME_MAP[k] ?? humanize(code);
+}
+
+// Replace stale "Proceed Only If" with a stronger instruction when available.
+function cleanProceedOnlyIf(value: string | null | undefined, replacement?: string | null): string {
+  const v = (value ?? "").toString().trim();
+  const r = (replacement ?? "").toString().trim();
+  if (!v) return r;
+  if (/proceed\s*only\s*if/i.test(v)) {
+    return r || "Proceed only if the required proof is produced.";
+  }
+  return v;
+}
+
+/* -------------------------- SupportingDiagnosis -------------------------- */
+
+function SupportingDiagnosis({ blocks }: { blocks?: SupportingBlocks }) {
+  if (!blocks) return null;
+  const groups: Array<{ key: keyof SupportingBlocks; title: string }> = [
+    { key: "failure_drivers", title: "Failure Drivers" },
+    { key: "evidence_required", title: "Evidence Required" },
+    { key: "required_actions", title: "Required Actions" },
+  ];
+  const visibleGroups = groups
+    .map((g) => ({ ...g, items: (blocks[g.key] as SupportingBlockItem[] | undefined) ?? [] }))
+    .filter((g) => g.items.length > 0);
+  if (visibleGroups.length === 0) return null;
+
+  return (
+    <SurfaceCard title="Supporting Diagnosis">
+      <p className="text-sm text-muted-foreground mb-5">
+        The issues below explain why this result was reached and what must be proven before moving forward.
+      </p>
+      <div className="space-y-6">
+        {visibleGroups.map((g) => (
+          <div key={String(g.key)}>
+            <div className="text-xs font-semibold uppercase tracking-wider text-foreground mb-2">
+              {g.title}
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {g.items.map((item, idx) => {
+                const rank = publicRankLabel(item.rank);
+                const dim = publicDimName(item.dimension_code);
+                return (
+                  <div
+                    key={`${String(g.key)}-${idx}`}
+                    className="rounded-lg border border-[hsl(var(--autopsy-border))] bg-background p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                      {rank && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--autopsy-accent))]">
+                          {rank}
+                        </span>
+                      )}
+                      {dim && (
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {dim}
+                        </span>
+                      )}
+                    </div>
+                    {hasContent(item.body) && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {item.body}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SurfaceCard>
   );
 }
 
@@ -2072,7 +2231,19 @@ function PressureTopology({
   );
 }
 
-function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function MechanicalFailureChain({
+  run,
+  isBlocked,
+  operatingInstruction,
+  requiredActionFallback,
+  evidenceFallback,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  operatingInstruction?: string | null;
+  requiredActionFallback?: string | null;
+  evidenceFallback?: string | null;
+}) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
   const failurePath =
@@ -2080,14 +2251,20 @@ function MechanicalFailureChain({ run, isBlocked }: { run: any; isBlocked?: bool
     humanize(run.failure_shape) ||
     humanize(run.failure_type) ||
     "Failure path not specified";
-  const breakpoint =
+  const rawBreakpoint =
     (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
     (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
-    "Required breakpoint not specified";
-  const outcome = isBlocked
+    "";
+  const breakpoint =
+    cleanProceedOnlyIf(rawBreakpoint, evidenceFallback || operatingInstruction) ||
+    "Required proof not specified";
+  const rawOutcome = isBlocked
     ? "Progression is blocked. Not viable in current form until the hard-fail condition is corrected and retested."
     : humanize(run.progression_state) ||
       "Operational outcome pending recovery signal verification.";
+  const outcome =
+    cleanProceedOnlyIf(rawOutcome, operatingInstruction || requiredActionFallback) ||
+    rawOutcome;
 
   const nodes: Array<{ icon: React.ReactNode; label: string; value: string; prose?: boolean; tone: "primary" | "step" | "breakpoint" | "outcome" }> = [
     { icon: <Activity className="h-4 w-4" />, label: "Main Blocker", value: primary, tone: "primary" },

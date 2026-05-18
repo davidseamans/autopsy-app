@@ -64,6 +64,23 @@ export const recordAutopsyAnswer = (params: {
 export const finalizeAutopsyRun = (run_id: string) =>
   rpc("finalize_autopsy_run", { p_run_id: run_id });
 
+export interface SupportingBlockItem {
+  rank?: string;
+  dimension_code?: string;
+  body?: string;
+  [key: string]: any;
+}
+
+export interface SupportingBlocks {
+  failure_drivers?: SupportingBlockItem[];
+  evidence_required?: SupportingBlockItem[];
+  required_actions?: SupportingBlockItem[];
+  [key: string]: any;
+}
+
+export const generateSupportingBlocks = (run_id: string) =>
+  rpc<SupportingBlocks>("generate_supporting_blocks", { p_run_id: run_id });
+
 export function extractRunId(data: any): string | null {
   if (!data) return null;
   if (typeof data === "string") return data;
