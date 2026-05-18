@@ -11,6 +11,7 @@ import {
   Wrench,
   HelpCircle,
 } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
