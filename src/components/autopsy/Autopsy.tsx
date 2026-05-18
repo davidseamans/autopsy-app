@@ -1178,8 +1178,17 @@ function VerdictView({
           </div>
         </SurfaceCard>
       ) : (
-        <MechanicalFailureChain run={run} isBlocked={isBlocked} />
+        <MechanicalFailureChain
+          run={run}
+          isBlocked={isBlocked}
+          operatingInstruction={cascadeSeverity?.operating_instruction}
+          requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+          evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+        />
       )}
+
+      {/* 7b. Supporting Diagnosis — failure drivers, evidence, actions */}
+      <SupportingDiagnosis blocks={supportingBlocks} />
 
       {/* 8. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
