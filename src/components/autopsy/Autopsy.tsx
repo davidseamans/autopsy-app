@@ -1488,6 +1488,108 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
+/* ---------------------- Public-facing label helpers ---------------------- */
+
+const PUBLIC_DIM_NAME_MAP: Record<string, string> = {
+  cash_reality: "Cash Runway",
+  economic_literacy: "Knowing Your Numbers",
+  market_reality: "Real Customer Demand",
+  operational_capacity: "Delivery Reliability",
+  execution_discipline: "Follow-Through",
+  psychological_resilience: "Pressure Tolerance",
+};
+
+const RANK_LABEL_MAP: Record<string, string> = {
+  primary: "Main Blocker",
+  secondary: "Next Pressure",
+  tertiary: "Third Pressure",
+};
+
+function publicRankLabel(rank?: string): string {
+  if (!rank) return "";
+  const k = rank.toLowerCase().trim();
+  return RANK_LABEL_MAP[k] ?? humanize(rank);
+}
+
+function publicDimName(code?: string): string {
+  if (!code) return "";
+  const k = code.toLowerCase().trim();
+  return PUBLIC_DIM_NAME_MAP[k] ?? humanize(code);
+}
+
+// Replace stale "Proceed Only If" with a stronger instruction when available.
+function cleanProceedOnlyIf(value: string | null | undefined, replacement?: string | null): string {
+  const v = (value ?? "").toString().trim();
+  const r = (replacement ?? "").toString().trim();
+  if (!v) return r;
+  if (/proceed\s*only\s*if/i.test(v)) {
+    return r || "Proceed only if the required proof is produced.";
+  }
+  return v;
+}
+
+/* -------------------------- SupportingDiagnosis -------------------------- */
+
+function SupportingDiagnosis({ blocks }: { blocks?: SupportingBlocks }) {
+  if (!blocks) return null;
+  const groups: Array<{ key: keyof SupportingBlocks; title: string }> = [
+    { key: "failure_drivers", title: "Failure Drivers" },
+    { key: "evidence_required", title: "Evidence Required" },
+    { key: "required_actions", title: "Required Actions" },
+  ];
+  const visibleGroups = groups
+    .map((g) => ({ ...g, items: (blocks[g.key] as SupportingBlockItem[] | undefined) ?? [] }))
+    .filter((g) => g.items.length > 0);
+  if (visibleGroups.length === 0) return null;
+
+  return (
+    <SurfaceCard title="Supporting Diagnosis">
+      <p className="text-sm text-muted-foreground mb-5">
+        The issues below explain why this result was reached and what must be proven before moving forward.
+      </p>
+      <div className="space-y-6">
+        {visibleGroups.map((g) => (
+          <div key={String(g.key)}>
+            <div className="text-xs font-semibold uppercase tracking-wider text-foreground mb-2">
+              {g.title}
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {g.items.map((item, idx) => {
+                const rank = publicRankLabel(item.rank);
+                const dim = publicDimName(item.dimension_code);
+                return (
+                  <div
+                    key={`${String(g.key)}-${idx}`}
+                    className="rounded-lg border border-[hsl(var(--autopsy-border))] bg-background p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                      {rank && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--autopsy-accent))]">
+                          {rank}
+                        </span>
+                      )}
+                      {dim && (
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {dim}
+                        </span>
+                      )}
+                    </div>
+                    {hasContent(item.body) && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {item.body}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SurfaceCard>
+  );
+}
+
 function KV({ label, value }: { label: string; value: any }) {
   return (
     <div>
