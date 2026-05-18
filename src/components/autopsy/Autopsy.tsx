@@ -1226,7 +1226,11 @@ function VerdictView({
       )}
 
       {/* 9. Recovery & Retest Gate */}
-      <RecoveryRetestPanel run={run} isBlocked={isBlocked} />
+      <RecoveryRetestPanel
+        run={run}
+        isBlocked={isBlocked}
+        evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
+      />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
       {!hasNarrativeOutput && !hasCascade && (
@@ -1439,11 +1443,23 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   );
 }
 
-function RecoveryRetestPanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function RecoveryRetestPanel({
+  run,
+  isBlocked,
+  evidenceOverride,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  evidenceOverride?: string | null;
+}) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    resolved === "Recovery signal not returned" ? null : resolved;
-  const retest = run.retest_condition;
+    hasContent(evidenceOverride)
+      ? evidenceOverride
+      : resolved === "Recovery signal not returned"
+        ? null
+        : resolved;
+  const retest = hasContent(evidenceOverride) ? null : run.retest_condition;
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
