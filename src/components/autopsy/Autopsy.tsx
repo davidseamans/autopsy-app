@@ -1350,10 +1350,13 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
     : humanize(run.failure_type);
+  const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
-    { label: "Pressure Summary", value: run.pressure_summary, prose: true },
+    ...(suppressPressureSummary
+      ? []
+      : [{ label: "Pressure Summary", value: run.pressure_summary, prose: true }]),
     { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
   ];
   const visible = items.filter((i) => hasContent(i.value));
