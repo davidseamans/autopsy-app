@@ -944,6 +944,15 @@ function VerdictView({
   if (loading) return <p className="text-sm text-muted-foreground">Loading verdict…</p>;
   const run = payload?.run ?? {};
 
+  // Supporting blocks: failure drivers, evidence required, required actions.
+  const supportingQuery = useQuery({
+    queryKey: ["autopsy", "supporting_blocks", runId],
+    queryFn: () => generateSupportingBlocks(runId as string),
+    enabled: !!runId,
+    retry: false,
+  });
+  const supportingBlocks: SupportingBlocks | undefined = supportingQuery.data as any;
+
   // Canonical normalized dimension scores from any backend shape.
   const normalizedDims = normalizeDimensionScores(run);
   // Fallback: also check payload-level fields if run is empty.
