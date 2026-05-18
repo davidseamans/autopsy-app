@@ -979,6 +979,15 @@ function VerdictView({
         </div>
       </div>
 
+      {/* SECTION 1 — Operational State Header */}
+      <OperationalStatePanel run={run} />
+
+      {/* SECTION 2 — Pressure & Collapse */}
+      <PressureCollapsePanel run={run} />
+
+      {/* SECTION 3 — Recovery & Retest */}
+      <RecoveryRetestPanel run={run} />
+
       {/* Run details */}
       <SurfaceCard title="Run details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -1182,17 +1191,6 @@ function VerdictView({
           <Prose value={run.final_outcome} />
         </SurfaceCard>
       )}
-      {hasContent(run.worksheet_output) && (
-        <SurfaceCard title="Worksheet">
-          <Prose value={humanizeDeep(run.worksheet_output)} />
-        </SurfaceCard>
-      )}
-      {hasContent(run.retest_condition) && (
-        <SurfaceCard title="Retest condition">
-          <Prose value={humanizeDeep(run.retest_condition)} />
-        </SurfaceCard>
-      )}
-
       <div className="flex flex-wrap gap-2 pt-2">
         {runId && (
           <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
@@ -1206,6 +1204,195 @@ function VerdictView({
 }
 
 /* --------------------------------- helpers --------------------------------- */
+
+const OPERATIONAL_STATE_STYLES: Record<
+  string,
+  { label: string; container: string; dot: string; text: string }
+> = {
+  blocked: {
+    label: "BLOCKED",
+    container: "border-red-600/60 bg-red-500/5",
+    dot: "bg-red-600",
+    text: "text-red-700",
+  },
+  constrained: {
+    label: "CONSTRAINED",
+    container: "border-amber-500/60 bg-amber-500/5",
+    dot: "bg-amber-500",
+    text: "text-amber-700",
+  },
+  stabilizing: {
+    label: "STABILIZING",
+    container: "border-blue-500/60 bg-blue-500/5",
+    dot: "bg-blue-500",
+    text: "text-blue-700",
+  },
+  operationally_viable: {
+    label: "OPERATIONALLY VIABLE",
+    container: "border-green-600/60 bg-green-500/5",
+    dot: "bg-green-600",
+    text: "text-green-700",
+  },
+  scalable: {
+    label: "SCALABLE",
+    container: "border-emerald-600/60 bg-emerald-500/5",
+    dot: "bg-emerald-600",
+    text: "text-emerald-700",
+  },
+};
+
+function operationalStyle(state: any) {
+  const key = String(state ?? "").trim().toLowerCase();
+  return (
+    OPERATIONAL_STATE_STYLES[key] ?? {
+      label: key ? key.replace(/_/g, " ").toUpperCase() : "—",
+      container: "border-[hsl(var(--autopsy-border))] bg-muted/30",
+      dot: "bg-muted-foreground",
+      text: "text-foreground",
+    }
+  );
+}
+
+function OperationalStatePanel({ run }: { run: any }) {
+  const style = operationalStyle(run.operational_state);
+  const rows: Array<[string, any]> = [
+    ["Progression State", humanize(run.progression_state)],
+    ["Permission Bias", humanize(run.permission_bias)],
+    ["Required Recovery Signal", run.required_recovery_signal],
+  ];
+  return (
+    <div className={cn("rounded-2xl border-2 shadow-sm p-6", style.container)}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Operational State
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          Governance Layer
+        </span>
+      </div>
+      <div className="flex items-center gap-3 mb-6">
+        <span className={cn("h-3 w-3 rounded-full", style.dot)} aria-hidden />
+        <h2 className={cn("text-3xl md:text-4xl font-bold tracking-tight font-mono", style.text)}>
+          {style.label}
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-[hsl(var(--autopsy-border))] pt-4">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              {label}
+            </div>
+            <div className="text-sm font-medium break-words whitespace-pre-wrap">
+              {hasContent(value) ? (typeof value === "string" ? value : String(value)) : "—"}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PressureCollapsePanel({ run }: { run: any }) {
+  const items: Array<{ label: string; value: any; prose?: boolean }> = [
+    { label: "Pressure Stage", value: humanize(run.pressure_stage) },
+    { label: "Failure Type", value: humanize(run.failure_type) },
+    { label: "Pressure Summary", value: run.pressure_summary, prose: true },
+    { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
+  ];
+  const visible = items.filter((i) => hasContent(i.value));
+  if (visible.length === 0) return null;
+  return (
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Structural Diagnostics
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          Pressure / Collapse
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {visible.map((i) => (
+          <div
+            key={i.label}
+            className={cn(
+              "rounded-lg border border-[hsl(var(--autopsy-border))] p-4 bg-background",
+              i.prose && "md:col-span-2",
+            )}
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              {i.label}
+            </div>
+            <div
+              className={cn(
+                "text-sm break-words",
+                i.prose ? "leading-relaxed whitespace-pre-wrap" : "font-semibold font-mono uppercase tracking-wide",
+              )}
+            >
+              {typeof i.value === "string" ? i.value : JSON.stringify(humanizeDeep(i.value), null, 2)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecoveryRetestPanel({ run }: { run: any }) {
+  const recovery = run.required_recovery_signal;
+  const retest = run.retest_condition;
+  const worksheet = run.worksheet_output;
+  if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
+  const renderBlock = (value: any) => {
+    if (value == null) return "—";
+    if (typeof value === "string") return value;
+    return JSON.stringify(humanizeDeep(value), null, 2);
+  };
+  return (
+    <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          Recovery & Retest Gate
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+          Controlled Progression
+        </span>
+      </div>
+      <div className="space-y-4">
+        {hasContent(recovery) && (
+          <div className="rounded-lg border-l-4 border-l-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-border))] p-4 bg-background">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Required Recovery Signal
+            </div>
+            <div className="text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">
+              {renderBlock(recovery)}
+            </div>
+          </div>
+        )}
+        {hasContent(retest) && (
+          <div className="rounded-lg border-l-4 border-l-blue-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Retest Condition
+            </div>
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+              {renderBlock(retest)}
+            </pre>
+          </div>
+        )}
+        {hasContent(worksheet) && (
+          <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Worksheet Output
+            </div>
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+              {renderBlock(worksheet)}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function SurfaceCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
