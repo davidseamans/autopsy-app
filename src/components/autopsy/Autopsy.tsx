@@ -1148,6 +1148,7 @@ function VerdictView({
           secondary={cascadeSecondary}
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
+          failureDrivers={supportingBlocks?.failure_drivers}
         />
       )}
 
@@ -1192,10 +1193,7 @@ function VerdictView({
         />
       )}
 
-      {/* 7b. Supporting Diagnosis — failure drivers, evidence, actions */}
-      <SupportingDiagnosis blocks={supportingBlocks} />
-
-      {/* 8. Verdict Judgement — lead voice with integrated decision block */}
+      {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(verdictBody) && (
         <SurfaceCard title="Verdict Judgement">
           {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
@@ -1225,11 +1223,12 @@ function VerdictView({
         </SurfaceCard>
       )}
 
-      {/* 9. Recovery & Retest Gate */}
+      {/* 8. Recovery & Retest Gate */}
       <RecoveryRetestPanel
         run={run}
         isBlocked={isBlocked}
         evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
+        actionOverride={supportingBlocks?.required_actions?.[0]?.body}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
