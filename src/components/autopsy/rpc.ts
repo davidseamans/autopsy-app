@@ -21,8 +21,13 @@ export interface GatewayPayload {
   [key: string]: any;
 }
 
-async function rpc<T = any>(fn: string, args: Record<string, any>): Promise<T> {
-  const { data, error } = await supabase.rpc(fn, args);
+async function rpc<T = any>(
+  fn: string,
+  args: Record<string, any>,
+  schema?: string,
+): Promise<T> {
+  const client = schema ? supabase.schema(schema as any) : supabase;
+  const { data, error } = await client.rpc(fn, args);
   if (error) {
     const err: any = new Error(error.message || `RPC ${fn} failed`);
     err.rpc = fn;
@@ -39,30 +44,30 @@ export const createAutopsyRun = (params: {
   tester_email: string;
   operator_class: string;
 }) =>
-  rpc<any>("runtime.create_autopsy_run", {
+  rpc<any>("create_autopsy_run", {
     p_industry: params.industry,
     p_run_name: params.run_name,
     p_scenario: params.scenario,
     p_tester_email: params.tester_email,
     p_operator_class: params.operator_class,
-  });
+  }, "runtime");
 
 export const getGatewayPayload = (run_id: string) =>
-  rpc<GatewayPayload>("runtime.get_autopsy_gateway_payload", { p_run_id: run_id });
+  rpc<GatewayPayload>("get_autopsy_gateway_payload", { p_run_id: run_id }, "runtime");
 
 export const recordAutopsyAnswer = (params: {
   run_id: string;
   question_id: string | number;
   selected_option: string | number;
 }) =>
-  rpc("runtime.record_autopsy_answer", {
+  rpc("record_autopsy_answer", {
     p_run_id: params.run_id,
     p_question_id: params.question_id,
     p_selected_option: params.selected_option,
-  });
+  }, "runtime");
 
 export const finalizeAutopsyRun = (run_id: string) =>
-  rpc("runtime.finalize_autopsy_run", { p_run_id: run_id });
+  rpc("finalize_autopsy_run", { p_run_id: run_id }, "runtime");
 
 export interface SupportingBlockItem {
   rank?: string;
