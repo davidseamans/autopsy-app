@@ -39,7 +39,7 @@ export const createAutopsyRun = (params: {
   tester_email: string;
   operator_class: string;
 }) =>
-  rpc<any>("create_autopsy_run", {
+  rpc<any>("runtime.create_autopsy_run", {
     p_industry: params.industry,
     p_run_name: params.run_name,
     p_scenario: params.scenario,
@@ -48,21 +48,21 @@ export const createAutopsyRun = (params: {
   });
 
 export const getGatewayPayload = (run_id: string) =>
-  rpc<GatewayPayload>("get_autopsy_gateway_payload", { p_run_id: run_id });
+  rpc<GatewayPayload>("runtime.get_autopsy_gateway_payload", { p_run_id: run_id });
 
 export const recordAutopsyAnswer = (params: {
   run_id: string;
   question_id: string | number;
   selected_option: string | number;
 }) =>
-  rpc("record_autopsy_answer", {
+  rpc("runtime.record_autopsy_answer", {
     p_run_id: params.run_id,
     p_question_id: params.question_id,
     p_selected_option: params.selected_option,
   });
 
 export const finalizeAutopsyRun = (run_id: string) =>
-  rpc("finalize_autopsy_run", { p_run_id: run_id });
+  rpc("runtime.finalize_autopsy_run", { p_run_id: run_id });
 
 export interface SupportingBlockItem {
   rank?: string;
