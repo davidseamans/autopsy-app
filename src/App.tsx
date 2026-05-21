@@ -7,6 +7,7 @@ import AppShell from "@/components/AppShell";
 import { Autopsy, AutopsyRunRoute } from "@/components/autopsy/Autopsy";
 import AutopsyHistory from "@/pages/AutopsyHistory";
 import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
+import Stage1 from "@/pages/Stage1";
 import Leads from "@/pages/crm/Leads";
 import Accounts from "@/pages/crm/Accounts";
 import Pipeline from "@/pages/crm/Pipeline";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
+            <Route path="/stage-1" element={<Stage1 />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/pipeline" element={<Pipeline />} />

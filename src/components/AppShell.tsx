@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
+  { title: "Stage 1", url: "/stage-1", icon: LayoutDashboard },
   { title: "Leads", url: "/leads", icon: Users },
   { title: "Accounts", url: "/accounts", icon: Building2 },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
