@@ -1156,6 +1156,7 @@ function VerdictView({
     opStateKey === "blocked" ||
     isNotViableVerdict ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
+  const isProgressionBlocked = isProgressionLocked;
   const isHardFail = hasSelectedHardFail;
   const isScoreBandNotViable =
     !isHardFail &&
@@ -1237,8 +1238,10 @@ function VerdictView({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFail
               ? "Status: Completed · Blocking Failure"
-              : isProgressionLocked
-                ? "Status: Completed · Progression Locked"
+                : isScoreBandNotViable
+                  ? "Status: Completed · Score-Band Failure"
+                  : isProgressionBlocked
+                    ? "Status: Completed · Progression Locked"
                 : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
@@ -1290,7 +1293,8 @@ function VerdictView({
       <OperationalStatePanel
         run={run}
         isBlocked={isBlocked}
-        isProgressionLocked={isProgressionLocked}
+        isProgressionLocked={isProgressionBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
         operatingInstruction={cascadeSeverity?.operating_instruction}
         requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
       />
@@ -1342,7 +1346,11 @@ function VerdictView({
       </SurfaceCard>
 
       {/* 5. Structural Diagnostics */}
-      <PressureCollapsePanel run={run} isBlocked={isBlocked} />
+      <PressureCollapsePanel
+        run={run}
+        isBlocked={isBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
+      />
 
       {isHardFail && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
@@ -1405,6 +1413,7 @@ function VerdictView({
         <MechanicalFailureChain
           run={run}
           isBlocked={isBlocked}
+          isScoreBandNotViable={isScoreBandNotViable}
           operatingInstruction={cascadeSeverity?.operating_instruction}
           requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
           evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
@@ -1450,6 +1459,7 @@ function VerdictView({
       <RecoveryRetestPanel
         run={run}
         isBlocked={isBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
         evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
         actionOverride={supportingBlocks?.required_actions?.[0]?.body}
       />
