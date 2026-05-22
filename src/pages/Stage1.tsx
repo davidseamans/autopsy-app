@@ -522,7 +522,7 @@ function Stage1ProofScorecard() {
             <CardTitle className="text-base">Stage 1 Proof Scorecard</CardTitle>
             <CardDescription>Prove real demand before scaling</CardDescription>
           </div>
-          <GateBadge gate={sc.gate} />
+          <PlainGateBadge sc={sc} unitsCount={units.length} />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
