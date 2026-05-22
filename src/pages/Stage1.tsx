@@ -601,6 +601,98 @@ function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[]
   });
 }
 
+function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
+  const [exp, setExp] = useState<GBExpense>({ id: "" });
+  const reset = () => setExp({ id: "" });
+  const categories: GBCategory[] = [
+    "Fuel / Vehicle",
+    "Phone / Internet",
+    "Parking / Tolls",
+    "Software",
+    "Small Tools",
+    "PPE / Uniforms",
+    "General Supplies",
+    "Training",
+    "Insurance",
+    "Other",
+  ];
+  return (
+    <div className="rounded border bg-muted/30 p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Expense Date</Label>
+          <Input type="date" value={exp.expenseDate ?? ""} onChange={(e) => setExp({ ...exp, expenseDate: e.target.value })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Supplier</Label>
+          <Input value={exp.supplier ?? ""} onChange={(e) => setExp({ ...exp, supplier: e.target.value })} />
+        </div>
+        <div className="space-y-1 col-span-2">
+          <Label className="text-xs">Description</Label>
+          <Input value={exp.description ?? ""} onChange={(e) => setExp({ ...exp, description: e.target.value })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Category</Label>
+          <Select value={exp.category ?? ""} onValueChange={(v) => setExp({ ...exp, category: v as GBCategory })}>
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Amount</Label>
+          <Input type="number" value={exp.amount ?? ""} onChange={(e) => setExp({ ...exp, amount: e.target.value === "" ? undefined : Number(e.target.value) })} />
+        </div>
+        <div className="space-y-1 col-span-2">
+          <Label className="text-xs flex items-center gap-2">
+            <input type="checkbox" checked={!!exp.gstIncluded} onChange={(e) => setExp({ ...exp, gstIncluded: e.target.checked })} />
+            GST included (optional)
+          </Label>
+        </div>
+        <div className="space-y-1 col-span-2">
+          <Label className="text-xs">Attach Receipt (Take Photo / Upload File)</Label>
+          <Input
+            type="file"
+            accept="image/jpeg,image/png,image/heic,application/pdf"
+            capture="environment"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) setExp({ ...exp, receiptName: f.name });
+            }}
+          />
+          {exp.receiptName && (
+            <p className="text-xs text-emerald-700">{exp.receiptName}</p>
+          )}
+        </div>
+        <div className="space-y-1 col-span-2">
+          <Label className="text-xs">Notes</Label>
+          <Textarea rows={2} value={exp.notes ?? ""} onChange={(e) => setExp({ ...exp, notes: e.target.value })} />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => {
+            if (!exp.amount && !exp.category && !exp.supplier) {
+              toast({ title: "Add at least a category, supplier, or amount" });
+              return;
+            }
+            onAdd({ ...exp, id: crypto.randomUUID() });
+            reset();
+            toast({
+              title: "Expense recorded",
+              description: "This item is not a direct job cost and will not be included in this job's gross margin.",
+            });
+          }}
+        >
+          Add Expense
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function JobDetailSheet({
   unit,
   open,
