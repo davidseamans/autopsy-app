@@ -47,6 +47,7 @@ import {
   getGatewayPayload,
   recordAutopsyAnswer,
   generateSupportingBlocks,
+  SelectedAnswerAuditRow,
   SupportingBlocks,
   SupportingBlockItem,
 } from "./rpc";
@@ -1087,14 +1088,21 @@ function VerdictView({
 
   const selectedAnswerAudit = useMemo(() => {
     const dbRows = answerAuditQuery.data ?? [];
+    const payloadRows = buildSelectedAnswersFromPayload(payload?.questions);
     if (dbRows.length > 0) {
-      const selectedHardFails = dbRows.filter((r) => r.hard_fail === true);
+      const byQuestion = new Map<string, SelectedAnswerAuditRow>();
+      for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
+      for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
+      const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
+      const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
       return {
-        selectedAnswers: dbRows,
+        selectedAnswers,
         selectedHardFails,
         hasSelectedHardFail: selectedHardFails.length > 0,
         firstSelectedHardFail: selectedHardFails[0] ?? null,
-        source: "autopsy_answers" as const,
+        source: (payloadRows.length > dbRows.length
+          ? "autopsy_answers+gateway_payload"
+          : "autopsy_answers") as const,
         expectedAnswerCount: (payload?.questions ?? []).length || 10,
         auditLoaded: true,
       };
@@ -1110,36 +1118,7 @@ function VerdictView({
         auditLoaded: false,
       };
     }
-    const qs = (payload?.questions ?? []) as any[];
-    const selectedAnswers = qs.filter((q) => q.selected_option != null).map((q, i) => {
-      const opts = (q.options ?? []) as any[];
-      const selectedId = q.selected_option ?? null;
-      const selectedOpt =
-        opts.find(
-          (o) =>
-            o != null &&
-            typeof o === "object" &&
-            (String(o.id) === String(selectedId) ||
-              String(o.option_id) === String(selectedId) ||
-              String(o.value) === String(selectedId)),
-        ) ?? null;
-      return {
-        question_id: q.question_id,
-        question_number: q.position ?? i + 1,
-        selected_option_id: selectedId,
-        selected_option_label:
-          (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
-        score_value:
-          selectedOpt && typeof selectedOpt === "object"
-            ? (selectedOpt.score_value ?? selectedOpt.score ?? null)
-            : q.selected_score_value ?? null,
-        hard_fail:
-          selectedOpt && typeof selectedOpt === "object"
-            ? !!selectedOpt.hard_fail
-            : false,
-        dimension_code: q.dimension_code ?? null,
-      };
-    });
+    const selectedAnswers = payloadRows;
     const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
     return {
       selectedAnswers,
@@ -1147,7 +1126,7 @@ function VerdictView({
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
       source: "gateway_payload" as const,
-      expectedAnswerCount: qs.length || 10,
+      expectedAnswerCount: (payload?.questions ?? []).length || 10,
       auditLoaded: !answerAuditQuery.isLoading,
     };
   }, [answerAuditQuery.data, answerAuditQuery.isLoading, payload?.questions]);
