@@ -1445,7 +1445,7 @@ function VerdictView({
         isScoreBandNotViable={isScoreBandNotViable}
       />
 
-      {isHardFail && (
+      {isHardFail && !isScoreBandNotViable && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
             Blocking Failure Triggered
@@ -1577,27 +1577,27 @@ function VerdictView({
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
-              <Prose value={run.execution_diagnosis} />
+              <Prose value={sanitizeVerdictCopy(run.execution_diagnosis, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_1) && (
             <SurfaceCard title="Mechanism — Step 1">
-              <Prose value={run.mechanism_step_1} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_1, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_2) && (
             <SurfaceCard title="Mechanism — Step 2">
-              <Prose value={run.mechanism_step_2} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_2, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_3) && (
             <SurfaceCard title="Mechanism — Step 3">
-              <Prose value={run.mechanism_step_3} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_3, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.final_outcome) && (
             <SurfaceCard title="Final outcome">
-              <Prose value={run.final_outcome} />
+              <Prose value={sanitizeVerdictCopy(run.final_outcome, isHardFail)} />
             </SurfaceCard>
           )}
         </>
@@ -1963,11 +1963,17 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
   return value
     .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
-    .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(
+      /A hard[-\s]?fail condition was triggered(?:\s+by\s+a\s+selected\s+answer\s+during\s+this\s+assessment)?\.?/gi,
+      "The assessment score is below the minimum viability threshold.",
+    )
     .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
+    .replace(/selected hard[-\s]?fail answer/gi, "selected answer")
     .replace(/hard[-\s]?fail condition/gi, "score-band condition")
     .replace(/existential hard[-\s]?fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[-\s]?fail triggered/gi, "score-band failure recorded")
+    .replace(/Blocking failure triggered/gi, "Score-band failure")
     .replace(/hard[_-]fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail/gi, "score-band failure")
     .replace(/blocking failure/gi, "score-band failure")
