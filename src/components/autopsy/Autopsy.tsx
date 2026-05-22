@@ -43,6 +43,7 @@ import {
   createAutopsyRun,
   extractRunId,
   finalizeAutopsyRun,
+  getCurrentRunAnswerAudit,
   getGatewayPayload,
   recordAutopsyAnswer,
   generateSupportingBlocks,
@@ -1038,6 +1039,12 @@ function VerdictView({
     retry: false,
   });
   const supportingBlocks: SupportingBlocks | undefined = supportingQuery.data as any;
+  const answerAuditQuery = useQuery({
+    queryKey: ["autopsy", "answer_audit", runId],
+    queryFn: () => getCurrentRunAnswerAudit(runId as string),
+    enabled: !!runId,
+    retry: false,
+  });
 
   // Canonical normalized dimension scores from any backend shape.
   const normalizedDims = normalizeDimensionScores(run);
@@ -1062,8 +1069,9 @@ function VerdictView({
 
   const verdictName = String(run.verdict_name ?? "");
   const permissionLevel = String(run.permission_level ?? "");
+  const isNotViableVerdict = /not[\s_-]?viable/i.test(verdictName);
   const isViable =
-    /viable/i.test(verdictName) ||
+    (!isNotViableVerdict && /viable/i.test(verdictName)) ||
     permissionLevel.toLowerCase() === "granted";
   const hasMeaningfulWeakest = !!(weakest && String(weakest).trim());
   const suppressFailureLanguage = isViable && !hasMeaningfulWeakest;
@@ -1078,6 +1086,16 @@ function VerdictView({
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
   const selectedAnswerAudit = useMemo(() => {
+    const dbRows = answerAuditQuery.data ?? [];
+    if (dbRows.length > 0) {
+      const selectedHardFails = dbRows.filter((r) => r.hard_fail === true);
+      return {
+        selectedAnswers: dbRows,
+        selectedHardFails,
+        hasSelectedHardFail: selectedHardFails.length > 0,
+        firstSelectedHardFail: selectedHardFails[0] ?? null,
+      };
+    }
     const qs = (payload?.questions ?? []) as any[];
     const selectedAnswers = qs.map((q, i) => {
       const opts = (q.options ?? []) as any[];
@@ -1115,7 +1133,7 @@ function VerdictView({
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
     };
-  }, [payload?.questions]);
+  }, [answerAuditQuery.data, payload?.questions]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
@@ -1133,11 +1151,22 @@ function VerdictView({
   // Progression locking is not the same as a hard-fail. Hard-fail display is
   // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
+  const scoreNumeric = run.score_total != null
+    ? Number(run.score_total)
+    : (payload as any)?.integrity?.score_total_live != null
+      ? Number((payload as any).integrity.score_total_live)
+      : null;
   const isProgressionLocked =
     opStateKey === "blocked" ||
-    /not[\s_-]?viable/i.test(verdictName) ||
+    isNotViableVerdict ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
+  const isProgressionBlocked = isProgressionLocked;
   const isHardFail = hasSelectedHardFail;
+  const isScoreBandNotViable =
+    !isHardFail &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= 0 &&
+    (scoreNumeric as number) <= 9;
   const isBlocked = isHardFail;
   const effectiveOpState = isHardFail
     ? "blocked"
@@ -1145,7 +1174,6 @@ function VerdictView({
       ? "locked"
       : opStateKey;
 
-  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const band: VerdictBand = getVerdictBand({
     verdictName,
     isBlocked,
@@ -1214,8 +1242,10 @@ function VerdictView({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFail
               ? "Status: Completed · Blocking Failure"
-              : isProgressionLocked
-                ? "Status: Completed · Progression Locked"
+                : isScoreBandNotViable
+                  ? "Status: Completed · Score-Band Failure"
+                  : isProgressionBlocked
+                    ? "Status: Completed · Progression Locked"
                 : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
@@ -1267,7 +1297,8 @@ function VerdictView({
       <OperationalStatePanel
         run={run}
         isBlocked={isBlocked}
-        isProgressionLocked={isProgressionLocked}
+        isProgressionLocked={isProgressionBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
         operatingInstruction={cascadeSeverity?.operating_instruction}
         requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
       />
@@ -1319,7 +1350,11 @@ function VerdictView({
       </SurfaceCard>
 
       {/* 5. Structural Diagnostics */}
-      <PressureCollapsePanel run={run} isBlocked={isBlocked} />
+      <PressureCollapsePanel
+        run={run}
+        isBlocked={isBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
+      />
 
       {isHardFail && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
@@ -1382,6 +1417,7 @@ function VerdictView({
         <MechanicalFailureChain
           run={run}
           isBlocked={isBlocked}
+          isScoreBandNotViable={isScoreBandNotViable}
           operatingInstruction={cascadeSeverity?.operating_instruction}
           requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
           evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
@@ -1418,7 +1454,7 @@ function VerdictView({
             </div>
           )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
-            <Prose value={verdictBody} />
+            <Prose value={sanitizeVerdictCopy(verdictBody, isHardFail)} />
           </div>
         </SurfaceCard>
       )}
@@ -1427,6 +1463,7 @@ function VerdictView({
       <RecoveryRetestPanel
         run={run}
         isBlocked={isBlocked}
+        isScoreBandNotViable={isScoreBandNotViable}
         evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
         actionOverride={supportingBlocks?.required_actions?.[0]?.body}
       />
@@ -1497,6 +1534,12 @@ function VerdictView({
           </SurfaceCard>
         );
       })()}
+      <VerdictHardFailDebug
+        runId={runId}
+        totalScore={scoreNumeric}
+        finalVerdict={verdictName}
+        audit={selectedAnswerAudit}
+      />
     </div>
   );
 }
@@ -1561,12 +1604,14 @@ function OperationalStatePanel({
   run,
   isBlocked,
   isProgressionLocked,
+  isScoreBandNotViable,
   operatingInstruction,
   requiredActionFallback,
 }: {
   run: any;
   isBlocked?: boolean;
   isProgressionLocked?: boolean;
+  isScoreBandNotViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1588,7 +1633,9 @@ function OperationalStatePanel({
     rawPermissionBias,
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = resolveRecoverySignal(run);
+  const recoveryDisplay = isScoreBandNotViable
+    ? "Repair Worksheet Required"
+    : resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Allowed Next Move", permissionBiasDisplay],
@@ -1626,14 +1673,24 @@ function OperationalStatePanel({
   );
 }
 
-function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function PressureCollapsePanel({
+  run,
+  isBlocked,
+  isScoreBandNotViable,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
+}) {
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
+    : isScoreBandNotViable
+      ? "SCORE-BAND FAILURE"
     : humanize(run.pressure_stage);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
-    : !isBlocked && /hard\s*fail|existential/i.test(rawFailureType)
+    : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
       ? "Score-band Not Viable"
       : rawFailureType;
   const suppressPressureSummary = hasContent(run.narrative_output);
@@ -1687,22 +1744,28 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
 function RecoveryRetestPanel({
   run,
   isBlocked,
+  isScoreBandNotViable,
   evidenceOverride,
   actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    hasContent(evidenceOverride)
+    isScoreBandNotViable
+      ? "Repair Worksheet Required"
+      : hasContent(evidenceOverride)
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
         : resolved;
-  const retest = hasContent(actionOverride)
+  const retest = isScoreBandNotViable
+    ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
+    : hasContent(actionOverride)
     ? actionOverride
     : hasContent(evidenceOverride)
       ? null
@@ -1773,6 +1836,60 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
         {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
+  if (isHardFail || typeof value !== "string") return value;
+  return value
+    .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
+    .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
+    .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(/hard[-\s]?fail condition/gi, "score-band condition")
+    .replace(/existential hard[-\s]?fail/gi, "score-band failure")
+    .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[-\s]?fail/gi, "score-band failure")
+    .replace(/blocking failure/gi, "score-band failure")
+    .replace(
+      /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
+      "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
+    );
+}
+
+function VerdictHardFailDebug({
+  runId,
+  totalScore,
+  finalVerdict,
+  audit,
+}: {
+  runId: string | null;
+  totalScore: number | null;
+  finalVerdict: string;
+  audit: any;
+}) {
+  const firstHardFail = audit?.firstSelectedHardFail ?? null;
+  const debugPayload = {
+    run_id: runId,
+    total_score: totalScore,
+    final_verdict: finalVerdict || null,
+    hard_fail_triggered: audit?.hasSelectedHardFail === true,
+    hard_fail_source_question_number: firstHardFail?.question_number ?? null,
+    hard_fail_source_option_id: firstHardFail?.selected_option_id ?? null,
+    selected_answers: (audit?.selectedAnswers ?? []).map((r: any) => ({
+      question_number: r.question_number ?? null,
+      score_value: r.score_value ?? null,
+      hard_fail: r.hard_fail === true,
+    })),
+  };
+  return (
+    <div className="rounded-lg border border-[hsl(var(--autopsy-border))] bg-muted/30 p-4">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+        Developer verdict audit
+      </div>
+      <pre className="text-[11px] overflow-auto max-h-72 whitespace-pre-wrap break-words">
+        {JSON.stringify(debugPayload, null, 2)}
+      </pre>
     </div>
   );
 }
@@ -2619,6 +2736,7 @@ function PressureTopology({
 function MechanicalFailureChain({
   run,
   isBlocked,
+  isScoreBandNotViable,
   operatingInstruction,
   requiredActionFallback,
   evidenceFallback,
@@ -2626,6 +2744,7 @@ function MechanicalFailureChain({
 }: {
   run: any;
   isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
@@ -2649,6 +2768,8 @@ function MechanicalFailureChain({
     "Required proof not specified";
   const rawOutcome = isBlocked
     ? "Progression is blocked. Not viable in current form until the hard-fail condition is corrected and retested."
+    : isScoreBandNotViable
+      ? "Progression locked. Repair Worksheet Required before Stage 1 can be reconsidered."
     : humanize(run.progression_state) ||
       "Operational outcome pending recovery signal verification.";
   const outcome =
