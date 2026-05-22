@@ -582,6 +582,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       localStorage.removeItem("autopsy_active_run_id");
       localStorage.removeItem("autopsy_current_run_id");
     } catch { /* noop */ }
+    // Drop ALL cached autopsy query data so a new run cannot read prior
+    // run's payload, supporting blocks, hard-fail flags, or answers.
+    try {
+      qc.removeQueries({ queryKey: ["autopsy"] });
+    } catch { /* noop */ }
     navigate("/autopsy");
   }
 
