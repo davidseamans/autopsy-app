@@ -1180,10 +1180,13 @@ function VerdictView({
         hard_fail_triggered: hasSelectedHardFail,
         backend_hard_fail_triggered: (run as any).hard_fail_triggered ?? null,
         primary_risk: (run as any).primary_risk ?? null,
-        hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
+        hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
-          (run as any).hard_fail_selected_option_id ?? null,
+          firstSelectedHardFail?.selected_option_id ?? null,
         hard_fail_dimension: firstSelectedHardFail?.dimension_code ?? null,
+        backend_hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
+        backend_hard_fail_selected_option_id:
+          (run as any).hard_fail_selected_option_id ?? null,
         hard_fail_triggered_from_selected_options:
           hasSelectedHardFail,
         selected_hard_fail_questions: selectedHardFails.map((r) => ({
