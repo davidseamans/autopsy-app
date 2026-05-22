@@ -2024,7 +2024,7 @@ function VerdictHardFailDebug({
     selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
       score_value: r.score_value ?? null,
-      option_hard_fail: r.option_hard_fail ?? r.hard_fail === true,
+      option_hard_fail: (r.option_hard_fail ?? r.hard_fail) === true,
       hard_fail: deriveHardFailFromSelectedAnswers([r]),
     })),
   };
