@@ -1245,14 +1245,21 @@ function VerdictView({
       ? Number((payload as any).integrity.score_total_live)
       : null;
   const isHardFail = hasSelectedHardFail;
-  const isScoreBandNotViable =
+  const isCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
+    (scoreNumeric as number) <= 3;
+  const isScoreBandNotViable =
+    !isHardFail &&
+    !isCriticalStop &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= 4 &&
     (scoreNumeric as number) <= 9;
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
+    isCriticalStop ||
     isScoreBandNotViable ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
   const isProgressionBlocked = isProgressionLocked;
