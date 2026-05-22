@@ -1077,6 +1077,47 @@ function VerdictView({
   const hasNarrativeOutput = hasContent(run.narrative_output);
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
+  const selectedAnswerAudit = useMemo(() => {
+    const qs = (payload?.questions ?? []) as any[];
+    const selectedAnswers = qs.map((q, i) => {
+      const opts = (q.options ?? []) as any[];
+      const selectedId = q.selected_option ?? null;
+      const selectedOpt =
+        opts.find(
+          (o) =>
+            o != null &&
+            typeof o === "object" &&
+            (String(o.id) === String(selectedId) ||
+              String(o.option_id) === String(selectedId) ||
+              String(o.value) === String(selectedId)),
+        ) ?? null;
+      return {
+        question_id: q.question_id,
+        question_number: q.position ?? i + 1,
+        selected_option_id: selectedId,
+        selected_option_label:
+          (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
+        score_value:
+          selectedOpt && typeof selectedOpt === "object"
+            ? (selectedOpt.score_value ?? selectedOpt.score ?? null)
+            : q.selected_score_value ?? null,
+        hard_fail:
+          selectedOpt && typeof selectedOpt === "object"
+            ? !!selectedOpt.hard_fail
+            : false,
+        dimension_code: q.dimension_code ?? null,
+      };
+    });
+    const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+    return {
+      selectedAnswers,
+      selectedHardFails,
+      hasSelectedHardFail: selectedHardFails.length > 0,
+      firstSelectedHardFail: selectedHardFails[0] ?? null,
+    };
+  }, [payload?.questions]);
+  const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
+
   // Diagnostic cascade (pressure topology) — new backend source of truth.
   const cascade =
     (run as any)?.diagnosis?.cascade ??
@@ -1089,14 +1130,15 @@ function VerdictView({
   const cascadeSeverity = cascade?.severity ?? null;
   const hasCascade = !!(cascadePrimary || cascadeSecondary || cascadeTertiary);
 
-  // Hard-fail / blocked classification (display only — backend values untouched)
+  // Progression locking is not the same as a hard-fail. Hard-fail display is
+  // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const isBlocked =
+  const isProgressionLocked =
     opStateKey === "blocked" ||
-    !!run.hard_fail_question_id ||
     /not[\s_-]?viable/i.test(verdictName) ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
-  const effectiveOpState = isBlocked && !opStateKey ? "blocked" : opStateKey;
+  const isBlocked = hasSelectedHardFail;
+  const effectiveOpState = isProgressionLocked && !opStateKey ? "blocked" : opStateKey;
   const opStyle = operationalStyle(effectiveOpState);
 
   const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
