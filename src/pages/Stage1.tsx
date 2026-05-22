@@ -903,10 +903,6 @@ function JobDetailSheet({
             </div>
           </div>
 
-          {/* Legacy linked records (read-only context) */}
-          {(fin || docs.length > 0) && (
-            null
-          )}
           {/* 6. General Business Expenses (not in GM) */}
           <div className="rounded-md border p-3 space-y-3">
             <div className="font-medium text-sm flex items-center gap-2">
