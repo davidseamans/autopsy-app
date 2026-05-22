@@ -1274,6 +1274,7 @@ function VerdictView({
     verdictName,
     isBlocked,
     score: scoreNumeric,
+    isCriticalStop,
   });
   const framing = BAND_FRAMING[band];
 
