@@ -1510,6 +1510,12 @@ const OPERATIONAL_STATE_STYLES: Record<
     dot: "bg-red-600",
     text: "text-red-700",
   },
+  locked: {
+    label: "LOCKED",
+    container: "border-amber-500/60 bg-amber-500/5",
+    dot: "bg-amber-500",
+    text: "text-amber-700",
+  },
   constrained: {
     label: "CONSTRAINED",
     container: "border-amber-500/60 bg-amber-500/5",
@@ -2410,6 +2416,7 @@ function DimensionPressureGraph({
 
 const PROGRESSION_STAGES = [
   { key: "blocked", label: "Blocked" },
+  { key: "locked", label: "Locked" },
   { key: "constrained", label: "Constrained" },
   { key: "stabilizing", label: "Stabilizing" },
   { key: "operationally_viable", label: "Operationally Viable" },
