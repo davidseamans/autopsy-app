@@ -1350,7 +1350,12 @@ function VerdictView({
               framing.headerTextClass,
             )}
           >
-            {(run.verdict_name as string) ?? "Verdict"}
+            {(() => {
+              const vn = (run.verdict_name as string) ?? "";
+              if (vn.trim()) return vn;
+              if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
+              return "Verdict";
+            })()}
           </h1>
           {run.score_total != null && (
             <div className="text-base">
@@ -1609,7 +1614,10 @@ function VerdictView({
       {/* 11. Worksheet link */}
       {/* 11. Progression Routing */}
       {runId && (() => {
-        const routingBand = deriveBand(verdictName);
+        let routingBand = deriveBand(verdictName);
+        if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
+          routingBand = "not_viable";
+        }
         const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
         return (
           <SurfaceCard title="Progression Routing">
@@ -1642,8 +1650,7 @@ function VerdictView({
           </SurfaceCard>
         );
       })()}
-      {(import.meta.env.DEV ||
-        (typeof window !== "undefined" &&
+      {((typeof window !== "undefined" &&
           new URLSearchParams(window.location.search).get("debug") === "1") ||
         (typeof window !== "undefined" &&
           window.localStorage?.getItem("autopsy_debug") === "1")) && (
