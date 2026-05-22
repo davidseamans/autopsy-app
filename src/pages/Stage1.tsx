@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -743,12 +743,21 @@ interface FPJob {
 }
 interface FPDocument {
   id: string;
+  client_id: string;
   job_id: string;
   financial_id: string | null;
   document_type: string;
   file_name: string;
+  file_url: string;
+  mime_type: string;
   uploaded_at: string;
-  verified_status: "Missing" | "Uploaded" | "Verified" | "Rejected";
+  uploaded_by: string;
+  verification_status: "Missing" | "Uploaded" | "Verified" | "Rejected";
+  document_date?: string;
+  document_amount?: number;
+  notes?: string;
+  storage_path?: string;
+  local_only?: boolean;
 }
 type EvidenceStatus = "Missing" | "Uploaded" | "Verified" | "Rejected";
 interface FPFinancial {
@@ -870,6 +879,10 @@ function FinancialsForm() {
 
   // Doc upload state
   const [docType, setDocType] = useState<string>("Invoice");
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
 
   const jobsForClient = useMemo(
     () => jobs.filter((j) => j.client_id === clientId),
@@ -974,27 +987,63 @@ function FinancialsForm() {
     }
   }
 
-  function handleAttachDoc(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!jobId) {
-      toast({ title: "Select a job before attaching documents" });
-      e.target.value = "";
+  async function uploadOne(file: File): Promise<{ file_url: string; storage_path?: string; local_only: boolean }> {
+    const ts = Date.now();
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${clientId}/${jobId}/${savedFinId ?? "pending"}/${ts}_${safeName}`;
+    try {
+      const { error } = await supabase.storage
+        .from("stage1-evidence")
+        .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+      if (error) throw error;
+      const { data: pub } = supabase.storage.from("stage1-evidence").getPublicUrl(path);
+      return { file_url: pub.publicUrl, storage_path: path, local_only: false };
+    } catch {
+      return { file_url: URL.createObjectURL(file), local_only: true };
+    }
+  }
+
+  async function handleFiles(files: File[], replaceId?: string) {
+    if (!clientId || !jobId) {
+      toast({ title: "Select a client and job before attaching evidence" });
       return;
     }
-    const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+    const ACCEPT = ["image/jpeg", "image/png", "image/heic", "image/heif", "application/pdf"];
+    const valid = files.filter((f) => ACCEPT.includes(f.type) || /\.(jpe?g|png|heic|heif|pdf)$/i.test(f.name));
+    if (valid.length === 0) {
+      toast({ title: "Unsupported file type", description: "Allowed: JPEG, PNG, HEIC, PDF" });
+      return;
+    }
     const now = new Date().toISOString();
-    const newDocs: FPDocument[] = files.map((file) => ({
-      id: uid(),
+    const uploads = await Promise.all(valid.map(uploadOne));
+    const newDocs: FPDocument[] = valid.map((file, i) => ({
+      id: replaceId ?? uid(),
+      client_id: clientId,
       job_id: jobId,
       financial_id: savedFinId,
       document_type: docType,
       file_name: file.name,
+      file_url: uploads[i].file_url,
+      mime_type: file.type || "application/octet-stream",
       uploaded_at: now,
-      verified_status: "Uploaded",
+      uploaded_by: "anonymous",
+      verification_status: "Uploaded",
+      storage_path: uploads[i].storage_path,
+      local_only: uploads[i].local_only,
     }));
-    setDocs([...docs, ...newDocs]);
-    toast({ title: `${files.length} document${files.length > 1 ? "s" : ""} attached` });
-    e.target.value = "";
+    if (replaceId) {
+      setDocs(docs.map((d) => (d.id === replaceId ? newDocs[0] : d)));
+      toast({ title: "Evidence replaced" });
+    } else {
+      setDocs([...docs, ...newDocs]);
+      toast({
+        title: `${newDocs.length} document${newDocs.length > 1 ? "s" : ""} attached`,
+        description: uploads.some((u) => u.local_only)
+          ? "Stored locally — connect storage bucket 'stage1-evidence' for persistence."
+          : undefined,
+      });
+    }
   }
 
   function handleRemoveDoc(id: string) {
@@ -1223,7 +1272,7 @@ function FinancialsForm() {
             </Badge>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Document type</Label>
               <Select value={docType} onValueChange={setDocType}>
@@ -1235,11 +1284,63 @@ function FinancialsForm() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">Attach file(s)</Label>
-              <Input type="file" multiple onChange={handleAttachDoc} disabled={!jobId} />
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!jobId}
+              onClick={() => cameraInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Camera className="h-4 w-4" /> Take Photo
+            </Button>
+            <Button
+              type="button"
+              disabled={!jobId}
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Paperclip className="h-4 w-4" /> Upload File
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Accepts JPEG, PNG, HEIC, PDF. Camera opens on supported mobile devices.
+          </p>
+
+          {/* Hidden inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(Array.from(e.target.files || []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(Array.from(e.target.files || []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={replaceInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              if (replaceTargetId && files[0]) handleFiles([files[0]], replaceTargetId);
+              setReplaceTargetId(null);
+              e.target.value = "";
+            }}
+          />
 
           {linkedDocs.length === 0 ? (
             <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
@@ -1248,15 +1349,36 @@ function FinancialsForm() {
           ) : (
             <ul className="space-y-1 text-sm">
               {linkedDocs.map((d) => (
-                <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
-                  <div className="flex items-center gap-2 min-w-0">
+                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-2 py-1.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{d.file_name}</span>
-                    <Badge variant="outline" className="text-[10px]">{d.document_type}</Badge>
+                    <span className="truncate">{d.document_type} — {d.file_name}</span>
+                    <Badge variant="outline" className="text-[10px] capitalize">{d.verification_status}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(d.uploaded_at).toLocaleDateString()}
+                    </span>
+                    {d.local_only && (
+                      <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">local</Badge>
+                    )}
                   </div>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveDoc(d.id)}>
-                    Remove
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {d.file_url && (
+                      <Button type="button" variant="ghost" size="sm" asChild>
+                        <a href={d.file_url} target="_blank" rel="noreferrer">View</a>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setReplaceTargetId(d.id); replaceInputRef.current?.click(); }}
+                    >
+                      Replace
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveDoc(d.id)}>
+                      Remove
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
