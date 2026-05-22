@@ -46,6 +46,7 @@ import {
   finalizeAutopsyRun,
   getCurrentRunAnswerAudit,
   getGatewayPayload,
+  readOptionHardFail,
   recordAutopsyAnswer,
   generateSupportingBlocks,
   SupportingBlocks,
@@ -147,14 +148,8 @@ function buildSelectedAnswersFromPayload(
           : Number.isFinite(Number(optionScore))
             ? Number(optionScore)
             : null,
-        option_hard_fail:
-          selectedOpt && typeof selectedOpt === "object"
-            ? selectedOpt.option_hard_fail === true || selectedOpt.hard_fail === true
-            : false,
-        hard_fail:
-          selectedOpt && typeof selectedOpt === "object"
-            ? selectedOpt.option_hard_fail === true || selectedOpt.hard_fail === true
-            : false,
+        option_hard_fail: readOptionHardFail(selectedOpt),
+        hard_fail: readOptionHardFail(selectedOpt),
       };
     })
     .filter((row): row is SelectedAnswerAuditRow => row != null)
