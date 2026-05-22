@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from "react";
  */
 
 export type VerdictBand =
+  | "critical_stop"
   | "not_viable"
   | "high_risk"
   | "viable"
@@ -89,6 +90,8 @@ export function deriveBand(verdictName: string | undefined | null): VerdictBand 
 /** Default Stage Permission given only the verdict band, before worksheet activity. */
 export function defaultPermissionForBand(band: VerdictBand): StagePermission {
   switch (band) {
+    case "critical_stop":
+      return "Locked";
     case "not_viable":
       return "Locked";
     case "high_risk":
@@ -111,6 +114,12 @@ export function recomputePermission(s: ProgressionState): StagePermission {
   if (s.stage1ReviewRequested) return "Stage 1 Review Required";
 
   const checklistComplete = Object.values(s.checklist).every(Boolean);
+
+  if (s.band === "critical_stop") {
+    // Critical Stop is outside the safe progression pathway — never unlocked
+    // by the in-product worksheet flow.
+    return "Locked";
+  }
 
   if (s.band === "not_viable") {
     if (s.worksheetStatus === "Accepted" && checklistComplete) {
@@ -298,6 +307,15 @@ export interface RoutingCopy {
 }
 
 export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
+  critical_stop: {
+    title: "Critical Stop",
+    body:
+      "This is not ready to become a business. Your answers show the current idea is missing too many basic controls — demand, cash, costs, delivery, execution, or record discipline. Autopsy is not opening Stage 1 from this result. The next step is not repair inside this system. The next step is education, advice, or a complete rethink before retesting. This result is outside the safe progression pathway.",
+    primaryCta: {
+      label: "View Diagnostic Summary",
+      to: (id) => `/autopsy/run/${id}`,
+    },
+  },
   not_viable: {
     title: "Stage 1 is locked",
     body:

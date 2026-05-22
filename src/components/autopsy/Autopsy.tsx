@@ -1245,14 +1245,21 @@ function VerdictView({
       ? Number((payload as any).integrity.score_total_live)
       : null;
   const isHardFail = hasSelectedHardFail;
-  const isScoreBandNotViable =
+  const isCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
+    (scoreNumeric as number) <= 3;
+  const isScoreBandNotViable =
+    !isHardFail &&
+    !isCriticalStop &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= 4 &&
     (scoreNumeric as number) <= 9;
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
+    isCriticalStop ||
     isScoreBandNotViable ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
   const isProgressionBlocked = isProgressionLocked;
@@ -1267,6 +1274,7 @@ function VerdictView({
     verdictName,
     isBlocked,
     score: scoreNumeric,
+    isCriticalStop,
   });
   const framing = BAND_FRAMING[band];
 
@@ -1342,7 +1350,9 @@ function VerdictView({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFail
               ? "Status: Completed · Blocking Failure"
-                : isScoreBandNotViable
+                : isCriticalStop
+                  ? "Status: Completed · Critical Stop"
+                  : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
                     ? "Status: Completed · Progression Locked"
@@ -1359,7 +1369,8 @@ function VerdictView({
           >
             {(() => {
               const vn = (run.verdict_name as string) ?? "";
-              if (vn.trim()) return vn;
+              if (isCriticalStop) return "Critical Stop";
+              if (vn.trim() && !isCriticalStop) return vn;
               if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
               return "Verdict";
             })()}
@@ -1404,6 +1415,7 @@ function VerdictView({
         isBlocked={isBlocked}
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1459,6 +1471,7 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1585,6 +1598,7 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1623,7 +1637,9 @@ function VerdictView({
       {/* 11. Progression Routing */}
       {runId && (() => {
         let routingBand = deriveBand(verdictName);
-        if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
+        if (isCriticalStop) {
+          routingBand = "critical_stop";
+        } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
           routingBand = "not_viable";
         }
         const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
@@ -1735,6 +1751,7 @@ function OperationalStatePanel({
   isBlocked,
   isProgressionLocked,
   isScoreBandNotViable,
+  isCriticalStop,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1742,6 +1759,7 @@ function OperationalStatePanel({
   isBlocked?: boolean;
   isProgressionLocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1756,6 +1774,8 @@ function OperationalStatePanel({
     : humanize(run.progression_state) || "—";
   const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
+    : isCriticalStop
+      ? "Education / Advice / Complete Rethink Before Retest"
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
@@ -1763,7 +1783,9 @@ function OperationalStatePanel({
     sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = isScoreBandNotViable
+  const recoveryDisplay = isCriticalStop
+    ? "Outside Safe Progression Pathway"
+    : isScoreBandNotViable
     ? "Repair Worksheet Required"
     : sanitizeVerdictCopy(resolveRecoverySignal(run), !!isBlocked);
   const rows: Array<[string, any]> = [
@@ -1807,25 +1829,31 @@ function PressureCollapsePanel({
   run,
   isBlocked,
   isScoreBandNotViable,
+  isCriticalStop,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
+    : isCriticalStop
+      ? "CRITICAL STOP"
     : isScoreBandNotViable
       ? "SCORE-BAND FAILURE"
       : /blocking\s*failure|hard\s*fail/i.test(rawPressureStage)
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
-    ? "HARD FAIL"
-    : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
-      ? "Score-band Not Viable"
-      : sanitizeVerdictCopy(rawFailureType, false);
+  const failureTypeDisplay = isCriticalStop
+    ? "Critical Stop"
+    : isBlocked && !hasContent(run.failure_type)
+      ? "HARD FAIL"
+      : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
+        ? "Score-band Not Viable"
+        : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
@@ -1878,25 +1906,31 @@ function RecoveryRetestPanel({
   run,
   isBlocked,
   isScoreBandNotViable,
+  isCriticalStop,
   evidenceOverride,
   actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    isScoreBandNotViable
+    isCriticalStop
+      ? "Outside Safe Progression Pathway"
+      : isScoreBandNotViable
       ? "Repair Worksheet Required"
       : hasContent(evidenceOverride)
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isScoreBandNotViable
+  const retest = isCriticalStop
+    ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
+    : isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
     : hasContent(actionOverride)
     ? actionOverride
@@ -2104,24 +2138,27 @@ function cleanProceedOnlyIf(value: string | null | undefined, replacement?: stri
 
 /* ----------------------- Band-aware verdict framing ---------------------- */
 
-export type VerdictBand = "not_viable" | "high_risk" | "viable" | "structurally_viable";
+export type VerdictBand = "critical_stop" | "not_viable" | "high_risk" | "viable" | "structurally_viable";
 
 export function getVerdictBand(opts: {
   verdictName: string;
   isBlocked: boolean;
   score: number | null | undefined;
+  isCriticalStop?: boolean;
 }): VerdictBand {
-  const { verdictName, isBlocked, score } = opts;
+  const { verdictName, isBlocked, score, isCriticalStop } = opts;
+  if (isCriticalStop && !isBlocked) return "critical_stop";
   if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
   if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
   if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
   if (/viable/i.test(verdictName)) return "viable";
   const s = typeof score === "number" ? score : Number(score);
   if (Number.isFinite(s)) {
-    if (s >= 26) return "structurally_viable";
-    if (s >= 20) return "viable";
-    if (s >= 12) return "high_risk";
-    return "not_viable";
+    if (s >= 25) return "structurally_viable";
+    if (s >= 18) return "viable";
+    if (s >= 10) return "high_risk";
+    if (s >= 4) return "not_viable";
+    return "critical_stop";
   }
   return "high_risk";
 }
@@ -2146,6 +2183,25 @@ export interface BandFraming {
 }
 
 export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
+  critical_stop: {
+    rankPrimary: "Critical Stop",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Pressures present at the time of assessment. A Critical Stop indicates the foundation is missing across multiple dimensions.",
+    chainTitle: "Failure Chain",
+    pathLabel: "Failure Path",
+    proofLabel: "Required Before Retest",
+    outcomeLabel: "Outside Safe Progression Pathway",
+    decisionStatusOverride: "Stop. Outside safe progression pathway.",
+    allowedNextOverride:
+      "Education, advice, or a complete rethink before retesting. Autopsy is not opening Stage 1 from this result.",
+    headerTextClass: "text-red-800",
+    headerContainerClass: "border-red-700/60 bg-red-500/5",
+    badgeClass: "border-red-700 text-red-800 bg-red-500/10",
+    failureOriented: true,
+  },
   not_viable: {
     rankPrimary: "Main Blocker",
     rankSecondary: "Next Pressure",
