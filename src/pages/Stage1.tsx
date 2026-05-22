@@ -811,8 +811,10 @@ function JobDetailSheet({
     const changes: { field: string; from: unknown; to: unknown }[] = [];
     (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
       if (k === "audit") return;
-      if (JSON.stringify((original as Record<string, unknown>)[k as string]) !== JSON.stringify((draft as Record<string, unknown>)[k as string])) {
-        changes.push({ field: String(k), from: (original as Record<string, unknown>)[k as string], to: (draft as Record<string, unknown>)[k as string] });
+      const a = (original as unknown as Record<string, unknown>)[k as string];
+      const b = (draft as unknown as Record<string, unknown>)[k as string];
+      if (JSON.stringify(a) !== JSON.stringify(b)) {
+        changes.push({ field: String(k), from: a, to: b });
       }
     });
     const entry: AuditEntry = {
