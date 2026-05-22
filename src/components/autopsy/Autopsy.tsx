@@ -1069,8 +1069,9 @@ function VerdictView({
 
   const verdictName = String(run.verdict_name ?? "");
   const permissionLevel = String(run.permission_level ?? "");
+  const isNotViableVerdict = /not[\s_-]?viable/i.test(verdictName);
   const isViable =
-    /viable/i.test(verdictName) ||
+    (!isNotViableVerdict && /viable/i.test(verdictName)) ||
     permissionLevel.toLowerCase() === "granted";
   const hasMeaningfulWeakest = !!(weakest && String(weakest).trim());
   const suppressFailureLanguage = isViable && !hasMeaningfulWeakest;
@@ -1150,11 +1151,17 @@ function VerdictView({
   // Progression locking is not the same as a hard-fail. Hard-fail display is
   // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
+  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const isProgressionLocked =
     opStateKey === "blocked" ||
-    /not[\s_-]?viable/i.test(verdictName) ||
+    isNotViableVerdict ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
   const isHardFail = hasSelectedHardFail;
+  const isScoreBandNotViable =
+    !isHardFail &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= 0 &&
+    (scoreNumeric as number) <= 9;
   const isBlocked = isHardFail;
   const effectiveOpState = isHardFail
     ? "blocked"
@@ -1162,7 +1169,6 @@ function VerdictView({
       ? "locked"
       : opStateKey;
 
-  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const band: VerdictBand = getVerdictBand({
     verdictName,
     isBlocked,
