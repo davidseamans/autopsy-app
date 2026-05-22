@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import {
+  getActiveRunId,
+  isStage1Reachable,
+  ROUTING_COPY,
+  STAGE_1_GOAL,
+  useProgression,
+} from "@/lib/progression";
 import {
   Card,
   CardContent,
@@ -2574,7 +2582,138 @@ function EvidenceForm() {
   );
 }
 
+function Stage1BlockedScreen({ runId }: { runId: string }) {
+  const { state: progression } = useProgression(runId);
+  const band = progression?.band ?? "unknown";
+  const copy = ROUTING_COPY[band] ?? ROUTING_COPY.unknown;
+  return (
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          Autopsy → Stage 1
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Stage 1 is not yet open</h1>
+      </div>
+      <Card className="border-red-300 bg-red-50/40">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-red-700" />
+            <CardTitle className="text-base text-red-900">
+              Stage Permission: {progression?.stagePermission ?? "Locked"}
+            </CardTitle>
+          </div>
+          <CardDescription className="text-red-900/80">
+            Worksheet status: {progression?.worksheetStatus ?? "Not Started"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm">{copy.body}</p>
+          <div className="rounded-md border bg-white p-3 text-sm space-y-1">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              What must happen next
+            </div>
+            <p>
+              Complete the Readiness / Repair Worksheet, satisfy the retest
+              condition for your primary risk, and confirm the readiness
+              checklist. Stage 1 opens automatically once Stage Permission
+              reaches Stage 1 Eligible or Conditional Stage 1 Access.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link to={`/autopsy/run/${runId}/readiness`}>
+                {copy.primaryCta.label}
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to={`/autopsy/run/${runId}`}>View Diagnostic Summary</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Stage1ProgressionHeader({
+  progression,
+  gateMet,
+  onRequestReview,
+  onMarkReviewPassed,
+}: {
+  progression: NonNullable<ReturnType<typeof useProgression>["state"]>;
+  gateMet: boolean;
+  onRequestReview: () => void;
+  onMarkReviewPassed: () => void;
+}) {
+  const conditional = progression.stagePermission === "Conditional Stage 1 Access";
+  const review = progression.stagePermission === "Stage 1 Review Required";
+  const stage2 = progression.stagePermission === "Stage 2 Eligible";
+  return (
+    <Card className="border-[hsl(var(--autopsy-accent,220_70%_50%))]/40">
+      <CardHeader className="pb-2">
+        <CardDescription className="uppercase text-xs tracking-wide">
+          Progression Status
+        </CardDescription>
+        <CardTitle className="text-base">Autopsy → Worksheet → Stage 1</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 text-sm">
+          <HeaderField label="Autopsy Verdict" value={progression.verdictName || "—"} />
+          <HeaderField label="Primary Risk" value={progression.primaryRisk || "—"} />
+          <HeaderField label="Stage Permission" value={progression.stagePermission} />
+          <HeaderField label="Worksheet Status" value={progression.worksheetStatus} />
+          <HeaderField label="Stage 1 Goal" value={STAGE_1_GOAL} multiline />
+        </div>
+        {conditional && (
+          <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+            Conditional Stage 1 access. Your worksheet was accepted with risk —
+            every proof unit must show real evidence and recorded margin.
+          </div>
+        )}
+        {review && (
+          <div className="rounded-md border-l-4 border-blue-500 bg-blue-50 p-3 text-sm text-blue-900 space-y-2">
+            <div>
+              Stage 1 proof appears sufficient for review. Confirm margin
+              quality, evidence, payment proof, customer concentration, and
+              repeatability before progression.
+            </div>
+            <Button size="sm" onClick={onMarkReviewPassed}>
+              Confirm Stage 1 Review Passed
+            </Button>
+          </div>
+        )}
+        {stage2 && (
+          <div className="rounded-md border-l-4 border-emerald-500 bg-emerald-50 p-3 text-sm text-emerald-900">
+            Stage 1 proof requirements satisfied. You are now eligible to begin
+            Stage 2: Repeatability & Capacity.
+          </div>
+        )}
+        {!review && !stage2 && gateMet && (
+          <div className="flex items-center justify-between rounded-md border bg-muted/40 p-3 text-sm">
+            <span>Gate conditions met — request Stage 1 Review to lock in the result.</span>
+            <Button size="sm" onClick={onRequestReview}>
+              Review Stage 1 Summary
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeaderField({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div className={multiline ? "sm:col-span-2 lg:col-span-5" : ""}>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="font-medium text-sm leading-snug">{value}</div>
+    </div>
+  );
+}
+
 export default function Stage1() {
+  const runId = getActiveRunId();
+  const { state: progression, update: updateProgression } = useProgression(runId);
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
@@ -2591,6 +2730,12 @@ export default function Stage1() {
     tab?.click();
     document.getElementById("operator-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // If we have a progression record but Stage 1 is not yet reachable, block entry.
+  if (runId && progression && !isStage1Reachable(progression.stagePermission)) {
+    return <Stage1BlockedScreen runId={runId} />;
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
@@ -2604,6 +2749,15 @@ export default function Stage1() {
           Prove the model before you scale it. Five jobs, real margin, real evidence.
         </p>
       </div>
+
+      {progression && (
+        <Stage1ProgressionHeader
+          progression={progression}
+          gateMet={sc.gate === "Unlocked"}
+          onRequestReview={() => updateProgression({ stage1ReviewRequested: true })}
+          onMarkReviewPassed={() => updateProgression({ stage1ReviewPassed: true })}
+        />
+      )}
 
       <Stage1GoalBanner />
       <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
