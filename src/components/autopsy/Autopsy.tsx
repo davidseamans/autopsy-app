@@ -1237,17 +1237,18 @@ function VerdictView({
     : (payload as any)?.integrity?.score_total_live != null
       ? Number((payload as any).integrity.score_total_live)
       : null;
-  const isProgressionLocked =
-    opStateKey === "blocked" ||
-    isNotViableVerdict ||
-    String(run.permission_level ?? "").toLowerCase() === "locked";
-  const isProgressionBlocked = isProgressionLocked;
   const isHardFail = hasSelectedHardFail;
   const isScoreBandNotViable =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
     (scoreNumeric as number) <= 9;
+  const isProgressionLocked =
+    opStateKey === "blocked" ||
+    isNotViableVerdict ||
+    isScoreBandNotViable ||
+    String(run.permission_level ?? "").toLowerCase() === "locked";
+  const isProgressionBlocked = isProgressionLocked;
   const isBlocked = isHardFail;
   const effectiveOpState = isHardFail
     ? "blocked"
@@ -1349,7 +1350,12 @@ function VerdictView({
               framing.headerTextClass,
             )}
           >
-            {(run.verdict_name as string) ?? "Verdict"}
+            {(() => {
+              const vn = (run.verdict_name as string) ?? "";
+              if (vn.trim()) return vn;
+              if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
+              return "Verdict";
+            })()}
           </h1>
           {run.score_total != null && (
             <div className="text-base">
@@ -1528,6 +1534,7 @@ function VerdictView({
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
         evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
+          primaryFallback={dimensionScores[0]?.label ?? dimensionScores[0]?.code ?? null}
         />
       )}
 
@@ -1608,7 +1615,10 @@ function VerdictView({
       {/* 11. Worksheet link */}
       {/* 11. Progression Routing */}
       {runId && (() => {
-        const routingBand = deriveBand(verdictName);
+        let routingBand = deriveBand(verdictName);
+        if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
+          routingBand = "not_viable";
+        }
         const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
         return (
           <SurfaceCard title="Progression Routing">
@@ -1641,8 +1651,7 @@ function VerdictView({
           </SurfaceCard>
         );
       })()}
-      {(import.meta.env.DEV ||
-        (typeof window !== "undefined" &&
+      {((typeof window !== "undefined" &&
           new URLSearchParams(window.location.search).get("debug") === "1") ||
         (typeof window !== "undefined" &&
           window.localStorage?.getItem("autopsy_debug") === "1")) && (
@@ -2893,6 +2902,7 @@ function MechanicalFailureChain({
   requiredActionFallback,
   evidenceFallback,
   framing,
+  primaryFallback,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2901,9 +2911,13 @@ function MechanicalFailureChain({
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
   framing?: BandFraming;
+  primaryFallback?: string | null;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
-  const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
+  const primary =
+    humanize(run.weakest_dimension ?? run.primary_risk) ||
+    humanize(primaryFallback) ||
+    "Unidentified";
   const rawFailurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
