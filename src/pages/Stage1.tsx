@@ -295,6 +295,27 @@ interface ProofUnit {
   scheduledDate?: string;
   notes?: string;
   nextAction?: string;
+  // Customer Invoice / Contract
+  invoiceAmount?: number;
+  invoiceDate?: string;
+  invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
+  contractStart?: string;
+  contractEnd?: string;
+  invoiceDocType?: "Quote" | "Customer Invoice" | "Signed Contract" | "Work Order" | "Customer Approval" | "Other";
+  invoiceDocName?: string;
+  // Job Costs
+  costMaterials?: number;
+  costLabour?: number;
+  costSubcontractors?: number;
+  costOther?: number;
+  costDocType?: "Supplier Receipt" | "Supplier Bill" | "Timesheet" | "Subcontractor Invoice" | "Materials Receipt" | "Other Cost Proof";
+  costDocName?: string;
+  // Payment Proof
+  paymentStatus?: "Not Paid" | "Part Paid" | "Paid" | "Disputed" | "Written Off";
+  paymentDate?: string;
+  paymentAmount?: number;
+  paymentMethod?: "Bank Transfer" | "Card" | "Cash with Receipt" | "Payment Platform" | "Other";
+  paymentProofName?: string;
 }
 
 const BASE_POINTS: Record<ProofType, number> = {
@@ -594,6 +615,23 @@ function JobDetailSheet({
   const fin = matchedJob ? fpFin.find((f) => f.job_id === matchedJob.id) : null;
   const docs = matchedJob ? fpDocs.filter((d) => d.job_id === matchedJob.id) : [];
 
+  // Computed GM from invoice + direct costs (falls back to legacy GM on unit)
+  const invAmt = draft.invoiceAmount ?? 0;
+  const costs =
+    (draft.costMaterials ?? 0) +
+    (draft.costLabour ?? 0) +
+    (draft.costSubcontractors ?? 0) +
+    (draft.costOther ?? 0);
+  const grossProfit = invAmt - costs;
+  const computedGm = invAmt > 0 ? Math.round((grossProfit / invAmt) * 100) : null;
+  const displayGm = computedGm ?? draft.gm;
+
+  const invoiceProofOk = !!(draft.invoiceDocName || fin || draft.evidence);
+  const costsEntered = invAmt > 0 || costs > 0;
+  const paymentClaimed = draft.paymentStatus === "Paid" || draft.paymentStatus === "Part Paid";
+  const paymentProofOk = !!draft.paymentProofName;
+  const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
+
   function save() {
     onSave(draft);
     toast({ title: "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
@@ -604,6 +642,31 @@ function JobDetailSheet({
     <div className="flex justify-between gap-3 py-1 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+
+  const sectionTitle = (n: number, label: string, Icon?: React.ComponentType<{ className?: string }>) => (
+    <div className="font-medium text-sm flex items-center gap-2">
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">{n}</span>
+      {Icon ? <Icon className="h-4 w-4" /> : null}
+      {label}
+    </div>
+  );
+
+  const fileInput = (label: string, currentName: string | undefined, onPick: (name: string) => void) => (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type="file"
+        accept="image/*,application/pdf"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f.name);
+        }}
+      />
+      {currentName && (
+        <p className="text-xs text-emerald-700 flex items-center gap-1"><FileText className="h-3 w-3" /> {currentName}</p>
+      )}
     </div>
   );
 
@@ -618,120 +681,231 @@ function JobDetailSheet({
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
-          {/* Header summary */}
-          <div className="rounded-md border bg-muted/30 p-3">
+          {/* 1. Job / Site Summary */}
+          <div className="rounded-md border bg-muted/30 p-3 space-y-1">
+            {sectionTitle(1, "Job / Site Summary")}
             {fieldRow("Client", draft.client)}
-            {fieldRow("Site", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
+            {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
             {fieldRow("Proof Type", draft.proofType)}
-            {fieldRow("Status", <Badge variant="outline" className={statusBadgeClass(draft.status)}>{draft.status}</Badge>)}
+            {fieldRow("Job / Contract Status", <Badge variant="outline" className={statusBadgeClass(draft.status)}>{draft.status}</Badge>)}
             {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
             {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
-            {fieldRow("GM %", <span className={draft.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{draft.gm}%</span>)}
-            {fieldRow("Evidence Status", draft.evidence ? "Uploaded" : <span className="text-red-600">Missing</span>)}
+            {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
             {fieldRow("Points", scoreUnit(draft))}
             {fieldRow("Risk", <span className={riskCellClass(risk)}>{risk}</span>)}
           </div>
 
-          {/* Status control */}
-          <div className="space-y-1">
-            <Label className="text-xs">Update Status</Label>
-            <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {statuses.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Only valid next statuses are shown ({kind === "contract" ? "contract" : "one-off"} rules).
-            </p>
-          </div>
-
-          {/* Warnings */}
-          {!draft.jobSite && (
-            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
-          )}
-          {!fin && (
-            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Financial proof missing</div>
-          )}
-          {!draft.evidence && (
-            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-              Evidence blocker: claims must be supported before progression can unlock.
-            </div>
-          )}
-          {draft.gm < 30 && (
-            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-              Margin blocker: this work is not yet economically safe to scale.
-            </div>
-          )}
-
-          {/* Financial Proof section */}
-          <div className="rounded-md border p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="font-medium text-sm flex items-center gap-2"><DollarSign className="h-4 w-4" /> Financial Proof</div>
-              <Button size="sm" variant="outline" onClick={onJumpToFinancials}>
-                {fin ? "Edit Financial Proof" : "Add Financial Proof"}
-              </Button>
-            </div>
-            {fin ? (
-              <div className="text-sm">
-                {fieldRow("Revenue", `$${fin.revenue_amount.toLocaleString()}`)}
-                {fieldRow("Materials", `$${fin.materials_cost.toLocaleString()}`)}
-                {fieldRow("Labour", `$${fin.labour_cost.toLocaleString()}`)}
-                {fieldRow("Other Direct Costs", `$${fin.other_direct_cost.toLocaleString()}`)}
-                {fieldRow("Gross Profit", `$${fin.gross_profit.toLocaleString()}`)}
-                {fieldRow("GM %", fin.gm_percent != null ? `${fin.gm_percent}%` : "—")}
+          {/* Blockers / warnings */}
+          <div className="space-y-2">
+            {!draft.jobSite && (
+              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
+            )}
+            {!invoiceProofOk && (
+              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+                Customer proof missing: upload an invoice, quote, signed contract, work order, or customer approval.
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No financial proof recorded yet.</p>
+            )}
+            {!costsEntered && (
+              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+                Cost proof incomplete: margin cannot be trusted until direct costs are entered.
+              </div>
+            )}
+            {draft.paymentStatus === "Paid" && !paymentProofOk && (
+              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+                Payment proof missing: paid work must be supported by invoice, receipt, remittance, payment receipt, or transaction evidence.
+              </div>
+            )}
+            {cashRequiresProof && (
+              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+                Cash proof missing: unrecorded cash does not count toward progression.
+              </div>
+            )}
+            {computedGm != null && computedGm < 30 && (
+              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+                Margin blocker: this work is not yet economically safe to scale.
+              </div>
             )}
           </div>
 
-          {/* Evidence section */}
-          <div className="rounded-md border p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Evidence</div>
-              <Button size="sm" variant="outline" onClick={onJumpToFinancials}>Attach Evidence</Button>
+          {/* 2. Customer Invoice / Contract */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Quote / Contract Amount</Label>
+                <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Invoice Amount</Label>
+                <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Invoice Date</Label>
+                <Input type="date" value={draft.invoiceDate ?? ""} onChange={(e) => setDraft({ ...draft, invoiceDate: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Invoice Status</Label>
+                <Select value={draft.invoiceStatus ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceStatus: v as ProofUnit["invoiceStatus"] })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {(["Draft","Sent","Approved","Invoiced","Part Paid","Paid","Cancelled"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Contract Start</Label>
+                <Input type="date" value={draft.contractStart ?? ""} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Contract End</Label>
+                <Input type="date" value={draft.contractEnd ?? ""} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} />
+              </div>
             </div>
-            {docs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No evidence attached for this site yet.</p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {docs.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate">{d.document_type} — {d.file_name}</span>
-                      <Badge variant="outline" className="text-[10px]">{d.verification_status}</Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{new Date(d.uploaded_at).toLocaleDateString()}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="space-y-1">
+              <Label className="text-xs">Attachment Type</Label>
+              <Select value={draft.invoiceDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceDocType: v as ProofUnit["invoiceDocType"] })}>
+                <SelectTrigger><SelectValue placeholder="Quote, Invoice, Signed Contract, Work Order, Customer Approval, Other" /></SelectTrigger>
+                <SelectContent>
+                  {(["Quote","Customer Invoice","Signed Contract","Work Order","Customer Approval","Other"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {fileInput("Attach Invoice / Contract", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
           </div>
 
-          {/* Notes / Next Action */}
-          <div className="grid gap-3">
+          {/* 3. Job Costs */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(3, "Job Costs", Paperclip)}
+            <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Materials</Label>
+                <Input type="number" value={draft.costMaterials ?? ""} onChange={(e) => setDraft({ ...draft, costMaterials: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Labour</Label>
+                <Input type="number" value={draft.costLabour ?? ""} onChange={(e) => setDraft({ ...draft, costLabour: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Subcontractors</Label>
+                <Input type="number" value={draft.costSubcontractors ?? ""} onChange={(e) => setDraft({ ...draft, costSubcontractors: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Other Direct Costs</Label>
+                <Input type="number" value={draft.costOther ?? ""} onChange={(e) => setDraft({ ...draft, costOther: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+            </div>
+            <div className="rounded bg-muted/40 p-2 text-sm">
+              {fieldRow("Gross Profit", invAmt > 0 ? `$${grossProfit.toLocaleString()}` : "—")}
+              {fieldRow("GM %", computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "—")}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Attachment Type</Label>
+              <Select value={draft.costDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, costDocType: v as ProofUnit["costDocType"] })}>
+                <SelectTrigger><SelectValue placeholder="Supplier Receipt, Timesheet, Subcontractor Invoice…" /></SelectTrigger>
+                <SelectContent>
+                  {(["Supplier Receipt","Supplier Bill","Timesheet","Subcontractor Invoice","Materials Receipt","Other Cost Proof"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {fileInput("Attach Cost Proof", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
+          </div>
+
+          {/* 4. Payment Proof */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(4, "Payment Proof", FileText)}
+            <div className="rounded border-l-4 border-blue-400 bg-blue-50 p-2 text-xs text-blue-900 space-y-1">
+              <p><span className="font-semibold">Payment proof does not require a full bank statement.</span> Upload only the relevant invoice, receipt, remittance advice, payment receipt, or transaction screenshot. You may hide unrelated bank transactions.</p>
+              <p>Show only: transaction date, payer / reference, amount, and account name if needed. Redact unrelated transactions, balances, and private information.</p>
+            </div>
+            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+              Cash payments must still have proof. Upload the customer receipt or bank deposit record. Unrecorded cash does not count toward progression.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Payment Status</Label>
+                <Select value={draft.paymentStatus ?? ""} onValueChange={(v) => setDraft({ ...draft, paymentStatus: v as ProofUnit["paymentStatus"] })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {(["Not Paid","Part Paid","Paid","Disputed","Written Off"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Payment Date</Label>
+                <Input type="date" value={draft.paymentDate ?? ""} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Payment Amount</Label>
+                <Input type="number" value={draft.paymentAmount ?? ""} onChange={(e) => setDraft({ ...draft, paymentAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Payment Method</Label>
+                <Select value={draft.paymentMethod ?? ""} onValueChange={(v) => setDraft({ ...draft, paymentMethod: v as ProofUnit["paymentMethod"] })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {(["Bank Transfer","Card","Cash with Receipt","Payment Platform","Other"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {fileInput("Attach Payment Proof (receipt, remittance, redacted screenshot)", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
+          </div>
+
+          {/* 5. Status & Next Action */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(5, "Status & Next Action")}
+            <div className="space-y-1">
+              <Label className="text-xs">Update Job / Contract Status</Label>
+              <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {statuses.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Only valid next statuses are shown ({kind === "contract" ? "contract" : "one-off"} rules).
+              </p>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">Notes</Label>
-              <Textarea
-                rows={2}
-                value={draft.notes ?? ""}
-                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-                placeholder="Observations, exceptions, anything to remember"
-              />
+              <Textarea rows={2} value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Observations, exceptions, anything to remember" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Next Action</Label>
-              <Input
-                value={draft.nextAction ?? ""}
-                onChange={(e) => setDraft({ ...draft, nextAction: e.target.value })}
-                placeholder="e.g. Upload signed contract"
-              />
+              <Input value={draft.nextAction ?? ""} onChange={(e) => setDraft({ ...draft, nextAction: e.target.value })} placeholder="e.g. Upload signed contract" />
             </div>
           </div>
+
+          {/* Legacy linked records (read-only context) */}
+          {(fin || docs.length > 0) && (
+            <div className="rounded-md border p-3 space-y-2">
+              <div className="font-medium text-xs text-muted-foreground">Linked records (Stage 1 Financial Proof store)</div>
+              {fin && (
+                <div className="text-sm">
+                  {fieldRow("Revenue", `$${fin.revenue_amount.toLocaleString()}`)}
+                  {fieldRow("Gross Profit", `$${fin.gross_profit.toLocaleString()}`)}
+                  {fieldRow("GM %", fin.gm_percent != null ? `${fin.gm_percent}%` : "—")}
+                </div>
+              )}
+              {docs.length > 0 && (
+                <ul className="space-y-1 text-sm">
+                  {docs.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="truncate">{d.document_type} — {d.file_name}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{new Date(d.uploaded_at).toLocaleDateString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="pt-1">
+                <Button size="sm" variant="outline" onClick={onJumpToFinancials}>Open Financial Proof tab</Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
