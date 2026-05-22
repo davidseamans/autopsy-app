@@ -2624,7 +2624,7 @@ export default function Stage1() {
       {progression && (
         <Stage1ProgressionHeader
           progression={progression}
-          gateMet={sc.gate === "Eligible" || sc.gate === "Eligible*"}
+          gateMet={sc.gate === "Unlocked"}
           onRequestReview={() => updateProgression({ stage1ReviewRequested: true })}
           onMarkReviewPassed={() => updateProgression({ stage1ReviewPassed: true })}
         />
