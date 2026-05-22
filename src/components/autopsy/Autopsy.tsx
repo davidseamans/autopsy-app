@@ -1453,7 +1453,7 @@ function VerdictView({
           secondary={cascadeSecondary}
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
-          failureDrivers={supportingBlocks?.failure_drivers}
+          failureDrivers={sanitizeVerdictCopy(supportingBlocks?.failure_drivers, isHardFail)}
           framing={framing}
         />
       )}
@@ -2861,13 +2861,14 @@ function MechanicalFailureChain({
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
-  const failurePath =
+  const rawFailurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
     (isBlocked || !/hard\s*fail|existential/i.test(humanize(run.failure_type))
       ? humanize(run.failure_type)
       : "") ||
     "Failure path not specified";
+  const failurePath = sanitizeVerdictCopy(rawFailurePath, !!isBlocked) as string;
   const rawBreakpoint = isScoreBandNotViable
     ? "Repair Worksheet Required before Stage 1 can be reconsidered."
     : (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
