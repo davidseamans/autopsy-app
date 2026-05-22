@@ -1551,23 +1551,29 @@ function operationalStyle(state: any) {
 function OperationalStatePanel({
   run,
   isBlocked,
+  isProgressionLocked,
   operatingInstruction,
   requiredActionFallback,
 }: {
   run: any;
   isBlocked?: boolean;
+  isProgressionLocked?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const effective = isBlocked && !opKey ? "blocked" : opKey;
+  const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
   const progressionDisplay = isBlocked
     ? "PROGRESSION BLOCKED"
+    : isProgressionLocked
+      ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
   const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
+    : isProgressionLocked
+      ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
   const permissionBiasDisplay = cleanProceedOnlyIf(
     rawPermissionBias,
