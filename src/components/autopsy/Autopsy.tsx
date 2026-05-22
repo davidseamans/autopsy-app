@@ -1094,10 +1094,24 @@ function VerdictView({
         selectedHardFails,
         hasSelectedHardFail: selectedHardFails.length > 0,
         firstSelectedHardFail: selectedHardFails[0] ?? null,
+        source: "autopsy_answers" as const,
+        expectedAnswerCount: (payload?.questions ?? []).length || 10,
+        auditLoaded: true,
+      };
+    }
+    if (answerAuditQuery.isLoading) {
+      return {
+        selectedAnswers: [],
+        selectedHardFails: [],
+        hasSelectedHardFail: false,
+        firstSelectedHardFail: null,
+        source: "answer_audit_pending" as const,
+        expectedAnswerCount: (payload?.questions ?? []).length || 10,
+        auditLoaded: false,
       };
     }
     const qs = (payload?.questions ?? []) as any[];
-    const selectedAnswers = qs.map((q, i) => {
+    const selectedAnswers = qs.filter((q) => q.selected_option != null).map((q, i) => {
       const opts = (q.options ?? []) as any[];
       const selectedId = q.selected_option ?? null;
       const selectedOpt =
@@ -1132,8 +1146,11 @@ function VerdictView({
       selectedHardFails,
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
+      source: "gateway_payload" as const,
+      expectedAnswerCount: qs.length || 10,
+      auditLoaded: !answerAuditQuery.isLoading,
     };
-  }, [answerAuditQuery.data, payload?.questions]);
+  }, [answerAuditQuery.data, answerAuditQuery.isLoading, payload?.questions]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
@@ -1205,8 +1222,19 @@ function VerdictView({
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
-        hard_fail_triggered: hasSelectedHardFail,
-        backend_hard_fail_triggered: (run as any).hard_fail_triggered ?? null,
+        hard_fail_from_selected_answers: hasSelectedHardFail,
+        hard_fail_triggered_payload: (run as any).hard_fail_triggered ?? null,
+        hard_fail_triggered_raw_payload:
+          (run as any).hard_fail_triggered_raw_payload ?? null,
+        payload_matches_selected_answers:
+          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        raw_payload_matches_selected_answers:
+          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        error:
+          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail &&
+          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
+            ? null
+            : "ERROR: hard_fail payload does not match selected answers.",
         primary_risk: (run as any).primary_risk ?? null,
         hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
@@ -1215,8 +1243,9 @@ function VerdictView({
         backend_hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
         backend_hard_fail_selected_option_id:
           (run as any).hard_fail_selected_option_id ?? null,
-        hard_fail_triggered_from_selected_options:
-          hasSelectedHardFail,
+        audit_source: selectedAnswerAudit.source,
+        selected_answer_count: selectedAnswers.length,
+        expected_answer_count: selectedAnswerAudit.expectedAnswerCount,
         selected_hard_fail_questions: selectedHardFails.map((r) => ({
           question_id: r.question_id,
           question_number: r.question_number,
@@ -1299,8 +1328,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
-        operatingInstruction={cascadeSeverity?.operating_instruction}
-        requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+        operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
+        requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
       <ProgressionFlow
         current={isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
@@ -1418,9 +1447,9 @@ function VerdictView({
           run={run}
           isBlocked={isBlocked}
           isScoreBandNotViable={isScoreBandNotViable}
-          operatingInstruction={cascadeSeverity?.operating_instruction}
-          requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
-          evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+        operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
+        requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
+        evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
         />
       )}
@@ -1445,9 +1474,10 @@ function VerdictView({
                     {framing.allowedNextOverride
                       ? framing.allowedNextOverride
                       : hasContent(cascadeSeverity.operating_instruction)
-                      ? cascadeSeverity.operating_instruction
+                      ? sanitizeVerdictCopy(cascadeSeverity.operating_instruction, isHardFail)
                       : (supportingBlocks?.required_actions?.[0]?.body
-                          || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
+                          ? sanitizeVerdictCopy(supportingBlocks.required_actions[0].body, isHardFail)
+                          : cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
                   </div>
                 </div>
               )}
@@ -1464,8 +1494,8 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
-        evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
-        actionOverride={supportingBlocks?.required_actions?.[0]?.body}
+        evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
+        actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
@@ -1536,6 +1566,7 @@ function VerdictView({
       })()}
       <VerdictHardFailDebug
         runId={runId}
+        run={run}
         totalScore={scoreNumeric}
         finalVerdict={verdictName}
         audit={selectedAnswerAudit}
@@ -1859,25 +1890,44 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
 
 function VerdictHardFailDebug({
   runId,
+  run,
   totalScore,
   finalVerdict,
   audit,
 }: {
   runId: string | null;
+  run: any;
   totalScore: number | null;
   finalVerdict: string;
   audit: any;
 }) {
   const firstHardFail = audit?.firstSelectedHardFail ?? null;
+  const selectedAnswers = audit?.selectedAnswers ?? [];
+  const hardFailFromSelectedAnswers = selectedAnswers.some((r: any) => r.hard_fail === true);
+  const hardFailTriggeredPayload = run?.hard_fail_triggered ?? null;
+  const payloadMatchesSelectedAnswers = hardFailTriggeredPayload === hardFailFromSelectedAnswers;
   const debugPayload = {
     run_id: runId,
     total_score: totalScore,
     final_verdict: finalVerdict || null,
-    hard_fail_triggered: audit?.hasSelectedHardFail === true,
+    audit_source: audit?.source ?? null,
+    audit_loaded: audit?.auditLoaded === true,
+    selected_answer_count: selectedAnswers.length,
+    expected_answer_count: audit?.expectedAnswerCount ?? 10,
+    hard_fail_from_selected_answers: hardFailFromSelectedAnswers,
+    hard_fail_triggered_payload: hardFailTriggeredPayload,
+    hard_fail_triggered_raw_payload: run?.hard_fail_triggered_raw_payload ?? null,
+    payload_matches_selected_answers: payloadMatchesSelectedAnswers,
+    error: payloadMatchesSelectedAnswers
+      ? null
+      : "ERROR: hard_fail payload does not match selected answers.",
     hard_fail_source_question_number: firstHardFail?.question_number ?? null,
+    hard_fail_source_question_id: firstHardFail?.question_id ?? null,
     hard_fail_source_option_id: firstHardFail?.selected_option_id ?? null,
-    selected_answers: (audit?.selectedAnswers ?? []).map((r: any) => ({
+    selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
+      question_id: r.question_id ?? null,
+      selected_option_id: r.selected_option_id ?? null,
       score_value: r.score_value ?? null,
       hard_fail: r.hard_fail === true,
     })),
@@ -2759,10 +2809,11 @@ function MechanicalFailureChain({
       ? humanize(run.failure_type)
       : "") ||
     "Failure path not specified";
-  const rawBreakpoint =
-    (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
-    (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
-    "";
+  const rawBreakpoint = isScoreBandNotViable
+    ? "Repair Worksheet Required before Stage 1 can be reconsidered."
+    : (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
+      (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
+      "";
   const breakpoint =
     cleanProceedOnlyIf(rawBreakpoint, evidenceFallback || operatingInstruction) ||
     "Required proof not specified";

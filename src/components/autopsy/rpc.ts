@@ -56,8 +56,50 @@ export const createAutopsyRun = (params: {
     p_operator_class: params.operator_class,
   });
 
-export const getGatewayPayload = (run_id: string) =>
-  rpc<GatewayPayload>("get_autopsy_gateway_payload", { p_run_id: run_id });
+export const getGatewayPayload = async (run_id: string) => {
+  const payload = await rpc<GatewayPayload>("get_autopsy_gateway_payload", { p_run_id: run_id });
+  return normalizeHardFailSourceOfTruth(payload, run_id);
+};
+
+async function normalizeHardFailSourceOfTruth(
+  payload: GatewayPayload,
+  run_id: string,
+): Promise<GatewayPayload> {
+  if (!payload?.run) return payload;
+  try {
+    const selectedAnswers = await getCurrentRunAnswerAudit(run_id);
+    const selectedHardFails = selectedAnswers.filter((a) => a.hard_fail === true);
+    const hardFailTriggered = selectedHardFails.length > 0;
+    const firstHardFail = selectedHardFails[0] ?? null;
+    const rawRun = payload.run;
+    const rawFailureType = String(rawRun.failure_type ?? "");
+    const rawPressureStage = String(rawRun.pressure_stage ?? "");
+    return {
+      ...payload,
+      run: {
+        ...rawRun,
+        hard_fail_triggered_raw_payload: rawRun.hard_fail_triggered ?? null,
+        hard_fail_question_id_raw_payload: rawRun.hard_fail_question_id ?? null,
+        hard_fail_triggered: hardFailTriggered,
+        hard_fail_question_id: hardFailTriggered ? firstHardFail?.question_id ?? null : null,
+        hard_fail_selected_option_id: hardFailTriggered
+          ? firstHardFail?.selected_option_id ?? null
+          : null,
+        hard_fail_reason: hardFailTriggered ? rawRun.hard_fail_reason ?? null : null,
+        failure_type:
+          !hardFailTriggered && /hard\s*fail|existential/i.test(rawFailureType)
+            ? "score_band_failure"
+            : rawRun.failure_type,
+        pressure_stage:
+          !hardFailTriggered && /blocking\s*failure/i.test(rawPressureStage)
+            ? "score_band_failure"
+            : rawRun.pressure_stage,
+      },
+    };
+  } catch {
+    return payload;
+  }
+}
 
 export const recordAutopsyAnswer = (params: {
   run_id: string;
@@ -89,7 +131,8 @@ export async function getCurrentRunAnswerAudit(
   const { data: answers, error: answersError } = await supabase
     .from("autopsy_answers")
     .select("question_id, selected_option, score_value")
-    .eq("run_id", run_id);
+    .eq("run_id", run_id)
+    .order("created_at", { ascending: true });
   if (answersError) throw answersError;
 
   const selectedOptionIds = (answers ?? [])
