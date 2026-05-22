@@ -33,6 +33,24 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -318,6 +336,22 @@ interface ProofUnit {
   paymentProofName?: string;
   // General Business Expenses (not included in job GM)
   gbExpenses?: GBExpense[];
+  // Lifecycle / audit
+  lifecycle?: "active" | "voided" | "archived";
+  voidReason?: string;
+  voidedAt?: string;
+  archivedAt?: string;
+  reviewed?: boolean;
+  audit?: AuditEntry[];
+}
+
+type AuditAction = "created" | "updated" | "corrected" | "voided" | "archived" | "restored" | "deleted_draft";
+interface AuditEntry {
+  ts: string;
+  action: AuditAction;
+  reason?: string;
+  changes?: { field: string; from: unknown; to: unknown }[];
+  user?: string;
 }
 
 type GBCategory =
@@ -601,6 +635,158 @@ function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[]
   });
 }
 
+function Stage1SummaryDialog({
+  open,
+  onOpenChange,
+  unit,
+  computedGm,
+  grossProfit,
+  totalCosts,
+  risk,
+  onEdit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  unit: ProofUnit;
+  computedGm: number | null;
+  grossProfit: number;
+  totalCosts: number;
+  risk: string;
+  onEdit: () => void;
+}) {
+  const points = scoreUnit(unit);
+  const base = BASE_POINTS[unit.proofType] ?? 0;
+  const contributors: { label: string; pts: number }[] = [];
+  if (base) contributors.push({ label: `${unit.proofType}: base`, pts: base });
+  if (unit.isNewClient) contributors.push({ label: "New client", pts: 15 });
+  if (unit.isAdditionalSite) contributors.push({ label: "Additional site", pts: 10 });
+  if (unit.proofType === "Recurring Job" && unit.recurringFirstInvoicePaid) contributors.push({ label: "First recurring invoice paid", pts: 10 });
+  if (unit.gm >= 30) contributors.push({ label: "GM above 30%", pts: 10 });
+  if (unit.evidence) contributors.push({ label: "Evidence uploaded", pts: 10 });
+  if (unit.isReferralOrRepeat) contributors.push({ label: "Referral / repeat", pts: 5 });
+
+  const warnings: string[] = [];
+  if (risk === "Concentration warning") warnings.push("Customer concentration risk");
+  if (unit.gm < 30 && unit.gm >= 25) warnings.push("Margin below 30%");
+
+  const blockers: string[] = [];
+  if (!unit.invoiceDocName && !unit.invoiceAmount && !unit.evidence) blockers.push("Customer proof missing");
+  if (unit.paymentStatus === "Paid" && !unit.paymentProofName) blockers.push("Payment proof missing");
+  if (unit.paymentMethod === "Cash with Receipt" && !unit.paymentProofName) blockers.push("Cash proof missing");
+  if ((computedGm ?? unit.gm) < 25) blockers.push("Margin too low to repeat safely");
+
+  const gbTotal = (unit.gbExpenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+  const gbMissingReceipts = (unit.gbExpenses ?? []).filter((e) => !e.receiptName).length;
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex justify-between gap-3 py-1 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Stage 1 Summary</DialogTitle>
+          <DialogDescription>
+            This shows how this job or contract site contributes to your Stage 1 proof.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">1. Job / Site Overview</div>
+            {row("Client", unit.client)}
+            {row("Site / Location", unit.jobSite ?? "—")}
+            {row("Proof Type", unit.proofType)}
+            {row("Job / Contract Status", unit.status)}
+            {row("Scheduled Date", unit.scheduledDate || "—")}
+            {row("Contract Start Date", unit.contractStart || "—")}
+            {row("Contract End Date", unit.contractEnd || "—")}
+            {row("Quote / Contract Value", unit.quoteValue != null ? `$${unit.quoteValue.toLocaleString()}` : "—")}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">2. Customer Invoice / Contract</div>
+            {row("Invoice Amount", unit.invoiceAmount != null ? `$${unit.invoiceAmount.toLocaleString()}` : "—")}
+            {row("Invoice Status", unit.invoiceStatus ?? "—")}
+            {row("Invoice Date", unit.invoiceDate || "—")}
+            {row("Document", unit.invoiceDocName ? `${unit.invoiceDocType ?? "Attached"}: ${unit.invoiceDocName}` : "—")}
+            {row("Customer proof status", unit.invoiceDocName || unit.evidence
+              ? <span className="text-emerald-600">Uploaded</span>
+              : <span className="text-red-600">Missing</span>)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">3. Job Costs</div>
+            {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
+            {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
+            {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
+            {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
+            {row("Total Direct Costs", `$${totalCosts.toLocaleString()}`)}
+            {row("Gross Profit", `$${grossProfit.toLocaleString()}`)}
+            {row("GM %", computedGm != null
+              ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
+              : `${unit.gm}%`)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">4. Payment Proof</div>
+            {row("Payment Status", unit.paymentStatus ?? "—")}
+            {row("Payment Date", unit.paymentDate || "—")}
+            {row("Payment Amount", unit.paymentAmount != null ? `$${unit.paymentAmount.toLocaleString()}` : "—")}
+            {row("Payment Method", unit.paymentMethod ?? "—")}
+            {row("Payment proof status", unit.paymentProofName
+              ? <span className="text-emerald-600">Uploaded</span>
+              : <span className="text-red-600">Missing</span>)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">5. General Business Expenses</div>
+            {row("Total recorded", `$${gbTotal.toLocaleString()}`)}
+            {row("Receipt status", gbMissingReceipts === 0
+              ? <span className="text-emerald-600">All attached</span>
+              : <span className="text-amber-600">{gbMissingReceipts} missing</span>)}
+            <p className="text-xs text-muted-foreground pt-1">These expenses are not included in this job's gross margin.</p>
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">6. Stage 1 Contribution</div>
+            {row("Points Earned", points)}
+            <div className="mt-2">
+              <div className="text-xs font-medium">Contributing proof:</div>
+              <ul className="text-sm">
+                {contributors.length === 0
+                  ? <li className="text-muted-foreground">No points yet.</li>
+                  : contributors.map((c, i) => <li key={i}>- {c.label}: {c.pts} points</li>)}
+              </ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Warnings:</div>
+              <ul className="text-sm">{warnings.length === 0 ? <li className="text-muted-foreground">None</li> : warnings.map((w, i) => <li key={i}>- {w}</li>)}</ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Blockers:</div>
+              <ul className="text-sm">{blockers.length === 0 ? <li className="text-muted-foreground">None</li> : blockers.map((b, i) => <li key={i}>- {b}</li>)}</ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Next Action:</div>
+              <p className="text-sm">{unit.nextAction || (blockers[0] ? `Resolve: ${blockers[0]}.` : "Keep going.")}</p>
+            </div>
+          </section>
+        </div>
+
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={onEdit}>Edit Job / Site Detail</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   const [exp, setExp] = useState<GBExpense>({ id: "" });
   const reset = () => setExp({ id: "" });
@@ -700,6 +886,9 @@ function JobDetailSheet({
   onSave,
   onJumpToFinancials,
   concentrationClient,
+  onVoid,
+  onArchive,
+  onDelete,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -707,13 +896,32 @@ function JobDetailSheet({
   onSave: (u: ProofUnit) => void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
+  onVoid: (n: number, reason: string) => void;
+  onArchive: (n: number) => void;
+  onDelete: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
-  useEffect(() => setDraft(unit), [unit]);
+  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [correctionReason, setCorrectionReason] = useState<string>("");
+  const [showSummary, setShowSummary] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState<string>("Entered by mistake");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editGateOpen, setEditGateOpen] = useState(false);
+  useEffect(() => {
+    setDraft(unit);
+    setMode("view");
+    setCorrectionReason("");
+  }, [unit]);
   if (!draft) return null;
   const kind = kindForProof(draft.proofType);
   const statuses = allowedStatuses(draft.status, kind);
   const risk = unitRisk(draft, concentrationClient);
+  const lifecycle = draft.lifecycle ?? "active";
+  const isLocked = lifecycle !== "active";
+  const isReviewed = !!draft.reviewed;
+  const readOnly = mode === "view" || isLocked;
 
   // Best-effort lookup into the Financial Proof local store (read-only)
   const fpClients = readLS<FPClient[]>(LS.clients, []);
@@ -751,10 +959,44 @@ function JobDetailSheet({
   const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
 
   function save() {
-    onSave(draft);
-    toast({ title: "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
-    onOpenChange(false);
+    const original = unit!;
+    const changes: { field: string; from: unknown; to: unknown }[] = [];
+    (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
+      if (k === "audit") return;
+      const a = (original as unknown as Record<string, unknown>)[k as string];
+      const b = (draft as unknown as Record<string, unknown>)[k as string];
+      if (JSON.stringify(a) !== JSON.stringify(b)) {
+        changes.push({ field: String(k), from: a, to: b });
+      }
+    });
+    const entry: AuditEntry = {
+      ts: new Date().toISOString(),
+      action: isReviewed ? "corrected" : "updated",
+      reason: isReviewed ? correctionReason || undefined : undefined,
+      changes,
+    };
+    const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
+    onSave(next);
+    toast({ title: isReviewed ? "Correction logged" : "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
+    setMode("view");
+    setCorrectionReason("");
   }
+
+  function cancelEdit() {
+    setDraft(unit);
+    setMode("view");
+    setCorrectionReason("");
+  }
+
+  // Delete eligibility — only truly empty drafts
+  const hasInvoiceProof = !!draft.invoiceDocName || !!draft.invoiceAmount;
+  const hasCosts = !!(draft.costMaterials || draft.costLabour || draft.costSubcontractors || draft.costOther);
+  const hasPayment = !!draft.paymentProofName || !!draft.paymentAmount;
+  const hasGB = (draft.gbExpenses ?? []).length > 0;
+  const hasReview = isReviewed;
+  const isDraftLike = draft.status === "Draft" || draft.status === "Open";
+  const canDelete =
+    isDraftLike && !hasInvoiceProof && !hasCosts && !hasPayment && !hasGB && !hasReview && scoreUnit(draft) === 0;
 
   const fieldRow = (label: string, value: React.ReactNode) => (
     <div className="flex justify-between gap-3 py-1 text-sm">
@@ -845,6 +1087,22 @@ function JobDetailSheet({
             )}
           </div>
 
+          {isLocked && (
+            <div className="rounded-md border-l-4 border-slate-500 bg-slate-50 p-2 text-xs text-slate-800">
+              This record is <span className="font-semibold">{lifecycle}</span>. It is read-only and excluded from your Stage 1 score.
+              {draft.voidReason && <> Reason: {draft.voidReason}.</>}
+            </div>
+          )}
+          {!isLocked && isReviewed && mode === "edit" && (
+            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900 space-y-2">
+              <p>This record has been used for progression review. Changes must be logged as corrections.</p>
+              <div className="space-y-1">
+                <Label className="text-xs">Correction reason (required)</Label>
+                <Input value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} placeholder="Why is this being corrected?" />
+              </div>
+            </div>
+          )}
+          <fieldset disabled={readOnly} className="space-y-5 contents [&:disabled_input]:opacity-70 [&:disabled_button]:opacity-70">
           {/* 2. Customer Invoice / Contract */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
@@ -1051,6 +1309,7 @@ function JobDetailSheet({
             )}
           </div>
 
+          </fieldset>
           {/* Legacy linked records (read-only context) */}
           {(fin || docs.length > 0) && (
             <div className="rounded-md border p-3 space-y-2">
@@ -1081,10 +1340,173 @@ function JobDetailSheet({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={save}>Save changes</Button>
+          {/* Audit history (compact) */}
+          {(draft.audit ?? []).length > 0 && (
+            <details className="rounded-md border p-3 text-xs">
+              <summary className="cursor-pointer font-medium">Audit history ({(draft.audit ?? []).length})</summary>
+              <ul className="mt-2 space-y-1">
+                {(draft.audit ?? []).slice().reverse().map((a, i) => (
+                  <li key={i} className="flex justify-between gap-3 border-t pt-1">
+                    <span className="font-mono">{a.action}</span>
+                    <span className="text-muted-foreground truncate">{a.reason ?? (a.changes?.length ? `${a.changes.length} field(s)` : "")}</span>
+                    <span className="text-muted-foreground">{new Date(a.ts).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {/* Summary trigger */}
+          <div className="pt-2">
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setShowSummary(true)}>
+              View Stage 1 Summary
+            </Button>
           </div>
+
+          {/* Actions */}
+          <div className="rounded-md border p-3 space-y-3">
+            <div className="font-medium text-sm">Actions</div>
+            <div className="flex flex-wrap gap-2">
+              {mode === "view" && !isLocked && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (isReviewed) setEditGateOpen(true);
+                    else setMode("edit");
+                  }}
+                >
+                  Edit
+                </Button>
+              )}
+              {mode === "edit" && (
+                <>
+                  <Button
+                    onClick={save}
+                    disabled={isReviewed && !correctionReason.trim()}
+                  >
+                    Save Changes
+                  </Button>
+                  <Button variant="outline" onClick={cancelEdit}>Cancel Changes</Button>
+                </>
+              )}
+              {!isLocked && (
+                <Button variant="outline" onClick={() => setVoidOpen(true)}>Void Record</Button>
+              )}
+              {!isLocked && (
+                <Button variant="outline" onClick={() => setArchiveOpen(true)}>Archive Record</Button>
+              )}
+              {canDelete && (
+                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete Draft</Button>
+              )}
+              <Button variant="ghost" className="ml-auto" onClick={() => onOpenChange(false)}>Close</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Void this record if it should no longer count toward Stage 1 but must remain in history.
+              Archive this record if it is no longer active but should be kept.
+              Delete is only available for empty draft mistakes.
+            </p>
+          </div>
+
+          {/* Summary dialog */}
+          <Stage1SummaryDialog
+            open={showSummary}
+            onOpenChange={setShowSummary}
+            unit={draft}
+            computedGm={computedGm}
+            grossProfit={grossProfit}
+            totalCosts={costs}
+            risk={risk}
+            onEdit={() => {
+              setShowSummary(false);
+              if (!isLocked) {
+                if (isReviewed) setEditGateOpen(true);
+                else setMode("edit");
+              }
+            }}
+          />
+
+          {/* Void dialog */}
+          <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Void this record?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Voiding keeps this record for history but removes it from your Stage 1 score.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-1">
+                <Label className="text-xs">Reason</Label>
+                <Select value={voidReason} onValueChange={setVoidReason}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["Entered by mistake","Duplicate record","Customer cancelled","Not valid proof","Wrong client/job","Other"].map(r => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onVoid(draft.n, voidReason); setVoidOpen(false); onOpenChange(false); }}>
+                  Void Record
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Archive dialog */}
+          <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Archive this record?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Archiving hides this record from the active view but keeps it in history.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onArchive(draft.n); setArchiveOpen(false); onOpenChange(false); }}>
+                  Archive Record
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Delete draft dialog */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This draft has no proof, costs, payments, or score history. Delete it permanently?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onDelete(draft.n); setDeleteOpen(false); onOpenChange(false); }}>
+                  Delete Draft
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Reviewed edit gate */}
+          <AlertDialog open={editGateOpen} onOpenChange={setEditGateOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Enter correction mode</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This record has been used for progression review. Changes must be logged as corrections with a reason.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { setEditGateOpen(false); setMode("edit"); }}>
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </SheetContent>
     </Sheet>
@@ -2154,7 +2576,8 @@ function EvidenceForm() {
 
 export default function Stage1() {
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
-  const sc = useMemo(() => computeScorecard(units), [units]);
+  const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
+  const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -2196,7 +2619,7 @@ export default function Stage1() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Stage1ProofScorecard units={units} onOpenUnit={setOpenUnitN} />
+        <Stage1ProofScorecard units={activeUnits} onOpenUnit={setOpenUnitN} />
         <MarginSnapshot />
       </div>
 
@@ -2240,6 +2663,29 @@ export default function Stage1() {
         onSave={(u) => setUnits(units.map((x) => (x.n === u.n ? u : x)))}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
+        onVoid={(n, reason) => {
+          setUnits((prev) => prev.map((x) => x.n === n ? {
+            ...x,
+            lifecycle: "voided",
+            voidReason: reason,
+            voidedAt: new Date().toISOString(),
+            audit: [...(x.audit ?? []), { ts: new Date().toISOString(), action: "voided", reason }],
+          } : x));
+          toast({ title: "Record voided", description: "Kept in history, removed from your Stage 1 score." });
+        }}
+        onArchive={(n) => {
+          setUnits((prev) => prev.map((x) => x.n === n ? {
+            ...x,
+            lifecycle: "archived",
+            archivedAt: new Date().toISOString(),
+            audit: [...(x.audit ?? []), { ts: new Date().toISOString(), action: "archived" }],
+          } : x));
+          toast({ title: "Record archived" });
+        }}
+        onDelete={(n) => {
+          setUnits((prev) => prev.filter((x) => x.n !== n));
+          toast({ title: "Draft deleted" });
+        }}
       />
     </div>
   );
