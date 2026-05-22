@@ -2002,7 +2002,7 @@ function VerdictHardFailDebug({
 }) {
   const firstHardFail = audit?.firstSelectedHardFail ?? null;
   const selectedAnswers = audit?.selectedAnswers ?? [];
-  const hardFailFromSelectedAnswers = selectedAnswers.some((r: any) => r.hard_fail === true);
+  const hardFailFromSelectedAnswers = deriveHardFailFromSelectedAnswers(selectedAnswers);
   const hardFailTriggeredPayload = run?.hard_fail_triggered_payload ?? run?.hard_fail_triggered ?? null;
   const mismatchWarning = hardFailTriggeredPayload !== hardFailFromSelectedAnswers
     ? "ERROR: payload hard-fail does not match selected answers."
@@ -2024,7 +2024,8 @@ function VerdictHardFailDebug({
     selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
       score_value: r.score_value ?? null,
-      hard_fail: r.hard_fail === true,
+      option_hard_fail: r.option_hard_fail ?? r.hard_fail === true,
+      hard_fail: deriveHardFailFromSelectedAnswers([r]),
     })),
   };
   return (
