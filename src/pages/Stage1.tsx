@@ -1060,8 +1060,14 @@ function FinancialsForm() {
           <DollarSign className="h-4 w-4" /> Financial Proof
         </CardTitle>
         <CardDescription>Record revenue, direct costs, and evidence to prove gross margin.</CardDescription>
-        <p className="text-xs text-muted-foreground pt-1">
-          This is not your accounting system. It records enough proof to test whether the work is safe to scale.
+        <div className="rounded-md border-l-4 border-[hsl(var(--autopsy-accent,220_70%_50%))] bg-muted/40 p-3 mt-2 text-sm">
+          <div className="font-semibold">Build the habit now.</div>
+          <div className="text-muted-foreground">
+            Every job needs revenue, costs, and proof. Later, this same discipline will feed your accounting system.
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground pt-2">
+          This is proof that the work is safe to repeat — not bookkeeping, tax, or accounting.
         </p>
       </CardHeader>
       <CardContent className="grid gap-4">
