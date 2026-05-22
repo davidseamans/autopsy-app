@@ -131,7 +131,8 @@ export async function getCurrentRunAnswerAudit(
   const { data: answers, error: answersError } = await supabase
     .from("autopsy_answers")
     .select("question_id, selected_option, score_value")
-    .eq("run_id", run_id);
+    .eq("run_id", run_id)
+    .order("created_at", { ascending: true });
   if (answersError) throw answersError;
 
   const selectedOptionIds = (answers ?? [])
