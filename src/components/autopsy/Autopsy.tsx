@@ -2112,24 +2112,27 @@ function cleanProceedOnlyIf(value: string | null | undefined, replacement?: stri
 
 /* ----------------------- Band-aware verdict framing ---------------------- */
 
-export type VerdictBand = "not_viable" | "high_risk" | "viable" | "structurally_viable";
+export type VerdictBand = "critical_stop" | "not_viable" | "high_risk" | "viable" | "structurally_viable";
 
 export function getVerdictBand(opts: {
   verdictName: string;
   isBlocked: boolean;
   score: number | null | undefined;
+  isCriticalStop?: boolean;
 }): VerdictBand {
-  const { verdictName, isBlocked, score } = opts;
+  const { verdictName, isBlocked, score, isCriticalStop } = opts;
+  if (isCriticalStop && !isBlocked) return "critical_stop";
   if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
   if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
   if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
   if (/viable/i.test(verdictName)) return "viable";
   const s = typeof score === "number" ? score : Number(score);
   if (Number.isFinite(s)) {
-    if (s >= 26) return "structurally_viable";
-    if (s >= 20) return "viable";
-    if (s >= 12) return "high_risk";
-    return "not_viable";
+    if (s >= 25) return "structurally_viable";
+    if (s >= 18) return "viable";
+    if (s >= 10) return "high_risk";
+    if (s >= 4) return "not_viable";
+    return "critical_stop";
   }
   return "high_risk";
 }
