@@ -1094,10 +1094,13 @@ function VerdictView({
         selectedHardFails,
         hasSelectedHardFail: selectedHardFails.length > 0,
         firstSelectedHardFail: selectedHardFails[0] ?? null,
+        source: "autopsy_answers" as const,
+        expectedAnswerCount: questions.length || 10,
+        auditLoaded: true,
       };
     }
     const qs = (payload?.questions ?? []) as any[];
-    const selectedAnswers = qs.map((q, i) => {
+    const selectedAnswers = qs.filter((q) => q.selected_option != null).map((q, i) => {
       const opts = (q.options ?? []) as any[];
       const selectedId = q.selected_option ?? null;
       const selectedOpt =
@@ -1132,8 +1135,11 @@ function VerdictView({
       selectedHardFails,
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
+      source: "gateway_payload" as const,
+      expectedAnswerCount: qs.length || 10,
+      auditLoaded: !answerAuditQuery.isLoading,
     };
-  }, [answerAuditQuery.data, payload?.questions]);
+  }, [answerAuditQuery.data, answerAuditQuery.isLoading, payload?.questions, questions.length]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
