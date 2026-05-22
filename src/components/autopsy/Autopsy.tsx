@@ -1887,11 +1887,13 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
 
 function VerdictHardFailDebug({
   runId,
+  run,
   totalScore,
   finalVerdict,
   audit,
 }: {
   runId: string | null;
+  run: any;
   totalScore: number | null;
   finalVerdict: string;
   audit: any;
