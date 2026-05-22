@@ -47,10 +47,10 @@ import {
   getGatewayPayload,
   recordAutopsyAnswer,
   generateSupportingBlocks,
-  SelectedAnswerAuditRow,
   SupportingBlocks,
   SupportingBlockItem,
 } from "./rpc";
+import type { SelectedAnswerAuditRow } from "./rpc";
 
 type View = "start" | "question" | "verdict";
 
