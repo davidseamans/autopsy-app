@@ -43,6 +43,7 @@ import {
   createAutopsyRun,
   extractRunId,
   finalizeAutopsyRun,
+  getCurrentRunAnswerAudit,
   getGatewayPayload,
   recordAutopsyAnswer,
   generateSupportingBlocks,
@@ -1038,6 +1039,12 @@ function VerdictView({
     retry: false,
   });
   const supportingBlocks: SupportingBlocks | undefined = supportingQuery.data as any;
+  const answerAuditQuery = useQuery({
+    queryKey: ["autopsy", "answer_audit", runId],
+    queryFn: () => getCurrentRunAnswerAudit(runId as string),
+    enabled: !!runId,
+    retry: false,
+  });
 
   // Canonical normalized dimension scores from any backend shape.
   const normalizedDims = normalizeDimensionScores(run);
@@ -1078,6 +1085,16 @@ function VerdictView({
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
   const selectedAnswerAudit = useMemo(() => {
+    const dbRows = answerAuditQuery.data ?? [];
+    if (dbRows.length > 0) {
+      const selectedHardFails = dbRows.filter((r) => r.hard_fail === true);
+      return {
+        selectedAnswers: dbRows,
+        selectedHardFails,
+        hasSelectedHardFail: selectedHardFails.length > 0,
+        firstSelectedHardFail: selectedHardFails[0] ?? null,
+      };
+    }
     const qs = (payload?.questions ?? []) as any[];
     const selectedAnswers = qs.map((q, i) => {
       const opts = (q.options ?? []) as any[];
@@ -1115,7 +1132,7 @@ function VerdictView({
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
     };
-  }, [payload?.questions]);
+  }, [answerAuditQuery.data, payload?.questions]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
