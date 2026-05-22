@@ -1099,6 +1099,17 @@ function VerdictView({
         auditLoaded: true,
       };
     }
+    if (answerAuditQuery.isLoading) {
+      return {
+        selectedAnswers: [],
+        selectedHardFails: [],
+        hasSelectedHardFail: false,
+        firstSelectedHardFail: null,
+        source: "answer_audit_pending" as const,
+        expectedAnswerCount: (payload?.questions ?? []).length || 10,
+        auditLoaded: false,
+      };
+    }
     const qs = (payload?.questions ?? []) as any[];
     const selectedAnswers = qs.filter((q) => q.selected_option != null).map((q, i) => {
       const opts = (q.options ?? []) as any[];
