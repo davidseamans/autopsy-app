@@ -1967,8 +1967,10 @@ function VerdictHardFailDebug({
   const firstHardFail = audit?.firstSelectedHardFail ?? null;
   const selectedAnswers = audit?.selectedAnswers ?? [];
   const hardFailFromSelectedAnswers = selectedAnswers.some((r: any) => r.hard_fail === true);
-  const hardFailTriggeredPayload = run?.hard_fail_triggered ?? null;
-  const payloadMatchesSelectedAnswers = hardFailTriggeredPayload === hardFailFromSelectedAnswers;
+  const hardFailTriggeredPayload = run?.hard_fail_triggered_payload ?? run?.hard_fail_triggered ?? null;
+  const mismatchWarning = hardFailTriggeredPayload !== hardFailFromSelectedAnswers
+    ? "ERROR: payload hard-fail does not match selected answers."
+    : null;
   const debugPayload = {
     run_id: runId,
     total_score: totalScore,
@@ -1977,20 +1979,14 @@ function VerdictHardFailDebug({
     audit_loaded: audit?.auditLoaded === true,
     selected_answer_count: selectedAnswers.length,
     expected_answer_count: audit?.expectedAnswerCount ?? 10,
-    hard_fail_from_selected_answers: hardFailFromSelectedAnswers,
+    hardFailFromSelectedAnswers,
     hard_fail_triggered_payload: hardFailTriggeredPayload,
-    hard_fail_triggered_raw_payload: run?.hard_fail_triggered_raw_payload ?? null,
-    payload_matches_selected_answers: payloadMatchesSelectedAnswers,
-    error: payloadMatchesSelectedAnswers
-      ? null
-      : "ERROR: hard_fail payload does not match selected answers.",
+    mismatch_warning: mismatchWarning,
     hard_fail_source_question_number: firstHardFail?.question_number ?? null,
     hard_fail_source_question_id: firstHardFail?.question_id ?? null,
     hard_fail_source_option_id: firstHardFail?.selected_option_id ?? null,
     selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
-      question_id: r.question_id ?? null,
-      selected_option_id: r.selected_option_id ?? null,
       score_value: r.score_value ?? null,
       hard_fail: r.hard_fail === true,
     })),
