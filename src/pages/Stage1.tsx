@@ -935,6 +935,22 @@ function JobDetailSheet({
             )}
           </div>
 
+          {isLocked && (
+            <div className="rounded-md border-l-4 border-slate-500 bg-slate-50 p-2 text-xs text-slate-800">
+              This record is <span className="font-semibold">{lifecycle}</span>. It is read-only and excluded from your Stage 1 score.
+              {draft.voidReason && <> Reason: {draft.voidReason}.</>}
+            </div>
+          )}
+          {!isLocked && isReviewed && mode === "edit" && (
+            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900 space-y-2">
+              <p>This record has been used for progression review. Changes must be logged as corrections.</p>
+              <div className="space-y-1">
+                <Label className="text-xs">Correction reason (required)</Label>
+                <Input value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} placeholder="Why is this being corrected?" />
+              </div>
+            </div>
+          )}
+          <fieldset disabled={readOnly} className="space-y-5 contents [&:disabled_input]:opacity-70 [&:disabled_button]:opacity-70">
           {/* 2. Customer Invoice / Contract */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
@@ -1141,6 +1157,7 @@ function JobDetailSheet({
             )}
           </div>
 
+          </fieldset>
           {/* Legacy linked records (read-only context) */}
           {(fin || docs.length > 0) && (
             <div className="rounded-md border p-3 space-y-2">
@@ -1171,10 +1188,173 @@ function JobDetailSheet({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={save}>Save changes</Button>
+          {/* Audit history (compact) */}
+          {(draft.audit ?? []).length > 0 && (
+            <details className="rounded-md border p-3 text-xs">
+              <summary className="cursor-pointer font-medium">Audit history ({(draft.audit ?? []).length})</summary>
+              <ul className="mt-2 space-y-1">
+                {(draft.audit ?? []).slice().reverse().map((a, i) => (
+                  <li key={i} className="flex justify-between gap-3 border-t pt-1">
+                    <span className="font-mono">{a.action}</span>
+                    <span className="text-muted-foreground truncate">{a.reason ?? (a.changes?.length ? `${a.changes.length} field(s)` : "")}</span>
+                    <span className="text-muted-foreground">{new Date(a.ts).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          {/* Summary trigger */}
+          <div className="pt-2">
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setShowSummary(true)}>
+              View Stage 1 Summary
+            </Button>
           </div>
+
+          {/* Actions */}
+          <div className="rounded-md border p-3 space-y-3">
+            <div className="font-medium text-sm">Actions</div>
+            <div className="flex flex-wrap gap-2">
+              {mode === "view" && !isLocked && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (isReviewed) setEditGateOpen(true);
+                    else setMode("edit");
+                  }}
+                >
+                  Edit
+                </Button>
+              )}
+              {mode === "edit" && (
+                <>
+                  <Button
+                    onClick={save}
+                    disabled={isReviewed && !correctionReason.trim()}
+                  >
+                    Save Changes
+                  </Button>
+                  <Button variant="outline" onClick={cancelEdit}>Cancel Changes</Button>
+                </>
+              )}
+              {!isLocked && (
+                <Button variant="outline" onClick={() => setVoidOpen(true)}>Void Record</Button>
+              )}
+              {!isLocked && (
+                <Button variant="outline" onClick={() => setArchiveOpen(true)}>Archive Record</Button>
+              )}
+              {canDelete && (
+                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete Draft</Button>
+              )}
+              <Button variant="ghost" className="ml-auto" onClick={() => onOpenChange(false)}>Close</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Void this record if it should no longer count toward Stage 1 but must remain in history.
+              Archive this record if it is no longer active but should be kept.
+              Delete is only available for empty draft mistakes.
+            </p>
+          </div>
+
+          {/* Summary dialog */}
+          <Stage1SummaryDialog
+            open={showSummary}
+            onOpenChange={setShowSummary}
+            unit={draft}
+            computedGm={computedGm}
+            grossProfit={grossProfit}
+            totalCosts={costs}
+            risk={risk}
+            onEdit={() => {
+              setShowSummary(false);
+              if (!isLocked) {
+                if (isReviewed) setEditGateOpen(true);
+                else setMode("edit");
+              }
+            }}
+          />
+
+          {/* Void dialog */}
+          <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Void this record?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Voiding keeps this record for history but removes it from your Stage 1 score.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-1">
+                <Label className="text-xs">Reason</Label>
+                <Select value={voidReason} onValueChange={setVoidReason}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["Entered by mistake","Duplicate record","Customer cancelled","Not valid proof","Wrong client/job","Other"].map(r => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onVoid(draft.n, voidReason); setVoidOpen(false); onOpenChange(false); }}>
+                  Void Record
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Archive dialog */}
+          <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Archive this record?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Archiving hides this record from the active view but keeps it in history.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onArchive(draft.n); setArchiveOpen(false); onOpenChange(false); }}>
+                  Archive Record
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Delete draft dialog */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This draft has no proof, costs, payments, or score history. Delete it permanently?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { onDelete(draft.n); setDeleteOpen(false); onOpenChange(false); }}>
+                  Delete Draft
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Reviewed edit gate */}
+          <AlertDialog open={editGateOpen} onOpenChange={setEditGateOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Enter correction mode</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This record has been used for progression review. Changes must be logged as corrections with a reason.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { setEditGateOpen(false); setMode("edit"); }}>
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </SheetContent>
     </Sheet>
