@@ -1734,22 +1734,28 @@ function PressureCollapsePanel({
 function RecoveryRetestPanel({
   run,
   isBlocked,
+  isScoreBandNotViable,
   evidenceOverride,
   actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    hasContent(evidenceOverride)
+    isScoreBandNotViable
+      ? "Repair Worksheet Required"
+      : hasContent(evidenceOverride)
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
         : resolved;
-  const retest = hasContent(actionOverride)
+  const retest = isScoreBandNotViable
+    ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
+    : hasContent(actionOverride)
     ? actionOverride
     : hasContent(evidenceOverride)
       ? null
@@ -2666,6 +2672,7 @@ function PressureTopology({
 function MechanicalFailureChain({
   run,
   isBlocked,
+  isScoreBandNotViable,
   operatingInstruction,
   requiredActionFallback,
   evidenceFallback,
@@ -2673,6 +2680,7 @@ function MechanicalFailureChain({
 }: {
   run: any;
   isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
@@ -2696,6 +2704,8 @@ function MechanicalFailureChain({
     "Required proof not specified";
   const rawOutcome = isBlocked
     ? "Progression is blocked. Not viable in current form until the hard-fail condition is corrected and retested."
+    : isScoreBandNotViable
+      ? "Progression locked. Repair Worksheet Required before Stage 1 can be reconsidered."
     : humanize(run.progression_state) ||
       "Operational outcome pending recovery signal verification.";
   const outcome =
