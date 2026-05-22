@@ -1637,7 +1637,9 @@ function VerdictView({
       {/* 11. Progression Routing */}
       {runId && (() => {
         let routingBand = deriveBand(verdictName);
-        if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
+        if (isCriticalStop) {
+          routingBand = "critical_stop";
+        } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
           routingBand = "not_viable";
         }
         const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
