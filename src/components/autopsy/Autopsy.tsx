@@ -1746,25 +1746,28 @@ function PressureCollapsePanel({
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
 }) {
+  const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
     : isScoreBandNotViable
       ? "SCORE-BAND FAILURE"
-    : humanize(run.pressure_stage);
+      : /blocking\s*failure|hard\s*fail/i.test(rawPressureStage)
+        ? "PROGRESSION LOCKED"
+        : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
     : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
       ? "Score-band Not Viable"
-      : rawFailureType;
+      : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
     ...(suppressPressureSummary
       ? []
-      : [{ label: "Pressure Summary", value: run.pressure_summary, prose: true }]),
-    { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
+      : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
+    { label: "Collapse Pattern", value: sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked), prose: true },
   ];
   const visible = items.filter((i) => hasContent(i.value));
   if (visible.length === 0) return null;
