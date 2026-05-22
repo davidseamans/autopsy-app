@@ -31,11 +31,11 @@ export interface GatewayPayload {
 type SelectedHardFailSource = Pick<SelectedAnswerAuditRow, "hard_fail"> &
   Partial<Pick<SelectedAnswerAuditRow, "option_hard_fail">>;
 
+// STRICT: hard-fail is only true when the selected answer option's
+// `option_hard_fail` column is explicitly true. Never inferred from score,
+// dimension, verdict, progression state, or legacy `hard_fail` payload fields.
 function isSelectedAnswerHardFail(answer: SelectedHardFailSource): boolean {
-  if (Object.prototype.hasOwnProperty.call(answer, "option_hard_fail")) {
-    return answer.option_hard_fail === true;
-  }
-  return answer.hard_fail === true;
+  return answer.option_hard_fail === true;
 }
 
 export function deriveHardFailFromSelectedAnswers(
@@ -44,12 +44,12 @@ export function deriveHardFailFromSelectedAnswers(
   return selectedAnswers.some(isSelectedAnswerHardFail);
 }
 
+// STRICT: only the canonical `option_hard_fail` column counts. Any other
+// field (legacy `hard_fail`, server-derived flags) is ignored to prevent
+// score/band/dimension/risk state from being mis-inferred as a hard fail.
 export function readOptionHardFail(option: any): boolean {
   if (!option || typeof option !== "object") return false;
-  if (Object.prototype.hasOwnProperty.call(option, "option_hard_fail")) {
-    return option.option_hard_fail === true;
-  }
-  return option.hard_fail === true;
+  return option.option_hard_fail === true;
 }
 
 async function rpc<T = any>(
