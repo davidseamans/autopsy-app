@@ -1325,8 +1325,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
-        operatingInstruction={cascadeSeverity?.operating_instruction}
-        requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
+        operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
+        requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
       <ProgressionFlow
         current={isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
@@ -1444,9 +1444,9 @@ function VerdictView({
           run={run}
           isBlocked={isBlocked}
           isScoreBandNotViable={isScoreBandNotViable}
-          operatingInstruction={cascadeSeverity?.operating_instruction}
-          requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
-          evidenceFallback={supportingBlocks?.evidence_required?.[0]?.body}
+        operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
+        requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
+        evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
         />
       )}
@@ -1491,8 +1491,8 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
-        evidenceOverride={supportingBlocks?.evidence_required?.[0]?.body}
-        actionOverride={supportingBlocks?.required_actions?.[0]?.body}
+        evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
+        actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
