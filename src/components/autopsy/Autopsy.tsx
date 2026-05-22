@@ -1577,27 +1577,27 @@ function VerdictView({
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
-              <Prose value={run.execution_diagnosis} />
+              <Prose value={sanitizeVerdictCopy(run.execution_diagnosis, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_1) && (
             <SurfaceCard title="Mechanism — Step 1">
-              <Prose value={run.mechanism_step_1} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_1, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_2) && (
             <SurfaceCard title="Mechanism — Step 2">
-              <Prose value={run.mechanism_step_2} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_2, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.mechanism_step_3) && (
             <SurfaceCard title="Mechanism — Step 3">
-              <Prose value={run.mechanism_step_3} />
+              <Prose value={sanitizeVerdictCopy(run.mechanism_step_3, isHardFail)} />
             </SurfaceCard>
           )}
           {hasContent(run.final_outcome) && (
             <SurfaceCard title="Final outcome">
-              <Prose value={run.final_outcome} />
+              <Prose value={sanitizeVerdictCopy(run.final_outcome, isHardFail)} />
             </SurfaceCard>
           )}
         </>
