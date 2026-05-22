@@ -1963,11 +1963,17 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
   return value
     .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
-    .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(
+      /A hard[-\s]?fail condition was triggered(?:\s+by\s+a\s+selected\s+answer\s+during\s+this\s+assessment)?\.?/gi,
+      "The assessment score is below the minimum viability threshold.",
+    )
     .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
+    .replace(/selected hard[-\s]?fail answer/gi, "selected answer")
     .replace(/hard[-\s]?fail condition/gi, "score-band condition")
     .replace(/existential hard[-\s]?fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[-\s]?fail triggered/gi, "score-band failure recorded")
+    .replace(/Blocking failure triggered/gi, "Score-band failure")
     .replace(/hard[_-]fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail/gi, "score-band failure")
     .replace(/blocking failure/gi, "score-band failure")
