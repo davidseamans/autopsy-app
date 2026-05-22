@@ -99,6 +99,60 @@ function sortedQuestions(payload: GatewayPayload | undefined): GatewayQuestion[]
   return [...qs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
 
+function auditQuestionKey(row: Pick<SelectedAnswerAuditRow, "question_id" | "question_number">): string {
+  return row.question_id != null
+    ? `id:${String(row.question_id)}`
+    : `n:${String(row.question_number ?? "")}`;
+}
+
+function sortAuditRows(a: SelectedAnswerAuditRow, b: SelectedAnswerAuditRow) {
+  return (a.question_number ?? 0) - (b.question_number ?? 0);
+}
+
+function buildSelectedAnswersFromPayload(
+  questions: GatewayQuestion[] | undefined,
+): SelectedAnswerAuditRow[] {
+  return (questions ?? [])
+    .map((q: any, i): SelectedAnswerAuditRow | null => {
+      const opts = (q.options ?? []) as any[];
+      const selectedOptionFromList = opts.find((o) => o && typeof o === "object" && o.selected === true);
+      const selectedId = q.selected_option ?? selectedOptionFromList?.id ?? selectedOptionFromList?.option_id ?? selectedOptionFromList?.value ?? null;
+      if (selectedId == null) return null;
+      const selectedOpt =
+        selectedOptionFromList ??
+        opts.find(
+          (o) =>
+            o != null &&
+            typeof o === "object" &&
+            (String(o.id) === String(selectedId) ||
+              String(o.option_id) === String(selectedId) ||
+              String(o.value) === String(selectedId)),
+        ) ??
+        null;
+      const optionScore = selectedOpt && typeof selectedOpt === "object"
+        ? selectedOpt.score_value ?? selectedOpt.score ?? selectedOpt.value
+        : null;
+      return {
+        question_id: q.question_id ?? q.q_id ?? null,
+        question_number: Number.isFinite(Number(q.position)) ? Number(q.position) : i + 1,
+        dimension_code: q.dimension_code ?? null,
+        selected_option_id: selectedId,
+        selected_option_label:
+          selectedOpt && typeof selectedOpt === "object"
+            ? selectedOpt.label ?? null
+            : null,
+        score_value: Number.isFinite(Number(q.selected_score_value))
+          ? Number(q.selected_score_value)
+          : Number.isFinite(Number(optionScore))
+            ? Number(optionScore)
+            : null,
+        hard_fail: selectedOpt && typeof selectedOpt === "object" ? selectedOpt.hard_fail === true : false,
+      };
+    })
+    .filter((row): row is SelectedAnswerAuditRow => row != null)
+    .sort(sortAuditRows);
+}
+
 function humanize(value: any): string {
   if (value == null) return "";
   const s = String(value).trim();
