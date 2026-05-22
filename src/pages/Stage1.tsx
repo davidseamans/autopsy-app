@@ -1562,6 +1562,13 @@ function EvidenceForm() {
 }
 
 export default function Stage1() {
+  const units = SEED_UNITS;
+  const sc = useMemo(() => computeScorecard(units), [units]);
+  const focusAddJob = () => {
+    const tab = document.querySelector<HTMLButtonElement>('[role="tab"][value="job"]');
+    tab?.click();
+    document.getElementById("operator-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
@@ -1575,6 +1582,9 @@ export default function Stage1() {
           Prove the model before you scale it. Five jobs, real margin, real evidence.
         </p>
       </div>
+
+      <Stage1GoalBanner />
+      <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
@@ -1591,7 +1601,7 @@ export default function Stage1() {
         <MarginSnapshot />
       </div>
 
-      <Card>
+      <Card id="operator-inputs">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4" /> Operator Inputs
