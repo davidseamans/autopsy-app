@@ -983,27 +983,63 @@ function FinancialsForm() {
     }
   }
 
-  function handleAttachDoc(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!jobId) {
-      toast({ title: "Select a job before attaching documents" });
-      e.target.value = "";
+  async function uploadOne(file: File): Promise<{ file_url: string; storage_path?: string; local_only: boolean }> {
+    const ts = Date.now();
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${clientId}/${jobId}/${savedFinId ?? "pending"}/${ts}_${safeName}`;
+    try {
+      const { error } = await supabase.storage
+        .from("stage1-evidence")
+        .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+      if (error) throw error;
+      const { data: pub } = supabase.storage.from("stage1-evidence").getPublicUrl(path);
+      return { file_url: pub.publicUrl, storage_path: path, local_only: false };
+    } catch {
+      return { file_url: URL.createObjectURL(file), local_only: true };
+    }
+  }
+
+  async function handleFiles(files: File[], replaceId?: string) {
+    if (!clientId || !jobId) {
+      toast({ title: "Select a client and job before attaching evidence" });
       return;
     }
-    const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+    const ACCEPT = ["image/jpeg", "image/png", "image/heic", "image/heif", "application/pdf"];
+    const valid = files.filter((f) => ACCEPT.includes(f.type) || /\.(jpe?g|png|heic|heif|pdf)$/i.test(f.name));
+    if (valid.length === 0) {
+      toast({ title: "Unsupported file type", description: "Allowed: JPEG, PNG, HEIC, PDF" });
+      return;
+    }
     const now = new Date().toISOString();
-    const newDocs: FPDocument[] = files.map((file) => ({
-      id: uid(),
+    const uploads = await Promise.all(valid.map(uploadOne));
+    const newDocs: FPDocument[] = valid.map((file, i) => ({
+      id: replaceId ?? uid(),
+      client_id: clientId,
       job_id: jobId,
       financial_id: savedFinId,
       document_type: docType,
       file_name: file.name,
+      file_url: uploads[i].file_url,
+      mime_type: file.type || "application/octet-stream",
       uploaded_at: now,
-      verified_status: "Uploaded",
+      uploaded_by: "anonymous",
+      verification_status: "Uploaded",
+      storage_path: uploads[i].storage_path,
+      local_only: uploads[i].local_only,
     }));
-    setDocs([...docs, ...newDocs]);
-    toast({ title: `${files.length} document${files.length > 1 ? "s" : ""} attached` });
-    e.target.value = "";
+    if (replaceId) {
+      setDocs(docs.map((d) => (d.id === replaceId ? newDocs[0] : d)));
+      toast({ title: "Evidence replaced" });
+    } else {
+      setDocs([...docs, ...newDocs]);
+      toast({
+        title: `${newDocs.length} document${newDocs.length > 1 ? "s" : ""} attached`,
+        description: uploads.some((u) => u.local_only)
+          ? "Stored locally — connect storage bucket 'stage1-evidence' for persistence."
+          : undefined,
+      });
+    }
   }
 
   function handleRemoveDoc(id: string) {
