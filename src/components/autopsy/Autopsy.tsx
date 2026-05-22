@@ -2806,10 +2806,11 @@ function MechanicalFailureChain({
       ? humanize(run.failure_type)
       : "") ||
     "Failure path not specified";
-  const rawBreakpoint =
-    (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
-    (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
-    "";
+  const rawBreakpoint = isScoreBandNotViable
+    ? "Repair Worksheet Required before Stage 1 can be reconsidered."
+    : (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
+      (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
+      "";
   const breakpoint =
     cleanProceedOnlyIf(rawBreakpoint, evidenceFallback || operatingInstruction) ||
     "Required proof not specified";
