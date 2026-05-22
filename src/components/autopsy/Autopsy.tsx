@@ -1603,9 +1603,12 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
     : humanize(run.pressure_stage);
+  const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
-    : humanize(run.failure_type);
+    : !isBlocked && /hard\s*fail|existential/i.test(rawFailureType)
+      ? "Score-band Not Viable"
+      : rawFailureType;
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
@@ -2605,7 +2608,9 @@ function MechanicalFailureChain({
   const failurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
-    humanize(run.failure_type) ||
+    (isBlocked || !/hard\s*fail|existential/i.test(humanize(run.failure_type))
+      ? humanize(run.failure_type)
+      : "") ||
     "Failure path not specified";
   const rawBreakpoint =
     (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
