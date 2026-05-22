@@ -1187,7 +1187,7 @@ function VerdictView({
       return {
         selectedAnswers,
         selectedHardFails,
-        hasSelectedHardFail: selectedHardFails.length > 0,
+        hasSelectedHardFail: deriveHardFailFromSelectedAnswers(selectedAnswers),
         firstSelectedHardFail: selectedHardFails[0] ?? null,
         source: payloadRows.length > dbRows.length
           ? "autopsy_answers+gateway_payload"
@@ -1212,7 +1212,7 @@ function VerdictView({
     return {
       selectedAnswers,
       selectedHardFails,
-      hasSelectedHardFail: selectedHardFails.length > 0,
+      hasSelectedHardFail: deriveHardFailFromSelectedAnswers(selectedAnswers),
       firstSelectedHardFail: selectedHardFails[0] ?? null,
       source: "gateway_payload" as const,
       expectedAnswerCount: (payload?.questions ?? []).length || 10,
