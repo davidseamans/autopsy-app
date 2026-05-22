@@ -295,6 +295,27 @@ interface ProofUnit {
   scheduledDate?: string;
   notes?: string;
   nextAction?: string;
+  // Customer Invoice / Contract
+  invoiceAmount?: number;
+  invoiceDate?: string;
+  invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
+  contractStart?: string;
+  contractEnd?: string;
+  invoiceDocType?: "Quote" | "Customer Invoice" | "Signed Contract" | "Work Order" | "Customer Approval" | "Other";
+  invoiceDocName?: string;
+  // Job Costs
+  costMaterials?: number;
+  costLabour?: number;
+  costSubcontractors?: number;
+  costOther?: number;
+  costDocType?: "Supplier Receipt" | "Supplier Bill" | "Timesheet" | "Subcontractor Invoice" | "Materials Receipt" | "Other Cost Proof";
+  costDocName?: string;
+  // Payment Proof
+  paymentStatus?: "Not Paid" | "Part Paid" | "Paid" | "Disputed" | "Written Off";
+  paymentDate?: string;
+  paymentAmount?: number;
+  paymentMethod?: "Bank Transfer" | "Card" | "Cash with Receipt" | "Payment Platform" | "Other";
+  paymentProofName?: string;
 }
 
 const BASE_POINTS: Record<ProofType, number> = {
