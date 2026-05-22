@@ -129,7 +129,24 @@ export interface SelectedAnswerAuditRow {
   selected_option_id: string | number | null;
   selected_option_label: string | null;
   score_value: number | null;
+  option_hard_fail?: boolean;
   hard_fail: boolean;
+}
+
+async function fetchSelectedAnswerOptions(selectedOptionIds: any[]) {
+  if (!selectedOptionIds.length) return [];
+  const selectWithCanonicalFlag = await supabase
+    .from("answer_options")
+    .select("id, question_id, label, option_hard_fail, hard_fail, score_value")
+    .in("id", selectedOptionIds);
+  if (!selectWithCanonicalFlag.error) return selectWithCanonicalFlag.data ?? [];
+
+  const fallback = await supabase
+    .from("answer_options")
+    .select("id, question_id, label, hard_fail, score_value")
+    .in("id", selectedOptionIds);
+  if (fallback.error) throw fallback.error;
+  return fallback.data ?? [];
 }
 
 export async function getCurrentRunAnswerAudit(
@@ -150,12 +167,7 @@ export async function getCurrentRunAnswerAudit(
     .filter((id: any) => id != null);
 
   const [optionsResult, runQuestionsResult] = await Promise.all([
-    selectedOptionIds.length
-      ? supabase
-          .from("answer_options")
-          .select("id, question_id, label, hard_fail, score_value")
-          .in("id", selectedOptionIds)
-      : Promise.resolve({ data: [], error: null } as any),
+    fetchSelectedAnswerOptions(selectedOptionIds).then((data) => ({ data, error: null })),
     questionIds.length
       ? supabase
           .from("run_questions")
@@ -194,7 +206,8 @@ export async function getCurrentRunAnswerAudit(
           : Number.isFinite(Number(opt?.score_value))
             ? Number(opt.score_value)
             : null,
-        hard_fail: opt?.hard_fail === true,
+        option_hard_fail: opt?.option_hard_fail === true,
+        hard_fail: opt?.option_hard_fail === true || opt?.hard_fail === true,
       };
     })
     .sort((a, b) => (a.question_number ?? 0) - (b.question_number ?? 0));
