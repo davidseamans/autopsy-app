@@ -2157,6 +2157,25 @@ export interface BandFraming {
 }
 
 export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
+  critical_stop: {
+    rankPrimary: "Critical Stop",
+    rankSecondary: "Next Pressure",
+    rankTertiary: "Third Pressure",
+    topologyTitle: "Pressure Topology",
+    topologyIntro:
+      "Pressures present at the time of assessment. A Critical Stop indicates the foundation is missing across multiple dimensions.",
+    chainTitle: "Failure Chain",
+    pathLabel: "Failure Path",
+    proofLabel: "Required Before Retest",
+    outcomeLabel: "Outside Safe Progression Pathway",
+    decisionStatusOverride: "Stop. Outside safe progression pathway.",
+    allowedNextOverride:
+      "Education, advice, or a complete rethink before retesting. Autopsy is not opening Stage 1 from this result.",
+    headerTextClass: "text-red-800",
+    headerContainerClass: "border-red-700/60 bg-red-500/5",
+    badgeClass: "border-red-700 text-red-800 bg-red-500/10",
+    failureOriented: true,
+  },
   not_viable: {
     rankPrimary: "Main Blocker",
     rankSecondary: "Next Pressure",
