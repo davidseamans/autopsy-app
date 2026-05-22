@@ -1205,7 +1205,7 @@ function VerdictView({
       >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isBlocked ? "Status: Completed · Blocking Failure" : "Status: Completed"}
+            {isHardFail ? "Status: Completed · Blocking Failure" : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
         </div>
@@ -1306,13 +1306,13 @@ function VerdictView({
       {/* 5. Structural Diagnostics */}
       <PressureCollapsePanel run={run} isBlocked={isBlocked} />
 
-      {run.hard_fail_question_id && (
+      {isHardFail && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
             Blocking Failure Triggered
           </div>
           <p className="text-sm leading-relaxed">
-            A hard-fail condition was triggered during the assessment.
+            A hard-fail condition was triggered by a selected answer during this assessment.
             Progression is blocked. The business is not viable in its current
             form. The hard-fail condition must be corrected and retested before
             progression can be reconsidered.
