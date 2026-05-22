@@ -28,12 +28,18 @@ export interface GatewayPayload {
   [key: string]: any;
 }
 
-function isSelectedAnswerHardFail(answer: Pick<SelectedAnswerAuditRow, "hard_fail">): boolean {
+type SelectedHardFailSource = Pick<SelectedAnswerAuditRow, "hard_fail"> &
+  Partial<Pick<SelectedAnswerAuditRow, "option_hard_fail">>;
+
+function isSelectedAnswerHardFail(answer: SelectedHardFailSource): boolean {
+  if (Object.prototype.hasOwnProperty.call(answer, "option_hard_fail")) {
+    return answer.option_hard_fail === true;
+  }
   return answer.hard_fail === true;
 }
 
 export function deriveHardFailFromSelectedAnswers(
-  selectedAnswers: Array<Pick<SelectedAnswerAuditRow, "hard_fail">>,
+  selectedAnswers: SelectedHardFailSource[],
 ): boolean {
   return selectedAnswers.some(isSelectedAnswerHardFail);
 }
