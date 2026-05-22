@@ -321,11 +321,11 @@ function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
 }
 
 const SEED_UNITS: ProofUnit[] = [
-  { n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200 },
-  { n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900 },
-  { n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400 },
-  { n: 4, client: "QML", jobSite: "Maroochydore Service Centre", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000 },
-  { n: 5, client: "QML", jobSite: "Nambour Service Centre", proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000 },
+  { n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200, quoteValue: 1200 },
+  { n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900, quoteValue: 900 },
+  { n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400, quoteValue: 2400 },
+  { n: 4, client: "QML", jobSite: "Maroochydore Service Centre", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000, quoteValue: 6000 },
+  { n: 5, client: "QML", jobSite: "Nambour Service Centre", proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000, quoteValue: 6000 },
 ];
 
 function computeScorecard(units: ProofUnit[]) {
