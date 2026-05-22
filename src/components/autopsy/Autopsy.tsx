@@ -1118,6 +1118,63 @@ function VerdictView({
   }, [runId, verdictName, primaryConstraint]);
   const { state: progression } = useProgression(runId);
 
+  // QA: per-run answer + hard-fail audit. Logs ONLY the current run's
+  // payload. Hard-fail must be derived from a selected option with
+  // hard_fail = true on this run — never from score, band, or prior runs.
+  useEffect(() => {
+    if (!runId || !run || !(run as any).verdict_name) return;
+    try {
+      const qs = (payload?.questions ?? []) as any[];
+      const perQuestion = qs.map((q, i) => {
+        const opts = (q.options ?? []) as any[];
+        const selectedId = q.selected_option ?? null;
+        const selectedOpt =
+          opts.find(
+            (o) =>
+              o != null &&
+              typeof o === "object" &&
+              (o.option_id === selectedId || o.value === selectedId),
+          ) ?? null;
+        return {
+          question_id: q.question_id,
+          question_number: q.position ?? i + 1,
+          selected_option_id: selectedId,
+          selected_option_label:
+            (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
+          score_value:
+            selectedOpt && typeof selectedOpt === "object"
+              ? (selectedOpt.score ?? selectedOpt.value ?? null)
+              : null,
+          hard_fail:
+            selectedOpt && typeof selectedOpt === "object"
+              ? !!selectedOpt.hard_fail
+              : false,
+        };
+      });
+      const selectedHardFails = perQuestion.filter((r) => r.hard_fail === true);
+      // eslint-disable-next-line no-console
+      console.info("[autopsy:verdict-audit]", {
+        run_id: runId,
+        total_score: (run as any).score_total ?? null,
+        final_verdict: (run as any).verdict_name ?? null,
+        primary_risk: (run as any).primary_risk ?? null,
+        hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
+        hard_fail_selected_option_id:
+          (run as any).hard_fail_selected_option_id ?? null,
+        hard_fail_triggered_from_selected_options:
+          selectedHardFails.length > 0,
+        selected_hard_fail_questions: selectedHardFails.map((r) => ({
+          question_id: r.question_id,
+          question_number: r.question_number,
+        })),
+        per_question: perQuestion,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[autopsy:verdict-audit] failed", err);
+    }
+  }, [runId, payload, run]);
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
