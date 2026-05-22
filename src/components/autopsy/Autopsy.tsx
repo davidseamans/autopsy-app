@@ -1471,9 +1471,10 @@ function VerdictView({
                     {framing.allowedNextOverride
                       ? framing.allowedNextOverride
                       : hasContent(cascadeSeverity.operating_instruction)
-                      ? cascadeSeverity.operating_instruction
+                      ? sanitizeVerdictCopy(cascadeSeverity.operating_instruction, isHardFail)
                       : (supportingBlocks?.required_actions?.[0]?.body
-                          || cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
+                          ? sanitizeVerdictCopy(supportingBlocks.required_actions[0].body, isHardFail)
+                          : cleanProceedOnlyIf(translatePermissionState(cascadeSeverity.permission_state), null))}
                   </div>
                 </div>
               )}
@@ -1562,6 +1563,7 @@ function VerdictView({
       })()}
       <VerdictHardFailDebug
         runId={runId}
+        run={run}
         totalScore={scoreNumeric}
         finalVerdict={verdictName}
         audit={selectedAnswerAudit}
