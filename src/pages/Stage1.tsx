@@ -515,6 +515,227 @@ function riskCellClass(risk: string) {
   return "text-muted-foreground";
 }
 
+// ---- Drilldown helpers ----
+function kindForProof(t: ProofType): "oneoff" | "contract" {
+  return t === "Signed Contract" || t === "Contract Site" ? "contract" : "oneoff";
+}
+
+function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[] {
+  if (kind === "contract") {
+    const order = ["Draft", "Sent", "Signed", "Mobilising", "Active", "Renewed", "Ended", "Cancelled"];
+    if (current === "Cancelled") return ["Cancelled", "Draft"]; // reopen path
+    if (current === "Ended") return ["Ended", "Renewed", "Cancelled"];
+    const i = Math.max(0, order.indexOf(current));
+    const fwd = order.slice(i);
+    // Active only after Signed/Mobilising
+    return Array.from(new Set([
+      current,
+      ...fwd.filter((s) => {
+        if (s === "Active") return ["Signed", "Mobilising", "Active"].includes(current);
+        return true;
+      }),
+    ]));
+  }
+  const order = ["Open", "Scheduled", "Active", "Completed", "Paid", "Cancelled"];
+  if (current === "Cancelled") return ["Cancelled", "Open"]; // reopen
+  if (current === "Paid") return ["Paid"]; // terminal
+  const i = Math.max(0, order.indexOf(current));
+  const fwd = order.slice(i);
+  return fwd.filter((s) => {
+    if (s === "Paid") return current === "Completed"; // Paid only after Completed
+    return true;
+  });
+}
+
+function JobDetailSheet({
+  unit,
+  open,
+  onOpenChange,
+  onSave,
+  onJumpToFinancials,
+  concentrationClient,
+}: {
+  unit: ProofUnit | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSave: (u: ProofUnit) => void;
+  onJumpToFinancials: () => void;
+  concentrationClient: string | null;
+}) {
+  const [draft, setDraft] = useState<ProofUnit | null>(unit);
+  useEffect(() => setDraft(unit), [unit]);
+  if (!draft) return null;
+  const kind = kindForProof(draft.proofType);
+  const statuses = allowedStatuses(draft.status, kind);
+  const risk = unitRisk(draft, concentrationClient);
+
+  // Best-effort lookup into the Financial Proof local store (read-only)
+  const fpClients = readLS<FPClient[]>(LS.clients, []);
+  const fpJobs = readLS<FPJob[]>(LS.jobs, []);
+  const fpFin = readLS<FPFinancial[]>(LS.fin, []);
+  const fpDocs = readLS<FPDocument[]>(LS.docs, []);
+  const matchedClient = fpClients.find(
+    (c) => c.name.toLowerCase() === draft.client.toLowerCase()
+  );
+  const matchedJob = matchedClient
+    ? fpJobs.find(
+        (j) =>
+          j.client_id === matchedClient.id &&
+          (draft.jobSite ? j.job_name.toLowerCase() === draft.jobSite.toLowerCase() : true)
+      )
+    : null;
+  const fin = matchedJob ? fpFin.find((f) => f.job_id === matchedJob.id) : null;
+  const docs = matchedJob ? fpDocs.filter((d) => d.job_id === matchedJob.id) : [];
+
+  function save() {
+    onSave(draft);
+    toast({ title: "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
+    onOpenChange(false);
+  }
+
+  const fieldRow = (label: string, value: React.ReactNode) => (
+    <div className="flex justify-between gap-3 py-1 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Job / Contract Site Detail</SheetTitle>
+          <SheetDescription>
+            {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 space-y-5">
+          {/* Header summary */}
+          <div className="rounded-md border bg-muted/30 p-3">
+            {fieldRow("Client", draft.client)}
+            {fieldRow("Site", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
+            {fieldRow("Proof Type", draft.proofType)}
+            {fieldRow("Status", <Badge variant="outline" className={statusBadgeClass(draft.status)}>{draft.status}</Badge>)}
+            {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
+            {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
+            {fieldRow("GM %", <span className={draft.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{draft.gm}%</span>)}
+            {fieldRow("Evidence Status", draft.evidence ? "Uploaded" : <span className="text-red-600">Missing</span>)}
+            {fieldRow("Points", scoreUnit(draft))}
+            {fieldRow("Risk", <span className={riskCellClass(risk)}>{risk}</span>)}
+          </div>
+
+          {/* Status control */}
+          <div className="space-y-1">
+            <Label className="text-xs">Update Status</Label>
+            <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {statuses.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Only valid next statuses are shown ({kind === "contract" ? "contract" : "one-off"} rules).
+            </p>
+          </div>
+
+          {/* Warnings */}
+          {!draft.jobSite && (
+            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
+          )}
+          {!fin && (
+            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Financial proof missing</div>
+          )}
+          {!draft.evidence && (
+            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+              Evidence blocker: claims must be supported before progression can unlock.
+            </div>
+          )}
+          {draft.gm < 30 && (
+            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+              Margin blocker: this work is not yet economically safe to scale.
+            </div>
+          )}
+
+          {/* Financial Proof section */}
+          <div className="rounded-md border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="font-medium text-sm flex items-center gap-2"><DollarSign className="h-4 w-4" /> Financial Proof</div>
+              <Button size="sm" variant="outline" onClick={onJumpToFinancials}>
+                {fin ? "Edit Financial Proof" : "Add Financial Proof"}
+              </Button>
+            </div>
+            {fin ? (
+              <div className="text-sm">
+                {fieldRow("Revenue", `$${fin.revenue_amount.toLocaleString()}`)}
+                {fieldRow("Materials", `$${fin.materials_cost.toLocaleString()}`)}
+                {fieldRow("Labour", `$${fin.labour_cost.toLocaleString()}`)}
+                {fieldRow("Other Direct Costs", `$${fin.other_direct_cost.toLocaleString()}`)}
+                {fieldRow("Gross Profit", `$${fin.gross_profit.toLocaleString()}`)}
+                {fieldRow("GM %", fin.gm_percent != null ? `${fin.gm_percent}%` : "—")}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No financial proof recorded yet.</p>
+            )}
+          </div>
+
+          {/* Evidence section */}
+          <div className="rounded-md border p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Evidence</div>
+              <Button size="sm" variant="outline" onClick={onJumpToFinancials}>Attach Evidence</Button>
+            </div>
+            {docs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No evidence attached for this site yet.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {docs.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{d.document_type} — {d.file_name}</span>
+                      <Badge variant="outline" className="text-[10px]">{d.verification_status}</Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{new Date(d.uploaded_at).toLocaleDateString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Notes / Next Action */}
+          <div className="grid gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Notes</Label>
+              <Textarea
+                rows={2}
+                value={draft.notes ?? ""}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                placeholder="Observations, exceptions, anything to remember"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Next Action</Label>
+              <Input
+                value={draft.nextAction ?? ""}
+                onChange={(e) => setDraft({ ...draft, nextAction: e.target.value })}
+                placeholder="e.g. Upload signed contract"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={save}>Save changes</Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function Stage1ProofScorecard() {
   const units = SEED_UNITS;
   const sc = useMemo(() => computeScorecard(units), [units]);
