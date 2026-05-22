@@ -2576,7 +2576,8 @@ function EvidenceForm() {
 
 export default function Stage1() {
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
-  const sc = useMemo(() => computeScorecard(units), [units]);
+  const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
+  const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -2618,7 +2619,7 @@ export default function Stage1() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Stage1ProofScorecard units={units} onOpenUnit={setOpenUnitN} />
+        <Stage1ProofScorecard units={activeUnits} onOpenUnit={setOpenUnitN} />
         <MarginSnapshot />
       </div>
 
@@ -2662,6 +2663,29 @@ export default function Stage1() {
         onSave={(u) => setUnits(units.map((x) => (x.n === u.n ? u : x)))}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
+        onVoid={(n, reason) => {
+          setUnits((prev) => prev.map((x) => x.n === n ? {
+            ...x,
+            lifecycle: "voided",
+            voidReason: reason,
+            voidedAt: new Date().toISOString(),
+            audit: [...(x.audit ?? []), { ts: new Date().toISOString(), action: "voided", reason }],
+          } : x));
+          toast({ title: "Record voided", description: "Kept in history, removed from your Stage 1 score." });
+        }}
+        onArchive={(n) => {
+          setUnits((prev) => prev.map((x) => x.n === n ? {
+            ...x,
+            lifecycle: "archived",
+            archivedAt: new Date().toISOString(),
+            audit: [...(x.audit ?? []), { ts: new Date().toISOString(), action: "archived" }],
+          } : x));
+          toast({ title: "Record archived" });
+        }}
+        onDelete={(n) => {
+          setUnits((prev) => prev.filter((x) => x.n !== n));
+          toast({ title: "Draft deleted" });
+        }}
       />
     </div>
   );
