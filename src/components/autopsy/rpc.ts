@@ -2,16 +2,22 @@ import { supabase } from "@/lib/supabase";
 
 export interface GatewayQuestion {
   question_id: string | number;
+  q_id?: string;
   dimension_code: string;
   prompt: string;
   position: number;
   options: Array<{
+    id?: string | number;
     option_id?: string | number;
     value?: string | number;
     label: string;
+    hard_fail?: boolean;
+    score_value?: number;
     selected?: boolean;
   } | string>;
   selected_option?: string | number | null;
+  selected_score_value?: number | null;
+  is_hard_fail?: boolean;
   answered?: boolean;
 }
 
@@ -66,6 +72,82 @@ export const recordAutopsyAnswer = (params: {
 
 export const finalizeAutopsyRun = (run_id: string) =>
   rpc("finalize_autopsy_run", { p_run_id: run_id });
+
+export interface SelectedAnswerAuditRow {
+  question_id: string | number | null;
+  question_number: number | null;
+  selected_option_id: string | number | null;
+  selected_option_label: string | null;
+  score_value: number | null;
+  hard_fail: boolean;
+}
+
+export async function getCurrentRunAnswerAudit(
+  run_id: string,
+): Promise<SelectedAnswerAuditRow[]> {
+  const { data: answers, error: answersError } = await supabase
+    .from("autopsy_answers")
+    .select("question_id, selected_option, score_value")
+    .eq("run_id", run_id);
+  if (answersError) throw answersError;
+
+  const selectedOptionIds = (answers ?? [])
+    .map((a: any) => a.selected_option)
+    .filter((id: any) => id != null);
+  const questionIds = (answers ?? [])
+    .map((a: any) => a.question_id)
+    .filter((id: any) => id != null);
+
+  const [optionsResult, runQuestionsResult] = await Promise.all([
+    selectedOptionIds.length
+      ? supabase
+          .from("answer_options")
+          .select("id, question_id, label, hard_fail, score_value")
+          .in("id", selectedOptionIds)
+      : Promise.resolve({ data: [], error: null } as any),
+    questionIds.length
+      ? supabase
+          .from("run_questions")
+          .select("question_id, position, question_order")
+          .eq("run_id", run_id)
+          .in("question_id", questionIds)
+      : Promise.resolve({ data: [], error: null } as any),
+  ]);
+
+  if (optionsResult.error) throw optionsResult.error;
+
+  const optionById = new Map(
+    (optionsResult.data ?? []).map((o: any) => [String(o.id), o]),
+  );
+  const orderByQuestionId = new Map(
+    (runQuestionsResult.data ?? []).map((rq: any) => [
+      String(rq.question_id),
+      Number(rq.position ?? rq.question_order),
+    ]),
+  );
+
+  return (answers ?? [])
+    .map((a: any, index: number) => {
+      const opt = optionById.get(String(a.selected_option));
+      const questionNumber = orderByQuestionId.get(String(a.question_id));
+      const fallbackNumber = index + 1;
+      return {
+        question_id: a.question_id ?? null,
+        question_number: Number.isFinite(questionNumber)
+          ? questionNumber
+          : fallbackNumber,
+        selected_option_id: a.selected_option ?? null,
+        selected_option_label: opt?.label ?? null,
+        score_value: Number.isFinite(Number(a.score_value))
+          ? Number(a.score_value)
+          : Number.isFinite(Number(opt?.score_value))
+            ? Number(opt.score_value)
+            : null,
+        hard_fail: opt?.hard_fail === true,
+      };
+    })
+    .sort((a, b) => (a.question_number ?? 0) - (b.question_number ?? 0));
+}
 
 export interface SupportingBlockItem {
   rank?: string;
