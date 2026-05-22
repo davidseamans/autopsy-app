@@ -1139,7 +1139,11 @@ function VerdictView({
     String(run.permission_level ?? "").toLowerCase() === "locked";
   const isHardFail = hasSelectedHardFail;
   const isBlocked = isHardFail;
-  const effectiveOpState = isProgressionLocked && !opStateKey ? "blocked" : opStateKey;
+  const effectiveOpState = isHardFail
+    ? "blocked"
+    : isProgressionLocked
+      ? "locked"
+      : opStateKey;
 
   const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const band: VerdictBand = getVerdictBand({
@@ -1205,7 +1209,11 @@ function VerdictView({
       >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isHardFail ? "Status: Completed · Blocking Failure" : "Status: Completed"}
+            {isHardFail
+              ? "Status: Completed · Blocking Failure"
+              : isProgressionLocked
+                ? "Status: Completed · Progression Locked"
+                : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
         </div>
@@ -1256,10 +1264,14 @@ function VerdictView({
       <OperationalStatePanel
         run={run}
         isBlocked={isBlocked}
+        isProgressionLocked={isProgressionLocked}
         operatingInstruction={cascadeSeverity?.operating_instruction}
         requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
       />
-      <ProgressionFlow current={run.operational_state} isBlocked={isBlocked} />
+      <ProgressionFlow
+        current={isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
+        isBlocked={isBlocked}
+      />
 
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
