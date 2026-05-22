@@ -38,6 +38,14 @@ export function deriveHardFailFromSelectedAnswers(
   return selectedAnswers.some(isSelectedAnswerHardFail);
 }
 
+function readOptionHardFail(option: any): boolean {
+  if (!option || typeof option !== "object") return false;
+  if (Object.prototype.hasOwnProperty.call(option, "option_hard_fail")) {
+    return option.option_hard_fail === true;
+  }
+  return option.hard_fail === true;
+}
+
 async function rpc<T = any>(
   fn: string,
   args: Record<string, any>,
@@ -207,7 +215,7 @@ export async function getCurrentRunAnswerAudit(
             ? Number(opt.score_value)
             : null,
         option_hard_fail: opt?.option_hard_fail === true,
-        hard_fail: opt?.option_hard_fail === true || opt?.hard_fail === true,
+        hard_fail: readOptionHardFail(opt),
       };
     })
     .sort((a, b) => (a.question_number ?? 0) - (b.question_number ?? 0));
