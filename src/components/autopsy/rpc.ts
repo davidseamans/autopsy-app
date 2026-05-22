@@ -28,6 +28,16 @@ export interface GatewayPayload {
   [key: string]: any;
 }
 
+function isSelectedAnswerHardFail(answer: Pick<SelectedAnswerAuditRow, "hard_fail">): boolean {
+  return answer.hard_fail === true;
+}
+
+export function deriveHardFailFromSelectedAnswers(
+  selectedAnswers: Array<Pick<SelectedAnswerAuditRow, "hard_fail">>,
+): boolean {
+  return selectedAnswers.some(isSelectedAnswerHardFail);
+}
+
 async function rpc<T = any>(
   fn: string,
   args: Record<string, any>,
