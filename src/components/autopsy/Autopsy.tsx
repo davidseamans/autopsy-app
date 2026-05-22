@@ -240,7 +240,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
   );
   const [scenario, setScenario] = useState(
-    () => localStorage.getItem("autopsy_intake_scenario") || "startup",
+    () => {
+      const v = localStorage.getItem("autopsy_intake_scenario") || "startup";
+      return v === "acquisition" ? "startup" : v;
+    },
   );
   const [operatorClass, setOperatorClass] = useState(
     () => localStorage.getItem("autopsy_intake_operator") || "unproven",
