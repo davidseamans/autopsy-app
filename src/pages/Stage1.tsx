@@ -316,6 +316,32 @@ interface ProofUnit {
   paymentAmount?: number;
   paymentMethod?: "Bank Transfer" | "Card" | "Cash with Receipt" | "Payment Platform" | "Other";
   paymentProofName?: string;
+  // General Business Expenses (not included in job GM)
+  gbExpenses?: GBExpense[];
+}
+
+type GBCategory =
+  | "Fuel / Vehicle"
+  | "Phone / Internet"
+  | "Parking / Tolls"
+  | "Software"
+  | "Small Tools"
+  | "PPE / Uniforms"
+  | "General Supplies"
+  | "Training"
+  | "Insurance"
+  | "Other";
+
+interface GBExpense {
+  id: string;
+  expenseDate?: string;
+  supplier?: string;
+  description?: string;
+  category?: GBCategory;
+  amount?: number;
+  gstIncluded?: boolean;
+  receiptName?: string;
+  notes?: string;
 }
 
 const BASE_POINTS: Record<ProofType, number> = {
