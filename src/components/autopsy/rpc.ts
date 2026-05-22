@@ -12,6 +12,7 @@ export interface GatewayQuestion {
     value?: string | number;
     label: string;
     hard_fail?: boolean;
+    option_hard_fail?: boolean;
     score_value?: number;
     selected?: boolean;
   } | string>;
@@ -68,14 +69,19 @@ async function normalizeHardFailSourceOfTruth(
   if (!payload?.run) return payload;
   try {
     const selectedAnswers = await getCurrentRunAnswerAudit(run_id);
-    const selectedHardFails = selectedAnswers.filter((a) => a.hard_fail === true);
-    const hardFailTriggered = selectedHardFails.length > 0;
+    const selectedHardFails = selectedAnswers.filter(isSelectedAnswerHardFail);
+    const hardFailTriggered = deriveHardFailFromSelectedAnswers(selectedAnswers);
     const firstHardFail = selectedHardFails[0] ?? null;
     const rawRun = payload.run;
     return {
       ...payload,
       run: {
         ...rawRun,
+        hard_fail_triggered: hardFailTriggered,
+        hard_fail_question_id: hardFailTriggered ? firstHardFail?.question_id ?? null : null,
+        hard_fail_selected_option_id: hardFailTriggered
+          ? firstHardFail?.selected_option_id ?? null
+          : null,
         hard_fail_triggered_payload: rawRun.hard_fail_triggered ?? null,
         hard_fail_triggered_raw_payload: rawRun.hard_fail_triggered ?? null,
         hard_fail_question_id_payload: rawRun.hard_fail_question_id ?? null,
