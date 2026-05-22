@@ -1154,9 +1154,9 @@ function VerdictView({
         selectedHardFails,
         hasSelectedHardFail: selectedHardFails.length > 0,
         firstSelectedHardFail: selectedHardFails[0] ?? null,
-        source: (payloadRows.length > dbRows.length
+        source: payloadRows.length > dbRows.length
           ? "autopsy_answers+gateway_payload"
-          : "autopsy_answers") as const,
+          : "autopsy_answers",
         expectedAnswerCount: (payload?.questions ?? []).length || 10,
         auditLoaded: true,
       };
