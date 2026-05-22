@@ -75,7 +75,6 @@ const INDUSTRIES = [
 const SCENARIOS: Array<{ value: string; label: string }> = [
   { value: "startup", label: "Startup" },
   { value: "existing_business", label: "Existing business" },
-  { value: "acquisition", label: "Acquisition" },
   { value: "franchise", label: "Franchise" },
 ];
 
@@ -241,7 +240,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
   );
   const [scenario, setScenario] = useState(
-    () => localStorage.getItem("autopsy_intake_scenario") || "startup",
+    () => {
+      const v = localStorage.getItem("autopsy_intake_scenario") || "startup";
+      return v === "acquisition" ? "startup" : v;
+    },
   );
   const [operatorClass, setOperatorClass] = useState(
     () => localStorage.getItem("autopsy_intake_operator") || "unproven",
@@ -812,10 +814,12 @@ function StartView(props: {
   const disabled =
     !props.industry ||
     !props.scenario ||
-    !props.operatorClass ||
     !props.runName.trim() ||
     !props.testerEmail.trim() ||
     props.loading;
+
+  const scenarioSupported =
+    props.industry === "Cleaning" && props.scenario === "startup";
 
   return (
     <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm">
@@ -824,9 +828,11 @@ function StartView(props: {
           <div className="h-14 w-14 rounded-xl bg-[hsl(var(--autopsy-accent-soft))] flex items-center justify-center mb-4">
             <Skull className="h-7 w-7 text-[hsl(var(--autopsy-accent))]" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">New Autopsy Run</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Start Business Readiness Autopsy
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Set up a new assessment to diagnose business health.
+            Test whether this is a business system — or just work wearing a business name.
           </p>
         </div>
 
@@ -870,23 +876,24 @@ function StartView(props: {
             </Select>
           </Field>
 
-          <Field label="Operator profile">
-            <Select value={props.operatorClass} onValueChange={props.setOperatorClass}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {OPERATOR_CLASSES.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          {!scenarioSupported && (
+            <p className="text-xs text-muted-foreground rounded-md border border-dashed px-3 py-2">
+              This scenario is not active in the current build.
+            </p>
+          )}
+
+          <div className="rounded-lg bg-[hsl(var(--autopsy-accent-soft))]/40 border border-[hsl(var(--autopsy-accent-soft))] px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+            Autopsy is not asking whether you can do the work. It tests whether the
+            work can be sold, priced, delivered, recorded, repeated, and eventually
+            operated without total dependence on you.
+          </div>
 
           <Button
             type="submit"
             disabled={disabled}
             className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
           >
-            {props.loading ? "Creating run…" : "Begin Autopsy"}
+            {props.loading ? "Creating run…" : "Begin Readiness Autopsy"}
           </Button>
         </form>
       </div>
