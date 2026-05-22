@@ -1185,6 +1185,7 @@ function VerdictView({
     };
   }, [answerAuditQuery.data, answerAuditQuery.isLoading, payload?.questions]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
+  const firstSelectedHardFail = selectedAnswerAudit.firstSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
   const cascade =
@@ -1255,19 +1256,18 @@ function VerdictView({
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
+        hardFailFromSelectedAnswers: hasSelectedHardFail,
         hard_fail_from_selected_answers: hasSelectedHardFail,
-        hard_fail_triggered_payload: (run as any).hard_fail_triggered ?? null,
+        hard_fail_triggered_payload:
+          (run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null,
         hard_fail_triggered_raw_payload:
           (run as any).hard_fail_triggered_raw_payload ?? null,
         payload_matches_selected_answers:
-          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
-        raw_payload_matches_selected_answers:
-          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
-        error:
-          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail &&
-          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
-            ? null
-            : "ERROR: hard_fail payload does not match selected answers.",
+          ((run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        mismatch_warning:
+          ((run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null) !== hasSelectedHardFail
+            ? "ERROR: payload hard-fail does not match selected answers."
+            : null,
         primary_risk: (run as any).primary_risk ?? null,
         hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
