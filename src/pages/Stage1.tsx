@@ -894,7 +894,7 @@ function FinancialsForm() {
   const linkedDocs = docs.filter(
     (d) => d.job_id === jobId && (savedFinId ? d.financial_id === savedFinId || d.financial_id === null : true)
   );
-  const evidenceStatus: EvidenceStatus = linkedDocs.length === 0 ? "Missing" : "Uploaded";
+  const evidenceStatus = (linkedDocs.length === 0 ? "Missing" : "Uploaded") as EvidenceStatus;
 
   // ----- Handlers -----
   function handleAddClient() {
