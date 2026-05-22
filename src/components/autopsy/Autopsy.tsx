@@ -207,8 +207,25 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   // Persist active runId so standalone /worksheet route can recover it.
   useEffect(() => {
-    if (runId) localStorage.setItem("autopsy_active_run_id", runId);
-  }, [runId]);
+    if (!runId) return;
+    const status = (payloadQuery.data as any)?.run?.status;
+    const hasVerdict = !!(payloadQuery.data as any)?.run?.verdict_name;
+    if (status === "completed" || hasVerdict) {
+      // Completed runs are not "active" — never resume them as in-progress.
+      try {
+        const current = localStorage.getItem("autopsy_active_run_id");
+        if (current === runId) localStorage.removeItem("autopsy_active_run_id");
+        if (current === "autopsy_current_run_id") {
+          /* noop, handled below */
+        }
+        localStorage.removeItem("autopsy_current_run_id");
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+    localStorage.setItem("autopsy_active_run_id", runId);
+  }, [runId, payloadQuery.data]);
 
   const payloadQuery = useQuery({
     queryKey: ["autopsy", "payload", runId],
@@ -274,7 +291,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
       // Auto-finalize when last question was just answered.
       if (questions.length > 0 && nextSize >= questions.length && runId) {
-        finalizeMutation.mutate(runId);
+        await finalizeAndLoad();
       }
     },
     onError: (e: any) =>
@@ -296,6 +313,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       });
       const status = (fresh as any)?.run?.status;
       const hasVerdict = !!(fresh as any)?.run?.verdict_name;
+      if (runId && (status === "completed" || hasVerdict)) {
+        try {
+          localStorage.removeItem("autopsy_active_run_id");
+          localStorage.removeItem("autopsy_current_run_id");
+        } catch { /* noop */ }
+      }
       if (status === "completed" || hasVerdict) {
         setLoadingStuck(false);
         setView("verdict");
@@ -303,13 +326,46 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         setView("verdict");
       }
     },
-    onError: (e: any) =>
+    onError: async (e: any) => {
+      const msg = String(e?.message ?? e ?? "");
+      const immutable = /immutable|already\s+completed|completed\s+autopsy/i.test(msg);
+      if (immutable && runId) {
+        try {
+          const fresh = await qc.fetchQuery({
+            queryKey: ["autopsy", "payload", runId],
+            queryFn: () => getGatewayPayload(runId),
+          });
+          const status = (fresh as any)?.run?.status;
+          const hasVerdict = !!(fresh as any)?.run?.verdict_name;
+          if (status === "completed" || hasVerdict) {
+            try {
+              localStorage.removeItem("autopsy_active_run_id");
+              localStorage.removeItem("autopsy_current_run_id");
+            } catch { /* noop */ }
+            setError(null);
+            setLoadingStuck(false);
+            setView("verdict");
+            return;
+          }
+        } catch {
+          /* fall through to controlled error */
+        }
+        setError({
+          rpc: "finalize_autopsy_run",
+          message:
+            "This run could not be finalised. Start a new analysis or contact support.",
+          step: "question",
+          runId,
+        });
+        return;
+      }
       setError({
         rpc: "finalize_autopsy_run",
         message: e?.message ?? String(e),
         step: "question",
         runId,
-      }),
+      });
+    },
   });
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
@@ -446,6 +502,26 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    // Never re-finalise a completed run. Check the latest payload first.
+    try {
+      const fresh = await qc.fetchQuery({
+        queryKey: ["autopsy", "payload", runId],
+        queryFn: () => getGatewayPayload(runId),
+      });
+      const status = (fresh as any)?.run?.status;
+      const hasVerdict = !!(fresh as any)?.run?.verdict_name;
+      if (status === "completed" || hasVerdict) {
+        try {
+          localStorage.removeItem("autopsy_active_run_id");
+          localStorage.removeItem("autopsy_current_run_id");
+        } catch { /* noop */ }
+        setLoadingStuck(false);
+        setView("verdict");
+        return;
+      }
+    } catch {
+      /* fall through to finalize attempt */
+    }
     try {
       await finalizeMutation.mutateAsync(runId);
     } catch {
@@ -507,6 +583,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setRunName("");
     setLoadingStuck(false);
     setManualIndex(null);
+    try {
+      localStorage.removeItem("autopsy_active_run_id");
+      localStorage.removeItem("autopsy_current_run_id");
+    } catch { /* noop */ }
     navigate("/autopsy");
   }
 
