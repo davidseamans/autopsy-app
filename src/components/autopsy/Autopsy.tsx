@@ -1749,6 +1749,7 @@ function OperationalStatePanel({
   isBlocked,
   isProgressionLocked,
   isScoreBandNotViable,
+  isCriticalStop,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1756,6 +1757,7 @@ function OperationalStatePanel({
   isBlocked?: boolean;
   isProgressionLocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1770,6 +1772,8 @@ function OperationalStatePanel({
     : humanize(run.progression_state) || "—";
   const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
+    : isCriticalStop
+      ? "Education / Advice / Complete Rethink Before Retest"
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
@@ -1777,7 +1781,9 @@ function OperationalStatePanel({
     sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = isScoreBandNotViable
+  const recoveryDisplay = isCriticalStop
+    ? "Outside Safe Progression Pathway"
+    : isScoreBandNotViable
     ? "Repair Worksheet Required"
     : sanitizeVerdictCopy(resolveRecoverySignal(run), !!isBlocked);
   const rows: Array<[string, any]> = [
