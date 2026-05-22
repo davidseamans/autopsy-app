@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import {
+  getActiveRunId,
+  isStage1Reachable,
+  ROUTING_COPY,
+  STAGE_1_GOAL,
+  useProgression,
+} from "@/lib/progression";
 import {
   Card,
   CardContent,
