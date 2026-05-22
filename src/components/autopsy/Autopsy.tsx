@@ -1665,9 +1665,16 @@ function VerdictView({
                     <Link to={copy.secondaryCta.to(runId)}>{copy.secondaryCta.label}</Link>
                   </Button>
                 )}
-                <Button variant="ghost" asChild>
-                  <Link to={`/autopsy/run/${runId}/worksheet`}>Open Diagnostic Worksheet</Link>
-                </Button>
+                {!isCriticalStop && (
+                  <Button variant="ghost" asChild>
+                    <Link to={`/autopsy/run/${runId}/worksheet`}>Open Diagnostic Worksheet</Link>
+                  </Button>
+                )}
+                {isCriticalStop && (
+                  <Button variant="ghost" asChild>
+                    <Link to={`/autopsy/run/${runId}`}>View Diagnostic Summary</Link>
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={onReset}>Start New Analysis</Button>
               </div>
             </div>
@@ -1981,10 +1988,20 @@ function RecoveryRetestPanel({
             )}
           </div>
         )}
-        {hasContent(worksheet) && (
+        {hasContent(worksheet) && !isCriticalStop && (
           <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Worksheet Output
+            </div>
+            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+              {renderBlock(worksheet)}
+            </pre>
+          </div>
+        )}
+        {hasContent(worksheet) && isCriticalStop && (
+          <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Diagnostic Guidance
             </div>
             <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
               {renderBlock(worksheet)}
