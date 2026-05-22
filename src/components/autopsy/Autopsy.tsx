@@ -1178,7 +1178,7 @@ function VerdictView({
       for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
       for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
       const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
-      const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+      const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
       return {
         selectedAnswers,
         selectedHardFails,
@@ -1203,7 +1203,7 @@ function VerdictView({
       };
     }
     const selectedAnswers = payloadRows;
-    const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+    const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
     return {
       selectedAnswers,
       selectedHardFails,
