@@ -12,6 +12,7 @@ export interface GatewayQuestion {
     value?: string | number;
     label: string;
     hard_fail?: boolean;
+    option_hard_fail?: boolean;
     score_value?: number;
     selected?: boolean;
   } | string>;
@@ -25,6 +26,30 @@ export interface GatewayPayload {
   run?: Record<string, any>;
   questions?: GatewayQuestion[];
   [key: string]: any;
+}
+
+type SelectedHardFailSource = Pick<SelectedAnswerAuditRow, "hard_fail"> &
+  Partial<Pick<SelectedAnswerAuditRow, "option_hard_fail">>;
+
+function isSelectedAnswerHardFail(answer: SelectedHardFailSource): boolean {
+  if (Object.prototype.hasOwnProperty.call(answer, "option_hard_fail")) {
+    return answer.option_hard_fail === true;
+  }
+  return answer.hard_fail === true;
+}
+
+export function deriveHardFailFromSelectedAnswers(
+  selectedAnswers: SelectedHardFailSource[],
+): boolean {
+  return selectedAnswers.some(isSelectedAnswerHardFail);
+}
+
+export function readOptionHardFail(option: any): boolean {
+  if (!option || typeof option !== "object") return false;
+  if (Object.prototype.hasOwnProperty.call(option, "option_hard_fail")) {
+    return option.option_hard_fail === true;
+  }
+  return option.hard_fail === true;
 }
 
 async function rpc<T = any>(
@@ -68,14 +93,19 @@ async function normalizeHardFailSourceOfTruth(
   if (!payload?.run) return payload;
   try {
     const selectedAnswers = await getCurrentRunAnswerAudit(run_id);
-    const selectedHardFails = selectedAnswers.filter((a) => a.hard_fail === true);
-    const hardFailTriggered = selectedHardFails.length > 0;
+    const selectedHardFails = selectedAnswers.filter(isSelectedAnswerHardFail);
+    const hardFailTriggered = deriveHardFailFromSelectedAnswers(selectedAnswers);
     const firstHardFail = selectedHardFails[0] ?? null;
     const rawRun = payload.run;
     return {
       ...payload,
       run: {
         ...rawRun,
+        hard_fail_triggered: hardFailTriggered,
+        hard_fail_question_id: hardFailTriggered ? firstHardFail?.question_id ?? null : null,
+        hard_fail_selected_option_id: hardFailTriggered
+          ? firstHardFail?.selected_option_id ?? null
+          : null,
         hard_fail_triggered_payload: rawRun.hard_fail_triggered ?? null,
         hard_fail_triggered_raw_payload: rawRun.hard_fail_triggered ?? null,
         hard_fail_question_id_payload: rawRun.hard_fail_question_id ?? null,
@@ -113,7 +143,24 @@ export interface SelectedAnswerAuditRow {
   selected_option_id: string | number | null;
   selected_option_label: string | null;
   score_value: number | null;
+  option_hard_fail?: boolean;
   hard_fail: boolean;
+}
+
+async function fetchSelectedAnswerOptions(selectedOptionIds: any[]) {
+  if (!selectedOptionIds.length) return [];
+  const selectWithCanonicalFlag = await supabase
+    .from("answer_options")
+    .select("id, question_id, label, option_hard_fail, hard_fail, score_value")
+    .in("id", selectedOptionIds);
+  if (!selectWithCanonicalFlag.error) return selectWithCanonicalFlag.data ?? [];
+
+  const fallback = await supabase
+    .from("answer_options")
+    .select("id, question_id, label, hard_fail, score_value")
+    .in("id", selectedOptionIds);
+  if (fallback.error) throw fallback.error;
+  return fallback.data ?? [];
 }
 
 export async function getCurrentRunAnswerAudit(
@@ -134,12 +181,7 @@ export async function getCurrentRunAnswerAudit(
     .filter((id: any) => id != null);
 
   const [optionsResult, runQuestionsResult] = await Promise.all([
-    selectedOptionIds.length
-      ? supabase
-          .from("answer_options")
-          .select("id, question_id, label, hard_fail, score_value")
-          .in("id", selectedOptionIds)
-      : Promise.resolve({ data: [], error: null } as any),
+    fetchSelectedAnswerOptions(selectedOptionIds).then((data) => ({ data, error: null })),
     questionIds.length
       ? supabase
           .from("run_questions")
@@ -178,7 +220,8 @@ export async function getCurrentRunAnswerAudit(
           : Number.isFinite(Number(opt?.score_value))
             ? Number(opt.score_value)
             : null,
-        hard_fail: opt?.hard_fail === true,
+        option_hard_fail: opt?.option_hard_fail === true,
+        hard_fail: readOptionHardFail(opt),
       };
     })
     .sort((a, b) => (a.question_number ?? 0) - (b.question_number ?? 0));

@@ -41,10 +41,12 @@ import {
   GatewayPayload,
   GatewayQuestion,
   createAutopsyRun,
+  deriveHardFailFromSelectedAnswers,
   extractRunId,
   finalizeAutopsyRun,
   getCurrentRunAnswerAudit,
   getGatewayPayload,
+  readOptionHardFail,
   recordAutopsyAnswer,
   generateSupportingBlocks,
   SupportingBlocks,
@@ -146,7 +148,8 @@ function buildSelectedAnswersFromPayload(
           : Number.isFinite(Number(optionScore))
             ? Number(optionScore)
             : null,
-        hard_fail: selectedOpt && typeof selectedOpt === "object" ? selectedOpt.hard_fail === true : false,
+        option_hard_fail: readOptionHardFail(selectedOpt),
+        hard_fail: readOptionHardFail(selectedOpt),
       };
     })
     .filter((row): row is SelectedAnswerAuditRow => row != null)
@@ -1175,11 +1178,11 @@ function VerdictView({
       for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
       for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
       const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
-      const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+      const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
       return {
         selectedAnswers,
         selectedHardFails,
-        hasSelectedHardFail: selectedHardFails.length > 0,
+        hasSelectedHardFail: deriveHardFailFromSelectedAnswers(selectedAnswers),
         firstSelectedHardFail: selectedHardFails[0] ?? null,
         source: payloadRows.length > dbRows.length
           ? "autopsy_answers+gateway_payload"
@@ -1200,11 +1203,11 @@ function VerdictView({
       };
     }
     const selectedAnswers = payloadRows;
-    const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+    const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
     return {
       selectedAnswers,
       selectedHardFails,
-      hasSelectedHardFail: selectedHardFails.length > 0,
+      hasSelectedHardFail: deriveHardFailFromSelectedAnswers(selectedAnswers),
       firstSelectedHardFail: selectedHardFails[0] ?? null,
       source: "gateway_payload" as const,
       expectedAnswerCount: (payload?.questions ?? []).length || 10,
@@ -1999,7 +2002,7 @@ function VerdictHardFailDebug({
 }) {
   const firstHardFail = audit?.firstSelectedHardFail ?? null;
   const selectedAnswers = audit?.selectedAnswers ?? [];
-  const hardFailFromSelectedAnswers = selectedAnswers.some((r: any) => r.hard_fail === true);
+  const hardFailFromSelectedAnswers = deriveHardFailFromSelectedAnswers(selectedAnswers);
   const hardFailTriggeredPayload = run?.hard_fail_triggered_payload ?? run?.hard_fail_triggered ?? null;
   const mismatchWarning = hardFailTriggeredPayload !== hardFailFromSelectedAnswers
     ? "ERROR: payload hard-fail does not match selected answers."
@@ -2021,7 +2024,8 @@ function VerdictHardFailDebug({
     selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
       score_value: r.score_value ?? null,
-      hard_fail: r.hard_fail === true,
+      option_hard_fail: (r.option_hard_fail ?? r.hard_fail) === true,
+      hard_fail: deriveHardFailFromSelectedAnswers([r]),
     })),
   };
   return (
