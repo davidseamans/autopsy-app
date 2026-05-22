@@ -1805,10 +1805,18 @@ function EvidenceForm() {
 }
 
 export default function Stage1() {
-  const units = SEED_UNITS;
+  const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
   const sc = useMemo(() => computeScorecard(units), [units]);
+  const [openUnitN, setOpenUnitN] = useState<number | null>(null);
+  const openUnit = units.find((u) => u.n === openUnitN) ?? null;
+
   const focusAddJob = () => {
     const tab = document.querySelector<HTMLButtonElement>('[role="tab"][value="job"]');
+    tab?.click();
+    document.getElementById("operator-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const focusFinancials = () => {
+    const tab = document.querySelector<HTMLButtonElement>('[role="tab"][value="financials"]');
     tab?.click();
     document.getElementById("operator-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1840,7 +1848,7 @@ export default function Stage1() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Stage1ProofScorecard />
+        <Stage1ProofScorecard units={units} onOpenUnit={setOpenUnitN} />
         <MarginSnapshot />
       </div>
 
@@ -1876,6 +1884,15 @@ export default function Stage1() {
           Continue working Stage 1 <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+
+      <JobDetailSheet
+        unit={openUnit}
+        open={openUnitN != null}
+        onOpenChange={(o) => !o && setOpenUnitN(null)}
+        onSave={(u) => setUnits(units.map((x) => (x.n === u.n ? u : x)))}
+        onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
+        concentrationClient={sc.concentrationClient}
+      />
     </div>
   );
 }
