@@ -1445,7 +1445,7 @@ function VerdictView({
         isScoreBandNotViable={isScoreBandNotViable}
       />
 
-      {isHardFail && (
+      {isHardFail && !isScoreBandNotViable && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
             Blocking Failure Triggered
