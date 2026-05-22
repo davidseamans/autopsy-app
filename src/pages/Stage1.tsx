@@ -504,7 +504,14 @@ function Stage1ProofScorecard() {
               return (
                 <TableRow key={u.n}>
                   <TableCell className="font-medium">{u.n}</TableCell>
-                  <TableCell>{u.client}</TableCell>
+                  <TableCell>
+                    <div className="font-medium leading-tight">{u.client}</div>
+                    {u.jobSite ? (
+                      <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                    ) : (
+                      <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                    )}
+                  </TableCell>
                   <TableCell>{u.proofType}</TableCell>
                   <TableCell>{u.status}</TableCell>
                   <TableCell className="text-right">
