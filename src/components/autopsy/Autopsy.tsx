@@ -1350,7 +1350,9 @@ function VerdictView({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFail
               ? "Status: Completed · Blocking Failure"
-                : isScoreBandNotViable
+                : isCriticalStop
+                  ? "Status: Completed · Critical Stop"
+                  : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
                     ? "Status: Completed · Progression Locked"
@@ -1367,7 +1369,8 @@ function VerdictView({
           >
             {(() => {
               const vn = (run.verdict_name as string) ?? "";
-              if (vn.trim()) return vn;
+              if (isCriticalStop) return "Critical Stop";
+              if (vn.trim() && !isCriticalStop) return vn;
               if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
               return "Verdict";
             })()}
