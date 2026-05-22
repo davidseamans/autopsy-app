@@ -33,6 +33,24 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -318,6 +336,22 @@ interface ProofUnit {
   paymentProofName?: string;
   // General Business Expenses (not included in job GM)
   gbExpenses?: GBExpense[];
+  // Lifecycle / audit
+  lifecycle?: "active" | "voided" | "archived";
+  voidReason?: string;
+  voidedAt?: string;
+  archivedAt?: string;
+  reviewed?: boolean;
+  audit?: AuditEntry[];
+}
+
+type AuditAction = "created" | "updated" | "corrected" | "voided" | "archived" | "restored" | "deleted_draft";
+interface AuditEntry {
+  ts: string;
+  action: AuditAction;
+  reason?: string;
+  changes?: { field: string; from: unknown; to: unknown }[];
+  user?: string;
 }
 
 type GBCategory =
