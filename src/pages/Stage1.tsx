@@ -1060,8 +1060,14 @@ function FinancialsForm() {
           <DollarSign className="h-4 w-4" /> Financial Proof
         </CardTitle>
         <CardDescription>Record revenue, direct costs, and evidence to prove gross margin.</CardDescription>
-        <p className="text-xs text-muted-foreground pt-1">
-          This is not your accounting system. It records enough proof to test whether the work is safe to scale.
+        <div className="rounded-md border-l-4 border-[hsl(var(--autopsy-accent,220_70%_50%))] bg-muted/40 p-3 mt-2 text-sm">
+          <div className="font-semibold">Build the habit now.</div>
+          <div className="text-muted-foreground">
+            Every job needs revenue, costs, and proof. Later, this same discipline will feed your accounting system.
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground pt-2">
+          This is proof that the work is safe to repeat — not bookkeeping, tax, or accounting.
         </p>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -1272,6 +1278,10 @@ function FinancialsForm() {
             </Badge>
           </div>
 
+          <p className="text-sm text-muted-foreground">
+            Take the photo now. Do not leave receipts in your car, inbox, or memory.
+          </p>
+
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Document type</Label>
@@ -1384,6 +1394,35 @@ function FinancialsForm() {
             </ul>
           )}
         </div>
+
+        {/* Proof status row */}
+        {(() => {
+          const hasCosts = !!materials || !!labour || !!other;
+          const statuses: { label: string; tone: "good" | "warn" | "bad" | "muted" }[] = [];
+          const complete = rev > 0 && hasCosts && gm != null && linkedDocs.length > 0;
+          if (!complete) statuses.push({ label: "Incomplete", tone: "warn" });
+          if (linkedDocs.length === 0) statuses.push({ label: "Evidence Missing", tone: "bad" });
+          else statuses.push({ label: "Evidence Uploaded", tone: "good" });
+          if (gm != null) statuses.push({ label: gm >= 30 ? "Margin Passed" : "Margin Blocked", tone: gm >= 30 ? "good" : "bad" });
+          const cls = (t: string) =>
+            t === "good" ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+            : t === "bad" ? "border-red-400 text-red-700 bg-red-50"
+            : t === "warn" ? "border-amber-400 text-amber-700 bg-amber-50"
+            : "border-muted-foreground/30 text-muted-foreground bg-muted/30";
+          return (
+            <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Proof status</div>
+              <div className="flex flex-wrap gap-2">
+                {statuses.map((s) => (
+                  <Badge key={s.label} variant="outline" className={cls(s.tone)}>{s.label}</Badge>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A financial proof record is not complete until revenue is entered, direct costs are entered, gross margin is calculated, and supporting evidence is attached.
+              </p>
+            </div>
+          );
+        })()}
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={!canSave}>
