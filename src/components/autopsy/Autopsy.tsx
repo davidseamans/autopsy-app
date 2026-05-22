@@ -1291,14 +1291,41 @@ function VerdictView({
         </>
       )}
       {/* 11. Worksheet link */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        {runId && (
-          <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
-            <Link to={`/autopsy/run/${runId}/worksheet`}>Open Worksheet</Link>
-          </Button>
-        )}
-        <Button variant="outline" onClick={onReset}>Start New Analysis</Button>
-      </div>
+      {/* 11. Progression Routing */}
+      {runId && (() => {
+        const routingBand = deriveBand(verdictName);
+        const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        return (
+          <SurfaceCard title="Progression Routing">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
+                  Stage Permission: {progression?.stagePermission ?? "Locked"}
+                </span>
+                <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
+                  Worksheet: {progression?.worksheetStatus ?? "Not Started"}
+                </span>
+              </div>
+              <div className="font-medium">{copy.title}</div>
+              <p className="text-sm text-muted-foreground">{copy.body}</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
+                  <Link to={copy.primaryCta.to(runId)}>{copy.primaryCta.label}</Link>
+                </Button>
+                {copy.secondaryCta && (
+                  <Button variant="outline" asChild>
+                    <Link to={copy.secondaryCta.to(runId)}>{copy.secondaryCta.label}</Link>
+                  </Button>
+                )}
+                <Button variant="ghost" asChild>
+                  <Link to={`/autopsy/run/${runId}/worksheet`}>Open Diagnostic Worksheet</Link>
+                </Button>
+                <Button variant="ghost" onClick={onReset}>Start New Analysis</Button>
+              </div>
+            </div>
+          </SurfaceCard>
+        );
+      })()}
     </div>
   );
 }
