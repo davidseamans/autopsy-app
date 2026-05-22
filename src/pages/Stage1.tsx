@@ -428,6 +428,83 @@ function GateBadge({ gate }: { gate: GateStatus }) {
   return <Badge variant="outline" className={cls}>Gate: {gate}</Badge>;
 }
 
+type Scorecard = ReturnType<typeof computeScorecard>;
+
+function plainGateLabel(sc: Scorecard, unitsCount: number): string {
+  if (unitsCount === 0) return "Locked — no proof recorded yet";
+  if (sc.gate === "Unlocked") return "Unlocked — Stage 1 proof ready for review";
+  if (sc.gate === "Conditional") return "Conditional — concentration risk visible";
+  // Locked — pick most-specific reason
+  if (sc.weightedGM < 30 && sc.earnedPoints >= 100) return "Locked — margin too low";
+  if (sc.blockers.some((b) => b.toLowerCase().includes("evidence"))) return "Locked — evidence missing";
+  if (sc.weightedGM < 30) return "Locked — margin too low";
+  return "Locked — not enough proof yet";
+}
+
+function PlainGateBadge({ sc, unitsCount }: { sc: Scorecard; unitsCount: number }) {
+  const label = plainGateLabel(sc, unitsCount);
+  const tone = label.startsWith("Unlocked")
+    ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+    : label.startsWith("Conditional")
+      ? "border-amber-400 text-amber-700 bg-amber-50"
+      : "border-red-400 text-red-700 bg-red-50";
+  return <Badge variant="outline" className={tone}>{label}</Badge>;
+}
+
+function nextStepText(sc: Scorecard, unitsCount: number): string {
+  if (unitsCount === 0) {
+    return "No proof recorded yet. Start by adding your first real job, quote, signed contract, or recurring job.";
+  }
+  if (sc.gate === "Unlocked") {
+    return "Stage 1 proof is ready for review. Confirm evidence and prepare to unlock the next stage.";
+  }
+  if (sc.earnedPoints >= 100 && sc.weightedGM < 30) {
+    return "Your demand proof is strong enough, but your margin is too low. Correct pricing or cost structure before scaling.";
+  }
+  if (sc.earnedPoints >= 100 && sc.blockers.some((b) => b.toLowerCase().includes("evidence"))) {
+    return "Your score is high enough, but evidence is missing. Attach invoices, receipts, contracts, quotes, timesheets, or payment proof.";
+  }
+  if (sc.gate === "Conditional" && sc.concentrationClient) {
+    return "You may proceed conditionally, but one client is carrying most of your proof. Add another client before relying on this model.";
+  }
+  return "Add one proof item, record its revenue and costs, then attach evidence.";
+}
+
+function WhatToDoNextCard({ sc, unitsCount, onAddFirst }: { sc: Scorecard; unitsCount: number; onAddFirst?: () => void }) {
+  return (
+    <Card className="border-[hsl(var(--autopsy-accent,220_70%_50%))]/40 bg-[hsl(var(--autopsy-accent,220_70%_50%))]/5">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardDescription className="uppercase text-xs tracking-wide">Next Step</CardDescription>
+            <CardTitle className="text-lg">What to do next</CardTitle>
+          </div>
+          <PlainGateBadge sc={sc} unitsCount={unitsCount} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm">{nextStepText(sc, unitsCount)}</p>
+        {unitsCount === 0 && (
+          <Button size="sm" onClick={onAddFirst} className="gap-2">
+            <Plus className="h-4 w-4" /> Add First Proof Item
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stage1GoalBanner() {
+  return (
+    <div className="rounded-md border-l-4 border-[hsl(var(--autopsy-accent,220_70%_50%))] bg-muted/40 p-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">Stage 1 Goal</div>
+      <p className="text-sm mt-1">
+        Prove that people will pay, the work can be delivered, and the margin is safe enough to repeat.
+      </p>
+    </div>
+  );
+}
+
 function riskCellClass(risk: string) {
   if (risk.includes("blocker")) return "text-red-600";
   if (risk.includes("warning") || risk.includes("missing")) return "text-amber-600";
