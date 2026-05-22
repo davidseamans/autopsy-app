@@ -1278,6 +1278,10 @@ function FinancialsForm() {
             </Badge>
           </div>
 
+          <p className="text-sm text-muted-foreground">
+            Take the photo now. Do not leave receipts in your car, inbox, or memory.
+          </p>
+
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Document type</Label>
