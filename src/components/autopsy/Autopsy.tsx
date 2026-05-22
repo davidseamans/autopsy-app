@@ -1429,6 +1429,20 @@ function VerdictView({
             form. The hard-fail condition must be corrected and retested before
             progression can be reconsidered.
           </p>
+          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+            <div>
+              <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
+              <div className="font-mono font-semibold">
+                {firstSelectedHardFail?.question_number ?? firstSelectedHardFail?.question_id ?? "—"}
+              </div>
+            </div>
+            <div>
+              <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
+              <div className="font-mono font-semibold break-words">
+                {firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? "—"}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
