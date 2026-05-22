@@ -301,7 +301,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
   not_viable: {
     title: "Stage 1 is locked",
     body:
-      "Stage 1 is locked because the current business model has not yet shown enough evidence of viability. You must complete the Repair Worksheet and satisfy the retest condition before progression can continue.",
+      "This is not ready to become a business system yet. The next step is not launch — it is repair. Complete the Repair Worksheet and satisfy the retest condition before progression can continue.",
     primaryCta: {
       label: "Start Repair Worksheet",
       to: (id) => `/autopsy/run/${id}/readiness`,
@@ -314,7 +314,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
   high_risk: {
     title: "Conditional progression",
     body:
-      "You may be able to proceed, but the current model carries significant risk. Before entering Stage 1, you must complete the Readiness Worksheet and provide minimum proof that the risk is being addressed.",
+      "There is enough signal to continue carefully, but not enough proof to scale or commit serious money. Complete the Readiness Worksheet and provide minimum proof that the primary risk is being addressed before Stage 1.",
     primaryCta: {
       label: "Start Readiness Worksheet",
       to: (id) => `/autopsy/run/${id}/readiness`,
@@ -323,7 +323,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
   viable: {
     title: "Viable — confirm and proceed",
     body:
-      "Your business concept shows viable early indicators. Before entering Stage 1, complete the readiness checklist and confirm your first proof actions.",
+      "There is enough structure to test in the real world, but Stage 1 must prove customers, margin, and record discipline. Complete the readiness checklist and confirm your first proof actions before entering Stage 1.",
     primaryCta: {
       label: "Continue to Readiness Checklist",
       to: (id) => `/autopsy/run/${id}/readiness`,
@@ -332,7 +332,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
   structurally_viable: {
     title: "Structurally viable",
     body:
-      "Your business concept shows strong structural viability. Stage 1 will now test whether the real world confirms the model through customers, margin, and evidence.",
+      "This has enough structure to enter Stage 1 — the commercial proof cockpit. The next test is whether real customers, real costs, and real evidence confirm it.",
     primaryCta: {
       label: "Open Stage 1 Dashboard",
       to: () => `/stage-1`,

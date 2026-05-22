@@ -832,7 +832,7 @@ function StartView(props: {
             Start Business Readiness Autopsy
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Test whether this is a business system — or just work wearing a business name.
+            Test whether this can become a business system — not just work wearing a business name.
           </p>
         </div>
 
@@ -884,8 +884,8 @@ function StartView(props: {
 
           <div className="rounded-lg bg-[hsl(var(--autopsy-accent-soft))]/40 border border-[hsl(var(--autopsy-accent-soft))] px-4 py-3 text-xs leading-relaxed text-muted-foreground">
             Autopsy is not asking whether you can do the work. It tests whether the
-            work can be sold, priced, delivered, recorded, repeated, and eventually
-            operated without total dependence on you.
+            work can be sold, priced, delivered, recorded, repeated, measured, and
+            eventually operated without total dependence on you.
           </div>
 
           <Button
