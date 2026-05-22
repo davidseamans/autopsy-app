@@ -635,6 +635,158 @@ function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[]
   });
 }
 
+function Stage1SummaryDialog({
+  open,
+  onOpenChange,
+  unit,
+  computedGm,
+  grossProfit,
+  totalCosts,
+  risk,
+  onEdit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  unit: ProofUnit;
+  computedGm: number | null;
+  grossProfit: number;
+  totalCosts: number;
+  risk: string;
+  onEdit: () => void;
+}) {
+  const points = scoreUnit(unit);
+  const base = BASE_POINTS[unit.proofType] ?? 0;
+  const contributors: { label: string; pts: number }[] = [];
+  if (base) contributors.push({ label: `${unit.proofType}: base`, pts: base });
+  if (unit.isNewClient) contributors.push({ label: "New client", pts: 15 });
+  if (unit.isAdditionalSite) contributors.push({ label: "Additional site", pts: 10 });
+  if (unit.proofType === "Recurring Job" && unit.recurringFirstInvoicePaid) contributors.push({ label: "First recurring invoice paid", pts: 10 });
+  if (unit.gm >= 30) contributors.push({ label: "GM above 30%", pts: 10 });
+  if (unit.evidence) contributors.push({ label: "Evidence uploaded", pts: 10 });
+  if (unit.isReferralOrRepeat) contributors.push({ label: "Referral / repeat", pts: 5 });
+
+  const warnings: string[] = [];
+  if (risk === "Concentration warning") warnings.push("Customer concentration risk");
+  if (unit.gm < 30 && unit.gm >= 25) warnings.push("Margin below 30%");
+
+  const blockers: string[] = [];
+  if (!unit.invoiceDocName && !unit.invoiceAmount && !unit.evidence) blockers.push("Customer proof missing");
+  if (unit.paymentStatus === "Paid" && !unit.paymentProofName) blockers.push("Payment proof missing");
+  if (unit.paymentMethod === "Cash with Receipt" && !unit.paymentProofName) blockers.push("Cash proof missing");
+  if ((computedGm ?? unit.gm) < 25) blockers.push("Margin too low to repeat safely");
+
+  const gbTotal = (unit.gbExpenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
+  const gbMissingReceipts = (unit.gbExpenses ?? []).filter((e) => !e.receiptName).length;
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex justify-between gap-3 py-1 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Stage 1 Summary</DialogTitle>
+          <DialogDescription>
+            This shows how this job or contract site contributes to your Stage 1 proof.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">1. Job / Site Overview</div>
+            {row("Client", unit.client)}
+            {row("Site / Location", unit.jobSite ?? "—")}
+            {row("Proof Type", unit.proofType)}
+            {row("Job / Contract Status", unit.status)}
+            {row("Scheduled Date", unit.scheduledDate || "—")}
+            {row("Contract Start Date", unit.contractStart || "—")}
+            {row("Contract End Date", unit.contractEnd || "—")}
+            {row("Quote / Contract Value", unit.quoteValue != null ? `$${unit.quoteValue.toLocaleString()}` : "—")}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">2. Customer Invoice / Contract</div>
+            {row("Invoice Amount", unit.invoiceAmount != null ? `$${unit.invoiceAmount.toLocaleString()}` : "—")}
+            {row("Invoice Status", unit.invoiceStatus ?? "—")}
+            {row("Invoice Date", unit.invoiceDate || "—")}
+            {row("Document", unit.invoiceDocName ? `${unit.invoiceDocType ?? "Attached"}: ${unit.invoiceDocName}` : "—")}
+            {row("Customer proof status", unit.invoiceDocName || unit.evidence
+              ? <span className="text-emerald-600">Uploaded</span>
+              : <span className="text-red-600">Missing</span>)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">3. Job Costs</div>
+            {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
+            {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
+            {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
+            {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
+            {row("Total Direct Costs", `$${totalCosts.toLocaleString()}`)}
+            {row("Gross Profit", `$${grossProfit.toLocaleString()}`)}
+            {row("GM %", computedGm != null
+              ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
+              : `${unit.gm}%`)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">4. Payment Proof</div>
+            {row("Payment Status", unit.paymentStatus ?? "—")}
+            {row("Payment Date", unit.paymentDate || "—")}
+            {row("Payment Amount", unit.paymentAmount != null ? `$${unit.paymentAmount.toLocaleString()}` : "—")}
+            {row("Payment Method", unit.paymentMethod ?? "—")}
+            {row("Payment proof status", unit.paymentProofName
+              ? <span className="text-emerald-600">Uploaded</span>
+              : <span className="text-red-600">Missing</span>)}
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">5. General Business Expenses</div>
+            {row("Total recorded", `$${gbTotal.toLocaleString()}`)}
+            {row("Receipt status", gbMissingReceipts === 0
+              ? <span className="text-emerald-600">All attached</span>
+              : <span className="text-amber-600">{gbMissingReceipts} missing</span>)}
+            <p className="text-xs text-muted-foreground pt-1">These expenses are not included in this job's gross margin.</p>
+          </section>
+
+          <section className="rounded-md border p-3">
+            <div className="font-medium text-sm mb-1">6. Stage 1 Contribution</div>
+            {row("Points Earned", points)}
+            <div className="mt-2">
+              <div className="text-xs font-medium">Contributing proof:</div>
+              <ul className="text-sm">
+                {contributors.length === 0
+                  ? <li className="text-muted-foreground">No points yet.</li>
+                  : contributors.map((c, i) => <li key={i}>- {c.label}: {c.pts} points</li>)}
+              </ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Warnings:</div>
+              <ul className="text-sm">{warnings.length === 0 ? <li className="text-muted-foreground">None</li> : warnings.map((w, i) => <li key={i}>- {w}</li>)}</ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Blockers:</div>
+              <ul className="text-sm">{blockers.length === 0 ? <li className="text-muted-foreground">None</li> : blockers.map((b, i) => <li key={i}>- {b}</li>)}</ul>
+            </div>
+            <div className="mt-2">
+              <div className="text-xs font-medium">Next Action:</div>
+              <p className="text-sm">{unit.nextAction || (blockers[0] ? `Resolve: ${blockers[0]}.` : "Keep going.")}</p>
+            </div>
+          </section>
+        </div>
+
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={onEdit}>Edit Job / Site Detail</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   const [exp, setExp] = useState<GBExpense>({ id: "" });
   const reset = () => setExp({ id: "" });
