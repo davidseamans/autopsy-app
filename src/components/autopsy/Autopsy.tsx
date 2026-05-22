@@ -1077,6 +1077,47 @@ function VerdictView({
   const hasNarrativeOutput = hasContent(run.narrative_output);
   const primaryConstraint = humanize(run.primary_risk ?? run.weakest_dimension);
 
+  const selectedAnswerAudit = useMemo(() => {
+    const qs = (payload?.questions ?? []) as any[];
+    const selectedAnswers = qs.map((q, i) => {
+      const opts = (q.options ?? []) as any[];
+      const selectedId = q.selected_option ?? null;
+      const selectedOpt =
+        opts.find(
+          (o) =>
+            o != null &&
+            typeof o === "object" &&
+            (String(o.id) === String(selectedId) ||
+              String(o.option_id) === String(selectedId) ||
+              String(o.value) === String(selectedId)),
+        ) ?? null;
+      return {
+        question_id: q.question_id,
+        question_number: q.position ?? i + 1,
+        selected_option_id: selectedId,
+        selected_option_label:
+          (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
+        score_value:
+          selectedOpt && typeof selectedOpt === "object"
+            ? (selectedOpt.score_value ?? selectedOpt.score ?? null)
+            : q.selected_score_value ?? null,
+        hard_fail:
+          selectedOpt && typeof selectedOpt === "object"
+            ? !!selectedOpt.hard_fail
+            : false,
+        dimension_code: q.dimension_code ?? null,
+      };
+    });
+    const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
+    return {
+      selectedAnswers,
+      selectedHardFails,
+      hasSelectedHardFail: selectedHardFails.length > 0,
+      firstSelectedHardFail: selectedHardFails[0] ?? null,
+    };
+  }, [payload?.questions]);
+  const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
+
   // Diagnostic cascade (pressure topology) — new backend source of truth.
   const cascade =
     (run as any)?.diagnosis?.cascade ??
@@ -1089,15 +1130,20 @@ function VerdictView({
   const cascadeSeverity = cascade?.severity ?? null;
   const hasCascade = !!(cascadePrimary || cascadeSecondary || cascadeTertiary);
 
-  // Hard-fail / blocked classification (display only — backend values untouched)
+  // Progression locking is not the same as a hard-fail. Hard-fail display is
+  // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const isBlocked =
+  const isProgressionLocked =
     opStateKey === "blocked" ||
-    !!run.hard_fail_question_id ||
     /not[\s_-]?viable/i.test(verdictName) ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
-  const effectiveOpState = isBlocked && !opStateKey ? "blocked" : opStateKey;
-  const opStyle = operationalStyle(effectiveOpState);
+  const isHardFail = hasSelectedHardFail;
+  const isBlocked = isHardFail;
+  const effectiveOpState = isHardFail
+    ? "blocked"
+    : isProgressionLocked
+      ? "locked"
+      : opStateKey;
 
   const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const band: VerdictBand = getVerdictBand({
@@ -1124,56 +1170,36 @@ function VerdictView({
   useEffect(() => {
     if (!runId || !run || !(run as any).verdict_name) return;
     try {
-      const qs = (payload?.questions ?? []) as any[];
-      const perQuestion = qs.map((q, i) => {
-        const opts = (q.options ?? []) as any[];
-        const selectedId = q.selected_option ?? null;
-        const selectedOpt =
-          opts.find(
-            (o) =>
-              o != null &&
-              typeof o === "object" &&
-              (o.option_id === selectedId || o.value === selectedId),
-          ) ?? null;
-        return {
-          question_id: q.question_id,
-          question_number: q.position ?? i + 1,
-          selected_option_id: selectedId,
-          selected_option_label:
-            (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
-          score_value:
-            selectedOpt && typeof selectedOpt === "object"
-              ? (selectedOpt.score ?? selectedOpt.value ?? null)
-              : null,
-          hard_fail:
-            selectedOpt && typeof selectedOpt === "object"
-              ? !!selectedOpt.hard_fail
-              : false,
-        };
-      });
-      const selectedHardFails = perQuestion.filter((r) => r.hard_fail === true);
+      const { selectedAnswers, selectedHardFails, hasSelectedHardFail, firstSelectedHardFail } =
+        selectedAnswerAudit;
       // eslint-disable-next-line no-console
       console.info("[autopsy:verdict-audit]", {
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
+        hard_fail_triggered: hasSelectedHardFail,
+        backend_hard_fail_triggered: (run as any).hard_fail_triggered ?? null,
         primary_risk: (run as any).primary_risk ?? null,
-        hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
+        hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
+          firstSelectedHardFail?.selected_option_id ?? null,
+        hard_fail_dimension: firstSelectedHardFail?.dimension_code ?? null,
+        backend_hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
+        backend_hard_fail_selected_option_id:
           (run as any).hard_fail_selected_option_id ?? null,
         hard_fail_triggered_from_selected_options:
-          selectedHardFails.length > 0,
+          hasSelectedHardFail,
         selected_hard_fail_questions: selectedHardFails.map((r) => ({
           question_id: r.question_id,
           question_number: r.question_number,
         })),
-        per_question: perQuestion,
+        selected_answers: selectedAnswers,
       });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn("[autopsy:verdict-audit] failed", err);
     }
-  }, [runId, payload, run]);
+  }, [runId, run, selectedAnswerAudit]);
 
   return (
     <div className="space-y-6">
@@ -1186,7 +1212,11 @@ function VerdictView({
       >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isBlocked ? "Status: Completed · Blocking Failure" : "Status: Completed"}
+            {isHardFail
+              ? "Status: Completed · Blocking Failure"
+              : isProgressionLocked
+                ? "Status: Completed · Progression Locked"
+                : "Status: Completed"}
           </span>
           <span className="text-xs text-muted-foreground">{completedLabel}</span>
         </div>
@@ -1237,10 +1267,14 @@ function VerdictView({
       <OperationalStatePanel
         run={run}
         isBlocked={isBlocked}
+        isProgressionLocked={isProgressionLocked}
         operatingInstruction={cascadeSeverity?.operating_instruction}
         requiredActionFallback={supportingBlocks?.required_actions?.[0]?.body}
       />
-      <ProgressionFlow current={run.operational_state} isBlocked={isBlocked} />
+      <ProgressionFlow
+        current={isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
+        isBlocked={isBlocked}
+      />
 
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
@@ -1287,13 +1321,13 @@ function VerdictView({
       {/* 5. Structural Diagnostics */}
       <PressureCollapsePanel run={run} isBlocked={isBlocked} />
 
-      {run.hard_fail_question_id && (
+      {isHardFail && (
         <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
           <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
             Blocking Failure Triggered
           </div>
           <p className="text-sm leading-relaxed">
-            A hard-fail condition was triggered during the assessment.
+            A hard-fail condition was triggered by a selected answer during this assessment.
             Progression is blocked. The business is not viable in its current
             form. The hard-fail condition must be corrected and retested before
             progression can be reconsidered.
@@ -1479,6 +1513,12 @@ const OPERATIONAL_STATE_STYLES: Record<
     dot: "bg-red-600",
     text: "text-red-700",
   },
+  locked: {
+    label: "LOCKED",
+    container: "border-amber-500/60 bg-amber-500/5",
+    dot: "bg-amber-500",
+    text: "text-amber-700",
+  },
   constrained: {
     label: "CONSTRAINED",
     container: "border-amber-500/60 bg-amber-500/5",
@@ -1520,23 +1560,29 @@ function operationalStyle(state: any) {
 function OperationalStatePanel({
   run,
   isBlocked,
+  isProgressionLocked,
   operatingInstruction,
   requiredActionFallback,
 }: {
   run: any;
   isBlocked?: boolean;
+  isProgressionLocked?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const effective = isBlocked && !opKey ? "blocked" : opKey;
+  const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
   const progressionDisplay = isBlocked
     ? "PROGRESSION BLOCKED"
+    : isProgressionLocked
+      ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
   const rawPermissionBias = isBlocked
     ? "STRONG RESTRICTION"
+    : isProgressionLocked
+      ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
   const permissionBiasDisplay = cleanProceedOnlyIf(
     rawPermissionBias,
@@ -1584,9 +1630,12 @@ function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boole
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
     : humanize(run.pressure_stage);
+  const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
-    : humanize(run.failure_type);
+    : !isBlocked && /hard\s*fail|existential/i.test(rawFailureType)
+      ? "Score-band Not Viable"
+      : rawFailureType;
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
@@ -2370,6 +2419,7 @@ function DimensionPressureGraph({
 
 const PROGRESSION_STAGES = [
   { key: "blocked", label: "Blocked" },
+  { key: "locked", label: "Locked" },
   { key: "constrained", label: "Constrained" },
   { key: "stabilizing", label: "Stabilizing" },
   { key: "operationally_viable", label: "Operationally Viable" },
@@ -2586,7 +2636,9 @@ function MechanicalFailureChain({
   const failurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
-    humanize(run.failure_type) ||
+    (isBlocked || !/hard\s*fail|existential/i.test(humanize(run.failure_type))
+      ? humanize(run.failure_type)
+      : "") ||
     "Failure path not specified";
   const rawBreakpoint =
     (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||
