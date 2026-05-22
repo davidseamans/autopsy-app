@@ -41,6 +41,7 @@ import {
   GatewayPayload,
   GatewayQuestion,
   createAutopsyRun,
+  deriveHardFailFromSelectedAnswers,
   extractRunId,
   finalizeAutopsyRun,
   getCurrentRunAnswerAudit,
@@ -146,7 +147,14 @@ function buildSelectedAnswersFromPayload(
           : Number.isFinite(Number(optionScore))
             ? Number(optionScore)
             : null,
-        hard_fail: selectedOpt && typeof selectedOpt === "object" ? selectedOpt.hard_fail === true : false,
+        option_hard_fail:
+          selectedOpt && typeof selectedOpt === "object"
+            ? selectedOpt.option_hard_fail === true || selectedOpt.hard_fail === true
+            : false,
+        hard_fail:
+          selectedOpt && typeof selectedOpt === "object"
+            ? selectedOpt.option_hard_fail === true || selectedOpt.hard_fail === true
+            : false,
       };
     })
     .filter((row): row is SelectedAnswerAuditRow => row != null)
