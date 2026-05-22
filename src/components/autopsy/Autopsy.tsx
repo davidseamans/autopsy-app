@@ -1534,7 +1534,7 @@ function VerdictView({
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
         evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
-          primaryFallback={dimensionScores[0]?.dimension ?? null}
+          primaryFallback={dimensionScores[0]?.label ?? dimensionScores[0]?.code ?? null}
         />
       )}
 
@@ -2902,6 +2902,7 @@ function MechanicalFailureChain({
   requiredActionFallback,
   evidenceFallback,
   framing,
+  primaryFallback,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2910,9 +2911,13 @@ function MechanicalFailureChain({
   requiredActionFallback?: string | null;
   evidenceFallback?: string | null;
   framing?: BandFraming;
+  primaryFallback?: string | null;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
-  const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
+  const primary =
+    humanize(run.weakest_dimension ?? run.primary_risk) ||
+    humanize(primaryFallback) ||
+    "Unidentified";
   const rawFailurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
