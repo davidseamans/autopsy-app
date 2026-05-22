@@ -38,7 +38,7 @@ export function deriveHardFailFromSelectedAnswers(
   return selectedAnswers.some(isSelectedAnswerHardFail);
 }
 
-function readOptionHardFail(option: any): boolean {
+export function readOptionHardFail(option: any): boolean {
   if (!option || typeof option !== "object") return false;
   if (Object.prototype.hasOwnProperty.call(option, "option_hard_fail")) {
     return option.option_hard_fail === true;
