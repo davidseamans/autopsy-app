@@ -743,12 +743,21 @@ interface FPJob {
 }
 interface FPDocument {
   id: string;
+  client_id: string;
   job_id: string;
   financial_id: string | null;
   document_type: string;
   file_name: string;
+  file_url: string;
+  mime_type: string;
   uploaded_at: string;
-  verified_status: "Missing" | "Uploaded" | "Verified" | "Rejected";
+  uploaded_by: string;
+  verification_status: "Missing" | "Uploaded" | "Verified" | "Rejected";
+  document_date?: string;
+  document_amount?: number;
+  notes?: string;
+  storage_path?: string;
+  local_only?: boolean;
 }
 type EvidenceStatus = "Missing" | "Uploaded" | "Verified" | "Rejected";
 interface FPFinancial {
