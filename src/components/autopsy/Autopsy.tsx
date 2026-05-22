@@ -1222,8 +1222,16 @@ function VerdictView({
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
-        hard_fail_triggered: hasSelectedHardFail,
-        backend_hard_fail_triggered: (run as any).hard_fail_triggered ?? null,
+        hard_fail_from_selected_answers: hasSelectedHardFail,
+        hard_fail_triggered_payload: (run as any).hard_fail_triggered ?? null,
+        hard_fail_triggered_raw_payload:
+          (run as any).hard_fail_triggered_raw_payload ?? null,
+        payload_matches_selected_answers:
+          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        error:
+          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
+            ? null
+            : "ERROR: hard_fail payload does not match selected answers.",
         primary_risk: (run as any).primary_risk ?? null,
         hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
@@ -1232,8 +1240,9 @@ function VerdictView({
         backend_hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
         backend_hard_fail_selected_option_id:
           (run as any).hard_fail_selected_option_id ?? null,
-        hard_fail_triggered_from_selected_options:
-          hasSelectedHardFail,
+        audit_source: selectedAnswerAudit.source,
+        selected_answer_count: selectedAnswers.length,
+        expected_answer_count: selectedAnswerAudit.expectedAnswerCount,
         selected_hard_fail_questions: selectedHardFails.map((r) => ({
           question_id: r.question_id,
           question_number: r.question_number,
