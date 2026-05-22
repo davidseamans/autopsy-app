@@ -1268,7 +1268,7 @@ function FinancialsForm() {
             </Badge>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Document type</Label>
               <Select value={docType} onValueChange={setDocType}>
@@ -1280,11 +1280,63 @@ function FinancialsForm() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">Attach file(s)</Label>
-              <Input type="file" multiple onChange={handleAttachDoc} disabled={!jobId} />
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!jobId}
+              onClick={() => cameraInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Camera className="h-4 w-4" /> Take Photo
+            </Button>
+            <Button
+              type="button"
+              disabled={!jobId}
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Paperclip className="h-4 w-4" /> Upload File
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Accepts JPEG, PNG, HEIC, PDF. Camera opens on supported mobile devices.
+          </p>
+
+          {/* Hidden inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(Array.from(e.target.files || []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(Array.from(e.target.files || []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={replaceInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              if (replaceTargetId && files[0]) handleFiles([files[0]], replaceTargetId);
+              setReplaceTargetId(null);
+              e.target.value = "";
+            }}
+          />
 
           {linkedDocs.length === 0 ? (
             <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
@@ -1293,15 +1345,36 @@ function FinancialsForm() {
           ) : (
             <ul className="space-y-1 text-sm">
               {linkedDocs.map((d) => (
-                <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
-                  <div className="flex items-center gap-2 min-w-0">
+                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded border bg-white px-2 py-1.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{d.file_name}</span>
-                    <Badge variant="outline" className="text-[10px]">{d.document_type}</Badge>
+                    <span className="truncate">{d.document_type} — {d.file_name}</span>
+                    <Badge variant="outline" className="text-[10px] capitalize">{d.verification_status}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(d.uploaded_at).toLocaleDateString()}
+                    </span>
+                    {d.local_only && (
+                      <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">local</Badge>
+                    )}
                   </div>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveDoc(d.id)}>
-                    Remove
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {d.file_url && (
+                      <Button type="button" variant="ghost" size="sm" asChild>
+                        <a href={d.file_url} target="_blank" rel="noreferrer">View</a>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setReplaceTargetId(d.id); replaceInputRef.current?.click(); }}
+                    >
+                      Replace
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveDoc(d.id)}>
+                      Remove
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
