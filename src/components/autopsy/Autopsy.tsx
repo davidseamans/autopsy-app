@@ -1594,12 +1594,14 @@ function OperationalStatePanel({
   run,
   isBlocked,
   isProgressionLocked,
+  isScoreBandNotViable,
   operatingInstruction,
   requiredActionFallback,
 }: {
   run: any;
   isBlocked?: boolean;
   isProgressionLocked?: boolean;
+  isScoreBandNotViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1621,7 +1623,9 @@ function OperationalStatePanel({
     rawPermissionBias,
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = resolveRecoverySignal(run);
+  const recoveryDisplay = isScoreBandNotViable
+    ? "Repair Worksheet Required"
+    : resolveRecoverySignal(run);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Allowed Next Move", permissionBiasDisplay],
@@ -1659,14 +1663,24 @@ function OperationalStatePanel({
   );
 }
 
-function PressureCollapsePanel({ run, isBlocked }: { run: any; isBlocked?: boolean }) {
+function PressureCollapsePanel({
+  run,
+  isBlocked,
+  isScoreBandNotViable,
+}: {
+  run: any;
+  isBlocked?: boolean;
+  isScoreBandNotViable?: boolean;
+}) {
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
+    : isScoreBandNotViable
+      ? "SCORE-BAND FAILURE"
     : humanize(run.pressure_stage);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
-    : !isBlocked && /hard\s*fail|existential/i.test(rawFailureType)
+    : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
       ? "Score-band Not Viable"
       : rawFailureType;
   const suppressPressureSummary = hasContent(run.narrative_output);
