@@ -734,6 +734,9 @@ function JobDetailSheet({
   onSave,
   onJumpToFinancials,
   concentrationClient,
+  onVoid,
+  onArchive,
+  onDelete,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -741,13 +744,32 @@ function JobDetailSheet({
   onSave: (u: ProofUnit) => void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
+  onVoid: (n: number, reason: string) => void;
+  onArchive: (n: number) => void;
+  onDelete: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
-  useEffect(() => setDraft(unit), [unit]);
+  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [correctionReason, setCorrectionReason] = useState<string>("");
+  const [showSummary, setShowSummary] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState<string>("Entered by mistake");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editGateOpen, setEditGateOpen] = useState(false);
+  useEffect(() => {
+    setDraft(unit);
+    setMode("view");
+    setCorrectionReason("");
+  }, [unit]);
   if (!draft) return null;
   const kind = kindForProof(draft.proofType);
   const statuses = allowedStatuses(draft.status, kind);
   const risk = unitRisk(draft, concentrationClient);
+  const lifecycle = draft.lifecycle ?? "active";
+  const isLocked = lifecycle !== "active";
+  const isReviewed = !!draft.reviewed;
+  const readOnly = mode === "view" || isLocked;
 
   // Best-effort lookup into the Financial Proof local store (read-only)
   const fpClients = readLS<FPClient[]>(LS.clients, []);
@@ -785,10 +807,42 @@ function JobDetailSheet({
   const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
 
   function save() {
-    onSave(draft);
-    toast({ title: "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
-    onOpenChange(false);
+    const original = unit!;
+    const changes: { field: string; from: unknown; to: unknown }[] = [];
+    (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
+      if (k === "audit") return;
+      if (JSON.stringify((original as Record<string, unknown>)[k as string]) !== JSON.stringify((draft as Record<string, unknown>)[k as string])) {
+        changes.push({ field: String(k), from: (original as Record<string, unknown>)[k as string], to: (draft as Record<string, unknown>)[k as string] });
+      }
+    });
+    const entry: AuditEntry = {
+      ts: new Date().toISOString(),
+      action: isReviewed ? "corrected" : "updated",
+      reason: isReviewed ? correctionReason || undefined : undefined,
+      changes,
+    };
+    const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
+    onSave(next);
+    toast({ title: isReviewed ? "Correction logged" : "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
+    setMode("view");
+    setCorrectionReason("");
   }
+
+  function cancelEdit() {
+    setDraft(unit);
+    setMode("view");
+    setCorrectionReason("");
+  }
+
+  // Delete eligibility — only truly empty drafts
+  const hasInvoiceProof = !!draft.invoiceDocName || !!draft.invoiceAmount;
+  const hasCosts = !!(draft.costMaterials || draft.costLabour || draft.costSubcontractors || draft.costOther);
+  const hasPayment = !!draft.paymentProofName || !!draft.paymentAmount;
+  const hasGB = (draft.gbExpenses ?? []).length > 0;
+  const hasReview = isReviewed;
+  const isDraftLike = draft.status === "Draft" || draft.status === "Open";
+  const canDelete =
+    isDraftLike && !hasInvoiceProof && !hasCosts && !hasPayment && !hasGB && !hasReview && scoreUnit(draft) === 0;
 
   const fieldRow = (label: string, value: React.ReactNode) => (
     <div className="flex justify-between gap-3 py-1 text-sm">
