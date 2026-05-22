@@ -116,18 +116,18 @@ export async function getCurrentRunAnswerAudit(
 
   if (optionsResult.error) throw optionsResult.error;
 
-  const optionById = new Map(
-    (optionsResult.data ?? []).map((o: any) => [String(o.id), o]),
+  const optionById = new Map<string, any>(
+    (optionsResult.data ?? []).map((o: any) => [String(o.id), o] as [string, any]),
   );
-  const orderByQuestionId = new Map(
+  const orderByQuestionId = new Map<string, number>(
     (runQuestionsResult.data ?? []).map((rq: any) => [
       String(rq.question_id),
       Number(rq.position ?? rq.question_order),
-    ]),
+    ] as [string, number]),
   );
 
   return (answers ?? [])
-    .map((a: any, index: number) => {
+    .map((a: any, index: number): SelectedAnswerAuditRow => {
       const opt = optionById.get(String(a.selected_option));
       const questionNumber = orderByQuestionId.get(String(a.question_id));
       const fallbackNumber = index + 1;
