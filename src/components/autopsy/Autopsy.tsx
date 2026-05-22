@@ -1534,6 +1534,7 @@ function VerdictView({
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
         evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
+          primaryFallback={dimensionScores[0]?.dimension ?? null}
         />
       )}
 
