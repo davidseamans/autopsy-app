@@ -312,7 +312,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
     body:
       "This is not ready to become a business. Your answers show the current idea is missing too many basic controls — demand, cash, costs, delivery, execution, or record discipline. Autopsy is not opening Stage 1 from this result. The next step is not repair inside this system. The next step is education, advice, or a complete rethink before retesting. This result is outside the safe progression pathway.",
     primaryCta: {
-      label: "View Diagnostic Summary",
+      label: "Retest Later",
       to: (id) => `/autopsy/run/${id}`,
     },
   },
