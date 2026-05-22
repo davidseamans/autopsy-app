@@ -257,55 +257,261 @@ function PipelineFunnelCard() {
   );
 }
 
-function FirstFiveJobsTracker() {
-  const jobs = [
-    { n: 1, client: "M. Patel", status: "Complete", gm: 28 },
-    { n: 2, client: "K. Nguyen", status: "Complete", gm: 22 },
-    { n: 3, client: "Sunrise Cafe", status: "Complete", gm: 22 },
-    { n: 4, client: "—", status: "Open", gm: null },
-    { n: 5, client: "—", status: "Open", gm: null },
-  ];
+// ---- Stage 1 Proof Scorecard ----
+// Cleaning-sleeve scoring config. Keep separated from generic Core proof data.
+type ProofType =
+  | "Completed Job"
+  | "Recurring Job"
+  | "Signed Contract"
+  | "Contract Site"
+  | "Repeat Job"
+  | "Referral Job";
+
+type GateStatus = "Locked" | "Conditional" | "Unlocked";
+
+interface ProofUnit {
+  n: number;
+  client: string;
+  proofType: ProofType;
+  status: string;
+  gm: number;
+  evidence: boolean;
+  recurringFirstInvoicePaid?: boolean;
+  isNewClient?: boolean;
+  isAdditionalSite?: boolean;
+  isReferralOrRepeat?: boolean;
+  projectedRevenue?: number;
+}
+
+const BASE_POINTS: Record<ProofType, number> = {
+  "Completed Job": 20,
+  "Recurring Job": 25,
+  "Signed Contract": 25,
+  "Contract Site": 10,
+  "Repeat Job": 20,
+  "Referral Job": 20,
+};
+
+function scoreUnit(u: ProofUnit): number {
+  let pts = BASE_POINTS[u.proofType] ?? 0;
+  if (u.isNewClient) pts += 15;
+  if (u.isAdditionalSite) pts += 10;
+  if (u.proofType === "Recurring Job" && u.recurringFirstInvoicePaid) pts += 10;
+  if (u.gm >= 30) pts += 10;
+  if (u.evidence) pts += 10;
+  if (u.isReferralOrRepeat) pts += 5;
+  return pts;
+}
+
+function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
+  if (concentrationClient && u.client === concentrationClient) {
+    return "Concentration warning";
+  }
+  if (u.gm < 25) return "Margin blocker";
+  if (u.gm < 30) return "Margin warning";
+  if (!u.evidence) return "Evidence missing";
+  return "—";
+}
+
+const SEED_UNITS: ProofUnit[] = [
+  { n: 1, client: "M. Patel", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200 },
+  { n: 2, client: "K. Nguyen", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900 },
+  { n: 3, client: "Sunrise Cafe", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400 },
+  { n: 4, client: "QML", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000 },
+  { n: 5, client: "QML", proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000 },
+];
+
+function computeScorecard(units: ProofUnit[]) {
+  const totalRevenue = units.reduce((s, u) => s + (u.projectedRevenue ?? 0), 0);
+  // Concentration: any single client > 70% of points OR projected revenue
+  const byClientPoints: Record<string, number> = {};
+  const byClientRev: Record<string, number> = {};
+  units.forEach((u) => {
+    byClientPoints[u.client] = (byClientPoints[u.client] ?? 0) + scoreUnit(u);
+    byClientRev[u.client] = (byClientRev[u.client] ?? 0) + (u.projectedRevenue ?? 0);
+  });
+  const totalPoints = Object.values(byClientPoints).reduce((a, b) => a + b, 0);
+  let concentrationClient: string | null = null;
+  for (const c of Object.keys(byClientPoints)) {
+    const ptShare = totalPoints > 0 ? byClientPoints[c] / totalPoints : 0;
+    const revShare = totalRevenue > 0 ? byClientRev[c] / totalRevenue : 0;
+    if (ptShare > 0.7 || revShare > 0.7) concentrationClient = c;
+  }
+
+  const earnedPoints = totalPoints;
+
+  // Weighted GM by projected revenue (fallback: equal weight)
+  const weights = units.map((u) => u.projectedRevenue ?? 1);
+  const wSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const weightedGM =
+    units.reduce((s, u, i) => s + u.gm * weights[i], 0) / wSum;
+
+  const validUnits = units.filter(
+    (u) => u.client && u.proofType && u.status && typeof u.gm === "number"
+  );
+  const payingStatuses = new Set(["Paid", "Active", "Signed", "Mobilising", "Renewed"]);
+  const payingClients = new Set(
+    units.filter((u) => payingStatuses.has(u.status)).map((u) => u.client)
+  );
+  const missingEvidence = units.filter((u) => !u.evidence).length;
+
+  const blockers: string[] = [];
+  if (weightedGM < 30)
+    blockers.push("Margin blocker: you have activity, but the work is not yet economically safe to scale.");
+  if (missingEvidence > 0)
+    blockers.push("Evidence blocker: claims must be supported before progression can unlock.");
+
+  const warnings: string[] = [];
+  if (concentrationClient)
+    warnings.push(
+      `Customer concentration risk: ${concentrationClient} is carrying most of your proof. This may be acceptable at Stage 1, but it is not yet a stable business.`
+    );
+
+  const meetsScore = earnedPoints >= 100;
+  const enoughUnits = validUnits.length >= 2;
+  const enoughClients = payingClients.size >= 1;
+  const marginOk = weightedGM >= 30;
+  const evidenceOk = missingEvidence === 0;
+
+  let gate: GateStatus = "Locked";
+  let reason = "";
+  let nextAction = "";
+
+  if (meetsScore && enoughUnits && enoughClients && marginOk && evidenceOk) {
+    gate = "Unlocked";
+    reason = "All proof, margin, and evidence requirements are satisfied.";
+    nextAction = "Proceed to Stage 2 setup.";
+  } else if (meetsScore && (!marginOk || !evidenceOk)) {
+    gate = "Locked";
+    if (!marginOk && !evidenceOk) {
+      reason = "You have enough demand proof, but margin and evidence requirements are unmet.";
+      nextAction = "Upload pricing and cost evidence, and correct pricing or cost structure.";
+    } else if (!marginOk) {
+      reason = "You have enough demand proof, but not enough margin proof.";
+      nextAction = "Correct pricing or cost structure before scaling.";
+    } else {
+      reason = "You have demand and margin, but supporting evidence is missing.";
+      nextAction = `Upload pricing and cost evidence for ${missingEvidence} proof unit${missingEvidence > 1 ? "s" : ""}.`;
+    }
+  } else if (earnedPoints >= 60) {
+    gate = "Conditional";
+    reason = "Progress is partway. Continue adding proof units and supporting evidence.";
+    nextAction = "Add more paid jobs, signed contracts, or recurring work with documented margin.";
+  } else {
+    gate = "Locked";
+    reason = "Not enough commercial proof yet.";
+    nextAction = "Record completed jobs, signed contracts, or active recurring work.";
+  }
+
+  return {
+    earnedPoints,
+    weightedGM,
+    gate,
+    reason,
+    nextAction,
+    blockers,
+    warnings,
+    concentrationClient,
+  };
+}
+
+function GateBadge({ gate }: { gate: GateStatus }) {
+  const cls =
+    gate === "Unlocked"
+      ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+      : gate === "Conditional"
+        ? "border-amber-400 text-amber-700 bg-amber-50"
+        : "border-red-400 text-red-700 bg-red-50";
+  return <Badge variant="outline" className={cls}>Gate: {gate}</Badge>;
+}
+
+function riskCellClass(risk: string) {
+  if (risk.includes("blocker")) return "text-red-600";
+  if (risk.includes("warning") || risk.includes("missing")) return "text-amber-600";
+  return "text-muted-foreground";
+}
+
+function Stage1ProofScorecard() {
+  const units = SEED_UNITS;
+  const sc = useMemo(() => computeScorecard(units), [units]);
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">First 5 Jobs Tracker</CardTitle>
-        <CardDescription>Prove the model before scaling</CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Stage 1 Proof Scorecard</CardTitle>
+            <CardDescription>Prove real demand before scaling</CardDescription>
+          </div>
+          <GateBadge gate={sc.gate} />
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile
+            label="Progress Score"
+            value={`${sc.earnedPoints} / 100`}
+            tone={sc.earnedPoints >= 100 ? "good" : "warn"}
+          />
+          <StatTile
+            label="Weighted GM"
+            value={`${sc.weightedGM.toFixed(0)}%`}
+            hint="Target ≥ 30%"
+            tone={sc.weightedGM >= 30 ? "good" : "warn"}
+          />
+          <StatTile label="Gate Status" value={sc.gate} />
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+          <div>
+            <span className="text-muted-foreground">Primary reason: </span>
+            <span className="font-medium">{sc.reason}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Next required action: </span>
+            <span className="font-medium">{sc.nextAction}</span>
+          </div>
+        </div>
+
+        {sc.blockers.map((b) => (
+          <div key={b} className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
+            <span className="font-semibold">Blocker: </span>{b}
+          </div>
+        ))}
+        {sc.warnings.map((w) => (
+          <div key={w} className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+            <span className="font-semibold">Risk warning: </span>{w}
+          </div>
+        ))}
+
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">#</TableHead>
+              <TableHead className="w-10">#</TableHead>
               <TableHead>Client</TableHead>
+              <TableHead>Proof Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">GM %</TableHead>
+              <TableHead className="text-right">Points</TableHead>
+              <TableHead>Risk</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {jobs.map((j) => (
-              <TableRow key={j.n}>
-                <TableCell className="font-medium">{j.n}</TableCell>
-                <TableCell>{j.client}</TableCell>
-                <TableCell>
-                  {j.status === "Complete" ? (
-                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                      <CheckCircle2 className="h-3 w-3 mr-1" /> Complete
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">Open</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {j.gm == null ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <span className={j.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>
-                      {j.gm}%
-                    </span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+            {units.map((u) => {
+              const risk = unitRisk(u, sc.concentrationClient);
+              return (
+                <TableRow key={u.n}>
+                  <TableCell className="font-medium">{u.n}</TableCell>
+                  <TableCell>{u.client}</TableCell>
+                  <TableCell>{u.proofType}</TableCell>
+                  <TableCell>{u.status}</TableCell>
+                  <TableCell className="text-right">
+                    <span className={u.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{u.gm}%</span>
+                  </TableCell>
+                  <TableCell className="text-right">{scoreUnit(u)}</TableCell>
+                  <TableCell className={riskCellClass(risk)}>{risk}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>
@@ -639,7 +845,7 @@ export default function Stage1() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <FirstFiveJobsTracker />
+        <Stage1ProofScorecard />
         <MarginSnapshot />
       </div>
 
