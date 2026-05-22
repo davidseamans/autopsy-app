@@ -905,6 +905,66 @@ function JobDetailSheet({
 
           {/* Legacy linked records (read-only context) */}
           {(fin || docs.length > 0) && (
+            null
+          )}
+          {/* 6. General Business Expenses (not in GM) */}
+          <div className="rounded-md border p-3 space-y-3">
+            <div className="font-medium text-sm flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">6</span>
+              <Paperclip className="h-4 w-4" /> General Business Expenses
+            </div>
+            <p className="text-xs text-muted-foreground">Not included in this job's gross margin.</p>
+            <div className="rounded border-l-4 border-blue-400 bg-blue-50 p-2 text-xs text-blue-900 space-y-1">
+              <p>Use this for business-related dockets that are not direct costs of this specific job. Examples: fuel, phone, parking, software, small tools, PPE, general supplies.</p>
+              <p>If you are unsure whether something is a direct job cost, record it here and ask your accountant later.</p>
+              <p className="italic">This section records possible business expenses. It does not decide tax deductibility.</p>
+            </div>
+
+            {(draft.gbExpenses ?? []).length > 0 && (
+              <ul className="space-y-1 text-sm">
+                {(draft.gbExpenses ?? []).map((e, idx) => (
+                  <li key={e.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">
+                        {e.category ?? "Uncategorised"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
+                        {e.receiptName
+                          ? <span className="text-emerald-700">Receipt uploaded</span>
+                          : <span className="text-amber-700">Receipt missing</span>}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          gbExpenses: (draft.gbExpenses ?? []).filter((_, i) => i !== idx),
+                        })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <GBExpenseForm
+              onAdd={(exp) =>
+                setDraft({ ...draft, gbExpenses: [...(draft.gbExpenses ?? []), exp] })
+              }
+            />
+
+            {(draft.gbExpenses ?? []).some((e) => !e.receiptName) && (
+              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+                Receipt missing: keep proof now so your accountant is not guessing later.
+              </div>
+            )}
+          </div>
+
+          {/* Legacy linked records (read-only context) */}
+          {(fin || docs.length > 0) && (
             <div className="rounded-md border p-3 space-y-2">
               <div className="font-medium text-xs text-muted-foreground">Linked records (Stage 1 Financial Proof store)</div>
               {fin && (
