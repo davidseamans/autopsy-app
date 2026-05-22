@@ -2583,6 +2583,8 @@ function EvidenceForm() {
 }
 
 export default function Stage1() {
+  const runId = getActiveRunId();
+  const { state: progression, update: updateProgression } = useProgression(runId);
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
@@ -2599,6 +2601,12 @@ export default function Stage1() {
     tab?.click();
     document.getElementById("operator-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // If we have a progression record but Stage 1 is not yet reachable, block entry.
+  if (runId && progression && !isStage1Reachable(progression.stagePermission)) {
+    return <Stage1BlockedScreen runId={runId} />;
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
@@ -2612,6 +2620,15 @@ export default function Stage1() {
           Prove the model before you scale it. Five jobs, real margin, real evidence.
         </p>
       </div>
+
+      {progression && (
+        <Stage1ProgressionHeader
+          progression={progression}
+          gateMet={sc.gate === "Eligible" || sc.gate === "Eligible*"}
+          onRequestReview={() => updateProgression({ stage1ReviewRequested: true })}
+          onMarkReviewPassed={() => updateProgression({ stage1ReviewPassed: true })}
+        />
+      )}
 
       <Stage1GoalBanner />
       <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
