@@ -274,6 +274,7 @@ type GateStatus = "Locked" | "Conditional" | "Unlocked";
 interface ProofUnit {
   n: number;
   client: string;
+  jobSite?: string;
   proofType: ProofType;
   status: string;
   gm: number;
@@ -316,11 +317,11 @@ function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
 }
 
 const SEED_UNITS: ProofUnit[] = [
-  { n: 1, client: "M. Patel", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200 },
-  { n: 2, client: "K. Nguyen", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900 },
-  { n: 3, client: "Sunrise Cafe", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400 },
-  { n: 4, client: "QML", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000 },
-  { n: 5, client: "QML", proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000 },
+  { n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200 },
+  { n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900 },
+  { n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400 },
+  { n: 4, client: "QML", jobSite: "Maroochydore Service Centre", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000 },
+  { n: 5, client: "QML", jobSite: "Nambour Service Centre", proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000 },
 ];
 
 function computeScorecard(units: ProofUnit[]) {
@@ -503,7 +504,14 @@ function Stage1ProofScorecard() {
               return (
                 <TableRow key={u.n}>
                   <TableCell className="font-medium">{u.n}</TableCell>
-                  <TableCell>{u.client}</TableCell>
+                  <TableCell>
+                    <div className="font-medium leading-tight">{u.client}</div>
+                    {u.jobSite ? (
+                      <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                    ) : (
+                      <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                    )}
+                  </TableCell>
                   <TableCell>{u.proofType}</TableCell>
                   <TableCell>{u.status}</TableCell>
                   <TableCell className="text-right">
