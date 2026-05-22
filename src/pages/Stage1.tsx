@@ -49,6 +49,8 @@ import {
   DollarSign,
   FileText,
   Camera,
+  Paperclip,
+  Plus,
 } from "lucide-react";
 
 // ----- Critical test state (acceptance fixture) -----
@@ -723,54 +725,548 @@ function LogActivityForm() {
   );
 }
 
+// ----- Financial Proof: local data store (frontend-only, scope-limited) -----
+type JobKind = "oneoff" | "contract";
+const ONEOFF_STATUSES = ["Open", "Scheduled", "Active", "Completed", "Paid", "Cancelled"] as const;
+const CONTRACT_STATUSES = ["Draft", "Sent", "Signed", "Mobilising", "Active", "Renewed", "Ended", "Cancelled"] as const;
+type OneoffStatus = (typeof ONEOFF_STATUSES)[number];
+type ContractStatus = (typeof CONTRACT_STATUSES)[number];
+
+interface FPClient { id: string; name: string }
+interface FPJob {
+  id: string;
+  client_id: string;
+  job_name: string;
+  kind: JobKind;
+  proof_type: ProofType;
+  status: OneoffStatus | ContractStatus;
+}
+interface FPDocument {
+  id: string;
+  job_id: string;
+  financial_id: string | null;
+  document_type: string;
+  file_name: string;
+  uploaded_at: string;
+  verified_status: "Missing" | "Uploaded" | "Verified" | "Rejected";
+}
+type EvidenceStatus = "Missing" | "Uploaded" | "Verified" | "Rejected";
+interface FPFinancial {
+  id: string;
+  job_id: string;
+  revenue_amount: number;
+  materials_cost: number;
+  labour_cost: number;
+  other_direct_cost: number;
+  gross_profit: number;
+  gm_percent: number | null;
+  evidence_status: EvidenceStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const LS = {
+  clients: "stage1.fp.clients",
+  jobs: "stage1.fp.jobs",
+  fin: "stage1.fp.financials",
+  docs: "stage1.fp.documents",
+};
+
+function readLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeLS<T>(key: string, val: T) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* noop */ }
+}
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+const SEED_CLIENTS: FPClient[] = [
+  { id: "c1", name: "M. Patel" },
+  { id: "c2", name: "Sunrise Cafe" },
+  { id: "c3", name: "QML" },
+];
+const SEED_JOBS: FPJob[] = [
+  { id: "j1", client_id: "c1", job_name: "Front yard clean", kind: "oneoff", proof_type: "Completed Job", status: "Paid" },
+  { id: "j2", client_id: "c2", job_name: "Weekly cafe clean", kind: "oneoff", proof_type: "Recurring Job", status: "Active" },
+  { id: "j3", client_id: "c3", job_name: "Site A contract", kind: "contract", proof_type: "Contract Site", status: "Signed" },
+  { id: "j4", client_id: "c3", job_name: "Site B contract", kind: "contract", proof_type: "Contract Site", status: "Mobilising" },
+];
+
+const PROOF_TYPES: ProofType[] = [
+  "Completed Job",
+  "Recurring Job",
+  "Signed Contract",
+  "Contract Site",
+  "Repeat Job",
+  "Referral Job",
+];
+
+const DOC_TYPES = [
+  "Invoice",
+  "Receipt",
+  "Supplier Bill",
+  "Timesheet",
+  "Contract",
+  "Quote",
+  "Bank / Payment Screenshot",
+  "Other",
+] as const;
+
+function statusBadgeClass(status: string) {
+  const s = status.toLowerCase();
+  if (["paid", "active", "signed", "renewed"].includes(s))
+    return "border-emerald-400 text-emerald-700 bg-emerald-50";
+  if (["cancelled", "ended", "rejected"].includes(s))
+    return "border-red-400 text-red-700 bg-red-50";
+  if (["completed", "mobilising", "sent"].includes(s))
+    return "border-blue-400 text-blue-700 bg-blue-50";
+  return "border-amber-400 text-amber-700 bg-amber-50";
+}
+
 function FinancialsForm() {
-  const [form, setForm] = useLocalForm("financials", {
-    job: "",
-    revenue: "",
-    materials: "",
-    labour: "",
-    other: "",
+  // ----- Hydrate stores -----
+  const [clients, setClients] = useState<FPClient[]>(() => {
+    const cur = readLS<FPClient[]>(LS.clients, []);
+    return cur.length ? cur : SEED_CLIENTS;
   });
-  const rev = Number(form.revenue) || 0;
-  const cost = (Number(form.materials) || 0) + (Number(form.labour) || 0) + (Number(form.other) || 0);
-  const gm = rev > 0 ? Math.round(((rev - cost) / rev) * 100) : null;
+  const [jobs, setJobs] = useState<FPJob[]>(() => {
+    const cur = readLS<FPJob[]>(LS.jobs, []);
+    return cur.length ? cur : SEED_JOBS;
+  });
+  const [financials, setFinancials] = useState<FPFinancial[]>(() => readLS(LS.fin, []));
+  const [docs, setDocs] = useState<FPDocument[]>(() => readLS(LS.docs, []));
+
+  useEffect(() => writeLS(LS.clients, clients), [clients]);
+  useEffect(() => writeLS(LS.jobs, jobs), [jobs]);
+  useEffect(() => writeLS(LS.fin, financials), [financials]);
+  useEffect(() => writeLS(LS.docs, docs), [docs]);
+
+  // ----- Selection + form state -----
+  const [clientId, setClientId] = useState<string>("");
+  const [jobId, setJobId] = useState<string>("");
+  const [revenue, setRevenue] = useState("");
+  const [materials, setMaterials] = useState("");
+  const [labour, setLabour] = useState("");
+  const [other, setOther] = useState("");
+  const [notes, setNotes] = useState("");
+  const [savedFinId, setSavedFinId] = useState<string | null>(null);
+
+  // Add-new dialogs (inline expanders, not modals)
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [showNewJob, setShowNewJob] = useState(false);
+  const [newJob, setNewJob] = useState<{ name: string; kind: JobKind; proof_type: ProofType; status: string }>({
+    name: "",
+    kind: "oneoff",
+    proof_type: "Completed Job",
+    status: "Open",
+  });
+
+  // Doc upload state
+  const [docType, setDocType] = useState<string>("Invoice");
+
+  const jobsForClient = useMemo(
+    () => jobs.filter((j) => j.client_id === clientId),
+    [jobs, clientId]
+  );
+  const selectedJob = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
+
+  // Reset job when client changes
+  useEffect(() => {
+    if (!jobsForClient.find((j) => j.id === jobId)) setJobId("");
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // GM compute
+  const rev = Number(revenue) || 0;
+  const mat = Number(materials) || 0;
+  const lab = Number(labour) || 0;
+  const oth = Number(other) || 0;
+  const grossProfit = rev - mat - lab - oth;
+  const gm = rev > 0 ? Math.round((grossProfit / rev) * 100) : null;
+
+  // Evidence
+  const linkedDocs = docs.filter(
+    (d) => d.job_id === jobId && (savedFinId ? d.financial_id === savedFinId || d.financial_id === null : true)
+  );
+  const evidenceStatus = (linkedDocs.length === 0 ? "Missing" : "Uploaded") as EvidenceStatus;
+
+  // ----- Handlers -----
+  function handleAddClient() {
+    const name = newClientName.trim();
+    if (!name) return;
+    const dup = clients.find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (dup) {
+      toast({ title: "Client already exists", description: `Selected existing "${dup.name}".` });
+      setClientId(dup.id);
+    } else {
+      const c: FPClient = { id: uid(), name };
+      setClients([...clients, c]);
+      setClientId(c.id);
+      toast({ title: "Client added", description: name });
+    }
+    setNewClientName("");
+    setShowNewClient(false);
+  }
+
+  function handleAddJob() {
+    if (!clientId) {
+      toast({ title: "Select a client first" });
+      return;
+    }
+    const name = newJob.name.trim();
+    if (!name) return;
+    const j: FPJob = {
+      id: uid(),
+      client_id: clientId,
+      job_name: name,
+      kind: newJob.kind,
+      proof_type: newJob.proof_type,
+      status: newJob.status as OneoffStatus | ContractStatus,
+    };
+    setJobs([...jobs, j]);
+    setJobId(j.id);
+    setNewJob({ name: "", kind: "oneoff", proof_type: "Completed Job", status: "Open" });
+    setShowNewJob(false);
+    toast({ title: "Job / Contract Site added", description: name });
+  }
+
+  function handleSave() {
+    if (!clientId) return toast({ title: "Select a client" });
+    if (!jobId) return toast({ title: "Select a job / contract site" });
+    if (!revenue || rev <= 0) return toast({ title: "Enter revenue" });
+    if (mat < 0 || lab < 0 || oth < 0) return toast({ title: "Costs must be zero or positive" });
+
+    const now = new Date().toISOString();
+    if (savedFinId) {
+      setFinancials(financials.map((f) =>
+        f.id === savedFinId
+          ? { ...f, revenue_amount: rev, materials_cost: mat, labour_cost: lab, other_direct_cost: oth,
+              gross_profit: grossProfit, gm_percent: gm, evidence_status: evidenceStatus, notes, updated_at: now }
+          : f
+      ));
+      toast({ title: "Financial proof updated" });
+    } else {
+      const f: FPFinancial = {
+        id: uid(),
+        job_id: jobId,
+        revenue_amount: rev,
+        materials_cost: mat,
+        labour_cost: lab,
+        other_direct_cost: oth,
+        gross_profit: grossProfit,
+        gm_percent: gm,
+        evidence_status: evidenceStatus,
+        notes,
+        created_at: now,
+        updated_at: now,
+      };
+      setFinancials([...financials, f]);
+      setSavedFinId(f.id);
+      // Attach any pre-existing job-level docs to this financial record
+      setDocs(docs.map((d) => (d.job_id === jobId && !d.financial_id ? { ...d, financial_id: f.id } : d)));
+      toast({ title: "Financial proof saved" });
+    }
+  }
+
+  function handleAttachDoc(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!jobId) {
+      toast({ title: "Select a job before attaching documents" });
+      e.target.value = "";
+      return;
+    }
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const now = new Date().toISOString();
+    const newDocs: FPDocument[] = files.map((file) => ({
+      id: uid(),
+      job_id: jobId,
+      financial_id: savedFinId,
+      document_type: docType,
+      file_name: file.name,
+      uploaded_at: now,
+      verified_status: "Uploaded",
+    }));
+    setDocs([...docs, ...newDocs]);
+    toast({ title: `${files.length} document${files.length > 1 ? "s" : ""} attached` });
+    e.target.value = "";
+  }
+
+  function handleRemoveDoc(id: string) {
+    setDocs(docs.filter((d) => d.id !== id));
+  }
+
+  const canSave = !!clientId && !!jobId && rev > 0 && mat >= 0 && lab >= 0 && oth >= 0;
+  const statusOptions = selectedJob?.kind === "contract" ? CONTRACT_STATUSES : ONEOFF_STATUSES;
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <DollarSign className="h-4 w-4" /> Financials
+          <DollarSign className="h-4 w-4" /> Financial Proof
         </CardTitle>
-        <CardDescription>Enter revenue + costs to compute GM</CardDescription>
+        <CardDescription>Record revenue, direct costs, and evidence to prove gross margin.</CardDescription>
+        <p className="text-xs text-muted-foreground pt-1">
+          This is not your accounting system. It records enough proof to test whether the work is safe to scale.
+        </p>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1 sm:col-span-2">
-          <Label>Job</Label>
-          <Input value={form.job} onChange={(e) => setForm({ ...form, job: e.target.value })} placeholder="Client / job name" />
+      <CardContent className="grid gap-4">
+        {/* Client + Job selection */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Client</Label>
+            <div className="flex gap-2">
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" size="icon" onClick={() => setShowNewClient((v) => !v)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {showNewClient && (
+              <div className="flex gap-2 pt-2">
+                <Input
+                  placeholder="New client name"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                />
+                <Button type="button" size="sm" onClick={handleAddClient}>Add</Button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label>Job / Contract Site</Label>
+            <div className="flex gap-2">
+              <Select value={jobId} onValueChange={setJobId} disabled={!clientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={clientId ? "Select job" : "Select a client first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {jobsForClient.map((j) => (
+                    <SelectItem key={j.id} value={j.id}>
+                      {j.job_name} <span className="text-muted-foreground">· {j.proof_type}</span>
+                    </SelectItem>
+                  ))}
+                  {jobsForClient.length === 0 && clientId && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No jobs yet</div>
+                  )}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" size="icon" disabled={!clientId} onClick={() => setShowNewJob((v) => !v)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {showNewJob && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-2 mt-2">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">Job name</Label>
+                    <Input
+                      value={newJob.name}
+                      onChange={(e) => setNewJob({ ...newJob, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Kind</Label>
+                    <Select
+                      value={newJob.kind}
+                      onValueChange={(v) => {
+                        const kind = v as JobKind;
+                        setNewJob({
+                          ...newJob,
+                          kind,
+                          status: kind === "contract" ? CONTRACT_STATUSES[0] : ONEOFF_STATUSES[0],
+                        });
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="oneoff">One-off job</SelectItem>
+                        <SelectItem value="contract">Contract / site</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Proof type</Label>
+                    <Select
+                      value={newJob.proof_type}
+                      onValueChange={(v) => setNewJob({ ...newJob, proof_type: v as ProofType })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PROOF_TYPES.map((p) => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Initial status</Label>
+                    <Select
+                      value={newJob.status}
+                      onValueChange={(v) => setNewJob({ ...newJob, status: v })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(newJob.kind === "contract" ? CONTRACT_STATUSES : ONEOFF_STATUSES).map((s) => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" onClick={handleAddJob}>Add Job / Site</Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Job status badge (sourced from job record) */}
+        {selectedJob && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Job status:</span>
+            <Badge variant="outline" className={statusBadgeClass(selectedJob.status)}>
+              {selectedJob.status}
+            </Badge>
+            <span className="text-xs text-muted-foreground">({selectedJob.proof_type})</span>
+          </div>
+        )}
+
+        {/* Financial fields */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Revenue Received / Expected ($)</Label>
+            <Input type="number" min={0} value={revenue} onChange={(e) => setRevenue(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Materials ($)</Label>
+            <Input type="number" min={0} value={materials} onChange={(e) => setMaterials(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Labour ($)</Label>
+            <Input type="number" min={0} value={labour} onChange={(e) => setLabour(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Other Direct Costs ($)</Label>
+            <Input type="number" min={0} value={other} onChange={(e) => setOther(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Computed GM */}
+        <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between">
+          <div className="text-sm">
+            <div className="text-muted-foreground">Gross Profit</div>
+            <div className="font-medium">{rev > 0 ? `$${grossProfit.toLocaleString()}` : "—"}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">Computed GM</div>
+            <div className={`text-2xl font-semibold ${gm == null ? "" : gm >= 30 ? "text-emerald-600" : "text-amber-600"}`}>
+              {gm == null ? "—" : `${gm}%`}
+            </div>
+          </div>
+        </div>
+        {gm == null && (
+          <p className="text-xs text-muted-foreground -mt-2">Enter revenue to calculate gross margin.</p>
+        )}
+
+        {/* Margin rule banner */}
+        {gm != null && gm < 30 && (
+          <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
+            <span className="font-semibold">Margin blocker: </span>this work is not yet economically safe to scale.
+          </div>
+        )}
+        {gm != null && gm >= 30 && (
+          <div className="rounded-md border-l-4 border-emerald-500 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <span className="font-semibold">Margin proof passed, </span>subject to valid evidence.
+          </div>
+        )}
+
+        {/* Notes */}
         <div className="space-y-1">
-          <Label>Revenue ($)</Label>
-          <Input type="number" value={form.revenue} onChange={(e) => setForm({ ...form, revenue: e.target.value })} />
+          <Label>Notes (optional)</Label>
+          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <div className="space-y-1">
-          <Label>Materials ($)</Label>
-          <Input type="number" value={form.materials} onChange={(e) => setForm({ ...form, materials: e.target.value })} />
+
+        {/* Evidence */}
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium text-sm">Evidence</span>
+            </div>
+            <Badge
+              variant="outline"
+              className={
+                evidenceStatus === "Verified"
+                  ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+                  : evidenceStatus === "Uploaded"
+                    ? "border-blue-400 text-blue-700 bg-blue-50"
+                    : evidenceStatus === "Rejected"
+                      ? "border-red-400 text-red-700 bg-red-50"
+                      : "border-amber-400 text-amber-700 bg-amber-50"
+              }
+            >
+              {evidenceStatus}
+            </Badge>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="space-y-1">
+              <Label className="text-xs">Document type</Label>
+              <Select value={docType} onValueChange={setDocType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DOC_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Attach file(s)</Label>
+              <Input type="file" multiple onChange={handleAttachDoc} disabled={!jobId} />
+            </div>
+          </div>
+
+          {linkedDocs.length === 0 ? (
+            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
+              <span className="font-semibold">Evidence blocker: </span>financial claims must be supported before progression can unlock.
+            </div>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {linkedDocs.map((d) => (
+                <li key={d.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{d.file_name}</span>
+                    <Badge variant="outline" className="text-[10px]">{d.document_type}</Badge>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveDoc(d.id)}>
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label>Labour ($)</Label>
-          <Input type="number" value={form.labour} onChange={(e) => setForm({ ...form, labour: e.target.value })} />
-        </div>
-        <div className="space-y-1">
-          <Label>Other Direct Costs ($)</Label>
-          <Input type="number" value={form.other} onChange={(e) => setForm({ ...form, other: e.target.value })} />
-        </div>
-        <div className="sm:col-span-2 rounded-md border bg-muted/30 p-3 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Computed GM</span>
-          <span className={`text-lg font-semibold ${gm == null ? "" : gm >= 30 ? "text-emerald-600" : "text-amber-600"}`}>
-            {gm == null ? "—" : `${gm}%`}
-          </span>
-        </div>
-        <div className="sm:col-span-2 flex justify-end">
-          <Button onClick={() => toast({ title: "Financials saved" })}>Save Financials</Button>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={!canSave}>
+            Save Financial Proof
+          </Button>
         </div>
       </CardContent>
     </Card>
