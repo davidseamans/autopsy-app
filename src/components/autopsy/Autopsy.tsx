@@ -1228,8 +1228,11 @@ function VerdictView({
           (run as any).hard_fail_triggered_raw_payload ?? null,
         payload_matches_selected_answers:
           ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        raw_payload_matches_selected_answers:
+          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
         error:
-          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
+          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail &&
+          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
             ? null
             : "ERROR: hard_fail payload does not match selected answers.",
         primary_risk: (run as any).primary_risk ?? null,
