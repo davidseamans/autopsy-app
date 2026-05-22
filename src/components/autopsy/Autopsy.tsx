@@ -50,6 +50,7 @@ import {
   SupportingBlocks,
   SupportingBlockItem,
 } from "./rpc";
+import type { SelectedAnswerAuditRow } from "./rpc";
 
 type View = "start" | "question" | "verdict";
 
@@ -96,6 +97,60 @@ function normalizeOption(opt: any, idx: number) {
 function sortedQuestions(payload: GatewayPayload | undefined): GatewayQuestion[] {
   const qs = payload?.questions ?? [];
   return [...qs].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+}
+
+function auditQuestionKey(row: Pick<SelectedAnswerAuditRow, "question_id" | "question_number">): string {
+  return row.question_id != null
+    ? `id:${String(row.question_id)}`
+    : `n:${String(row.question_number ?? "")}`;
+}
+
+function sortAuditRows(a: SelectedAnswerAuditRow, b: SelectedAnswerAuditRow) {
+  return (a.question_number ?? 0) - (b.question_number ?? 0);
+}
+
+function buildSelectedAnswersFromPayload(
+  questions: GatewayQuestion[] | undefined,
+): SelectedAnswerAuditRow[] {
+  return (questions ?? [])
+    .map((q: any, i): SelectedAnswerAuditRow | null => {
+      const opts = (q.options ?? []) as any[];
+      const selectedOptionFromList = opts.find((o) => o && typeof o === "object" && o.selected === true);
+      const selectedId = q.selected_option ?? selectedOptionFromList?.id ?? selectedOptionFromList?.option_id ?? selectedOptionFromList?.value ?? null;
+      if (selectedId == null) return null;
+      const selectedOpt =
+        selectedOptionFromList ??
+        opts.find(
+          (o) =>
+            o != null &&
+            typeof o === "object" &&
+            (String(o.id) === String(selectedId) ||
+              String(o.option_id) === String(selectedId) ||
+              String(o.value) === String(selectedId)),
+        ) ??
+        null;
+      const optionScore = selectedOpt && typeof selectedOpt === "object"
+        ? selectedOpt.score_value ?? selectedOpt.score ?? selectedOpt.value
+        : null;
+      return {
+        question_id: q.question_id ?? q.q_id ?? null,
+        question_number: Number.isFinite(Number(q.position)) ? Number(q.position) : i + 1,
+        dimension_code: q.dimension_code ?? null,
+        selected_option_id: selectedId,
+        selected_option_label:
+          selectedOpt && typeof selectedOpt === "object"
+            ? selectedOpt.label ?? null
+            : null,
+        score_value: Number.isFinite(Number(q.selected_score_value))
+          ? Number(q.selected_score_value)
+          : Number.isFinite(Number(optionScore))
+            ? Number(optionScore)
+            : null,
+        hard_fail: selectedOpt && typeof selectedOpt === "object" ? selectedOpt.hard_fail === true : false,
+      };
+    })
+    .filter((row): row is SelectedAnswerAuditRow => row != null)
+    .sort(sortAuditRows);
 }
 
 function humanize(value: any): string {
@@ -1087,14 +1142,21 @@ function VerdictView({
 
   const selectedAnswerAudit = useMemo(() => {
     const dbRows = answerAuditQuery.data ?? [];
+    const payloadRows = buildSelectedAnswersFromPayload(payload?.questions);
     if (dbRows.length > 0) {
-      const selectedHardFails = dbRows.filter((r) => r.hard_fail === true);
+      const byQuestion = new Map<string, SelectedAnswerAuditRow>();
+      for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
+      for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
+      const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
+      const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
       return {
-        selectedAnswers: dbRows,
+        selectedAnswers,
         selectedHardFails,
         hasSelectedHardFail: selectedHardFails.length > 0,
         firstSelectedHardFail: selectedHardFails[0] ?? null,
-        source: "autopsy_answers" as const,
+        source: payloadRows.length > dbRows.length
+          ? "autopsy_answers+gateway_payload"
+          : "autopsy_answers",
         expectedAnswerCount: (payload?.questions ?? []).length || 10,
         auditLoaded: true,
       };
@@ -1110,36 +1172,7 @@ function VerdictView({
         auditLoaded: false,
       };
     }
-    const qs = (payload?.questions ?? []) as any[];
-    const selectedAnswers = qs.filter((q) => q.selected_option != null).map((q, i) => {
-      const opts = (q.options ?? []) as any[];
-      const selectedId = q.selected_option ?? null;
-      const selectedOpt =
-        opts.find(
-          (o) =>
-            o != null &&
-            typeof o === "object" &&
-            (String(o.id) === String(selectedId) ||
-              String(o.option_id) === String(selectedId) ||
-              String(o.value) === String(selectedId)),
-        ) ?? null;
-      return {
-        question_id: q.question_id,
-        question_number: q.position ?? i + 1,
-        selected_option_id: selectedId,
-        selected_option_label:
-          (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
-        score_value:
-          selectedOpt && typeof selectedOpt === "object"
-            ? (selectedOpt.score_value ?? selectedOpt.score ?? null)
-            : q.selected_score_value ?? null,
-        hard_fail:
-          selectedOpt && typeof selectedOpt === "object"
-            ? !!selectedOpt.hard_fail
-            : false,
-        dimension_code: q.dimension_code ?? null,
-      };
-    });
+    const selectedAnswers = payloadRows;
     const selectedHardFails = selectedAnswers.filter((r) => r.hard_fail === true);
     return {
       selectedAnswers,
@@ -1147,11 +1180,12 @@ function VerdictView({
       hasSelectedHardFail: selectedHardFails.length > 0,
       firstSelectedHardFail: selectedHardFails[0] ?? null,
       source: "gateway_payload" as const,
-      expectedAnswerCount: qs.length || 10,
+      expectedAnswerCount: (payload?.questions ?? []).length || 10,
       auditLoaded: !answerAuditQuery.isLoading,
     };
   }, [answerAuditQuery.data, answerAuditQuery.isLoading, payload?.questions]);
   const hasSelectedHardFail = selectedAnswerAudit.hasSelectedHardFail;
+  const firstSelectedHardFail = selectedAnswerAudit.firstSelectedHardFail;
 
   // Diagnostic cascade (pressure topology) — new backend source of truth.
   const cascade =
@@ -1222,19 +1256,18 @@ function VerdictView({
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
+        hardFailFromSelectedAnswers: hasSelectedHardFail,
         hard_fail_from_selected_answers: hasSelectedHardFail,
-        hard_fail_triggered_payload: (run as any).hard_fail_triggered ?? null,
+        hard_fail_triggered_payload:
+          (run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null,
         hard_fail_triggered_raw_payload:
           (run as any).hard_fail_triggered_raw_payload ?? null,
         payload_matches_selected_answers:
-          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
-        raw_payload_matches_selected_answers:
-          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
-        error:
-          ((run as any).hard_fail_triggered ?? null) === hasSelectedHardFail &&
-          ((run as any).hard_fail_triggered_raw_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail
-            ? null
-            : "ERROR: hard_fail payload does not match selected answers.",
+          ((run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null) === hasSelectedHardFail,
+        mismatch_warning:
+          ((run as any).hard_fail_triggered_payload ?? (run as any).hard_fail_triggered ?? null) !== hasSelectedHardFail
+            ? "ERROR: payload hard-fail does not match selected answers."
+            : null,
         primary_risk: (run as any).primary_risk ?? null,
         hard_fail_question_id: firstSelectedHardFail?.question_id ?? null,
         hard_fail_selected_option_id:
@@ -1396,6 +1429,20 @@ function VerdictView({
             form. The hard-fail condition must be corrected and retested before
             progression can be reconsidered.
           </p>
+          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+            <div>
+              <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
+              <div className="font-mono font-semibold">
+                {firstSelectedHardFail?.question_number ?? firstSelectedHardFail?.question_id ?? "—"}
+              </div>
+            </div>
+            <div>
+              <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
+              <div className="font-mono font-semibold break-words">
+                {firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? "—"}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1406,7 +1453,7 @@ function VerdictView({
           secondary={cascadeSecondary}
           tertiary={cascadeTertiary}
           isBlocked={isBlocked}
-          failureDrivers={supportingBlocks?.failure_drivers}
+          failureDrivers={sanitizeVerdictCopy(supportingBlocks?.failure_drivers, isHardFail)}
           framing={framing}
         />
       )}
@@ -1661,12 +1708,12 @@ function OperationalStatePanel({
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
   const permissionBiasDisplay = cleanProceedOnlyIf(
-    rawPermissionBias,
+    sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
   const recoveryDisplay = isScoreBandNotViable
     ? "Repair Worksheet Required"
-    : resolveRecoverySignal(run);
+    : sanitizeVerdictCopy(resolveRecoverySignal(run), !!isBlocked);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Allowed Next Move", permissionBiasDisplay],
@@ -1713,25 +1760,28 @@ function PressureCollapsePanel({
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
 }) {
+  const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
     : isScoreBandNotViable
       ? "SCORE-BAND FAILURE"
-    : humanize(run.pressure_stage);
+      : /blocking\s*failure|hard\s*fail/i.test(rawPressureStage)
+        ? "PROGRESSION LOCKED"
+        : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
     ? "HARD FAIL"
     : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
       ? "Score-band Not Viable"
-      : rawFailureType;
+      : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
     ...(suppressPressureSummary
       ? []
-      : [{ label: "Pressure Summary", value: run.pressure_summary, prose: true }]),
-    { label: "Collapse Pattern", value: run.collapse_pattern, prose: true },
+      : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
+    { label: "Collapse Pattern", value: sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked), prose: true },
   ];
   const visible = items.filter((i) => hasContent(i.value));
   if (visible.length === 0) return null;
@@ -1793,14 +1843,14 @@ function RecoveryRetestPanel({
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
-        : resolved;
+        : sanitizeVerdictCopy(resolved, !!isBlocked);
   const retest = isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
     : hasContent(actionOverride)
     ? actionOverride
     : hasContent(evidenceOverride)
       ? null
-      : run.retest_condition;
+      : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
@@ -1872,16 +1922,29 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
 }
 
 function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
-  if (isHardFail || typeof value !== "string") return value;
+  if (isHardFail || value == null) return value;
+  if (Array.isArray(value)) return value.map((item) => sanitizeVerdictCopy(item, false));
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [key, child] of Object.entries(value)) {
+      const cleanKey = sanitizeVerdictCopy(humanize(key), false);
+      out[typeof cleanKey === "string" ? cleanKey : key] = sanitizeVerdictCopy(child, false);
+    }
+    return out;
+  }
+  if (typeof value !== "string") return value;
   return value
     .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
     .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
     .replace(/hard[-\s]?fail condition/gi, "score-band condition")
     .replace(/existential hard[-\s]?fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[_-]fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail/gi, "score-band failure")
     .replace(/blocking failure/gi, "score-band failure")
+    .replace(/progression is blocked/gi, "Progression is locked")
     .replace(
       /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
       "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
@@ -1904,8 +1967,10 @@ function VerdictHardFailDebug({
   const firstHardFail = audit?.firstSelectedHardFail ?? null;
   const selectedAnswers = audit?.selectedAnswers ?? [];
   const hardFailFromSelectedAnswers = selectedAnswers.some((r: any) => r.hard_fail === true);
-  const hardFailTriggeredPayload = run?.hard_fail_triggered ?? null;
-  const payloadMatchesSelectedAnswers = hardFailTriggeredPayload === hardFailFromSelectedAnswers;
+  const hardFailTriggeredPayload = run?.hard_fail_triggered_payload ?? run?.hard_fail_triggered ?? null;
+  const mismatchWarning = hardFailTriggeredPayload !== hardFailFromSelectedAnswers
+    ? "ERROR: payload hard-fail does not match selected answers."
+    : null;
   const debugPayload = {
     run_id: runId,
     total_score: totalScore,
@@ -1914,20 +1979,14 @@ function VerdictHardFailDebug({
     audit_loaded: audit?.auditLoaded === true,
     selected_answer_count: selectedAnswers.length,
     expected_answer_count: audit?.expectedAnswerCount ?? 10,
-    hard_fail_from_selected_answers: hardFailFromSelectedAnswers,
+    hardFailFromSelectedAnswers,
     hard_fail_triggered_payload: hardFailTriggeredPayload,
-    hard_fail_triggered_raw_payload: run?.hard_fail_triggered_raw_payload ?? null,
-    payload_matches_selected_answers: payloadMatchesSelectedAnswers,
-    error: payloadMatchesSelectedAnswers
-      ? null
-      : "ERROR: hard_fail payload does not match selected answers.",
+    mismatch_warning: mismatchWarning,
     hard_fail_source_question_number: firstHardFail?.question_number ?? null,
     hard_fail_source_question_id: firstHardFail?.question_id ?? null,
     hard_fail_source_option_id: firstHardFail?.selected_option_id ?? null,
     selected_answers: selectedAnswers.map((r: any) => ({
       question_number: r.question_number ?? null,
-      question_id: r.question_id ?? null,
-      selected_option_id: r.selected_option_id ?? null,
       score_value: r.score_value ?? null,
       hard_fail: r.hard_fail === true,
     })),
@@ -2802,13 +2861,14 @@ function MechanicalFailureChain({
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary = humanize(run.weakest_dimension ?? run.primary_risk) || "Unidentified";
-  const failurePath =
+  const rawFailurePath =
     (typeof run.collapse_pattern === "string" && run.collapse_pattern.trim()) ||
     humanize(run.failure_shape) ||
     (isBlocked || !/hard\s*fail|existential/i.test(humanize(run.failure_type))
       ? humanize(run.failure_type)
       : "") ||
     "Failure path not specified";
+  const failurePath = sanitizeVerdictCopy(rawFailurePath, !!isBlocked) as string;
   const rawBreakpoint = isScoreBandNotViable
     ? "Repair Worksheet Required before Stage 1 can be reconsidered."
     : (typeof run.retest_condition === "string" && run.retest_condition.trim()) ||

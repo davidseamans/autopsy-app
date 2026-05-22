@@ -72,28 +72,19 @@ async function normalizeHardFailSourceOfTruth(
     const hardFailTriggered = selectedHardFails.length > 0;
     const firstHardFail = selectedHardFails[0] ?? null;
     const rawRun = payload.run;
-    const rawFailureType = String(rawRun.failure_type ?? "");
-    const rawPressureStage = String(rawRun.pressure_stage ?? "");
     return {
       ...payload,
       run: {
         ...rawRun,
+        hard_fail_triggered_payload: rawRun.hard_fail_triggered ?? null,
         hard_fail_triggered_raw_payload: rawRun.hard_fail_triggered ?? null,
+        hard_fail_question_id_payload: rawRun.hard_fail_question_id ?? null,
         hard_fail_question_id_raw_payload: rawRun.hard_fail_question_id ?? null,
-        hard_fail_triggered: hardFailTriggered,
-        hard_fail_question_id: hardFailTriggered ? firstHardFail?.question_id ?? null : null,
-        hard_fail_selected_option_id: hardFailTriggered
+        hard_fail_from_selected_answers: hardFailTriggered,
+        selected_hard_fail_question_id: hardFailTriggered ? firstHardFail?.question_id ?? null : null,
+        selected_hard_fail_option_id: hardFailTriggered
           ? firstHardFail?.selected_option_id ?? null
           : null,
-        hard_fail_reason: hardFailTriggered ? rawRun.hard_fail_reason ?? null : null,
-        failure_type:
-          !hardFailTriggered && /hard\s*fail|existential/i.test(rawFailureType)
-            ? "score_band_failure"
-            : rawRun.failure_type,
-        pressure_stage:
-          !hardFailTriggered && /blocking\s*failure/i.test(rawPressureStage)
-            ? "score_band_failure"
-            : rawRun.pressure_stage,
       },
     };
   } catch {
