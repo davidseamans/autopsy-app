@@ -1237,17 +1237,18 @@ function VerdictView({
     : (payload as any)?.integrity?.score_total_live != null
       ? Number((payload as any).integrity.score_total_live)
       : null;
-  const isProgressionLocked =
-    opStateKey === "blocked" ||
-    isNotViableVerdict ||
-    String(run.permission_level ?? "").toLowerCase() === "locked";
-  const isProgressionBlocked = isProgressionLocked;
   const isHardFail = hasSelectedHardFail;
   const isScoreBandNotViable =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
     (scoreNumeric as number) <= 9;
+  const isProgressionLocked =
+    opStateKey === "blocked" ||
+    isNotViableVerdict ||
+    isScoreBandNotViable ||
+    String(run.permission_level ?? "").toLowerCase() === "locked";
+  const isProgressionBlocked = isProgressionLocked;
   const isBlocked = isHardFail;
   const effectiveOpState = isHardFail
     ? "blocked"
