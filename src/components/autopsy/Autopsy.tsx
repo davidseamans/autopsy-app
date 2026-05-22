@@ -1137,9 +1137,9 @@ function VerdictView({
     opStateKey === "blocked" ||
     /not[\s_-]?viable/i.test(verdictName) ||
     String(run.permission_level ?? "").toLowerCase() === "locked";
-  const isBlocked = hasSelectedHardFail;
+  const isHardFail = hasSelectedHardFail;
+  const isBlocked = isHardFail;
   const effectiveOpState = isProgressionLocked && !opStateKey ? "blocked" : opStateKey;
-  const opStyle = operationalStyle(effectiveOpState);
 
   const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
   const band: VerdictBand = getVerdictBand({
@@ -1166,56 +1166,33 @@ function VerdictView({
   useEffect(() => {
     if (!runId || !run || !(run as any).verdict_name) return;
     try {
-      const qs = (payload?.questions ?? []) as any[];
-      const perQuestion = qs.map((q, i) => {
-        const opts = (q.options ?? []) as any[];
-        const selectedId = q.selected_option ?? null;
-        const selectedOpt =
-          opts.find(
-            (o) =>
-              o != null &&
-              typeof o === "object" &&
-              (o.option_id === selectedId || o.value === selectedId),
-          ) ?? null;
-        return {
-          question_id: q.question_id,
-          question_number: q.position ?? i + 1,
-          selected_option_id: selectedId,
-          selected_option_label:
-            (selectedOpt && (selectedOpt.label ?? String(selectedOpt))) ?? null,
-          score_value:
-            selectedOpt && typeof selectedOpt === "object"
-              ? (selectedOpt.score ?? selectedOpt.value ?? null)
-              : null,
-          hard_fail:
-            selectedOpt && typeof selectedOpt === "object"
-              ? !!selectedOpt.hard_fail
-              : false,
-        };
-      });
-      const selectedHardFails = perQuestion.filter((r) => r.hard_fail === true);
+      const { selectedAnswers, selectedHardFails, hasSelectedHardFail, firstSelectedHardFail } =
+        selectedAnswerAudit;
       // eslint-disable-next-line no-console
       console.info("[autopsy:verdict-audit]", {
         run_id: runId,
         total_score: (run as any).score_total ?? null,
         final_verdict: (run as any).verdict_name ?? null,
+        hard_fail_triggered: hasSelectedHardFail,
+        backend_hard_fail_triggered: (run as any).hard_fail_triggered ?? null,
         primary_risk: (run as any).primary_risk ?? null,
         hard_fail_question_id: (run as any).hard_fail_question_id ?? null,
         hard_fail_selected_option_id:
           (run as any).hard_fail_selected_option_id ?? null,
+        hard_fail_dimension: firstSelectedHardFail?.dimension_code ?? null,
         hard_fail_triggered_from_selected_options:
-          selectedHardFails.length > 0,
+          hasSelectedHardFail,
         selected_hard_fail_questions: selectedHardFails.map((r) => ({
           question_id: r.question_id,
           question_number: r.question_number,
         })),
-        per_question: perQuestion,
+        selected_answers: selectedAnswers,
       });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn("[autopsy:verdict-audit] failed", err);
     }
-  }, [runId, payload, run]);
+  }, [runId, run, selectedAnswerAudit]);
 
   return (
     <div className="space-y-6">
