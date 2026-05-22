@@ -1904,25 +1904,31 @@ function RecoveryRetestPanel({
   run,
   isBlocked,
   isScoreBandNotViable,
+  isCriticalStop,
   evidenceOverride,
   actionOverride,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    isScoreBandNotViable
+    isCriticalStop
+      ? "Outside Safe Progression Pathway"
+      : isScoreBandNotViable
       ? "Repair Worksheet Required"
       : hasContent(evidenceOverride)
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isScoreBandNotViable
+  const retest = isCriticalStop
+    ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
+    : isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
     : hasContent(actionOverride)
     ? actionOverride
