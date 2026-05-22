@@ -1827,25 +1827,31 @@ function PressureCollapsePanel({
   run,
   isBlocked,
   isScoreBandNotViable,
+  isCriticalStop,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
+  isCriticalStop?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isBlocked
     ? "BLOCKING FAILURE"
+    : isCriticalStop
+      ? "CRITICAL STOP"
     : isScoreBandNotViable
       ? "SCORE-BAND FAILURE"
       : /blocking\s*failure|hard\s*fail/i.test(rawPressureStage)
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isBlocked && !hasContent(run.failure_type)
-    ? "HARD FAIL"
-    : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
-      ? "Score-band Not Viable"
-      : sanitizeVerdictCopy(rawFailureType, false);
+  const failureTypeDisplay = isCriticalStop
+    ? "Critical Stop"
+    : isBlocked && !hasContent(run.failure_type)
+      ? "HARD FAIL"
+      : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
+        ? "Score-band Not Viable"
+        : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
