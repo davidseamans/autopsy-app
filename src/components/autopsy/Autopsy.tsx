@@ -481,29 +481,56 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     let max = 0;
     let anyNumeric = false;
     for (const q of questions) {
-      const opts = (q.options ?? []).map(normalizeOption);
-      const numericOpts = opts
-        .map((o) => (typeof o.value === "number" ? o.value : Number(o.value)))
+      const rawOpts = (q.options ?? []) as any[];
+      const scoreOpts = rawOpts
+        .map((o) =>
+          o && typeof o === "object"
+            ? Number(o.score_value ?? o.score ?? o.value)
+            : Number(o),
+        )
         .filter((n) => Number.isFinite(n));
-      if (numericOpts.length) {
+      if (scoreOpts.length) {
         anyNumeric = true;
-        max += Math.max(...numericOpts);
+        max += Math.max(...scoreOpts);
       }
       const sel =
         q.selected_option ?? localAnswers[String(q.question_id)] ?? null;
       if (sel != null) {
-        const n = Number(sel);
+        const selOpt = rawOpts.find(
+          (o) =>
+            o &&
+            typeof o === "object" &&
+            (String(o.id) === String(sel) ||
+              String(o.option_id) === String(sel) ||
+              String(o.value) === String(sel)),
+        );
+        const selectedFlagOpt = rawOpts.find(
+          (o) => o && typeof o === "object" && o.selected === true,
+        );
+        const scoreSource =
+          (selOpt as any)?.score_value ??
+          (selOpt as any)?.score ??
+          (typeof q.selected_score_value === "number" ? q.selected_score_value : undefined) ??
+          (selectedFlagOpt as any)?.score_value ??
+          (selectedFlagOpt as any)?.score;
+        const n = Number(scoreSource);
         if (Number.isFinite(n)) sum += n;
       }
     }
     const integrity = (payloadQuery.data as any)?.integrity ?? {};
     const liveScore = Number(integrity.score_total_live);
+    const runStatus = (payloadQuery.data?.run as any)?.status;
     const backendScore = Number((payloadQuery.data?.run as any)?.score_total);
-    const finalScore = Number.isFinite(liveScore)
-      ? liveScore
-      : Number.isFinite(backendScore)
-        ? backendScore
-        : sum;
+    // Prefer live derived sum during in-progress runs; only fall back to backend
+    // aggregate scores once the run is completed (so verdict matches final score).
+    const isCompleted = runStatus === "completed";
+    const finalScore = isCompleted
+      ? (Number.isFinite(backendScore)
+          ? backendScore
+          : Number.isFinite(liveScore)
+            ? liveScore
+            : sum)
+      : sum;
     return { scoreSoFar: finalScore, scoreMax: max, scoreNumeric: anyNumeric };
   }, [questions, localAnswers, payloadQuery.data]);
 
