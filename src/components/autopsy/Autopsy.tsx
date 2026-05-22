@@ -1840,6 +1840,60 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
+function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
+  if (isHardFail || typeof value !== "string") return value;
+  return value
+    .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
+    .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
+    .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(/hard[-\s]?fail condition/gi, "score-band condition")
+    .replace(/existential hard[-\s]?fail/gi, "score-band failure")
+    .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[-\s]?fail/gi, "score-band failure")
+    .replace(/blocking failure/gi, "score-band failure")
+    .replace(
+      /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
+      "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
+    );
+}
+
+function VerdictHardFailDebug({
+  runId,
+  totalScore,
+  finalVerdict,
+  audit,
+}: {
+  runId: string | null;
+  totalScore: number | null;
+  finalVerdict: string;
+  audit: any;
+}) {
+  const firstHardFail = audit?.firstSelectedHardFail ?? null;
+  const debugPayload = {
+    run_id: runId,
+    total_score: totalScore,
+    final_verdict: finalVerdict || null,
+    hard_fail_triggered: audit?.hasSelectedHardFail === true,
+    hard_fail_source_question_number: firstHardFail?.question_number ?? null,
+    hard_fail_source_option_id: firstHardFail?.selected_option_id ?? null,
+    selected_answers: (audit?.selectedAnswers ?? []).map((r: any) => ({
+      question_number: r.question_number ?? null,
+      score_value: r.score_value ?? null,
+      hard_fail: r.hard_fail === true,
+    })),
+  };
+  return (
+    <div className="rounded-lg border border-[hsl(var(--autopsy-border))] bg-muted/30 p-4">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+        Developer verdict audit
+      </div>
+      <pre className="text-[11px] overflow-auto max-h-72 whitespace-pre-wrap break-words">
+        {JSON.stringify(debugPayload, null, 2)}
+      </pre>
+    </div>
+  );
+}
+
 /* ---------------------- Public-facing label helpers ---------------------- */
 
 const PUBLIC_DIM_NAME_MAP: Record<string, string> = {
