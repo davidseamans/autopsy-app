@@ -1641,13 +1641,19 @@ function VerdictView({
           </SurfaceCard>
         );
       })()}
-      <VerdictHardFailDebug
-        runId={runId}
-        run={run}
-        totalScore={scoreNumeric}
-        finalVerdict={verdictName}
-        audit={selectedAnswerAudit}
-      />
+      {(import.meta.env.DEV ||
+        (typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("debug") === "1") ||
+        (typeof window !== "undefined" &&
+          window.localStorage?.getItem("autopsy_debug") === "1")) && (
+        <VerdictHardFailDebug
+          runId={runId}
+          run={run}
+          totalScore={scoreNumeric}
+          finalVerdict={verdictName}
+          audit={selectedAnswerAudit}
+        />
+      )}
     </div>
   );
 }
