@@ -1151,7 +1151,11 @@ function VerdictView({
   // Progression locking is not the same as a hard-fail. Hard-fail display is
   // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const scoreNumeric = run.score_total != null ? Number(run.score_total) : null;
+  const scoreNumeric = run.score_total != null
+    ? Number(run.score_total)
+    : (payload as any)?.integrity?.score_total_live != null
+      ? Number((payload as any).integrity.score_total_live)
+      : null;
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
@@ -1450,7 +1454,7 @@ function VerdictView({
             </div>
           )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
-            <Prose value={verdictBody} />
+            <Prose value={sanitizeVerdictCopy(verdictBody, isHardFail)} />
           </div>
         </SurfaceCard>
       )}
@@ -1530,6 +1534,12 @@ function VerdictView({
           </SurfaceCard>
         );
       })()}
+      <VerdictHardFailDebug
+        runId={runId}
+        totalScore={scoreNumeric}
+        finalVerdict={verdictName}
+        audit={selectedAnswerAudit}
+      />
     </div>
   );
 }
