@@ -1922,16 +1922,29 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
 }
 
 function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
-  if (isHardFail || typeof value !== "string") return value;
+  if (isHardFail || value == null) return value;
+  if (Array.isArray(value)) return value.map((item) => sanitizeVerdictCopy(item, false));
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    for (const [key, child] of Object.entries(value)) {
+      const cleanKey = sanitizeVerdictCopy(humanize(key), false);
+      out[typeof cleanKey === "string" ? cleanKey : key] = sanitizeVerdictCopy(child, false);
+    }
+    return out;
+  }
+  if (typeof value !== "string") return value;
   return value
     .replace(/Completed\s*[—-]\s*Blocking Failure/gi, "Completed — Score-Band Failure")
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
     .replace(/A hard[-\s]?fail condition was triggered\.?/gi, "A score-band failure was recorded.")
+    .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
     .replace(/hard[-\s]?fail condition/gi, "score-band condition")
     .replace(/existential hard[-\s]?fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail recovery signal/gi, "repair worksheet requirement")
+    .replace(/hard[_-]fail/gi, "score-band failure")
     .replace(/hard[-\s]?fail/gi, "score-band failure")
     .replace(/blocking failure/gi, "score-band failure")
+    .replace(/progression is blocked/gi, "Progression is locked")
     .replace(
       /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
       "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
