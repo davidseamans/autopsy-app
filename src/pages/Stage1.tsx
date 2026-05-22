@@ -49,6 +49,8 @@ import {
   DollarSign,
   FileText,
   Camera,
+  Paperclip,
+  Plus,
 } from "lucide-react";
 
 // ----- Critical test state (acceptance fixture) -----
