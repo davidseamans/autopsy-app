@@ -1694,12 +1694,12 @@ function OperationalStatePanel({
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
   const permissionBiasDisplay = cleanProceedOnlyIf(
-    rawPermissionBias,
+    sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
   const recoveryDisplay = isScoreBandNotViable
     ? "Repair Worksheet Required"
-    : resolveRecoverySignal(run);
+    : sanitizeVerdictCopy(resolveRecoverySignal(run), !!isBlocked);
   const rows: Array<[string, any]> = [
     ["Progression State", progressionDisplay],
     ["Allowed Next Move", permissionBiasDisplay],
@@ -1829,14 +1829,14 @@ function RecoveryRetestPanel({
       ? evidenceOverride
       : resolved === "Recovery signal not returned"
         ? null
-        : resolved;
+        : sanitizeVerdictCopy(resolved, !!isBlocked);
   const retest = isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
     : hasContent(actionOverride)
     ? actionOverride
     : hasContent(evidenceOverride)
       ? null
-      : run.retest_condition;
+      : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
   const worksheet = run.worksheet_output;
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
