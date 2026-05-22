@@ -205,33 +205,28 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     localStorage.setItem("autopsy_intake_email", testerEmail);
   }, [testerEmail]);
 
-  // Persist active runId so standalone /worksheet route can recover it.
-  useEffect(() => {
-    if (!runId) return;
-    const status = (payloadQuery.data as any)?.run?.status;
-    const hasVerdict = !!(payloadQuery.data as any)?.run?.verdict_name;
-    if (status === "completed" || hasVerdict) {
-      // Completed runs are not "active" — never resume them as in-progress.
-      try {
-        const current = localStorage.getItem("autopsy_active_run_id");
-        if (current === runId) localStorage.removeItem("autopsy_active_run_id");
-        if (current === "autopsy_current_run_id") {
-          /* noop, handled below */
-        }
-        localStorage.removeItem("autopsy_current_run_id");
-      } catch {
-        /* noop */
-      }
-      return;
-    }
-    localStorage.setItem("autopsy_active_run_id", runId);
-  }, [runId, payloadQuery.data]);
-
   const payloadQuery = useQuery({
     queryKey: ["autopsy", "payload", runId],
     queryFn: () => getGatewayPayload(runId as string),
     enabled: !!runId,
   });
+
+  // Persist active runId so standalone /worksheet route can recover it.
+  // Completed runs are NOT considered active and must be cleared.
+  useEffect(() => {
+    if (!runId) return;
+    const status = (payloadQuery.data as any)?.run?.status;
+    const hasVerdict = !!(payloadQuery.data as any)?.run?.verdict_name;
+    if (status === "completed" || hasVerdict) {
+      try {
+        const current = localStorage.getItem("autopsy_active_run_id");
+        if (current === runId) localStorage.removeItem("autopsy_active_run_id");
+        localStorage.removeItem("autopsy_current_run_id");
+      } catch { /* noop */ }
+      return;
+    }
+    localStorage.setItem("autopsy_active_run_id", runId);
+  }, [runId, payloadQuery.data]);
 
   useEffect(() => {
     if (payloadQuery.error) {
