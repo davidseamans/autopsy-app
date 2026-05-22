@@ -284,6 +284,10 @@ interface ProofUnit {
   isAdditionalSite?: boolean;
   isReferralOrRepeat?: boolean;
   projectedRevenue?: number;
+  quoteValue?: number;
+  scheduledDate?: string;
+  notes?: string;
+  nextAction?: string;
 }
 
 const BASE_POINTS: Record<ProofType, number> = {
