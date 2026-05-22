@@ -1415,6 +1415,7 @@ function VerdictView({
         isBlocked={isBlocked}
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1470,6 +1471,7 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1596,6 +1598,7 @@ function VerdictView({
         run={run}
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
+        isCriticalStop={isCriticalStop}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
