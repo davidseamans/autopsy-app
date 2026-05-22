@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -879,6 +879,10 @@ function FinancialsForm() {
 
   // Doc upload state
   const [docType, setDocType] = useState<string>("Invoice");
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
 
   const jobsForClient = useMemo(
     () => jobs.filter((j) => j.client_id === clientId),
