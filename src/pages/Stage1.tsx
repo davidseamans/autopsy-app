@@ -743,8 +743,13 @@ function JobDetailSheet({
   );
 }
 
-function Stage1ProofScorecard() {
-  const units = SEED_UNITS;
+function Stage1ProofScorecard({
+  units,
+  onOpenUnit,
+}: {
+  units: ProofUnit[];
+  onOpenUnit: (n: number) => void;
+}) {
   const sc = useMemo(() => computeScorecard(units), [units]);
   return (
     <Card>
@@ -814,12 +819,18 @@ function Stage1ProofScorecard() {
                 <TableRow key={u.n}>
                   <TableCell className="font-medium">{u.n}</TableCell>
                   <TableCell>
-                    <div className="font-medium leading-tight">{u.client}</div>
-                    {u.jobSite ? (
-                      <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
-                    ) : (
-                      <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onOpenUnit(u.n)}
+                      className="text-left hover:underline focus:outline-none"
+                    >
+                      <div className="font-medium leading-tight">{u.client}</div>
+                      {u.jobSite ? (
+                        <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                      ) : (
+                        <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                      )}
+                    </button>
                   </TableCell>
                   <TableCell>{u.proofType}</TableCell>
                   <TableCell>{u.status}</TableCell>
