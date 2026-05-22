@@ -1027,6 +1027,17 @@ function VerdictView({
   });
   const framing = BAND_FRAMING[band];
 
+  // Persist progression state for this run as soon as we know the verdict.
+  useEffect(() => {
+    if (!runId || !verdictName) return;
+    upsertFromVerdict({
+      runId,
+      verdictName,
+      primaryRisk: primaryConstraint,
+    });
+  }, [runId, verdictName, primaryConstraint]);
+  const { state: progression } = useProgression(runId);
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
