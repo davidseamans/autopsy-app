@@ -2251,7 +2251,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     topologyTitle: "Pressure Topology",
     topologyIntro:
       "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
-    chainTitle: "Failure Chain",
+    chainTitle: "Pressure Topology",
     pathLabel: "Failure Path",
     proofLabel: "Proof Required Before Proceeding",
     outcomeLabel: "Stop — Do Not Proceed",
@@ -2267,7 +2267,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     topologyTitle: "Pressure Topology",
     topologyIntro:
       "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
-    chainTitle: "Pressure Chain",
+    chainTitle: "Pressure Topology",
     pathLabel: "Pressure Path",
     proofLabel: "Evidence Required",
     outcomeLabel: "Proceed Only If",
