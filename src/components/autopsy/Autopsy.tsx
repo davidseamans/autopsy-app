@@ -2584,6 +2584,69 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
+function HardFailChainPanel({
+  primaryRisk,
+  questionNumber,
+  questionId,
+  optionLabel,
+}: {
+  primaryRisk: string;
+  questionNumber: number | string | null;
+  questionId: string | null;
+  optionLabel: string | null;
+}) {
+  const risk = primaryRisk && primaryRisk.trim() ? primaryRisk : "the hard-fail dimension";
+  const cards = [
+    { label: "Hard-fail trigger", value: risk },
+    { label: "Severity", value: "Non-negotiable blocker" },
+    {
+      label: "Progression",
+      value: "Progression blocked until corrected and retested.",
+    },
+  ];
+  return (
+    <div className="rounded-2xl border-2 border-red-700/60 bg-red-500/5 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-800">
+          Hard-Fail Chain
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-red-800/80">
+          Override
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground mb-4">
+        A non-negotiable blocker was triggered by a selected answer. This overrides the
+        score band. Correct the hard-fail condition, prove the correction, and retest
+        before progression can reopen.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-lg border border-red-700/40 bg-background p-4">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-red-800 mb-1">
+              {c.label}
+            </div>
+            <div className="text-sm font-semibold break-words">{c.value}</div>
+          </div>
+        ))}
+      </div>
+      {(questionNumber != null || questionId || optionLabel) && (
+        <div className="grid gap-3 text-xs sm:grid-cols-2 border-t border-red-700/30 pt-3">
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
+            <div className="font-mono font-semibold">
+              {questionNumber ?? questionId ?? "—"}
+            </div>
+          </div>
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
+            <div className="font-mono font-semibold break-words">{optionLabel ?? "—"}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
   if (isHardFail || value == null) return value;
   if (Array.isArray(value)) return value.map((item) => sanitizeVerdictCopy(item, false));
