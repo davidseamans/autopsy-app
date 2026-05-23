@@ -1922,7 +1922,13 @@ function VerdictView({
           primaryRisk={primaryConstraint || humanize((run as any).primary_risk_code) || "the hard-fail dimension"}
           questionNumber={firstSelectedHardFail?.question_number ?? null}
           questionId={String(firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? "") || null}
-          optionLabel={firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? null}
+          optionLabel={
+            firstSelectedHardFail?.selected_option_label
+              ? String(firstSelectedHardFail.selected_option_label)
+              : firstSelectedHardFail?.selected_option_id
+                ? String(firstSelectedHardFail.selected_option_id)
+                : null
+          }
         />
       )}
 
