@@ -1526,7 +1526,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !isPerfectScore && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !suppressPrimaryWatchpoint && (
             <Badge
               variant="outline"
               className={cn(
@@ -1543,6 +1543,14 @@ function VerdictView({
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
               No Active Blocker Identified
+            </Badge>
+          )}
+          {!isPerfectScore && tiedWatchpointNotice && (
+            <Badge
+              variant="outline"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
+            >
+              {tiedWatchpointNotice}
             </Badge>
           )}
           {suppressFailureLanguage && (
