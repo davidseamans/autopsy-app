@@ -1180,7 +1180,7 @@ function QuestionView(props: {
 
         <div className="space-y-3">
           {hasOptions ? options.map((opt) => {
-            const selected = props.pendingSelection === opt.value;
+            const selected = props.pendingSelection != null && String(props.pendingSelection) === String(opt.value);
             return (
               <button
                 key={opt.key}
@@ -2538,7 +2538,7 @@ export function getVerdictBand(opts: {
   isCriticalStop?: boolean;
 }): VerdictBand {
   const { verdictName, isBlocked, score, isCriticalStop } = opts;
-  if (isCriticalStop && !isBlocked) return "critical_stop";
+  if (isCriticalStop) return "critical_stop";
   if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
   if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
   if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
