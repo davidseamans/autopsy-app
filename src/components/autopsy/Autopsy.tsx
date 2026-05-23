@@ -1824,6 +1824,9 @@ function OperationalStatePanel({
   isProgressionLocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isHardFailCriticalStop,
+  isScoreBandCriticalStop,
+  isPerfectScore,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1832,6 +1835,9 @@ function OperationalStatePanel({
   isProgressionLocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isHardFailCriticalStop?: boolean;
+  isScoreBandCriticalStop?: boolean;
+  isPerfectScore?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1839,8 +1845,12 @@ function OperationalStatePanel({
   const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isBlocked
-    ? "PROGRESSION BLOCKED"
+  const progressionDisplay = isHardFailCriticalStop
+    ? "BLOCKED BY HARD-FAIL CONDITION"
+    : isScoreBandCriticalStop
+      ? "BLOCKED BY CRITICAL STOP SCORE BAND"
+    : isBlocked
+      ? "PROGRESSION BLOCKED"
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
@@ -1855,7 +1865,11 @@ function OperationalStatePanel({
     sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = isCriticalStop
+  const recoveryDisplay = isPerfectScore
+    ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isHardFailCriticalStop
+      ? "Hard-fail condition must be corrected and retested before progression can reopen."
+    : isCriticalStop
     ? "Outside Safe Progression Pathway"
     : isScoreBandNotViable
     ? "Repair Worksheet Required"
@@ -1902,15 +1916,23 @@ function PressureCollapsePanel({
   isBlocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isHardFailCriticalStop,
+  isScoreBandCriticalStop,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isHardFailCriticalStop?: boolean;
+  isScoreBandCriticalStop?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isBlocked
-    ? "BLOCKING FAILURE"
+  const stageDisplay = isHardFailCriticalStop
+    ? "HARD-FAIL TRIGGERED"
+    : isScoreBandCriticalStop
+      ? "CRITICAL STOP"
+    : isBlocked
+      ? "BLOCKING FAILURE"
     : isCriticalStop
       ? "CRITICAL STOP"
     : isScoreBandNotViable
@@ -1919,7 +1941,11 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isCriticalStop
+  const failureTypeDisplay = isHardFailCriticalStop
+    ? "Hard-fail override"
+    : isScoreBandCriticalStop
+    ? "Score-band Critical Stop"
+    : isCriticalStop
     ? "Critical Stop"
     : isBlocked && !hasContent(run.failure_type)
       ? "HARD FAIL"
