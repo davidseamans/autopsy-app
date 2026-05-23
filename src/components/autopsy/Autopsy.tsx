@@ -2147,6 +2147,7 @@ function PressureCollapsePanel({
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
   isPerfectScore,
+  tiedWatchpointNotice,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2155,9 +2156,12 @@ function PressureCollapsePanel({
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
+  tiedWatchpointNotice?: string | null;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isPerfectScore
+    ? "EXECUTION WATCHPOINT"
+    : tiedWatchpointNotice
     ? "EXECUTION WATCHPOINT"
     : isHardFailCriticalStop
     ? "HARD-FAIL TRIGGERED"
@@ -2174,6 +2178,8 @@ function PressureCollapsePanel({
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isPerfectScore
+    ? "Execution watchpoint"
+    : tiedWatchpointNotice
     ? "Execution watchpoint"
     : isHardFailCriticalStop
     ? "Hard-fail override"
@@ -2194,9 +2200,11 @@ function PressureCollapsePanel({
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
     {
-      label: isPerfectScore ? "Watchpoint Pattern" : "Collapse Pattern",
+      label: isPerfectScore || tiedWatchpointNotice ? "Watchpoint Pattern" : "Collapse Pattern",
       value: isPerfectScore
         ? "No collapse pattern assigned. Track watchpoints under operating load."
+        : tiedWatchpointNotice
+        ? tiedWatchpointNotice
         : sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked),
       prose: true,
     },
