@@ -1435,6 +1435,17 @@ function QuestionView(props: {
           )}
         </div>
 
+        {/* Subtle save micro-status — never replaces the Next button. */}
+        <div className="mt-3 min-h-[1.25rem] text-xs text-muted-foreground" aria-live="polite">
+          {props.currentSaveStatus === "saving" && <span>Saving…</span>}
+          {props.currentSaveStatus === "saved" && <span>Saved</span>}
+          {props.currentSaveStatus === "error" && (
+            <span className="text-destructive">
+              Save failed — reselect your answer to retry.
+            </span>
+          )}
+        </div>
+
         <div className="flex gap-3 mt-6">
           {props.canGoPrevious && (
             <Button
