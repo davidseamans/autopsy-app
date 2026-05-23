@@ -2246,6 +2246,7 @@ function RecoveryRetestPanel({
   isCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
 }: {
@@ -2255,6 +2256,7 @@ function RecoveryRetestPanel({
   isCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
@@ -2262,6 +2264,8 @@ function RecoveryRetestPanel({
   const recovery =
     isPerfectScore
       ? "No recovery signal required. Maintain telemetry and review cadence."
+    : tiedWatchpointNotice
+      ? "No recovery signal required. Maintain telemetry and monitor all tied watchpoints under operating load."
     : isStructurallyViable
       ? "Evidence maintained under operating load."
     : isCriticalStop
@@ -2275,6 +2279,8 @@ function RecoveryRetestPanel({
         : sanitizeVerdictCopy(resolved, !!isBlocked);
   const retest = isPerfectScore
     ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
+    : tiedWatchpointNotice
+    ? "No repair action required. Retest if operating load changes or one tied watchpoint begins to dominate."
     : isCriticalStop
     ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
     : isScoreBandNotViable
@@ -2286,6 +2292,8 @@ function RecoveryRetestPanel({
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
   const worksheet = isPerfectScore
     ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
+    : tiedWatchpointNotice
+    ? "No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load."
     : run.worksheet_output;
   const worksheetIsString = typeof worksheet === "string";
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
