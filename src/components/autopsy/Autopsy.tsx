@@ -1111,7 +1111,7 @@ function ProgressHeader({
           Question {Math.min(currentIndex + 1, total)} of {total}
         </span>
         <span className="text-muted-foreground">
-          Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / {scoreMax || QUICK_GATE_CONFIG.maxScore}
+          Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / {QUICK_GATE_CONFIG.maxScore}
         </span>
       </div>
       <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
