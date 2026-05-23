@@ -1859,15 +1859,13 @@ function VerdictView({
 
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
-        <p className="text-sm text-muted-foreground mb-4">
+        <SectionMicrocopy>
           {isPerfectScore
-            ? "Scores per dimension. No primary constraint is active at perfect score."
+            ? "All domains are fully proven at this level. No primary constraint is active."
             : tiedWatchpointNotice
-              ? `${tiedWatchpointNotice} Scores remain watchpoints rather than a single primary constraint.`
-            : suppressFailureLanguage
-            ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
-            : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
-        </p>
+              ? "Lowest domains are tied. Treat them as watchpoints under operating load, not as a single blocker."
+              : "Shows how each domain scored. Weakest scores identify the constraint, watchpoint, or proof risk."}
+        </SectionMicrocopy>
         <DimensionPressureGraph
           rows={dimensionScores}
           hasData={hasDimensionData}
@@ -1917,6 +1915,7 @@ function VerdictView({
         tiedWatchpointNotice={tiedWatchpointNotice}
         isHardFail={isHardFail}
         primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
+        microcopy="Summarises the structural state created by the score, hard-fail status, and weakest domain."
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1931,6 +1930,7 @@ function VerdictView({
                 ? String(firstSelectedHardFail.selected_option_id)
                 : null
           }
+          microcopy="Shows why the selected hard-fail answer overrides the score and blocks progression."
         />
       )}
 
@@ -1943,12 +1943,22 @@ function VerdictView({
           isBlocked={isBlocked}
           failureDrivers={sanitizeVerdictCopy(supportingBlocks?.failure_drivers, isHardFail)}
           framing={framing}
+          microcopy={
+            Number.isFinite(scoreNumeric) && scoreNumeric >= 30
+              ? "Identifies watchpoints to monitor during execution. These are not blockers unless evidence deteriorates."
+              : Number.isFinite(scoreNumeric) && scoreNumeric >= 22
+                ? "Identifies the stability risks most likely to weaken the business under real operating pressure."
+                : "Ranks the main pressure, next pressure, and compounding third pressure."
+          }
         />
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
       {isHardFail ? null : isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
+          <SectionMicrocopy>
+            Shows the operating watchpoints to monitor as the business enters execution.
+          </SectionMicrocopy>
           <div className="space-y-3 text-sm leading-relaxed">
             <p>No active watchpoint identified.</p>
             <p className="text-muted-foreground">
@@ -1958,6 +1968,9 @@ function VerdictView({
         </SurfaceCard>
       ) : suppressFailureLanguage || tiedWatchpointNotice ? (
         <SurfaceCard title="Structural Profile">
+          <SectionMicrocopy>
+            Shows the operating watchpoints to monitor as the business enters execution.
+          </SectionMicrocopy>
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
               {tiedWatchpointNotice ?? "This run shows a balanced dimension profile with no dominant failure pressure."}
@@ -1994,12 +2007,20 @@ function VerdictView({
         evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
           primaryFallback={dimensionScores[0]?.label ?? dimensionScores[0]?.code ?? null}
+          microcopy={
+            Number.isFinite(scoreNumeric) && scoreNumeric >= 30
+              ? "Shows the operating watchpoints to monitor as the business enters execution."
+              : "Shows the causal path from the primary constraint to blocked progression."
+          }
         />
       )}
 
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
+          <SectionMicrocopy>
+            Plain-English decision logic. This section explains what the result permits, blocks, or requires next.
+          </SectionMicrocopy>
           {isHardFail ? (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               <div>
@@ -2072,6 +2093,11 @@ function VerdictView({
         tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
+        microcopy={
+          isPerfectScore
+            ? "No recovery action is required. Retest only if assumptions, operating load, or structure materially change."
+            : "Defines the proof required before retesting or progression can reopen."
+        }
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
@@ -2128,6 +2154,9 @@ function VerdictView({
           : baseCopy;
         return (
           <SurfaceCard title="Progression Routing">
+            <SectionMicrocopy>
+              Determines the next permitted action based on verdict, worksheet status, and operational permission.
+            </SectionMicrocopy>
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
@@ -2369,6 +2398,7 @@ function PressureCollapsePanel({
   tiedWatchpointNotice,
   isHardFail,
   primaryRiskLabel,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2380,6 +2410,7 @@ function PressureCollapsePanel({
   tiedWatchpointNotice?: string | null;
   isHardFail?: boolean;
   primaryRiskLabel?: string | null;
+  microcopy?: string;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isHardFail
@@ -2457,6 +2488,7 @@ function PressureCollapsePanel({
           Pressure / Collapse
         </span>
       </div>
+      {microcopy && <SectionMicrocopy>{microcopy}</SectionMicrocopy>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {visible.map((i) => (
           <div
@@ -2496,6 +2528,7 @@ function RecoveryRetestPanel({
   tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2508,6 +2541,7 @@ function RecoveryRetestPanel({
   tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
+  microcopy?: string;
 }) {
   const resolved = resolveRecoverySignal(run);
   const backendRecovery =
@@ -2576,9 +2610,9 @@ function RecoveryRetestPanel({
           Controlled Progression
         </span>
       </div>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Defines the proof required before retesting or progression can reopen.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Defines the proof required before retesting or progression can reopen."}
+      </SectionMicrocopy>
       <div className="space-y-4">
         {hasContent(recovery) && (
           <div className="rounded-lg border-l-4 border-l-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-border))] p-4 bg-background">
@@ -2648,6 +2682,23 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
+/**
+ * SectionMicrocopy — persistent, required explanatory line under section headings.
+ * Small grey/slate, never red/green/orange, not uppercase, not bold.
+ * Do not remove during UI cleanups. Do not replace with tooltips only.
+ */
+function SectionMicrocopy({ children }: { children: React.ReactNode }) {
+  if (!children) return null;
+  return (
+    <p
+      className="text-[13px] text-muted-foreground"
+      style={{ lineHeight: 1.4, marginTop: 4, marginBottom: 12 }}
+    >
+      {children}
+    </p>
+  );
+}
+
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-[hsl(var(--autopsy-border))] bg-background px-3 py-2">
@@ -2662,11 +2713,13 @@ function HardFailChainPanel({
   questionNumber,
   questionId,
   optionLabel,
+  microcopy,
 }: {
   primaryRisk: string;
   questionNumber: number | string | null;
   questionId: string | number | null;
   optionLabel: string | null;
+  microcopy?: string;
 }) {
   const risk = primaryRisk && primaryRisk.trim() ? primaryRisk : "the hard-fail dimension";
   const cards = [
@@ -2687,6 +2740,7 @@ function HardFailChainPanel({
           Override
         </span>
       </div>
+      {microcopy && <SectionMicrocopy>{microcopy}</SectionMicrocopy>}
       <p className="text-sm leading-relaxed text-foreground mb-4">
         A non-negotiable blocker was triggered by a selected answer. This overrides the
         score band. Correct the hard-fail condition, prove the correction, and retest
@@ -3544,6 +3598,7 @@ function PressureTopology({
   isBlocked,
   failureDrivers,
   framing,
+  microcopy,
 }: {
   primary: any;
   secondary: any;
@@ -3551,6 +3606,7 @@ function PressureTopology({
   isBlocked?: boolean;
   failureDrivers?: SupportingBlockItem[];
   framing?: BandFraming;
+  microcopy?: string;
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -3609,9 +3665,9 @@ function PressureTopology({
 
   return (
     <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Ranked pressures showing the main blocker, next pressure, and compounding third pressure.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Ranks the main pressure, next pressure, and compounding third pressure."}
+      </SectionMicrocopy>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
           const dim = publicNameFor(t.data);
@@ -3689,6 +3745,7 @@ function MechanicalFailureChain({
   evidenceFallback,
   framing,
   primaryFallback,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -3698,6 +3755,7 @@ function MechanicalFailureChain({
   evidenceFallback?: string | null;
   framing?: BandFraming;
   primaryFallback?: string | null;
+  microcopy?: string;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary =
@@ -3753,9 +3811,9 @@ function MechanicalFailureChain({
           Causal Sequence
         </span>
       </div>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Shows the causal path from primary blocker to blocked progression.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Shows the causal path from the primary constraint to blocked progression."}
+      </SectionMicrocopy>
       {framing?.chainNote && (
         <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
       )}
