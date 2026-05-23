@@ -540,6 +540,44 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   });
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
+
+  // Hydrate localAnswers from backend audit, validating each saved option
+  // against the question's current active option list. Stale options (from
+  // an earlier question schema) are dropped silently and a warning is shown.
+  useEffect(() => {
+    const rows = answerHydrationQuery.data;
+    if (!rows || questions.length === 0) return;
+    const questionById = new Map<string, GatewayQuestion>(
+      questions.map((q) => [String(q.question_id), q] as [string, GatewayQuestion]),
+    );
+    const nextAnswers: Record<string, string | number> = {};
+    const nextScores: Record<string, number> = {};
+    const nextAnswered = new Set<string>();
+    let droppedAny = false;
+    for (const r of rows) {
+      if (r.question_id == null) continue;
+      const qid = String(r.question_id);
+      const q = questionById.get(qid);
+      const opt = findActiveOptionForQuestion(q, r.selected_option_id as any);
+      if (!opt) {
+        if (r.selected_option_id != null) droppedAny = true;
+        continue;
+      }
+      nextAnswers[qid] = r.selected_option_id as any;
+      const n = Number(r.score_value);
+      if (Number.isFinite(n)) nextScores[qid] = n;
+      nextAnswered.add(qid);
+    }
+    setLocalAnswers(nextAnswers);
+    setAnswerScores(nextScores);
+    setAnsweredIds(nextAnswered);
+    if (droppedAny) {
+      setStaleAnswerWarning(
+        "Saved answer was stale after question update. Please reselect your answer.",
+      );
+    }
+  }, [answerHydrationQuery.data, questions]);
+
   const isAnswered = (q: GatewayQuestion) =>
     answeredIds.has(String(q.question_id)) || localAnswers[String(q.question_id)] != null || !!q.answered || q.selected_option != null;
 
