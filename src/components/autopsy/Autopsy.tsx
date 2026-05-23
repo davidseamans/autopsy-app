@@ -289,6 +289,37 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     enabled: !!runId,
   });
 
+  // Authoritative answer hydration from the backend. On every payload refresh
+  // (including resume), pull saved answers so localAnswers + answeredIds reflect
+  // exactly what is persisted server-side. Prevents "Q10 at score 0/36" on
+  // resume and keeps the running score authoritative.
+  const answerHydrationQuery = useQuery({
+    queryKey: ["autopsy", "answer_audit_hydration", runId],
+    queryFn: () => getCurrentRunAnswerAudit(runId as string),
+    enabled: !!runId,
+    retry: false,
+  });
+  useEffect(() => {
+    const rows = answerHydrationQuery.data;
+    if (!rows || rows.length === 0) return;
+    setLocalAnswers((prev) => {
+      const next = { ...prev };
+      for (const r of rows) {
+        if (r.question_id != null && r.selected_option_id != null) {
+          next[String(r.question_id)] = r.selected_option_id as any;
+        }
+      }
+      return next;
+    });
+    setAnsweredIds((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        if (r.question_id != null) next.add(String(r.question_id));
+      }
+      return next;
+    });
+  }, [answerHydrationQuery.data]);
+
   // Resume prompt: if the user lands on the start screen and an incomplete
   // run is recorded in localStorage, offer to resume or discard before
   // a new run can be created. Do not auto-clear without confirmation.
@@ -634,6 +665,27 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    // Authoritative pre-finalize guard: re-fetch saved answers and require
+    // exactly QUICK_GATE_CONFIG.totalQuestions. Never finalize from stale
+    // local state.
+    try {
+      const savedRows = await qc.fetchQuery({
+        queryKey: ["autopsy", "answer_audit_hydration", runId],
+        queryFn: () => getCurrentRunAnswerAudit(runId as string),
+      });
+      const savedCount = (savedRows ?? []).length;
+      if (savedCount < QUICK_GATE_CONFIG.totalQuestions) {
+        setError({
+          rpc: "finalize_autopsy_run",
+          message: `Cannot finalize: only ${savedCount} of ${QUICK_GATE_CONFIG.totalQuestions} answers saved.`,
+          step: "question",
+          runId,
+        });
+        return;
+      }
+    } catch {
+      /* fall through to existing logic */
+    }
     // Never re-finalise a completed run. Check the latest payload first.
     try {
       const fresh = await qc.fetchQuery({
@@ -1343,6 +1395,33 @@ function VerdictView({
     hasDimensionData &&
     dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
 
+  // Tied-min watchpoint detection for 30–35 (Structurally Viable but not perfect).
+  // When multiple domains tie for the minimum score, do not arbitrarily label
+  // any single domain as Primary Watchpoint. When all six tie, surface a
+  // balanced-profile notice instead.
+  const minDomainScore = hasDimensionData
+    ? Math.min(...dimensionScores.map((d) => Number(d.score)))
+    : null;
+  const tiedMinCount = hasDimensionData
+    ? dimensionScores.filter((d) => Number(d.score) === minDomainScore).length
+    : 0;
+  const isStructurallyViableNonPerfect =
+    !isPerfectScore &&
+    !isHardFail &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin &&
+    (scoreNumeric as number) < QUICK_GATE_CONFIG.perfectScore;
+  const allDomainsTied =
+    hasDimensionData && tiedMinCount === dimensionScores.length;
+  const hasTiedWatchpoint =
+    isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount > 1;
+  const tiedWatchpointNotice = allDomainsTied
+    ? "Balanced profile — monitor all domains under load."
+    : hasTiedWatchpoint
+      ? "No dominant watchpoint — lowest domains are tied."
+      : null;
+  const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
+
   const band: VerdictBand = getVerdictBand({
     verdictName,
     isBlocked,
@@ -1468,7 +1547,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !isPerfectScore && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !suppressPrimaryWatchpoint && (
             <Badge
               variant="outline"
               className={cn(
@@ -1485,6 +1564,14 @@ function VerdictView({
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
               No Active Blocker Identified
+            </Badge>
+          )}
+          {!isPerfectScore && tiedWatchpointNotice && (
+            <Badge
+              variant="outline"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
+            >
+              {tiedWatchpointNotice}
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1511,6 +1598,7 @@ function VerdictView({
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
+        isStructurallyViable={isStructurallyViableNonPerfect}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1532,7 +1620,7 @@ function VerdictView({
           weakest={weakest}
           suppress={suppressFailureLanguage}
           opState={effectiveOpState}
-          isPerfectScore={isPerfectScore}
+          isPerfectScore={isPerfectScore || hasTiedWatchpoint || allDomainsTied}
           primaryLabel={framing.rankPrimary}
         />
 
@@ -1708,6 +1796,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isPerfectScore={isPerfectScore}
+        isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1871,6 +1961,7 @@ function OperationalStatePanel({
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
   isPerfectScore,
+  isStructurallyViable,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1882,6 +1973,7 @@ function OperationalStatePanel({
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
+  isStructurallyViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1889,7 +1981,11 @@ function OperationalStatePanel({
   const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isHardFailCriticalStop
+  const progressionDisplay = isPerfectScore
+    ? "Scalable"
+    : isStructurallyViable
+      ? "Controlled progression"
+    : isHardFailCriticalStop
     ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
       ? "Blocked by Critical Stop score band"
@@ -1898,19 +1994,27 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
-  const rawPermissionBias = isBlocked
+  const rawPermissionBias = isPerfectScore
+    ? "Open Stage 1 Dashboard"
+    : isStructurallyViable
+      ? "Proceed with execution watchpoints"
+    : isBlocked
     ? "STRONG RESTRICTION"
     : isCriticalStop
       ? "Education / Advice / Complete Rethink Before Retest"
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
-  const permissionBiasDisplay = cleanProceedOnlyIf(
-    sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
-    operatingInstruction || requiredActionFallback,
-  );
+  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable)
+    ? rawPermissionBias
+    : cleanProceedOnlyIf(
+        sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
+        operatingInstruction || requiredActionFallback,
+      );
   const recoveryDisplay = isPerfectScore
     ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isStructurallyViable
+      ? "Evidence maintained under operating load."
     : isHardFailCriticalStop
       ? "Hard-fail condition must be corrected and retested before progression can reopen."
     : isCriticalStop
@@ -2061,6 +2165,8 @@ function RecoveryRetestPanel({
   isBlocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isPerfectScore,
+  isStructurallyViable,
   evidenceOverride,
   actionOverride,
 }: {
@@ -2068,12 +2174,18 @@ function RecoveryRetestPanel({
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isPerfectScore?: boolean;
+  isStructurallyViable?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    isCriticalStop
+    isPerfectScore
+      ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isStructurallyViable
+      ? "Evidence maintained under operating load."
+    : isCriticalStop
       ? "Outside Safe Progression Pathway"
       : isScoreBandNotViable
       ? "Repair Worksheet Required"
@@ -2082,7 +2194,9 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isCriticalStop
+  const retest = isPerfectScore
+    ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
+    : isCriticalStop
     ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
     : isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
@@ -2091,7 +2205,10 @@ function RecoveryRetestPanel({
     : hasContent(evidenceOverride)
       ? null
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
-  const worksheet = run.worksheet_output;
+  const worksheet = isPerfectScore
+    ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
+    : run.worksheet_output;
+  const worksheetIsString = typeof worksheet === "string";
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
     if (value == null) return "—";
@@ -2143,9 +2260,15 @@ function RecoveryRetestPanel({
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Worksheet Output
             </div>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
-              {renderBlock(worksheet)}
-            </pre>
+            {worksheetIsString ? (
+              <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {worksheet as string}
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {renderBlock(worksheet)}
+              </pre>
+            )}
           </div>
         )}
         {hasContent(worksheet) && isCriticalStop && (
