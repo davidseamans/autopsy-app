@@ -73,6 +73,42 @@ export const QUICK_GATE_CONFIG = {
   },
 } as const;
 
+/* ---------- Quick Gate schema version (invalidates stale local state) ----- */
+const QUICK_GATE_SCHEMA_VERSION = "quick_gate_v1_12q_36_custom_answers";
+const QUICK_GATE_SCHEMA_VERSION_KEY = "autopsy_quick_gate_schema_version";
+
+/**
+ * Returns the active option (object) for the given value within a question's
+ * options array, matching id/option_id/value. Returns undefined if the option
+ * does not belong to the question or is explicitly inactive.
+ */
+function findActiveOptionForQuestion(
+  question: GatewayQuestion | undefined | null,
+  value: string | number | null | undefined,
+): any | undefined {
+  if (!question || value == null) return undefined;
+  const opts = (question.options ?? []) as any[];
+  const match = opts.find(
+    (o) =>
+      o &&
+      typeof o === "object" &&
+      (String(o.id) === String(value) ||
+        String(o.option_id) === String(value) ||
+        String(o.value) === String(value)),
+  );
+  if (!match) return undefined;
+  // is_active may be absent — only reject when explicitly false.
+  if (match.is_active === false) return undefined;
+  // question_id, when present on the option, must match the question.
+  if (
+    match.question_id != null &&
+    String(match.question_id) !== String(question.question_id)
+  ) {
+    return undefined;
+  }
+  return match;
+}
+
 interface RpcError {
   rpc: string;
   message: string;
