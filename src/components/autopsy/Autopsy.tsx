@@ -289,6 +289,38 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     enabled: !!runId,
   });
 
+  // Resume prompt: if the user lands on the start screen and an incomplete
+  // run is recorded in localStorage, offer to resume or discard before
+  // a new run can be created. Do not auto-clear without confirmation.
+  const [resumeChecked, setResumeChecked] = useState(false);
+  useEffect(() => {
+    if (resumeChecked) return;
+    if (view !== "start" || runId) return;
+    let candidate: string | null = null;
+    try {
+      candidate =
+        localStorage.getItem("autopsy_active_run_id") ||
+        localStorage.getItem("autopsy_current_run_id");
+    } catch { /* noop */ }
+    if (!candidate) {
+      setResumeChecked(true);
+      return;
+    }
+    const resume = window.confirm(
+      "You have an autopsy run in progress. Click OK to resume the current run, or Cancel to discard it and start a new one.",
+    );
+    if (resume) {
+      setRunId(candidate);
+      setView("question");
+    } else {
+      try {
+        localStorage.removeItem("autopsy_active_run_id");
+        localStorage.removeItem("autopsy_current_run_id");
+      } catch { /* noop */ }
+    }
+    setResumeChecked(true);
+  }, [view, runId, resumeChecked]);
+
   // Persist active runId so standalone /worksheet route can recover it.
   // Completed runs are NOT considered active and must be cleared.
   useEffect(() => {
@@ -1452,7 +1484,7 @@ function VerdictView({
               variant="outline"
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
-              Primary Watchpoint: None Identified · Monitor Under Load
+              No Active Blocker Identified
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1586,12 +1618,9 @@ function VerdictView({
       {isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
           <div className="space-y-3 text-sm leading-relaxed">
-            <p>
-              No active blocker identified. All dimensions are at full score.
-            </p>
+            <p>No active watchpoint identified.</p>
             <p className="text-muted-foreground">
-              Monitor under operating load. No recovery signal required —
-              maintain telemetry and review cadence.
+              Continue with telemetry and review cadence.
             </p>
           </div>
         </SurfaceCard>
@@ -1861,9 +1890,9 @@ function OperationalStatePanel({
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
   const progressionDisplay = isHardFailCriticalStop
-    ? "BLOCKED BY HARD-FAIL CONDITION"
+    ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
-      ? "BLOCKED BY CRITICAL STOP SCORE BAND"
+      ? "Blocked by Critical Stop score band"
     : isBlocked
       ? "PROGRESSION BLOCKED"
     : isProgressionLocked
