@@ -2799,12 +2799,16 @@ function DimensionPressureGraph({
   weakest,
   suppress,
   opState,
+  isPerfectScore,
+  primaryLabel,
 }: {
   rows: DimensionScoreRow[];
   hasData: boolean;
   weakest: string;
   suppress: boolean;
   opState: string;
+  isPerfectScore?: boolean;
+  primaryLabel?: string;
 }) {
   // Merge backend rows with canonical 6 so all dimensions are always shown.
   const byKey = new Map<string, DimensionScoreRow>();
@@ -2849,6 +2853,7 @@ function DimensionPressureGraph({
       {merged.map((d) => {
         const isWeakest =
           !suppress &&
+          !isPerfectScore &&
           weakestKey &&
           (normalizeDimKey(d.code) === weakestKey ||
             normalizeDimKey(d.label) === weakestKey);
@@ -2865,7 +2870,7 @@ function DimensionPressureGraph({
                       ? "bg-red-500/10 text-red-700 border-red-600/40"
                       : "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border-[hsl(var(--autopsy-accent))]/30",
                   )}>
-                    Main Blocker
+                    {primaryLabel ?? "Main Blocker"}
                   </span>
                 )}
               </span>
