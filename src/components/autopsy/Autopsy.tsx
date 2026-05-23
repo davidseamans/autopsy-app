@@ -2592,7 +2592,7 @@ function HardFailChainPanel({
 }: {
   primaryRisk: string;
   questionNumber: number | string | null;
-  questionId: string | null;
+  questionId: string | number | null;
   optionLabel: string | null;
 }) {
   const risk = primaryRisk && primaryRisk.trim() ? primaryRisk : "the hard-fail dimension";
