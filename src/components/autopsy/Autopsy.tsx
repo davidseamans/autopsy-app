@@ -755,6 +755,32 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function handleSelect(value: string | number) {
     if (!runId || !currentQuestion) return;
     const qid = String(currentQuestion.question_id);
+    // Validate the option belongs to the current question's active option set
+    // before any state mutation or RPC. Prevents "Invalid answer option for
+    // question" backend rejections from stale local/resume state.
+    const validOpt = findActiveOptionForQuestion(currentQuestion, value);
+    if (!validOpt) {
+      setLocalAnswers((prev) => {
+        const next = { ...prev };
+        delete next[qid];
+        return next;
+      });
+      setAnswerScores((prev) => {
+        const next = { ...prev };
+        delete next[qid];
+        return next;
+      });
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.delete(qid);
+        return next;
+      });
+      setPendingSelection(null);
+      setStaleAnswerWarning(
+        "Saved answer was stale after question update. Please reselect your answer.",
+      );
+      return;
+    }
     setPendingSelection(value);
     setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
     setAnsweredIds((prev) => {
@@ -762,15 +788,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       next.add(qid);
       return next;
     });
-    const selectedOpt = ((currentQuestion.options ?? []) as any[]).find(
-      (o) =>
-        o &&
-        typeof o === "object" &&
-        (String(o.id) === String(value) ||
-          String(o.option_id) === String(value) ||
-          String(o.value) === String(value)),
-    );
-    const selectedScore = Number(selectedOpt?.score_value ?? selectedOpt?.score);
+    const selectedScore = Number(validOpt?.score_value ?? validOpt?.score);
     if (Number.isFinite(selectedScore)) {
       setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
       setSavedScoreOverride(null);
