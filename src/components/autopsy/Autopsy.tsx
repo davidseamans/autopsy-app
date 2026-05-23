@@ -1374,6 +1374,33 @@ function VerdictView({
     hasDimensionData &&
     dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
 
+  // Tied-min watchpoint detection for 30–35 (Structurally Viable but not perfect).
+  // When multiple domains tie for the minimum score, do not arbitrarily label
+  // any single domain as Primary Watchpoint. When all six tie, surface a
+  // balanced-profile notice instead.
+  const minDomainScore = hasDimensionData
+    ? Math.min(...dimensionScores.map((d) => Number(d.score)))
+    : null;
+  const tiedMinCount = hasDimensionData
+    ? dimensionScores.filter((d) => Number(d.score) === minDomainScore).length
+    : 0;
+  const isStructurallyViableNonPerfect =
+    !isPerfectScore &&
+    !isHardFail &&
+    Number.isFinite(scoreNumeric) &&
+    (scoreNumeric as number) >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin &&
+    (scoreNumeric as number) < QUICK_GATE_CONFIG.perfectScore;
+  const allDomainsTied =
+    hasDimensionData && tiedMinCount === dimensionScores.length;
+  const hasTiedWatchpoint =
+    isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount > 1;
+  const tiedWatchpointNotice = allDomainsTied
+    ? "Balanced profile — monitor all domains under load."
+    : hasTiedWatchpoint
+      ? "No dominant watchpoint — lowest domains are tied."
+      : null;
+  const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
+
   const band: VerdictBand = getVerdictBand({
     verdictName,
     isBlocked,
