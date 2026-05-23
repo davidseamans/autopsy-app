@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -291,6 +291,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
   const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
+  // Optimistic-save tracking. saveStatus drives subtle per-question micro-status
+  // ("saving" / "saved" / "error"). pendingSavesRef holds in-flight save
+  // promises so finalisation can wait for all of them deterministically without
+  // making the UI feel laggy during answer selection.
+  const [saveStatus, setSaveStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const pendingSavesRef = useRef<Map<string, Promise<unknown>>>(new Map());
 
   // Schema-version guard: if the stored Quick Gate schema version does not
   // match the current one, clear stale local answer state on first mount.
@@ -436,6 +442,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       setPendingSelection(null);
       setManualIndex(null);
       setStaleAnswerWarning(null);
+      setSaveStatus({});
+      pendingSavesRef.current = new Map();
       setRunId(id);
       setView("question");
     },
@@ -463,7 +471,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         ...prev,
         [String(vars.question_id)]: vars.selected_option,
       }));
-      setPendingSelection(vars.selected_option);
+      // Only update pendingSelection if the user is still on this question.
+      // Otherwise we'd overwrite the current question's pending choice with a
+      // background-save response for an earlier question.
+      if (currentQuestion && String(currentQuestion.question_id) === justAnsweredId) {
+        setPendingSelection(vars.selected_option);
+      }
       await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
@@ -488,7 +501,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           next.delete(qid);
           return next;
         });
-        setPendingSelection(null);
+        if (currentQuestion && String(currentQuestion.question_id) === qid) {
+          setPendingSelection(null);
+        }
         setStaleAnswerWarning(
           "Saved answer was stale after question update. Please reselect your answer.",
         );
@@ -782,6 +797,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       );
       return;
     }
+    // Optimistic UI: update local canonical answer state and score immediately,
+    // then save in the background. Selection feel must remain crisp — the
+    // Next button is not blocked on the network round-trip.
     setPendingSelection(value);
     setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
     // Pin the current question — answering must NOT auto-advance.
@@ -798,15 +816,41 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
       setSavedScoreOverride(null);
     }
-    try {
-      await answerMutation.mutateAsync({
+    saveAnswerInBackground(qid, currentQuestion.question_id, value);
+  }
+
+  // Fire a record_autopsy_answer call in the background. The returned promise
+  // is tracked in pendingSavesRef so finalisation can deterministically wait
+  // for in-flight saves before refetching the authoritative answer audit.
+  function saveAnswerInBackground(
+    qid: string,
+    questionId: string | number,
+    value: string | number,
+  ) {
+    if (!runId) return;
+    setSaveStatus((prev) => ({ ...prev, [qid]: "saving" }));
+    const promise = answerMutation
+      .mutateAsync({
         run_id: runId,
-        question_id: currentQuestion.question_id,
+        question_id: questionId,
         selected_option: value,
+      })
+      .then((r) => {
+        setSaveStatus((prev) => ({ ...prev, [qid]: "saved" }));
+        return r;
+      })
+      .catch((e) => {
+        setSaveStatus((prev) => ({ ...prev, [qid]: "error" }));
+        throw e;
+      })
+      .finally(() => {
+        if (pendingSavesRef.current.get(qid) === promise) {
+          pendingSavesRef.current.delete(qid);
+        }
       });
-    } catch {
-      return;
-    }
+    pendingSavesRef.current.set(qid, promise);
+    // Swallow unhandled rejection — error is surfaced via saveStatus + error toast.
+    promise.catch(() => undefined);
   }
 
   async function handleNext() {
@@ -816,7 +860,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const alreadySaved =
       localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
     if (!alreadySaved) {
-      // Re-validate before resubmission to avoid stale option IDs.
+      // Re-validate before submission to avoid stale option IDs.
       if (!findActiveOptionForQuestion(currentQuestion, pendingSelection)) {
         setPendingSelection(null);
         setStaleAnswerWarning(
@@ -824,15 +868,15 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         );
         return;
       }
-      try {
-        await answerMutation.mutateAsync({
-          run_id: runId,
-          question_id: currentQuestion.question_id,
-          selected_option: pendingSelection,
-        });
-      } catch {
-        return; // onError captured it
-      }
+      // Fire in the background; don't block navigation. finalizeAndLoad will
+      // wait for all in-flight saves before refetching.
+      setLocalAnswers((prev) => ({ ...prev, [qid]: pendingSelection }));
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.add(qid);
+        return next;
+      });
+      saveAnswerInBackground(qid, currentQuestion.question_id, pendingSelection);
     }
     if (isFinal) {
       await finalizeAndLoad();
@@ -844,6 +888,26 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    // Wait for any in-flight optimistic saves to finish before reading the
+    // authoritative answer audit. Optimistic UI must never produce a final
+    // score that races ahead of the persisted backend state.
+    const pending = Array.from(pendingSavesRef.current.values());
+    if (pending.length > 0) {
+      await Promise.allSettled(pending);
+    }
+    // Any answer still in error state blocks finalisation — the user must
+    // reselect that answer so it can be re-saved successfully.
+    const erroredQid = Object.entries(saveStatus).find(([, s]) => s === "error")?.[0];
+    if (erroredQid) {
+      setError({
+        rpc: "record_autopsy_answer",
+        message:
+          "Answer was not saved. Please reselect or retry the failed question before finalising.",
+        step: "question",
+        runId,
+      });
+      return;
+    }
     // Authoritative pre-finalize guard: re-fetch saved answers and require
     // exactly QUICK_GATE_CONFIG.totalQuestions. Never finalize from stale
     // local state.
@@ -964,6 +1028,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setRunName("");
     setLoadingStuck(false);
     setManualIndex(null);
+    setSaveStatus({});
+    pendingSavesRef.current = new Map();
     try {
       localStorage.removeItem("autopsy_active_run_id");
       localStorage.removeItem("autopsy_current_run_id");
@@ -1036,6 +1102,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           <QuestionView
             loading={payloadQuery.isLoading}
             saving={answerMutation.isPending || finalizeMutation.isPending}
+            currentSaveStatus={
+              currentQuestion
+                ? saveStatus[String(currentQuestion.question_id)] ?? null
+                : null
+            }
+            finalizingSave={finalizeMutation.isPending}
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
@@ -1230,6 +1302,8 @@ function Field({
 function QuestionView(props: {
   loading: boolean;
   saving: boolean;
+  currentSaveStatus: "saving" | "saved" | "error" | null;
+  finalizingSave: boolean;
   currentQuestion: GatewayQuestion | undefined;
   currentIndex: number;
   total: number;
@@ -1329,13 +1403,13 @@ function QuestionView(props: {
                 key={opt.key}
                 type="button"
                 onClick={() => props.onSelect(opt.value as any)}
-                disabled={props.saving}
+                disabled={props.finalizingSave}
                 className={cn(
                   "w-full text-left flex items-start gap-3 rounded-lg border p-4 transition-colors",
                   selected
                     ? "border-[hsl(var(--autopsy-accent))] bg-[hsl(var(--autopsy-accent-soft))]"
                     : "border-[hsl(var(--autopsy-border))] hover:bg-muted/40",
-                  props.saving && "opacity-60 cursor-not-allowed",
+                  props.finalizingSave && "opacity-60 cursor-not-allowed",
                 )}
               >
                 <span
@@ -1361,13 +1435,24 @@ function QuestionView(props: {
           )}
         </div>
 
+        {/* Subtle save micro-status — never replaces the Next button. */}
+        <div className="mt-3 min-h-[1.25rem] text-xs text-muted-foreground" aria-live="polite">
+          {props.currentSaveStatus === "saving" && <span>Saving…</span>}
+          {props.currentSaveStatus === "saved" && <span>Saved</span>}
+          {props.currentSaveStatus === "error" && (
+            <span className="text-destructive">
+              Save failed — reselect your answer to retry.
+            </span>
+          )}
+        </div>
+
         <div className="flex gap-3 mt-6">
           {props.canGoPrevious && (
             <Button
               type="button"
               variant="outline"
               onClick={props.onPrevious}
-              disabled={props.saving}
+              disabled={props.finalizingSave}
               className="h-11"
             >
               <span className="inline-flex items-center gap-1.5">
@@ -1377,10 +1462,17 @@ function QuestionView(props: {
           )}
           <Button
             onClick={props.onNext}
-            disabled={!hasOptions || props.pendingSelection == null || props.saving}
+            disabled={
+              !hasOptions ||
+              props.pendingSelection == null ||
+              props.finalizingSave ||
+              props.currentSaveStatus === "error"
+            }
             className="flex-1 h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
           >
-            {props.saving ? "Saving…" : (
+            {props.finalizingSave ? (
+              "Finalising…"
+            ) : (
               <span className="inline-flex items-center gap-1.5">
                 Next <ChevronRight className="h-4 w-4" />
               </span>
