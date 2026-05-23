@@ -1841,7 +1841,17 @@ function VerdictView({
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
       <ProgressionFlow
-        current={isPerfectScore ? "scalable" : tiedWatchpointNotice ? "operationally_viable" : isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
+        current={
+          isHardFail
+            ? "blocked"
+            : isPerfectScore
+              ? "scalable"
+              : tiedWatchpointNotice
+                ? "operationally_viable"
+                : isProgressionLocked
+                  ? "locked"
+                  : run.operational_state
+        }
         isBlocked={isBlocked}
       />
 
