@@ -784,6 +784,10 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     }
     setPendingSelection(value);
     setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
+    // Pin the current question — answering must NOT auto-advance.
+    // User must click Next deliberately. See directive: Autopsy is an
+    // underwriting diagnostic, not a speed quiz.
+    setManualIndex(currentIndex);
     setAnsweredIds((prev) => {
       const next = new Set(prev);
       next.add(qid);
