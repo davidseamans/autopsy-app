@@ -344,32 +344,15 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   // Authoritative answer hydration from the backend. On every payload refresh
   // (including resume), pull saved answers so localAnswers + answeredIds reflect
-  // exactly what is persisted server-side. Prevents "Q10 at score 0/36" on
-  // resume and keeps the running score authoritative.
+  // exactly what is persisted server-side. Hydration is gated on the gateway
+  // payload's active option list — stale option IDs (from a previous question
+  // schema) are discarded so the user is forced to reselect.
   const answerHydrationQuery = useQuery({
     queryKey: ["autopsy", "answer_audit_hydration", runId],
     queryFn: () => getCurrentRunAnswerAudit(runId as string),
     enabled: !!runId,
     retry: false,
   });
-  useEffect(() => {
-    const rows = answerHydrationQuery.data;
-    if (!rows) return;
-    const nextAnswers: Record<string, string | number> = {};
-    const nextScores: Record<string, number> = {};
-    const nextAnswered = new Set<string>();
-    for (const r of rows) {
-      if (r.question_id == null) continue;
-      const qid = String(r.question_id);
-      if (r.selected_option_id != null) nextAnswers[qid] = r.selected_option_id as any;
-      const n = Number(r.score_value);
-      if (Number.isFinite(n)) nextScores[qid] = n;
-      nextAnswered.add(qid);
-    }
-    setLocalAnswers(nextAnswers);
-    setAnswerScores(nextScores);
-    setAnsweredIds(nextAnswered);
-  }, [answerHydrationQuery.data]);
 
   // Resume prompt: if the user lands on the start screen and an incomplete
   // run is recorded in localStorage, offer to resume or discard before
