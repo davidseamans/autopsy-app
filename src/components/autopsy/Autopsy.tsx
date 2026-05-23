@@ -881,6 +881,26 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    // Wait for any in-flight optimistic saves to finish before reading the
+    // authoritative answer audit. Optimistic UI must never produce a final
+    // score that races ahead of the persisted backend state.
+    const pending = Array.from(pendingSavesRef.current.values());
+    if (pending.length > 0) {
+      await Promise.allSettled(pending);
+    }
+    // Any answer still in error state blocks finalisation — the user must
+    // reselect that answer so it can be re-saved successfully.
+    const erroredQid = Object.entries(saveStatus).find(([, s]) => s === "error")?.[0];
+    if (erroredQid) {
+      setError({
+        rpc: "record_autopsy_answer",
+        message:
+          "Answer was not saved. Please reselect or retry the failed question before finalising.",
+        step: "question",
+        runId,
+      });
+      return;
+    }
     // Authoritative pre-finalize guard: re-fetch saved answers and require
     // exactly QUICK_GATE_CONFIG.totalQuestions. Never finalize from stale
     // local state.
