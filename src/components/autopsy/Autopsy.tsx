@@ -1302,6 +1302,8 @@ function Field({
 function QuestionView(props: {
   loading: boolean;
   saving: boolean;
+  currentSaveStatus: "saving" | "saved" | "error" | null;
+  finalizingSave: boolean;
   currentQuestion: GatewayQuestion | undefined;
   currentIndex: number;
   total: number;
