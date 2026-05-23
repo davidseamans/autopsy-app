@@ -1940,6 +1940,7 @@ function OperationalStatePanel({
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
   isPerfectScore,
+  isStructurallyViable,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1951,6 +1952,7 @@ function OperationalStatePanel({
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
+  isStructurallyViable?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1958,7 +1960,11 @@ function OperationalStatePanel({
   const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isHardFailCriticalStop
+  const progressionDisplay = isPerfectScore
+    ? "Scalable"
+    : isStructurallyViable
+      ? "Controlled progression"
+    : isHardFailCriticalStop
     ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
       ? "Blocked by Critical Stop score band"
@@ -1967,19 +1973,27 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
-  const rawPermissionBias = isBlocked
+  const rawPermissionBias = isPerfectScore
+    ? "Open Stage 1 Dashboard"
+    : isStructurallyViable
+      ? "Proceed with execution watchpoints"
+    : isBlocked
     ? "STRONG RESTRICTION"
     : isCriticalStop
       ? "Education / Advice / Complete Rethink Before Retest"
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
-  const permissionBiasDisplay = cleanProceedOnlyIf(
-    sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
-    operatingInstruction || requiredActionFallback,
-  );
+  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable)
+    ? rawPermissionBias
+    : cleanProceedOnlyIf(
+        sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
+        operatingInstruction || requiredActionFallback,
+      );
   const recoveryDisplay = isPerfectScore
     ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isStructurallyViable
+      ? "Evidence maintained under operating load."
     : isHardFailCriticalStop
       ? "Hard-fail condition must be corrected and retested before progression can reopen."
     : isCriticalStop
