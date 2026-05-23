@@ -2525,6 +2525,7 @@ function RecoveryRetestPanel({
   tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2537,6 +2538,7 @@ function RecoveryRetestPanel({
   tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
+  microcopy?: string;
 }) {
   const resolved = resolveRecoverySignal(run);
   const backendRecovery =
@@ -2605,9 +2607,9 @@ function RecoveryRetestPanel({
           Controlled Progression
         </span>
       </div>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Defines the proof required before retesting or progression can reopen.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Defines the proof required before retesting or progression can reopen."}
+      </SectionMicrocopy>
       <div className="space-y-4">
         {hasContent(recovery) && (
           <div className="rounded-lg border-l-4 border-l-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-border))] p-4 bg-background">
