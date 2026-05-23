@@ -1569,8 +1569,27 @@ function VerdictView({
       : Number.isFinite(livePayloadScore)
         ? livePayloadScore
         : null;
-  const hardFailQuestionId = firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? null;
-  const isHardFail = hardFailQuestionId != null || hasSelectedHardFail;
+  // Hard-fail detection: prefer per-answer evidence, but also honor backend
+  // signals so hard-fail presentation can override score-band visuals even
+  // when the answer-level record is unavailable on resumed sessions.
+  const backendHardFailQuestionId = (run as any).hard_fail_question_id ?? null;
+  const backendHardFailTriggered =
+    (run as any).hard_fail_triggered_payload === true ||
+    (run as any).hard_fail_triggered === true;
+  const rawFailureTypeText = String((run as any).failure_type ?? "").toLowerCase();
+  const rawPressureStageText = String((run as any).pressure_stage ?? "").toLowerCase();
+  const rawProgressionStateText = String((run as any).progression_state ?? "").toLowerCase();
+  const backendHardFailText =
+    /hard[\s_-]?fail/.test(rawFailureTypeText) ||
+    /hard[\s_-]?fail/.test(rawPressureStageText) ||
+    /hard[\s_-]?fail/.test(rawProgressionStateText);
+  const hardFailQuestionId =
+    firstSelectedHardFail?.question_id ?? backendHardFailQuestionId ?? null;
+  const isHardFail =
+    hardFailQuestionId != null ||
+    hasSelectedHardFail ||
+    backendHardFailTriggered ||
+    backendHardFailText;
   const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
