@@ -442,6 +442,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       setPendingSelection(null);
       setManualIndex(null);
       setStaleAnswerWarning(null);
+      setSaveStatus({});
+      pendingSavesRef.current = new Map();
       setRunId(id);
       setView("question");
     },
