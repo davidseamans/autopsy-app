@@ -1102,6 +1102,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           <QuestionView
             loading={payloadQuery.isLoading}
             saving={answerMutation.isPending || finalizeMutation.isPending}
+            currentSaveStatus={
+              currentQuestion
+                ? saveStatus[String(currentQuestion.question_id)] ?? null
+                : null
+            }
+            finalizingSave={finalizeMutation.isPending}
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
