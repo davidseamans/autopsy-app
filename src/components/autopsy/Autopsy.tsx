@@ -2328,6 +2328,8 @@ function PressureCollapsePanel({
   isScoreBandCriticalStop,
   isPerfectScore,
   tiedWatchpointNotice,
+  isHardFail,
+  primaryRiskLabel,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2337,9 +2339,13 @@ function PressureCollapsePanel({
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
   tiedWatchpointNotice?: string | null;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isPerfectScore
+  const stageDisplay = isHardFail
+    ? "HARD-FAIL TRIGGERED"
+    : isPerfectScore
     ? "EXECUTION WATCHPOINT"
     : tiedWatchpointNotice
     ? "EXECUTION WATCHPOINT"
@@ -2357,7 +2363,9 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isPerfectScore
+  const failureTypeDisplay = isHardFail
+    ? "Hard-fail override"
+    : isPerfectScore
     ? "Execution watchpoint"
     : tiedWatchpointNotice
     ? "Execution watchpoint"
@@ -2373,15 +2381,24 @@ function PressureCollapsePanel({
         ? "Score-band Not Viable"
         : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
+  const hardFailCollapseText = isHardFail
+    ? `${(primaryRiskLabel && primaryRiskLabel.trim()) || "The hard-fail dimension"} blocks progression until corrected and retested.`
+    : null;
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
-    ...(suppressPressureSummary
+    ...(suppressPressureSummary || isHardFail
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
     {
-      label: isPerfectScore || tiedWatchpointNotice ? "Watchpoint Pattern" : "Collapse Pattern",
-      value: isPerfectScore
+      label: isHardFail
+        ? "Collapse Pattern"
+        : isPerfectScore || tiedWatchpointNotice
+          ? "Watchpoint Pattern"
+          : "Collapse Pattern",
+      value: isHardFail
+        ? hardFailCollapseText
+        : isPerfectScore
         ? "No collapse pattern assigned. Track watchpoints under operating load."
         : tiedWatchpointNotice
         ? tiedWatchpointNotice
