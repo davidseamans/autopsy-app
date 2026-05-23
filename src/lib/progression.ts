@@ -377,6 +377,9 @@ export interface WorksheetGuidance {
   requirement: string;
   acceptable: string[];
   notAcceptable: string[];
+  failureCondition: string;
+  evidenceRequired: string;
+  firstAction: string;
 }
 
 export function getWorksheetGuidance(primaryRisk: string): WorksheetGuidance {
@@ -399,6 +402,12 @@ export function getWorksheetGuidance(primaryRisk: string): WorksheetGuidance {
         "Social media likes",
         "Family encouragement",
       ],
+      failureCondition:
+        "The operator cannot show that real customers will pay for the offer at a price that sustains the business.",
+      evidenceRequired:
+        "Recorded customer demand: quote requests, approved quotes, signed commitments, or paid jobs tied to the offer.",
+      firstAction:
+        "Run one real customer conversation that ends in a quote, commitment, or paid job and record the outcome.",
     };
   }
   if (/economic|literacy|margin|finance|cost|pricing/.test(r)) {
@@ -418,6 +427,12 @@ export function getWorksheetGuidance(primaryRisk: string): WorksheetGuidance {
         "Unrecorded cash counted as proof",
         "“It will be profitable once we scale”",
       ],
+      failureCondition:
+        "The operator cannot demonstrate unit economics clearly enough to justify progression.",
+      evidenceRequired:
+        "Worked proof of revenue, direct costs, gross margin, payment evidence, and repeatability using a real or realistic job.",
+      firstAction:
+        "Complete one worked job economics example showing revenue, direct costs, gross margin, payment proof, and repeatability.",
     };
   }
   return {
@@ -433,6 +448,12 @@ export function getWorksheetGuidance(primaryRisk: string): WorksheetGuidance {
       "Plans without a measurable test",
       "Anything that cannot be checked by a third party",
     ],
+    failureCondition:
+      "The primary risk identified in the Autopsy has not yet been addressed with verifiable proof.",
+    evidenceRequired:
+      "Documented evidence directly tied to the primary risk, with a measurable outcome a third party could check.",
+    firstAction:
+      "Take one concrete action against the primary risk that produces a measurable, recordable result.",
   };
 }
 

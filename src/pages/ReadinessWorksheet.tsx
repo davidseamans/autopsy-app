@@ -86,6 +86,10 @@ export default function ReadinessWorksheet() {
   const run = (payloadQ.data?.run ?? {}) as Record<string, any>;
   const verdictName = String(run.verdict_name ?? "");
   const primaryRisk = humanize(run.primary_risk ?? run.weakest_dimension);
+  const scoreTotal = Number(run.score_total ?? run.total_score ?? NaN);
+  const isNotViableBand =
+    /not\s*viable/i.test(verdictName) ||
+    (Number.isFinite(scoreTotal) && scoreTotal >= 4 && scoreTotal <= 9);
 
   // Seed / refresh progression record once we have the verdict.
   useEffect(() => {
@@ -95,22 +99,27 @@ export default function ReadinessWorksheet() {
 
   const { state, update } = useProgression(runId);
 
-  const evidenceRequired =
-    plain(blocksQ.data?.evidence_required?.[0]?.body) ||
-    plain(run.evidence_required);
-  const failureCondition =
-    plain(blocksQ.data?.failure_drivers?.[0]?.body) ||
-    plain(run.failure_condition);
-  const firstAction =
-    plain(blocksQ.data?.required_actions?.[0]?.body) ||
-    plain(run.first_action);
-  const requirement = plain(run.requirement_to_proceed) || "";
-  const retestCondition = plain(run.retest_condition) || "";
-
   const guidance = useMemo(
     () => getWorksheetGuidance(state?.primaryRisk ?? primaryRisk),
     [state?.primaryRisk, primaryRisk],
   );
+
+  const evidenceRequired =
+    plain(blocksQ.data?.evidence_required?.[0]?.body) ||
+    plain(run.evidence_required) ||
+    guidance.evidenceRequired;
+  const failureCondition =
+    plain(blocksQ.data?.failure_drivers?.[0]?.body) ||
+    plain(run.failure_condition) ||
+    guidance.failureCondition;
+  const firstAction =
+    plain(blocksQ.data?.required_actions?.[0]?.body) ||
+    plain(run.first_action) ||
+    guidance.firstAction;
+  const requirement = plain(run.requirement_to_proceed) || guidance.requirement;
+  const retestCondition =
+    plain(run.retest_condition) ||
+    "Re-run the Autopsy after the required proof is in place.";
 
   if (!runId) {
     return (
@@ -151,11 +160,14 @@ export default function ReadinessWorksheet() {
           Readiness / Repair Worksheet
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Prepare to Enter Stage 1
+          {isNotViableBand
+            ? "Repair Gate — Stage 1 Not Yet Open"
+            : "Prepare to Enter Stage 1"}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          This is a readiness and repair gate, not a business plan. You must
-          satisfy it before Stage 1 will open.
+          {isNotViableBand
+            ? "This is a repair gate, not a business plan. Complete the required proof and retest before Stage 1 can open."
+            : "This is a readiness and repair gate, not a business plan. You must satisfy it before Stage 1 will open."}
         </p>
       </div>
 
@@ -165,13 +177,13 @@ export default function ReadinessWorksheet() {
           <CardDescription>Pulled from the Autopsy result for this run.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
-          <Row label="Final Verdict" value={humanize(verdictName) || "—"} />
+          <Row label="Final Verdict" value={humanize(verdictName) || (isNotViableBand ? "Not Viable" : "—")} />
           <Row label="Primary Risk" value={primaryRisk || "—"} />
-          <Row label="Failure Condition" value={failureCondition || "—"} multiline />
-          <Row label="Requirement to Proceed" value={requirement || guidance.requirement} multiline />
-          <Row label="Evidence Required" value={evidenceRequired || "—"} multiline />
-          <Row label="First Action" value={firstAction || "—"} multiline />
-          <Row label="Retest Condition" value={retestCondition || "—"} multiline />
+          <Row label="Failure Condition" value={failureCondition} multiline />
+          <Row label="Requirement to Proceed" value={requirement} multiline />
+          <Row label="Evidence Required" value={evidenceRequired} multiline />
+          <Row label="First Action" value={firstAction} multiline />
+          <Row label="Retest Condition" value={retestCondition} multiline />
         </CardContent>
       </Card>
 
