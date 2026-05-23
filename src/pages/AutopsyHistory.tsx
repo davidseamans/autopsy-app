@@ -112,7 +112,14 @@ export default function AutopsyHistory() {
 
 function RunCard({ r, inProgress }: { r: RunRow; inProgress?: boolean }) {
   const date = r.created_at;
-  const constraint = humanize(r.primary_risk ?? r.weakest_dimension);
+  const score = Number(r.score_total);
+  const isPerfectScore = Number.isFinite(score) && score === 36;
+  const isStructurallyViable = Number.isFinite(score) && score >= 30 && score < 36 && /structurally\s*viable/i.test(String(r.verdict_name ?? ""));
+  const constraint = isPerfectScore
+    ? "No active blocker identified"
+    : isStructurallyViable
+      ? "Execution watchpoints"
+      : humanize(r.primary_risk ?? r.weakest_dimension);
   return (
     <Link to={`/autopsy/run/${r.id}`}>
       <Card className={`hover:bg-muted/40 transition-colors rounded-2xl ${inProgress ? "opacity-80" : ""}`}>
@@ -149,7 +156,7 @@ function RunCard({ r, inProgress }: { r: RunRow; inProgress?: boolean }) {
             )}
             {constraint && (
               <span>
-                Primary constraint:{" "}
+                {isPerfectScore || isStructurallyViable ? "Watchpoint:" : "Primary constraint:"}{" "}
                 <span className="text-foreground font-medium">{constraint}</span>
               </span>
             )}
