@@ -427,7 +427,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         ...prev,
         [String(vars.question_id)]: vars.selected_option,
       }));
-      setPendingSelection(null);
+      setPendingSelection(vars.selected_option);
       await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
@@ -648,24 +648,61 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  async function handleNext() {
-    if (!runId || !currentQuestion || pendingSelection == null) return;
-    const isFinal = currentIndex >= questions.length - 1;
-    // Advance past the manually navigated index on Next.
-    if (manualIndex != null) {
-      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
+  async function handleSelect(value: string | number) {
+    if (!runId || !currentQuestion) return;
+    const qid = String(currentQuestion.question_id);
+    setPendingSelection(value);
+    setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
+    setAnsweredIds((prev) => {
+      const next = new Set(prev);
+      next.add(qid);
+      return next;
+    });
+    const selectedOpt = ((currentQuestion.options ?? []) as any[]).find(
+      (o) =>
+        o &&
+        typeof o === "object" &&
+        (String(o.id) === String(value) ||
+          String(o.option_id) === String(value) ||
+          String(o.value) === String(value)),
+    );
+    const selectedScore = Number(selectedOpt?.score_value ?? selectedOpt?.score);
+    if (Number.isFinite(selectedScore)) {
+      setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
+      setSavedScoreOverride(null);
     }
     try {
       await answerMutation.mutateAsync({
         run_id: runId,
         question_id: currentQuestion.question_id,
-        selected_option: pendingSelection,
+        selected_option: value,
       });
     } catch {
-      return; // onError captured it
+      return;
+    }
+  }
+
+  async function handleNext() {
+    if (!runId || !currentQuestion || pendingSelection == null) return;
+    const isFinal = currentIndex >= questions.length - 1;
+    const qid = String(currentQuestion.question_id);
+    const alreadySaved =
+      localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
+    if (!alreadySaved) {
+      try {
+        await answerMutation.mutateAsync({
+          run_id: runId,
+          question_id: currentQuestion.question_id,
+          selected_option: pendingSelection,
+        });
+      } catch {
+        return; // onError captured it
+      }
     }
     if (isFinal) {
       await finalizeAndLoad();
+    } else if (manualIndex != null) {
+      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
     }
   }
 
@@ -843,7 +880,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             total={questions.length}
             allAnswered={allAnswered}
             pendingSelection={pendingSelection}
-            onSelect={setPendingSelection}
+            onSelect={handleSelect}
             onNext={handleNext}
             finalizing={finalizeMutation.isPending}
             scoreSoFar={scoreSoFar}
