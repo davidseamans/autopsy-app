@@ -289,6 +289,38 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     enabled: !!runId,
   });
 
+  // Resume prompt: if the user lands on the start screen and an incomplete
+  // run is recorded in localStorage, offer to resume or discard before
+  // a new run can be created. Do not auto-clear without confirmation.
+  const [resumeChecked, setResumeChecked] = useState(false);
+  useEffect(() => {
+    if (resumeChecked) return;
+    if (view !== "start" || runId) return;
+    let candidate: string | null = null;
+    try {
+      candidate =
+        localStorage.getItem("autopsy_active_run_id") ||
+        localStorage.getItem("autopsy_current_run_id");
+    } catch { /* noop */ }
+    if (!candidate) {
+      setResumeChecked(true);
+      return;
+    }
+    const resume = window.confirm(
+      "You have an autopsy run in progress. Click OK to resume the current run, or Cancel to discard it and start a new one.",
+    );
+    if (resume) {
+      setRunId(candidate);
+      setView("question");
+    } else {
+      try {
+        localStorage.removeItem("autopsy_active_run_id");
+        localStorage.removeItem("autopsy_current_run_id");
+      } catch { /* noop */ }
+    }
+    setResumeChecked(true);
+  }, [view, runId, resumeChecked]);
+
   // Persist active runId so standalone /worksheet route can recover it.
   // Completed runs are NOT considered active and must be cleared.
   useEffect(() => {
