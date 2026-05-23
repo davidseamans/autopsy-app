@@ -1441,7 +1441,7 @@ function QuestionView(props: {
               type="button"
               variant="outline"
               onClick={props.onPrevious}
-              disabled={props.saving}
+              disabled={props.finalizingSave}
               className="h-11"
             >
               <span className="inline-flex items-center gap-1.5">
@@ -1451,10 +1451,17 @@ function QuestionView(props: {
           )}
           <Button
             onClick={props.onNext}
-            disabled={!hasOptions || props.pendingSelection == null || props.saving}
+            disabled={
+              !hasOptions ||
+              props.pendingSelection == null ||
+              props.finalizingSave ||
+              props.currentSaveStatus === "error"
+            }
             className="flex-1 h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
           >
-            {props.saving ? "Saving…" : (
+            {props.finalizingSave ? (
+              "Finalising…"
+            ) : (
               <span className="inline-flex items-center gap-1.5">
                 Next <ChevronRight className="h-4 w-4" />
               </span>
