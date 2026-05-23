@@ -1276,11 +1276,14 @@ function VerdictView({
       ? Number((payload as any).integrity.score_total_live)
       : null;
   const isHardFail = hasSelectedHardFail;
-  const isCriticalStop =
+  const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
     (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.criticalStopMax;
+  // A hard-fail always routes to Critical Stop regardless of score band.
+  const isHardFailCriticalStop = isHardFail;
+  const isCriticalStop = isScoreBandCriticalStop || isHardFailCriticalStop;
   const isScoreBandNotViable =
     !isHardFail &&
     !isCriticalStop &&
@@ -1300,6 +1303,13 @@ function VerdictView({
     : isProgressionLocked
       ? "locked"
       : opStateKey;
+
+  // Perfect score: 36/36 with every domain at max (6) and no hard-fail.
+  const isPerfectScore =
+    !isHardFail &&
+    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore &&
+    hasDimensionData &&
+    dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
 
   const band: VerdictBand = getVerdictBand({
     verdictName,
@@ -1379,10 +1389,10 @@ function VerdictView({
       >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isHardFail
-              ? "Status: Completed · Blocking Failure"
-                : isCriticalStop
-                  ? "Status: Completed · Critical Stop"
+            {isHardFailCriticalStop
+              ? "Status: Completed · Critical Stop (Hard-Fail Triggered)"
+                : isScoreBandCriticalStop
+                  ? "Status: Completed · Critical Stop (Score-Band)"
                   : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
@@ -1406,6 +1416,17 @@ function VerdictView({
               return "Verdict";
             })()}
           </h1>
+          {isHardFailCriticalStop && (
+            <div className="max-w-xl space-y-1">
+              <div className="text-sm font-semibold text-red-800">
+                Hard-fail condition triggered
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                This score would normally fall into a different band, but a
+                non-negotiable blocker has stopped progression.
+              </p>
+            </div>
+          )}
           {run.score_total != null && (
             <div className="text-base">
               <span className="text-muted-foreground">Score: </span>
@@ -1415,7 +1436,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && !hasCascade && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !isPerfectScore && (
             <Badge
               variant="outline"
               className={cn(
@@ -1424,6 +1445,14 @@ function VerdictView({
               )}
             >
               {framing.rankPrimary} · {primaryConstraint}
+            </Badge>
+          )}
+          {isPerfectScore && (
+            <Badge
+              variant="outline"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
+            >
+              No Active Blocker Identified · Monitor Under Load
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1447,6 +1476,9 @@ function VerdictView({
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isHardFailCriticalStop={isHardFailCriticalStop}
+        isScoreBandCriticalStop={isScoreBandCriticalStop}
+        isPerfectScore={isPerfectScore}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1503,6 +1535,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isHardFailCriticalStop={isHardFailCriticalStop}
+        isScoreBandCriticalStop={isScoreBandCriticalStop}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1790,6 +1824,9 @@ function OperationalStatePanel({
   isProgressionLocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isHardFailCriticalStop,
+  isScoreBandCriticalStop,
+  isPerfectScore,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -1798,6 +1835,9 @@ function OperationalStatePanel({
   isProgressionLocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isHardFailCriticalStop?: boolean;
+  isScoreBandCriticalStop?: boolean;
+  isPerfectScore?: boolean;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
@@ -1805,8 +1845,12 @@ function OperationalStatePanel({
   const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isBlocked
-    ? "PROGRESSION BLOCKED"
+  const progressionDisplay = isHardFailCriticalStop
+    ? "BLOCKED BY HARD-FAIL CONDITION"
+    : isScoreBandCriticalStop
+      ? "BLOCKED BY CRITICAL STOP SCORE BAND"
+    : isBlocked
+      ? "PROGRESSION BLOCKED"
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
@@ -1821,7 +1865,11 @@ function OperationalStatePanel({
     sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
     operatingInstruction || requiredActionFallback,
   );
-  const recoveryDisplay = isCriticalStop
+  const recoveryDisplay = isPerfectScore
+    ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isHardFailCriticalStop
+      ? "Hard-fail condition must be corrected and retested before progression can reopen."
+    : isCriticalStop
     ? "Outside Safe Progression Pathway"
     : isScoreBandNotViable
     ? "Repair Worksheet Required"
@@ -1868,15 +1916,23 @@ function PressureCollapsePanel({
   isBlocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isHardFailCriticalStop,
+  isScoreBandCriticalStop,
 }: {
   run: any;
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isHardFailCriticalStop?: boolean;
+  isScoreBandCriticalStop?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isBlocked
-    ? "BLOCKING FAILURE"
+  const stageDisplay = isHardFailCriticalStop
+    ? "HARD-FAIL TRIGGERED"
+    : isScoreBandCriticalStop
+      ? "CRITICAL STOP"
+    : isBlocked
+      ? "BLOCKING FAILURE"
     : isCriticalStop
       ? "CRITICAL STOP"
     : isScoreBandNotViable
@@ -1885,7 +1941,11 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isCriticalStop
+  const failureTypeDisplay = isHardFailCriticalStop
+    ? "Hard-fail override"
+    : isScoreBandCriticalStop
+    ? "Score-band Critical Stop"
+    : isCriticalStop
     ? "Critical Stop"
     : isBlocked && !hasContent(run.failure_type)
       ? "HARD FAIL"
@@ -2294,7 +2354,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     rankPrimary: "Primary Watchpoint",
     rankSecondary: "Secondary Watchpoint",
     rankTertiary: "Third Watchpoint",
-    topologyTitle: "Pressure Topology",
+    topologyTitle: "Stability Risks",
     topologyIntro:
       "Watchpoints ranked by structural weight. These are the areas most likely to weaken first if operating pressure increases.",
     chainTitle: "Stability Risks",
@@ -2310,7 +2370,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     rankPrimary: "Primary Watchpoint",
     rankSecondary: "Secondary Watchpoint",
     rankTertiary: "Third Watchpoint",
-    topologyTitle: "Pressure Topology",
+    topologyTitle: "Execution Watchpoints",
     topologyIntro:
       "Areas to monitor under operating load. Permission is granted under discipline — not guaranteed performance.",
     chainTitle: "Execution Watchpoints",
