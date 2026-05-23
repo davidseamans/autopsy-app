@@ -1452,7 +1452,7 @@ function VerdictView({
               variant="outline"
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
-              Primary Watchpoint: None Identified · Monitor Under Load
+              No Active Blocker Identified
             </Badge>
           )}
           {suppressFailureLanguage && (
