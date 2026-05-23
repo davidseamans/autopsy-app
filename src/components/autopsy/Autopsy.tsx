@@ -2427,6 +2427,8 @@ function RecoveryRetestPanel({
   isCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  isHardFail,
+  primaryRiskLabel,
   tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
@@ -2437,13 +2439,22 @@ function RecoveryRetestPanel({
   isCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
   tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
+  const backendRecovery =
+    typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()
+      ? run.required_recovery_signal.trim()
+      : null;
   const recovery =
-    isPerfectScore
+    isHardFail
+      ? (backendRecovery ||
+          `Hard-fail condition${primaryRiskLabel ? ` on ${primaryRiskLabel}` : ""} corrected and proven under real operating conditions.`)
+    : isPerfectScore
       ? "No recovery signal required. Maintain telemetry and review cadence."
     : tiedWatchpointNotice
       ? "No recovery signal required. Maintain telemetry and monitor all tied watchpoints under operating load."
@@ -2458,7 +2469,9 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isPerfectScore
+  const retest = isHardFail
+    ? "Correct the hard-fail condition, produce proof, and retest."
+    : isPerfectScore
     ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
     : tiedWatchpointNotice
     ? "No repair action required. Retest if operating load changes or one tied watchpoint begins to dominate."
@@ -2471,7 +2484,13 @@ function RecoveryRetestPanel({
     : hasContent(evidenceOverride)
       ? null
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
-  const worksheet = isPerfectScore
+  const worksheet = isHardFail
+    ? `WORKSHEET: HARD-FAIL REPAIR — ${(primaryRiskLabel || "PRIMARY RISK").toUpperCase()}\n\n` +
+        "1. Identify the exact hard-fail condition triggered by the selected answer.\n" +
+        "2. Repair the underlying cause in real operating conditions, not on paper.\n" +
+        "3. Produce verifiable proof that the condition no longer triggers.\n" +
+        "4. Retest only after the proof is in place and reviewable by a third party."
+    : isPerfectScore
     ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
     : tiedWatchpointNotice
     ? "No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load."
@@ -2523,7 +2542,7 @@ function RecoveryRetestPanel({
             )}
           </div>
         )}
-        {hasContent(worksheet) && !isCriticalStop && (
+        {hasContent(worksheet) && (!isCriticalStop || isHardFail) && (
           <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Worksheet Output
@@ -2539,7 +2558,7 @@ function RecoveryRetestPanel({
             )}
           </div>
         )}
-        {hasContent(worksheet) && isCriticalStop && (
+        {hasContent(worksheet) && isCriticalStop && !isHardFail && (
           <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Diagnostic Guidance
