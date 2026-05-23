@@ -1863,7 +1863,6 @@ function VerdictView({
             </div>
           )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
-            <Prose value={sanitizeVerdictCopy(verdictBody, isHardFail)} />
             <Prose value={sanitizeVerdictCopy(effectiveVerdictBody, isHardFail)} />
           </div>
         </SurfaceCard>
