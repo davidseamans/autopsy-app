@@ -665,6 +665,27 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    // Authoritative pre-finalize guard: re-fetch saved answers and require
+    // exactly QUICK_GATE_CONFIG.totalQuestions. Never finalize from stale
+    // local state.
+    try {
+      const savedRows = await qc.fetchQuery({
+        queryKey: ["autopsy", "answer_audit_hydration", runId],
+        queryFn: () => getCurrentRunAnswerAudit(runId as string),
+      });
+      const savedCount = (savedRows ?? []).length;
+      if (savedCount < QUICK_GATE_CONFIG.totalQuestions) {
+        setError({
+          rpc: "finalize_autopsy_run",
+          message: `Cannot finalize: only ${savedCount} of ${QUICK_GATE_CONFIG.totalQuestions} answers saved.`,
+          step: "question",
+          runId,
+        });
+        return;
+      }
+    } catch {
+      /* fall through to existing logic */
+    }
     // Never re-finalise a completed run. Check the latest payload first.
     try {
       const fresh = await qc.fetchQuery({
