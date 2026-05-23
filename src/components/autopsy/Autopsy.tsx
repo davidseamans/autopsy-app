@@ -1586,12 +1586,9 @@ function VerdictView({
       {isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
           <div className="space-y-3 text-sm leading-relaxed">
-            <p>
-              No active blocker identified. All dimensions are at full score.
-            </p>
+            <p>No active watchpoint identified.</p>
             <p className="text-muted-foreground">
-              Monitor under operating load. No recovery signal required —
-              maintain telemetry and review cadence.
+              Continue with telemetry and review cadence.
             </p>
           </div>
         </SurfaceCard>
