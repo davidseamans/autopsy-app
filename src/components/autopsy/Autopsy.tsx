@@ -1452,7 +1452,7 @@ function VerdictView({
               variant="outline"
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
-              No Active Blocker Identified · Monitor Under Load
+              Primary Watchpoint: None Identified · Monitor Under Load
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1500,6 +1500,8 @@ function VerdictView({
           weakest={weakest}
           suppress={suppressFailureLanguage}
           opState={effectiveOpState}
+          isPerfectScore={isPerfectScore}
+          primaryLabel={framing.rankPrimary}
         />
 
         <Collapsible className="mt-4">
@@ -1568,7 +1570,7 @@ function VerdictView({
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && (
+      {hasCascade && !isPerfectScore && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1580,7 +1582,19 @@ function VerdictView({
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
-      {suppressFailureLanguage ? (
+      {isPerfectScore ? (
+        <SurfaceCard title="Execution Watchpoints">
+          <div className="space-y-3 text-sm leading-relaxed">
+            <p>
+              No active blocker identified. All dimensions are at full score.
+            </p>
+            <p className="text-muted-foreground">
+              Monitor under operating load. No recovery signal required —
+              maintain telemetry and review cadence.
+            </p>
+          </div>
+        </SurfaceCard>
+      ) : suppressFailureLanguage ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
