@@ -1774,6 +1774,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isPerfectScore={isPerfectScore}
+        isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
