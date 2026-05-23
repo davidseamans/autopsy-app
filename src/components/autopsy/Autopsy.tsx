@@ -1569,8 +1569,27 @@ function VerdictView({
       : Number.isFinite(livePayloadScore)
         ? livePayloadScore
         : null;
-  const hardFailQuestionId = firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? null;
-  const isHardFail = hardFailQuestionId != null || hasSelectedHardFail;
+  // Hard-fail detection: prefer per-answer evidence, but also honor backend
+  // signals so hard-fail presentation can override score-band visuals even
+  // when the answer-level record is unavailable on resumed sessions.
+  const backendHardFailQuestionId = (run as any).hard_fail_question_id ?? null;
+  const backendHardFailTriggered =
+    (run as any).hard_fail_triggered_payload === true ||
+    (run as any).hard_fail_triggered === true;
+  const rawFailureTypeText = String((run as any).failure_type ?? "").toLowerCase();
+  const rawPressureStageText = String((run as any).pressure_stage ?? "").toLowerCase();
+  const rawProgressionStateText = String((run as any).progression_state ?? "").toLowerCase();
+  const backendHardFailText =
+    /hard[\s_-]?fail/.test(rawFailureTypeText) ||
+    /hard[\s_-]?fail/.test(rawPressureStageText) ||
+    /hard[\s_-]?fail/.test(rawProgressionStateText);
+  const hardFailQuestionId =
+    firstSelectedHardFail?.question_id ?? backendHardFailQuestionId ?? null;
+  const isHardFail =
+    hardFailQuestionId != null ||
+    hasSelectedHardFail ||
+    backendHardFailTriggered ||
+    backendHardFailText;
   const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
@@ -1817,12 +1836,24 @@ function VerdictView({
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
-        isStructurallyViable={isStructurallyViableNonPerfect}
+        isStructurallyViable={isStructurallyViableNonPerfect && !isHardFail}
+        isHardFail={isHardFail}
+        primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
       <ProgressionFlow
-        current={isPerfectScore ? "scalable" : tiedWatchpointNotice ? "operationally_viable" : isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
+        current={
+          isHardFail
+            ? "blocked"
+            : isPerfectScore
+              ? "scalable"
+              : tiedWatchpointNotice
+                ? "operationally_viable"
+                : isProgressionLocked
+                  ? "locked"
+                  : run.operational_state
+        }
         isBlocked={isBlocked}
       />
 
@@ -1884,38 +1915,27 @@ function VerdictView({
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
         tiedWatchpointNotice={tiedWatchpointNotice}
+        isHardFail={isHardFail}
+        primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
       />
 
       {isHardFail && !isScoreBandNotViable && (
-        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
-          <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
-            Blocking Failure Triggered
-          </div>
-          <p className="text-sm leading-relaxed">
-            A hard-fail condition was triggered by a selected answer during this assessment.
-            Progression is blocked. The business is not viable in its current
-            form. The hard-fail condition must be corrected and retested before
-            progression can be reconsidered.
-          </p>
-          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
-            <div>
-              <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
-              <div className="font-mono font-semibold">
-                {firstSelectedHardFail?.question_number ?? firstSelectedHardFail?.question_id ?? "—"}
-              </div>
-            </div>
-            <div>
-              <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
-              <div className="font-mono font-semibold break-words">
-                {firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? "—"}
-              </div>
-            </div>
-          </div>
-        </div>
+        <HardFailChainPanel
+          primaryRisk={primaryConstraint || humanize((run as any).primary_risk_code) || "the hard-fail dimension"}
+          questionNumber={firstSelectedHardFail?.question_number ?? null}
+          questionId={String(firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? "") || null}
+          optionLabel={
+            firstSelectedHardFail?.selected_option_label
+              ? String(firstSelectedHardFail.selected_option_label)
+              : firstSelectedHardFail?.selected_option_id
+                ? String(firstSelectedHardFail.selected_option_id)
+                : null
+          }
+        />
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && (
+      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && !isHardFail && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1927,7 +1947,7 @@ function VerdictView({
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
-      {isPerfectScore ? (
+      {isHardFail ? null : isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>No active watchpoint identified.</p>
@@ -1980,7 +2000,34 @@ function VerdictView({
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
-          {!isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+          {isHardFail ? (
+            <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
+                <div className="text-base font-semibold text-red-800">
+                  Stop. Hard-fail condition triggered.
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                <div className="text-sm leading-relaxed text-foreground">
+                  Correct the hard-fail condition and retest before progression.
+                </div>
+              </div>
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <Meta label="Severity" value="Hard-fail condition triggered" />
+                <Meta label="Operational State" value="Blocked" />
+                <Meta label="Progression" value="Blocked by hard-fail condition" />
+                <Meta
+                  label="Required Recovery Signal"
+                  value={
+                    (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
+                    `Hard-fail condition${primaryConstraint ? ` on ${primaryConstraint}` : ""} corrected and proven under real operating conditions.`
+                  }
+                />
+              </div>
+            </div>
+          ) : !isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
@@ -2019,7 +2066,9 @@ function VerdictView({
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
         isPerfectScore={isPerfectScore}
-        isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
+        isStructurallyViable={(isStructurallyViableNonPerfect || isPerfectScore) && !isHardFail}
+        isHardFail={isHardFail}
+        primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
         tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
@@ -2064,16 +2113,28 @@ function VerdictView({
         } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
           routingBand = "not_viable";
         }
-        const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        const baseCopy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        const copy = isHardFail
+          ? {
+              ...baseCopy,
+              title: "Critical Stop — hard-fail repair required",
+              body:
+                "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
+              primaryCta: {
+                label: "Start Hard-Fail Repair Worksheet",
+                to: (id: string) => `/autopsy/run/${id}/worksheet`,
+              },
+            }
+          : baseCopy;
         return (
           <SurfaceCard title="Progression Routing">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
-                  Stage Permission: {progression?.stagePermission ?? "Locked"}
+                  Stage Permission: {isHardFail ? "Locked" : (progression?.stagePermission ?? "Locked")}
                 </span>
                 <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
-                  Worksheet: {progression?.worksheetStatus ?? "Not Started"}
+                  Worksheet: {isHardFail ? "Required" : (progression?.worksheetStatus ?? "Not Started")}
                 </span>
               </div>
               <div className="font-medium">{copy.title}</div>
@@ -2185,6 +2246,8 @@ function OperationalStatePanel({
   isScoreBandCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  isHardFail,
+  primaryRiskLabel,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -2197,14 +2260,18 @@ function OperationalStatePanel({
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
+  const effective = isHardFail || isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isPerfectScore
+  const progressionDisplay = isHardFail
+    ? "Blocked by hard-fail condition"
+    : isPerfectScore
     ? "Scalable"
     : isStructurallyViable
       ? "Controlled progression"
@@ -2217,7 +2284,9 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
-  const rawPermissionBias = isPerfectScore
+  const rawPermissionBias = isHardFail
+    ? "Repair hard-fail condition before retesting"
+    : isPerfectScore
     ? "Open Stage 1 Dashboard"
     : isStructurallyViable
       ? "Proceed with execution watchpoints"
@@ -2228,13 +2297,20 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
-  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable)
+  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable || isHardFail)
     ? rawPermissionBias
     : cleanProceedOnlyIf(
         sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
         operatingInstruction || requiredActionFallback,
       );
-  const recoveryDisplay = isPerfectScore
+  const backendRecovery =
+    typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()
+      ? run.required_recovery_signal.trim()
+      : null;
+  const recoveryDisplay = isHardFail
+    ? (backendRecovery ||
+        `Hard-fail condition${primaryRiskLabel ? ` on ${primaryRiskLabel}` : ""} corrected and proven under real operating conditions.`)
+    : isPerfectScore
     ? "No recovery signal required. Maintain telemetry and review cadence."
     : isStructurallyViable
       ? "Evidence maintained under operating load."
@@ -2291,6 +2367,8 @@ function PressureCollapsePanel({
   isScoreBandCriticalStop,
   isPerfectScore,
   tiedWatchpointNotice,
+  isHardFail,
+  primaryRiskLabel,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2300,9 +2378,13 @@ function PressureCollapsePanel({
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
   tiedWatchpointNotice?: string | null;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isPerfectScore
+  const stageDisplay = isHardFail
+    ? "HARD-FAIL TRIGGERED"
+    : isPerfectScore
     ? "EXECUTION WATCHPOINT"
     : tiedWatchpointNotice
     ? "EXECUTION WATCHPOINT"
@@ -2320,7 +2402,9 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isPerfectScore
+  const failureTypeDisplay = isHardFail
+    ? "Hard-fail override"
+    : isPerfectScore
     ? "Execution watchpoint"
     : tiedWatchpointNotice
     ? "Execution watchpoint"
@@ -2336,15 +2420,24 @@ function PressureCollapsePanel({
         ? "Score-band Not Viable"
         : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
+  const hardFailCollapseText = isHardFail
+    ? `${(primaryRiskLabel && primaryRiskLabel.trim()) || "The hard-fail dimension"} blocks progression until corrected and retested.`
+    : null;
   const items: Array<{ label: string; value: any; prose?: boolean }> = [
     { label: "Risk State", value: stageDisplay },
     { label: "Failure Type", value: failureTypeDisplay },
-    ...(suppressPressureSummary
+    ...(suppressPressureSummary || isHardFail
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
     {
-      label: isPerfectScore || tiedWatchpointNotice ? "Watchpoint Pattern" : "Collapse Pattern",
-      value: isPerfectScore
+      label: isHardFail
+        ? "Collapse Pattern"
+        : isPerfectScore || tiedWatchpointNotice
+          ? "Watchpoint Pattern"
+          : "Collapse Pattern",
+      value: isHardFail
+        ? hardFailCollapseText
+        : isPerfectScore
         ? "No collapse pattern assigned. Track watchpoints under operating load."
         : tiedWatchpointNotice
         ? tiedWatchpointNotice
@@ -2398,6 +2491,8 @@ function RecoveryRetestPanel({
   isCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  isHardFail,
+  primaryRiskLabel,
   tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
@@ -2408,13 +2503,22 @@ function RecoveryRetestPanel({
   isCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
   tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
+  const backendRecovery =
+    typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()
+      ? run.required_recovery_signal.trim()
+      : null;
   const recovery =
-    isPerfectScore
+    isHardFail
+      ? (backendRecovery ||
+          `Hard-fail condition${primaryRiskLabel ? ` on ${primaryRiskLabel}` : ""} corrected and proven under real operating conditions.`)
+    : isPerfectScore
       ? "No recovery signal required. Maintain telemetry and review cadence."
     : tiedWatchpointNotice
       ? "No recovery signal required. Maintain telemetry and monitor all tied watchpoints under operating load."
@@ -2429,7 +2533,9 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isPerfectScore
+  const retest = isHardFail
+    ? "Correct the hard-fail condition, produce proof, and retest."
+    : isPerfectScore
     ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
     : tiedWatchpointNotice
     ? "No repair action required. Retest if operating load changes or one tied watchpoint begins to dominate."
@@ -2442,7 +2548,13 @@ function RecoveryRetestPanel({
     : hasContent(evidenceOverride)
       ? null
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
-  const worksheet = isPerfectScore
+  const worksheet = isHardFail
+    ? `WORKSHEET: HARD-FAIL REPAIR — ${(primaryRiskLabel || "PRIMARY RISK").toUpperCase()}\n\n` +
+        "1. Identify the exact hard-fail condition triggered by the selected answer.\n" +
+        "2. Repair the underlying cause in real operating conditions, not on paper.\n" +
+        "3. Produce verifiable proof that the condition no longer triggers.\n" +
+        "4. Retest only after the proof is in place and reviewable by a third party."
+    : isPerfectScore
     ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
     : tiedWatchpointNotice
     ? "No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load."
@@ -2494,7 +2606,7 @@ function RecoveryRetestPanel({
             )}
           </div>
         )}
-        {hasContent(worksheet) && !isCriticalStop && (
+        {hasContent(worksheet) && (!isCriticalStop || isHardFail) && (
           <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Worksheet Output
@@ -2510,7 +2622,7 @@ function RecoveryRetestPanel({
             )}
           </div>
         )}
-        {hasContent(worksheet) && isCriticalStop && (
+        {hasContent(worksheet) && isCriticalStop && !isHardFail && (
           <div className="rounded-lg border-l-4 border-l-amber-500 border border-[hsl(var(--autopsy-border))] p-4 bg-background">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Diagnostic Guidance
@@ -2532,6 +2644,78 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
         {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-[hsl(var(--autopsy-border))] bg-background px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium break-words">{value}</div>
+    </div>
+  );
+}
+
+function HardFailChainPanel({
+  primaryRisk,
+  questionNumber,
+  questionId,
+  optionLabel,
+}: {
+  primaryRisk: string;
+  questionNumber: number | string | null;
+  questionId: string | number | null;
+  optionLabel: string | null;
+}) {
+  const risk = primaryRisk && primaryRisk.trim() ? primaryRisk : "the hard-fail dimension";
+  const cards = [
+    { label: "Hard-fail trigger", value: risk },
+    { label: "Severity", value: "Non-negotiable blocker" },
+    {
+      label: "Progression",
+      value: "Progression blocked until corrected and retested.",
+    },
+  ];
+  return (
+    <div className="rounded-2xl border-2 border-red-700/60 bg-red-500/5 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-800">
+          Hard-Fail Chain
+        </span>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-red-800/80">
+          Override
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground mb-4">
+        A non-negotiable blocker was triggered by a selected answer. This overrides the
+        score band. Correct the hard-fail condition, prove the correction, and retest
+        before progression can reopen.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        {cards.map((c) => (
+          <div key={c.label} className="rounded-lg border border-red-700/40 bg-background p-4">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-red-800 mb-1">
+              {c.label}
+            </div>
+            <div className="text-sm font-semibold break-words">{c.value}</div>
+          </div>
+        ))}
+      </div>
+      {(questionNumber != null || questionId || optionLabel) && (
+        <div className="grid gap-3 text-xs sm:grid-cols-2 border-t border-red-700/30 pt-3">
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
+            <div className="font-mono font-semibold">
+              {questionNumber ?? questionId ?? "—"}
+            </div>
+          </div>
+          <div>
+            <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
+            <div className="font-mono font-semibold break-words">{optionLabel ?? "—"}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
