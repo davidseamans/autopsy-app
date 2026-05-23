@@ -50,10 +50,28 @@ export default function AutopsyWorksheet() {
     );
   }
   const run = q.data?.run ?? {};
-  const primaryRisk = humanize(run.primary_risk) || "—";
-  const weakest = humanize(run.weakest_dimension) || "—";
-  const worksheetOutput = run.worksheet_output as any;
-  const retestCondition = run.retest_condition as any;
+  const score = Number(run.score_total ?? run.adjusted_score);
+  const hasHardFail = run.hard_fail_question_id != null || run.hard_fail_triggered === true;
+  const isPerfectScore = Number.isFinite(score) && score === 36 && !hasHardFail;
+  const isStructurallyViableWatchpoint = Number.isFinite(score) && score >= 30 && score < 36 && !hasHardFail;
+  const primaryRisk = isPerfectScore
+    ? "None"
+    : isStructurallyViableWatchpoint
+      ? "No dominant watchpoint — lowest domains are tied."
+      : humanize(run.primary_risk) || "—";
+  const weakest = isPerfectScore
+    ? "None"
+    : isStructurallyViableWatchpoint
+      ? "Execution watchpoints"
+      : humanize(run.weakest_dimension) || "—";
+  const worksheetOutput = isPerfectScore
+    ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
+    : isStructurallyViableWatchpoint
+      ? "No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load."
+      : run.worksheet_output as any;
+  const retestCondition = isPerfectScore
+    ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
+    : run.retest_condition as any;
 
   return (
     <div className="min-h-screen bg-[hsl(var(--autopsy-bg))]">

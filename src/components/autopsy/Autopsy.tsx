@@ -249,6 +249,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [error, setError] = useState<RpcError | null>(null);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
+  const [answerScores, setAnswerScores] = useState<Record<string, number>>({});
+  const [savedScoreOverride, setSavedScoreOverride] = useState<number | null>(null);
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
@@ -301,23 +303,21 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   });
   useEffect(() => {
     const rows = answerHydrationQuery.data;
-    if (!rows || rows.length === 0) return;
-    setLocalAnswers((prev) => {
-      const next = { ...prev };
-      for (const r of rows) {
-        if (r.question_id != null && r.selected_option_id != null) {
-          next[String(r.question_id)] = r.selected_option_id as any;
-        }
-      }
-      return next;
-    });
-    setAnsweredIds((prev) => {
-      const next = new Set(prev);
-      for (const r of rows) {
-        if (r.question_id != null) next.add(String(r.question_id));
-      }
-      return next;
-    });
+    if (!rows) return;
+    const nextAnswers: Record<string, string | number> = {};
+    const nextScores: Record<string, number> = {};
+    const nextAnswered = new Set<string>();
+    for (const r of rows) {
+      if (r.question_id == null) continue;
+      const qid = String(r.question_id);
+      if (r.selected_option_id != null) nextAnswers[qid] = r.selected_option_id as any;
+      const n = Number(r.score_value);
+      if (Number.isFinite(n)) nextScores[qid] = n;
+      nextAnswered.add(qid);
+    }
+    setLocalAnswers(nextAnswers);
+    setAnswerScores(nextScores);
+    setAnsweredIds(nextAnswered);
   }, [answerHydrationQuery.data]);
 
   // Resume prompt: if the user lands on the start screen and an incomplete
@@ -395,6 +395,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         return;
       }
       setError(null);
+      setAnsweredIds(new Set());
+      setLocalAnswers({});
+      setAnswerScores({});
+      setSavedScoreOverride(null);
+      setPendingSelection(null);
+      setManualIndex(null);
       setRunId(id);
       setView("question");
     },
@@ -412,23 +418,18 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     onSuccess: async (_d, vars) => {
       setError(null);
       const justAnsweredId = String(vars.question_id);
-      let nextSize = 0;
       setAnsweredIds((prev) => {
         const next = new Set(prev);
         next.add(justAnsweredId);
-        nextSize = next.size;
         return next;
       });
       setLocalAnswers((prev) => ({
         ...prev,
         [String(vars.question_id)]: vars.selected_option,
       }));
-      setPendingSelection(null);
+      setPendingSelection(vars.selected_option);
+      await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
-      // Auto-finalize when last question was just answered.
-      if (questions.length > 0 && nextSize >= questions.length && runId) {
-        await finalizeAndLoad();
-      }
     },
     onError: (e: any) =>
       setError({
@@ -506,7 +507,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
   const isAnswered = (q: GatewayQuestion) =>
-    !!q.answered || q.selected_option != null || answeredIds.has(String(q.question_id));
+    answeredIds.has(String(q.question_id)) || localAnswers[String(q.question_id)] != null || !!q.answered || q.selected_option != null;
 
   const currentIndex = useMemo(() => {
     if (manualIndex != null) {
@@ -578,9 +579,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         anyNumeric = true;
         max += Math.max(...scoreOpts);
       }
-      const sel =
-        q.selected_option ?? localAnswers[String(q.question_id)] ?? null;
+      const qid = String(q.question_id);
+      const sel = localAnswers[qid] ?? q.selected_option ?? null;
       if (sel != null) {
+        const hydratedScore = answerScores[qid];
+        if (Number.isFinite(hydratedScore)) {
+          sum += hydratedScore;
+          continue;
+        }
         const selOpt = rawOpts.find(
           (o) =>
             o &&
@@ -609,7 +615,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     // Prefer live derived sum during in-progress runs; only fall back to backend
     // aggregate scores once the run is completed (so verdict matches final score).
     const isCompleted = runStatus === "completed";
-    const finalScore = isCompleted
+    const finalScore = savedScoreOverride != null
+      ? savedScoreOverride
+      : isCompleted
       ? (Number.isFinite(backendScore)
           ? backendScore
           : Number.isFinite(liveScore)
@@ -617,14 +625,13 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             : sum)
       : sum;
     return { scoreSoFar: finalScore, scoreMax: max, scoreNumeric: anyNumeric };
-  }, [questions, localAnswers, payloadQuery.data]);
+  }, [questions, localAnswers, answerScores, payloadQuery.data, savedScoreOverride]);
 
   // Preselect previously saved answer when the current question changes.
   useEffect(() => {
     if (view !== "question" || !currentQuestion) return;
     const qid = String(currentQuestion.question_id);
-    const prior =
-      currentQuestion.selected_option ?? localAnswers[qid] ?? null;
+    const prior = localAnswers[qid] ?? currentQuestion.selected_option ?? null;
     setPendingSelection(prior as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQuestion?.question_id, view]);
@@ -641,24 +648,61 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     });
   }
 
-  async function handleNext() {
-    if (!runId || !currentQuestion || pendingSelection == null) return;
-    const isFinal = currentIndex >= questions.length - 1;
-    // Advance past the manually navigated index on Next.
-    if (manualIndex != null) {
-      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
+  async function handleSelect(value: string | number) {
+    if (!runId || !currentQuestion) return;
+    const qid = String(currentQuestion.question_id);
+    setPendingSelection(value);
+    setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
+    setAnsweredIds((prev) => {
+      const next = new Set(prev);
+      next.add(qid);
+      return next;
+    });
+    const selectedOpt = ((currentQuestion.options ?? []) as any[]).find(
+      (o) =>
+        o &&
+        typeof o === "object" &&
+        (String(o.id) === String(value) ||
+          String(o.option_id) === String(value) ||
+          String(o.value) === String(value)),
+    );
+    const selectedScore = Number(selectedOpt?.score_value ?? selectedOpt?.score);
+    if (Number.isFinite(selectedScore)) {
+      setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
+      setSavedScoreOverride(null);
     }
     try {
       await answerMutation.mutateAsync({
         run_id: runId,
         question_id: currentQuestion.question_id,
-        selected_option: pendingSelection,
+        selected_option: value,
       });
     } catch {
-      return; // onError captured it
+      return;
+    }
+  }
+
+  async function handleNext() {
+    if (!runId || !currentQuestion || pendingSelection == null) return;
+    const isFinal = currentIndex >= questions.length - 1;
+    const qid = String(currentQuestion.question_id);
+    const alreadySaved =
+      localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
+    if (!alreadySaved) {
+      try {
+        await answerMutation.mutateAsync({
+          run_id: runId,
+          question_id: currentQuestion.question_id,
+          selected_option: pendingSelection,
+        });
+      } catch {
+        return; // onError captured it
+      }
     }
     if (isFinal) {
       await finalizeAndLoad();
+    } else if (manualIndex != null) {
+      setManualIndex(manualIndex + 1 >= questions.length ? null : manualIndex + 1);
     }
   }
 
@@ -673,7 +717,23 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         queryKey: ["autopsy", "answer_audit_hydration", runId],
         queryFn: () => getCurrentRunAnswerAudit(runId as string),
       });
-      const savedCount = (savedRows ?? []).length;
+      const savedAnswers: Record<string, string | number> = {};
+      const savedScores: Record<string, number> = {};
+      const savedAnswered = new Set<string>();
+      for (const r of savedRows ?? []) {
+        if (r.question_id == null) continue;
+        const qid = String(r.question_id);
+        savedAnswered.add(qid);
+        if (r.selected_option_id != null) savedAnswers[qid] = r.selected_option_id as any;
+        const n = Number(r.score_value);
+        if (Number.isFinite(n)) savedScores[qid] = n;
+      }
+      const savedCount = savedAnswered.size;
+      const savedSum = Object.values(savedScores).reduce((acc, n) => acc + n, 0);
+      setLocalAnswers(savedAnswers);
+      setAnswerScores(savedScores);
+      setAnsweredIds(savedAnswered);
+      if (Number.isFinite(savedSum)) setSavedScoreOverride(savedSum);
       if (savedCount < QUICK_GATE_CONFIG.totalQuestions) {
         setError({
           rpc: "finalize_autopsy_run",
@@ -763,6 +823,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setError(null);
     setAnsweredIds(new Set());
     setLocalAnswers({});
+    setAnswerScores({});
+    setSavedScoreOverride(null);
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
@@ -834,9 +896,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
-            allAnswered={allAnswered}
+            allAnswered={allAnswered && (finalizeMutation.isPending || loadingStuck)}
             pendingSelection={pendingSelection}
-            onSelect={setPendingSelection}
+            onSelect={handleSelect}
             onNext={handleNext}
             finalizing={finalizeMutation.isPending}
             scoreSoFar={scoreSoFar}
@@ -1118,7 +1180,7 @@ function QuestionView(props: {
 
         <div className="space-y-3">
           {hasOptions ? options.map((opt) => {
-            const selected = props.pendingSelection === opt.value;
+            const selected = props.pendingSelection != null && String(props.pendingSelection) === String(opt.value);
             return (
               <button
                 key={opt.key}
@@ -1354,12 +1416,18 @@ function VerdictView({
   // Progression locking is not the same as a hard-fail. Hard-fail display is
   // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const scoreNumeric = run.score_total != null
-    ? Number(run.score_total)
-    : (payload as any)?.integrity?.score_total_live != null
-      ? Number((payload as any).integrity.score_total_live)
-      : null;
-  const isHardFail = hasSelectedHardFail;
+  const backendScoreTotal = Number(run.score_total);
+  const adjustedScore = Number((run as any).adjusted_score);
+  const livePayloadScore = Number((payload as any)?.integrity?.score_total_live);
+  const scoreNumeric = Number.isFinite(backendScoreTotal)
+    ? backendScoreTotal
+    : Number.isFinite(adjustedScore)
+      ? adjustedScore
+      : Number.isFinite(livePayloadScore)
+        ? livePayloadScore
+        : null;
+  const hardFailQuestionId = firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? null;
+  const isHardFail = hardFailQuestionId != null || hasSelectedHardFail;
   const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
@@ -1388,12 +1456,11 @@ function VerdictView({
       ? "locked"
       : opStateKey;
 
-  // Perfect score: 36/36 with every domain at max (6) and no hard-fail.
+  // Perfect score override is global: 36/36 and no hard-fail, regardless of
+  // stale primary-risk or weakest-dimension payload fields.
   const isPerfectScore =
     !isHardFail &&
-    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore &&
-    hasDimensionData &&
-    dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
+    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore;
 
   // Tied-min watchpoint detection for 30–35 (Structurally Viable but not perfect).
   // When multiple domains tie for the minimum score, do not arbitrarily label
@@ -1412,7 +1479,7 @@ function VerdictView({
     (scoreNumeric as number) >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin &&
     (scoreNumeric as number) < QUICK_GATE_CONFIG.perfectScore;
   const allDomainsTied =
-    hasDimensionData && tiedMinCount === dimensionScores.length;
+    isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount === dimensionScores.length;
   const hasTiedWatchpoint =
     isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount > 1;
   const tiedWatchpointNotice = allDomainsTied
@@ -1421,6 +1488,12 @@ function VerdictView({
       ? "No dominant watchpoint — lowest domains are tied."
       : null;
   const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
+  const displayScore = scoreNumeric;
+  const effectiveVerdictBody = isPerfectScore
+    ? "Structurally viable. No primary constraint or repair worksheet is required. Maintain telemetry and review cadence under operating load."
+    : tiedWatchpointNotice
+      ? `${tiedWatchpointNotice} No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.`
+      : verdictBody;
 
   const band: VerdictBand = getVerdictBand({
     verdictName,
@@ -1501,7 +1574,7 @@ function VerdictView({
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFailCriticalStop
-              ? "Status: Completed · Critical Stop (Hard-Fail Triggered)"
+              ? "Status: Completed · Critical Stop · Hard-fail condition triggered"
                 : isScoreBandCriticalStop
                   ? "Status: Completed · Critical Stop (Score-Band)"
                   : isScoreBandNotViable
@@ -1529,20 +1602,23 @@ function VerdictView({
           </h1>
           {isHardFailCriticalStop && (
             <div className="max-w-xl space-y-1">
+              <Badge variant="outline" className="border-red-700 text-red-800 bg-red-500/10 uppercase tracking-wider text-[10px]">
+                Hard-fail override
+              </Badge>
               <div className="text-sm font-semibold text-red-800">
                 Hard-fail condition triggered
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                This score would normally fall into a different band, but a
-                non-negotiable blocker has stopped progression.
+                This score would normally fall into its score band, but a
+                non-negotiable blocker stopped progression.
               </p>
             </div>
           )}
-          {run.score_total != null && (
+          {displayScore != null && Number.isFinite(displayScore) && (
             <div className="text-base">
               <span className="text-muted-foreground">Score: </span>
               <span className="font-semibold text-foreground text-lg">
-                {String(run.score_total)}
+                {String(displayScore)}
               </span>
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
@@ -1603,14 +1679,18 @@ function VerdictView({
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
       <ProgressionFlow
-        current={isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
+        current={isPerfectScore ? "scalable" : tiedWatchpointNotice ? "operationally_viable" : isProgressionLocked && !isHardFail ? "locked" : run.operational_state}
         isBlocked={isBlocked}
       />
 
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
         <p className="text-sm text-muted-foreground mb-4">
-          {suppressFailureLanguage
+          {isPerfectScore
+            ? "Scores per dimension. No primary constraint is active at perfect score."
+            : tiedWatchpointNotice
+              ? `${tiedWatchpointNotice} Scores remain watchpoints rather than a single primary constraint.`
+            : suppressFailureLanguage
             ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
             : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
         </p>
@@ -1660,6 +1740,7 @@ function VerdictView({
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
+        tiedWatchpointNotice={tiedWatchpointNotice}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1691,7 +1772,7 @@ function VerdictView({
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && !isPerfectScore && (
+      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1712,17 +1793,15 @@ function VerdictView({
             </p>
           </div>
         </SurfaceCard>
-      ) : suppressFailureLanguage ? (
+      ) : suppressFailureLanguage || tiedWatchpointNotice ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
-              This run shows a balanced dimension profile with no dominant
-              failure pressure. No primary constraint is being flagged.
+              {tiedWatchpointNotice ?? "This run shows a balanced dimension profile with no dominant failure pressure."}
+              {" "}No primary constraint is being flagged.
             </p>
             <p className="text-muted-foreground">
-              Focus shifts from constraint removal to progression and
-              governance: maintain the disciplines that produced this profile
-              and prepare for controlled scaling rather than emergency repair.
+              No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.
             </p>
             {hasContent(run.progression_state) && (
               <div>
@@ -1756,9 +1835,9 @@ function VerdictView({
       )}
 
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
-      {hasContent(verdictBody) && (
+      {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
-          {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+          {!isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
@@ -1785,7 +1864,7 @@ function VerdictView({
             </div>
           )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
-            <Prose value={sanitizeVerdictCopy(verdictBody, isHardFail)} />
+            <Prose value={sanitizeVerdictCopy(effectiveVerdictBody, isHardFail)} />
           </div>
         </SurfaceCard>
       )}
@@ -1798,12 +1877,13 @@ function VerdictView({
         isCriticalStop={isCriticalStop}
         isPerfectScore={isPerfectScore}
         isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
+        tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
-      {!hasNarrativeOutput && !hasCascade && (
+      {!isPerfectScore && !tiedWatchpointNotice && !hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
@@ -2067,6 +2147,7 @@ function PressureCollapsePanel({
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
   isPerfectScore,
+  tiedWatchpointNotice,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2075,9 +2156,12 @@ function PressureCollapsePanel({
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
+  tiedWatchpointNotice?: string | null;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isPerfectScore
+    ? "EXECUTION WATCHPOINT"
+    : tiedWatchpointNotice
     ? "EXECUTION WATCHPOINT"
     : isHardFailCriticalStop
     ? "HARD-FAIL TRIGGERED"
@@ -2094,6 +2178,8 @@ function PressureCollapsePanel({
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
   const failureTypeDisplay = isPerfectScore
+    ? "Execution watchpoint"
+    : tiedWatchpointNotice
     ? "Execution watchpoint"
     : isHardFailCriticalStop
     ? "Hard-fail override"
@@ -2114,9 +2200,11 @@ function PressureCollapsePanel({
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
     {
-      label: isPerfectScore ? "Watchpoint Pattern" : "Collapse Pattern",
+      label: isPerfectScore || tiedWatchpointNotice ? "Watchpoint Pattern" : "Collapse Pattern",
       value: isPerfectScore
         ? "No collapse pattern assigned. Track watchpoints under operating load."
+        : tiedWatchpointNotice
+        ? tiedWatchpointNotice
         : sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked),
       prose: true,
     },
@@ -2167,6 +2255,7 @@ function RecoveryRetestPanel({
   isCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  tiedWatchpointNotice,
   evidenceOverride,
   actionOverride,
 }: {
@@ -2176,6 +2265,7 @@ function RecoveryRetestPanel({
   isCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  tiedWatchpointNotice?: string | null;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
@@ -2183,6 +2273,8 @@ function RecoveryRetestPanel({
   const recovery =
     isPerfectScore
       ? "No recovery signal required. Maintain telemetry and review cadence."
+    : tiedWatchpointNotice
+      ? "No recovery signal required. Maintain telemetry and monitor all tied watchpoints under operating load."
     : isStructurallyViable
       ? "Evidence maintained under operating load."
     : isCriticalStop
@@ -2196,6 +2288,8 @@ function RecoveryRetestPanel({
         : sanitizeVerdictCopy(resolved, !!isBlocked);
   const retest = isPerfectScore
     ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
+    : tiedWatchpointNotice
+    ? "No repair action required. Retest if operating load changes or one tied watchpoint begins to dominate."
     : isCriticalStop
     ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
     : isScoreBandNotViable
@@ -2207,6 +2301,8 @@ function RecoveryRetestPanel({
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
   const worksheet = isPerfectScore
     ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
+    : tiedWatchpointNotice
+    ? "No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load."
     : run.worksheet_output;
   const worksheetIsString = typeof worksheet === "string";
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
@@ -2442,7 +2538,7 @@ export function getVerdictBand(opts: {
   isCriticalStop?: boolean;
 }): VerdictBand {
   const { verdictName, isBlocked, score, isCriticalStop } = opts;
-  if (isCriticalStop && !isBlocked) return "critical_stop";
+  if (isCriticalStop) return "critical_stop";
   if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
   if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
   if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
