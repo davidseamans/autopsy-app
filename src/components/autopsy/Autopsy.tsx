@@ -1740,6 +1740,7 @@ function VerdictView({
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
+        tiedWatchpointNotice={tiedWatchpointNotice}
       />
 
       {isHardFail && !isScoreBandNotViable && (
