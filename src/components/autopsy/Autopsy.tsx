@@ -717,7 +717,23 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         queryKey: ["autopsy", "answer_audit_hydration", runId],
         queryFn: () => getCurrentRunAnswerAudit(runId as string),
       });
-      const savedCount = (savedRows ?? []).length;
+      const savedAnswers: Record<string, string | number> = {};
+      const savedScores: Record<string, number> = {};
+      const savedAnswered = new Set<string>();
+      for (const r of savedRows ?? []) {
+        if (r.question_id == null) continue;
+        const qid = String(r.question_id);
+        savedAnswered.add(qid);
+        if (r.selected_option_id != null) savedAnswers[qid] = r.selected_option_id as any;
+        const n = Number(r.score_value);
+        if (Number.isFinite(n)) savedScores[qid] = n;
+      }
+      const savedCount = savedAnswered.size;
+      const savedSum = Object.values(savedScores).reduce((acc, n) => acc + n, 0);
+      setLocalAnswers(savedAnswers);
+      setAnswerScores(savedScores);
+      setAnsweredIds(savedAnswered);
+      if (Number.isFinite(savedSum)) setSavedScoreOverride(savedSum);
       if (savedCount < QUICK_GATE_CONFIG.totalQuestions) {
         setError({
           rpc: "finalize_autopsy_run",
@@ -807,6 +823,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setError(null);
     setAnsweredIds(new Set());
     setLocalAnswers({});
+    setAnswerScores({});
+    setSavedScoreOverride(null);
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
