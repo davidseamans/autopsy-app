@@ -972,6 +972,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setRunName("");
     setLoadingStuck(false);
     setManualIndex(null);
+    setSaveStatus({});
+    pendingSavesRef.current = new Map();
     try {
       localStorage.removeItem("autopsy_active_run_id");
       localStorage.removeItem("autopsy_current_run_id");
