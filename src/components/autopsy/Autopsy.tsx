@@ -2636,12 +2636,6 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function HardFailChainPanel({
-  // declared below
-}: any) { return null as any; }
-
-function MetaCellShim() { return null; }
-
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-[hsl(var(--autopsy-border))] bg-background px-3 py-2">
