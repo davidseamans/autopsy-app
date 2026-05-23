@@ -1005,6 +1005,15 @@ function QuestionView(props: {
   const q = props.currentQuestion;
   if (!q) return null;
   const options = (q.options ?? []).map(normalizeOption);
+  const hasOptions = options.length > 0;
+  if (!hasOptions) {
+    // eslint-disable-next-line no-console
+    console.error("Autopsy: answer options missing for question", {
+      question_id: q.question_id,
+      q_id: (q as any).q_id,
+      dimension_code: q.dimension_code,
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -1024,7 +1033,7 @@ function QuestionView(props: {
         <h2 className="text-xl font-semibold leading-snug mb-6">{q.prompt}</h2>
 
         <div className="space-y-3">
-          {options.map((opt) => {
+          {hasOptions ? options.map((opt) => {
             const selected = props.pendingSelection === opt.value;
             return (
               <button
@@ -1055,7 +1064,12 @@ function QuestionView(props: {
                 <span className="text-sm leading-relaxed flex-1">{opt.label}</span>
               </button>
             );
-          })}
+          }) : (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+              Configuration error: answer options missing for this question.
+              {(q as any).q_id ? <span className="ml-1 opacity-70">({String((q as any).q_id)})</span> : null}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 mt-6">
@@ -1074,7 +1088,7 @@ function QuestionView(props: {
           )}
           <Button
             onClick={props.onNext}
-            disabled={props.pendingSelection == null || props.saving}
+            disabled={!hasOptions || props.pendingSelection == null || props.saving}
             className="flex-1 h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
           >
             {props.saving ? "Saving…" : (
