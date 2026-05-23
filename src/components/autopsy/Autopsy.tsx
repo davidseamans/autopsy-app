@@ -3737,6 +3737,7 @@ function MechanicalFailureChain({
   evidenceFallback,
   framing,
   primaryFallback,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -3746,6 +3747,7 @@ function MechanicalFailureChain({
   evidenceFallback?: string | null;
   framing?: BandFraming;
   primaryFallback?: string | null;
+  microcopy?: string;
 }) {
   const style = operationalStyle(isBlocked ? "blocked" : String(run.operational_state ?? "").toLowerCase());
   const primary =
@@ -3801,9 +3803,9 @@ function MechanicalFailureChain({
           Causal Sequence
         </span>
       </div>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Shows the causal path from primary blocker to blocked progression.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Shows the causal path from the primary constraint to blocked progression."}
+      </SectionMicrocopy>
       {framing?.chainNote && (
         <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
       )}
