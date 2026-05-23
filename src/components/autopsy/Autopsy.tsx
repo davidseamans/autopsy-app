@@ -2354,7 +2354,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     rankPrimary: "Primary Watchpoint",
     rankSecondary: "Secondary Watchpoint",
     rankTertiary: "Third Watchpoint",
-    topologyTitle: "Pressure Topology",
+    topologyTitle: "Stability Risks",
     topologyIntro:
       "Watchpoints ranked by structural weight. These are the areas most likely to weaken first if operating pressure increases.",
     chainTitle: "Stability Risks",
@@ -2370,7 +2370,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     rankPrimary: "Primary Watchpoint",
     rankSecondary: "Secondary Watchpoint",
     rankTertiary: "Third Watchpoint",
-    topologyTitle: "Pressure Topology",
+    topologyTitle: "Execution Watchpoints",
     topologyIntro:
       "Areas to monitor under operating load. Permission is granted under discipline — not guaranteed performance.",
     chainTitle: "Execution Watchpoints",
