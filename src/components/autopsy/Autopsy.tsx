@@ -1686,7 +1686,11 @@ function VerdictView({
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
         <p className="text-sm text-muted-foreground mb-4">
-          {suppressFailureLanguage
+          {isPerfectScore
+            ? "Scores per dimension. No primary constraint is active at perfect score."
+            : tiedWatchpointNotice
+              ? `${tiedWatchpointNotice} Scores remain watchpoints rather than a single primary constraint.`
+            : suppressFailureLanguage
             ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
             : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
         </p>
@@ -1767,7 +1771,7 @@ function VerdictView({
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && !isPerfectScore && (
+      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1788,17 +1792,15 @@ function VerdictView({
             </p>
           </div>
         </SurfaceCard>
-      ) : suppressFailureLanguage ? (
+      ) : suppressFailureLanguage || tiedWatchpointNotice ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
-              This run shows a balanced dimension profile with no dominant
-              failure pressure. No primary constraint is being flagged.
+              {tiedWatchpointNotice ?? "This run shows a balanced dimension profile with no dominant failure pressure."}
+              {" "}No primary constraint is being flagged.
             </p>
             <p className="text-muted-foreground">
-              Focus shifts from constraint removal to progression and
-              governance: maintain the disciplines that produced this profile
-              and prepare for controlled scaling rather than emergency repair.
+              No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.
             </p>
             {hasContent(run.progression_state) && (
               <div>
@@ -1832,7 +1834,7 @@ function VerdictView({
       )}
 
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
-      {hasContent(verdictBody) && (
+      {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
           {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
@@ -1862,6 +1864,7 @@ function VerdictView({
           )}
           <div className="border-l-4 border-[hsl(var(--autopsy-accent))] pl-5">
             <Prose value={sanitizeVerdictCopy(verdictBody, isHardFail)} />
+            <Prose value={sanitizeVerdictCopy(effectiveVerdictBody, isHardFail)} />
           </div>
         </SurfaceCard>
       )}
@@ -1874,12 +1877,13 @@ function VerdictView({
         isCriticalStop={isCriticalStop}
         isPerfectScore={isPerfectScore}
         isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
+        tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
-      {!hasNarrativeOutput && !hasCascade && (
+      {!isPerfectScore && !tiedWatchpointNotice && !hasNarrativeOutput && !hasCascade && (
         <>
           {hasContent(run.execution_diagnosis) && (
             <SurfaceCard title="Execution diagnosis">
