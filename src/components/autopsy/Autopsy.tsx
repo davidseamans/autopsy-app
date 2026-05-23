@@ -1837,7 +1837,7 @@ function VerdictView({
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
-          {cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+          {!isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
