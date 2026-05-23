@@ -2648,6 +2648,23 @@ function SurfaceCard({ title, children }: { title: string; children: React.React
   );
 }
 
+/**
+ * SectionMicrocopy — persistent, required explanatory line under section headings.
+ * Small grey/slate, never red/green/orange, not uppercase, not bold.
+ * Do not remove during UI cleanups. Do not replace with tooltips only.
+ */
+function SectionMicrocopy({ children }: { children: React.ReactNode }) {
+  if (!children) return null;
+  return (
+    <p
+      className="text-[13px] text-muted-foreground"
+      style={{ lineHeight: 1.4, marginTop: 4, marginBottom: 12 }}
+    >
+      {children}
+    </p>
+  );
+}
+
 function Meta({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-[hsl(var(--autopsy-border))] bg-background px-3 py-2">
