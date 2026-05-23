@@ -1861,9 +1861,9 @@ function OperationalStatePanel({
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
   const progressionDisplay = isHardFailCriticalStop
-    ? "BLOCKED BY HARD-FAIL CONDITION"
+    ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
-      ? "BLOCKED BY CRITICAL STOP SCORE BAND"
+      ? "Blocked by Critical Stop score band"
     : isBlocked
       ? "PROGRESSION BLOCKED"
     : isProgressionLocked
