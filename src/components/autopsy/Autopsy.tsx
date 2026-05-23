@@ -1574,7 +1574,7 @@ function VerdictView({
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFailCriticalStop
-              ? "Status: Completed · Critical Stop (Hard-Fail Triggered)"
+              ? "Status: Completed · Critical Stop · Hard-fail condition triggered"
                 : isScoreBandCriticalStop
                   ? "Status: Completed · Critical Stop (Score-Band)"
                   : isScoreBandNotViable
@@ -1602,20 +1602,23 @@ function VerdictView({
           </h1>
           {isHardFailCriticalStop && (
             <div className="max-w-xl space-y-1">
+              <Badge variant="outline" className="border-red-700 text-red-800 bg-red-500/10 uppercase tracking-wider text-[10px]">
+                Hard-fail override
+              </Badge>
               <div className="text-sm font-semibold text-red-800">
                 Hard-fail condition triggered
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                This score would normally fall into a different band, but a
-                non-negotiable blocker has stopped progression.
+                This score would normally fall into its score band, but a
+                non-negotiable blocker stopped progression.
               </p>
             </div>
           )}
-          {run.score_total != null && (
+          {displayScore != null && Number.isFinite(displayScore) && (
             <div className="text-base">
               <span className="text-muted-foreground">Score: </span>
               <span className="font-semibold text-foreground text-lg">
-                {String(run.score_total)}
+                {String(displayScore)}
               </span>
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
