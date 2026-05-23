@@ -435,6 +435,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       setSavedScoreOverride(null);
       setPendingSelection(null);
       setManualIndex(null);
+      setStaleAnswerWarning(null);
       setRunId(id);
       setView("question");
     },
