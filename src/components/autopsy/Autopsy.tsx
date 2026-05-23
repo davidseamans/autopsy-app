@@ -2060,7 +2060,12 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
     .replace(
       /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
       "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
-    );
+    )
+    // Normalize Verdict Judgement metadata casing
+    .replace(/(^|\n)\s*severity\s*:\s*score[-\s]?band\s+failure\b/gi, "$1Severity: Score-band failure")
+    .replace(/(^|\n)\s*operational state\s*:\s*blocked\b/gi, "$1Operational State: Blocked")
+    .replace(/(^|\n)\s*progression\s*:\s*progression\s+blocked\b/gi, "$1Progression: Progression blocked")
+    .replace(/(^|\n)\s*required recovery signal\s*:\s*([a-z])/g, (_m, p1, c) => `${p1}Required Recovery Signal: ${c.toUpperCase()}`);
 }
 
 function VerdictHardFailDebug({
