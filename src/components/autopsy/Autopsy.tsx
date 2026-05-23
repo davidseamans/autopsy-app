@@ -451,6 +451,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     mutationFn: recordAutopsyAnswer,
     onSuccess: async (_d, vars) => {
       setError(null);
+      setStaleAnswerWarning(null);
       const justAnsweredId = String(vars.question_id);
       setAnsweredIds((prev) => {
         const next = new Set(prev);
@@ -465,13 +466,44 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
-    onError: (e: any) =>
+    onError: async (e: any, vars: any) => {
+      const msg = String(e?.message ?? e ?? "");
+      const isInvalidOption = /invalid\s+answer\s+option/i.test(msg);
+      if (isInvalidOption && vars?.question_id != null) {
+        const qid = String(vars.question_id);
+        // Clear the stale selection for this question and force a reselect.
+        setLocalAnswers((prev) => {
+          const next = { ...prev };
+          delete next[qid];
+          return next;
+        });
+        setAnswerScores((prev) => {
+          const next = { ...prev };
+          delete next[qid];
+          return next;
+        });
+        setAnsweredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(qid);
+          return next;
+        });
+        setPendingSelection(null);
+        setStaleAnswerWarning(
+          "Saved answer was stale after question update. Please reselect your answer.",
+        );
+        // Refetch the current question's options so any stale option IDs are
+        // replaced with the active set.
+        await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
+        await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
+        return;
+      }
       setError({
         rpc: "record_autopsy_answer",
-        message: e?.message ?? String(e),
+        message: msg,
         step: "question",
         runId,
-      }),
+      });
+    },
   });
 
   const finalizeMutation = useMutation({
