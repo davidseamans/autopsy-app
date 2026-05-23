@@ -2000,7 +2000,34 @@ function VerdictView({
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
-          {!isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
+          {isHardFail ? (
+            <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Decision Status</div>
+                <div className="text-base font-semibold text-red-800">
+                  Stop. Hard-fail condition triggered.
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Allowed Next Move</div>
+                <div className="text-sm leading-relaxed text-foreground">
+                  Correct the hard-fail condition and retest before progression.
+                </div>
+              </div>
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <Meta label="Severity" value="Hard-fail condition triggered" />
+                <Meta label="Operational State" value="Blocked" />
+                <Meta label="Progression" value="Blocked by hard-fail condition" />
+                <Meta
+                  label="Required Recovery Signal"
+                  value={
+                    (typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()) ||
+                    `Hard-fail condition${primaryConstraint ? ` on ${primaryConstraint}` : ""} corrected and proven under real operating conditions.`
+                  }
+                />
+              </div>
+            </div>
+          ) : !isPerfectScore && !tiedWatchpointNotice && cascadeSeverity && (hasContent(cascadeSeverity.permission_state) || hasContent(cascadeSeverity.operating_instruction)) && (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               {hasContent(cascadeSeverity.permission_state) && (
                 <div>
