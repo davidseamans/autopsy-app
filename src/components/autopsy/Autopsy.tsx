@@ -1452,7 +1452,7 @@ function VerdictView({
               variant="outline"
               className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
             >
-              No Active Blocker Identified · Monitor Under Load
+              Primary Watchpoint: None Identified · Monitor Under Load
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1500,6 +1500,8 @@ function VerdictView({
           weakest={weakest}
           suppress={suppressFailureLanguage}
           opState={effectiveOpState}
+          isPerfectScore={isPerfectScore}
+          primaryLabel={framing.rankPrimary}
         />
 
         <Collapsible className="mt-4">
@@ -1537,6 +1539,7 @@ function VerdictView({
         isCriticalStop={isCriticalStop}
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
+        isPerfectScore={isPerfectScore}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1568,7 +1571,7 @@ function VerdictView({
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && (
+      {hasCascade && !isPerfectScore && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1580,7 +1583,19 @@ function VerdictView({
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
-      {suppressFailureLanguage ? (
+      {isPerfectScore ? (
+        <SurfaceCard title="Execution Watchpoints">
+          <div className="space-y-3 text-sm leading-relaxed">
+            <p>
+              No active blocker identified. All dimensions are at full score.
+            </p>
+            <p className="text-muted-foreground">
+              Monitor under operating load. No recovery signal required —
+              maintain telemetry and review cadence.
+            </p>
+          </div>
+        </SurfaceCard>
+      ) : suppressFailureLanguage ? (
         <SurfaceCard title="Structural Profile">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
@@ -1918,6 +1933,7 @@ function PressureCollapsePanel({
   isCriticalStop,
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
+  isPerfectScore,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -1925,9 +1941,12 @@ function PressureCollapsePanel({
   isCriticalStop?: boolean;
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
+  isPerfectScore?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isHardFailCriticalStop
+  const stageDisplay = isPerfectScore
+    ? "EXECUTION WATCHPOINT"
+    : isHardFailCriticalStop
     ? "HARD-FAIL TRIGGERED"
     : isScoreBandCriticalStop
       ? "CRITICAL STOP"
@@ -1941,7 +1960,9 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isHardFailCriticalStop
+  const failureTypeDisplay = isPerfectScore
+    ? "Execution watchpoint"
+    : isHardFailCriticalStop
     ? "Hard-fail override"
     : isScoreBandCriticalStop
     ? "Score-band Critical Stop"
@@ -1959,7 +1980,13 @@ function PressureCollapsePanel({
     ...(suppressPressureSummary
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
-    { label: "Collapse Pattern", value: sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked), prose: true },
+    {
+      label: isPerfectScore ? "Watchpoint Pattern" : "Collapse Pattern",
+      value: isPerfectScore
+        ? "No collapse pattern assigned. Track watchpoints under operating load."
+        : sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked),
+      prose: true,
+    },
   ];
   const visible = items.filter((i) => hasContent(i.value));
   if (visible.length === 0) return null;
@@ -2785,12 +2812,16 @@ function DimensionPressureGraph({
   weakest,
   suppress,
   opState,
+  isPerfectScore,
+  primaryLabel,
 }: {
   rows: DimensionScoreRow[];
   hasData: boolean;
   weakest: string;
   suppress: boolean;
   opState: string;
+  isPerfectScore?: boolean;
+  primaryLabel?: string;
 }) {
   // Merge backend rows with canonical 6 so all dimensions are always shown.
   const byKey = new Map<string, DimensionScoreRow>();
@@ -2835,6 +2866,7 @@ function DimensionPressureGraph({
       {merged.map((d) => {
         const isWeakest =
           !suppress &&
+          !isPerfectScore &&
           weakestKey &&
           (normalizeDimKey(d.code) === weakestKey ||
             normalizeDimKey(d.label) === weakestKey);
@@ -2851,7 +2883,7 @@ function DimensionPressureGraph({
                       ? "bg-red-500/10 text-red-700 border-red-600/40"
                       : "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] border-[hsl(var(--autopsy-accent))]/30",
                   )}>
-                    Main Blocker
+                    {primaryLabel ?? "Main Blocker"}
                   </span>
                 )}
               </span>
