@@ -471,7 +471,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         ...prev,
         [String(vars.question_id)]: vars.selected_option,
       }));
-      setPendingSelection(vars.selected_option);
+      // Only update pendingSelection if the user is still on this question.
+      // Otherwise we'd overwrite the current question's pending choice with a
+      // background-save response for an earlier question.
+      if (currentQuestion && String(currentQuestion.question_id) === justAnsweredId) {
+        setPendingSelection(vars.selected_option);
+      }
       await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
@@ -496,7 +501,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           next.delete(qid);
           return next;
         });
-        setPendingSelection(null);
+        if (currentQuestion && String(currentQuestion.question_id) === qid) {
+          setPendingSelection(null);
+        }
         setStaleAnswerWarning(
           "Saved answer was stale after question update. Please reselect your answer.",
         );
