@@ -249,6 +249,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [error, setError] = useState<RpcError | null>(null);
   const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
   const [localAnswers, setLocalAnswers] = useState<Record<string, string | number>>({});
+  const [answerScores, setAnswerScores] = useState<Record<string, number>>({});
+  const [savedScoreOverride, setSavedScoreOverride] = useState<number | null>(null);
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
@@ -301,23 +303,21 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   });
   useEffect(() => {
     const rows = answerHydrationQuery.data;
-    if (!rows || rows.length === 0) return;
-    setLocalAnswers((prev) => {
-      const next = { ...prev };
-      for (const r of rows) {
-        if (r.question_id != null && r.selected_option_id != null) {
-          next[String(r.question_id)] = r.selected_option_id as any;
-        }
-      }
-      return next;
-    });
-    setAnsweredIds((prev) => {
-      const next = new Set(prev);
-      for (const r of rows) {
-        if (r.question_id != null) next.add(String(r.question_id));
-      }
-      return next;
-    });
+    if (!rows) return;
+    const nextAnswers: Record<string, string | number> = {};
+    const nextScores: Record<string, number> = {};
+    const nextAnswered = new Set<string>();
+    for (const r of rows) {
+      if (r.question_id == null) continue;
+      const qid = String(r.question_id);
+      if (r.selected_option_id != null) nextAnswers[qid] = r.selected_option_id as any;
+      const n = Number(r.score_value);
+      if (Number.isFinite(n)) nextScores[qid] = n;
+      nextAnswered.add(qid);
+    }
+    setLocalAnswers(nextAnswers);
+    setAnswerScores(nextScores);
+    setAnsweredIds(nextAnswered);
   }, [answerHydrationQuery.data]);
 
   // Resume prompt: if the user lands on the start screen and an incomplete
@@ -395,6 +395,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         return;
       }
       setError(null);
+      setAnsweredIds(new Set());
+      setLocalAnswers({});
+      setAnswerScores({});
+      setSavedScoreOverride(null);
+      setPendingSelection(null);
+      setManualIndex(null);
       setRunId(id);
       setView("question");
     },
