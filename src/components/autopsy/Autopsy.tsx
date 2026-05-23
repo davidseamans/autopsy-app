@@ -2031,7 +2031,9 @@ function VerdictView({
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
         isPerfectScore={isPerfectScore}
-        isStructurallyViable={isStructurallyViableNonPerfect || isPerfectScore}
+        isStructurallyViable={(isStructurallyViableNonPerfect || isPerfectScore) && !isHardFail}
+        isHardFail={isHardFail}
+        primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
         tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
