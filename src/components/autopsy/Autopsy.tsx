@@ -2395,6 +2395,7 @@ function PressureCollapsePanel({
   tiedWatchpointNotice,
   isHardFail,
   primaryRiskLabel,
+  microcopy,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -2406,6 +2407,7 @@ function PressureCollapsePanel({
   tiedWatchpointNotice?: string | null;
   isHardFail?: boolean;
   primaryRiskLabel?: string | null;
+  microcopy?: string;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isHardFail
@@ -2483,6 +2485,7 @@ function PressureCollapsePanel({
           Pressure / Collapse
         </span>
       </div>
+      {microcopy && <SectionMicrocopy>{microcopy}</SectionMicrocopy>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {visible.map((i) => (
           <div
