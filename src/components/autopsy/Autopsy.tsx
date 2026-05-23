@@ -790,6 +790,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       );
       return;
     }
+    // Optimistic UI: update local canonical answer state and score immediately,
+    // then save in the background. Selection feel must remain crisp — the
+    // Next button is not blocked on the network round-trip.
     setPendingSelection(value);
     setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
     // Pin the current question — answering must NOT auto-advance.
@@ -806,15 +809,41 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
       setSavedScoreOverride(null);
     }
-    try {
-      await answerMutation.mutateAsync({
+    saveAnswerInBackground(qid, currentQuestion.question_id, value);
+  }
+
+  // Fire a record_autopsy_answer call in the background. The returned promise
+  // is tracked in pendingSavesRef so finalisation can deterministically wait
+  // for in-flight saves before refetching the authoritative answer audit.
+  function saveAnswerInBackground(
+    qid: string,
+    questionId: string | number,
+    value: string | number,
+  ) {
+    if (!runId) return;
+    setSaveStatus((prev) => ({ ...prev, [qid]: "saving" }));
+    const promise = answerMutation
+      .mutateAsync({
         run_id: runId,
-        question_id: currentQuestion.question_id,
+        question_id: questionId,
         selected_option: value,
+      })
+      .then((r) => {
+        setSaveStatus((prev) => ({ ...prev, [qid]: "saved" }));
+        return r;
+      })
+      .catch((e) => {
+        setSaveStatus((prev) => ({ ...prev, [qid]: "error" }));
+        throw e;
+      })
+      .finally(() => {
+        if (pendingSavesRef.current.get(qid) === promise) {
+          pendingSavesRef.current.delete(qid);
+        }
       });
-    } catch {
-      return;
-    }
+    pendingSavesRef.current.set(qid, promise);
+    // Swallow unhandled rejection — error is surfaced via saveStatus + error toast.
+    promise.catch(() => undefined);
   }
 
   async function handleNext() {
@@ -824,7 +853,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const alreadySaved =
       localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
     if (!alreadySaved) {
-      // Re-validate before resubmission to avoid stale option IDs.
+      // Re-validate before submission to avoid stale option IDs.
       if (!findActiveOptionForQuestion(currentQuestion, pendingSelection)) {
         setPendingSelection(null);
         setStaleAnswerWarning(
@@ -832,15 +861,15 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         );
         return;
       }
-      try {
-        await answerMutation.mutateAsync({
-          run_id: runId,
-          question_id: currentQuestion.question_id,
-          selected_option: pendingSelection,
-        });
-      } catch {
-        return; // onError captured it
-      }
+      // Fire in the background; don't block navigation. finalizeAndLoad will
+      // wait for all in-flight saves before refetching.
+      setLocalAnswers((prev) => ({ ...prev, [qid]: pendingSelection }));
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.add(qid);
+        return next;
+      });
+      saveAnswerInBackground(qid, currentQuestion.question_id, pendingSelection);
     }
     if (isFinal) {
       await finalizeAndLoad();
