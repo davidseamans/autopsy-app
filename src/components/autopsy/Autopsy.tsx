@@ -290,6 +290,21 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
+  const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
+
+  // Schema-version guard: if the stored Quick Gate schema version does not
+  // match the current one, clear stale local answer state on first mount.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(QUICK_GATE_SCHEMA_VERSION_KEY);
+      if (stored !== QUICK_GATE_SCHEMA_VERSION) {
+        localStorage.removeItem("autopsy_active_run_id");
+        localStorage.removeItem("autopsy_current_run_id");
+        localStorage.setItem(QUICK_GATE_SCHEMA_VERSION_KEY, QUICK_GATE_SCHEMA_VERSION);
+      }
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [industry, setIndustry] = useState(
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
