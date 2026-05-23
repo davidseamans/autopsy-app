@@ -1403,13 +1403,13 @@ function QuestionView(props: {
                 key={opt.key}
                 type="button"
                 onClick={() => props.onSelect(opt.value as any)}
-                disabled={props.saving}
+                disabled={props.finalizingSave}
                 className={cn(
                   "w-full text-left flex items-start gap-3 rounded-lg border p-4 transition-colors",
                   selected
                     ? "border-[hsl(var(--autopsy-accent))] bg-[hsl(var(--autopsy-accent-soft))]"
                     : "border-[hsl(var(--autopsy-border))] hover:bg-muted/40",
-                  props.saving && "opacity-60 cursor-not-allowed",
+                  props.finalizingSave && "opacity-60 cursor-not-allowed",
                 )}
               >
                 <span
