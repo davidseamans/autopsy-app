@@ -1577,6 +1577,7 @@ function VerdictView({
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
+        isStructurallyViable={isStructurallyViableNonPerfect}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
