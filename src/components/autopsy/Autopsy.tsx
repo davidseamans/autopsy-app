@@ -73,6 +73,42 @@ export const QUICK_GATE_CONFIG = {
   },
 } as const;
 
+/* ---------- Quick Gate schema version (invalidates stale local state) ----- */
+const QUICK_GATE_SCHEMA_VERSION = "quick_gate_v1_12q_36_custom_answers";
+const QUICK_GATE_SCHEMA_VERSION_KEY = "autopsy_quick_gate_schema_version";
+
+/**
+ * Returns the active option (object) for the given value within a question's
+ * options array, matching id/option_id/value. Returns undefined if the option
+ * does not belong to the question or is explicitly inactive.
+ */
+function findActiveOptionForQuestion(
+  question: GatewayQuestion | undefined | null,
+  value: string | number | null | undefined,
+): any | undefined {
+  if (!question || value == null) return undefined;
+  const opts = (question.options ?? []) as any[];
+  const match = opts.find(
+    (o) =>
+      o &&
+      typeof o === "object" &&
+      (String(o.id) === String(value) ||
+        String(o.option_id) === String(value) ||
+        String(o.value) === String(value)),
+  );
+  if (!match) return undefined;
+  // is_active may be absent — only reject when explicitly false.
+  if (match.is_active === false) return undefined;
+  // question_id, when present on the option, must match the question.
+  if (
+    match.question_id != null &&
+    String(match.question_id) !== String(question.question_id)
+  ) {
+    return undefined;
+  }
+  return match;
+}
+
 interface RpcError {
   rpc: string;
   message: string;
@@ -254,6 +290,21 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
+  const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
+
+  // Schema-version guard: if the stored Quick Gate schema version does not
+  // match the current one, clear stale local answer state on first mount.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(QUICK_GATE_SCHEMA_VERSION_KEY);
+      if (stored !== QUICK_GATE_SCHEMA_VERSION) {
+        localStorage.removeItem("autopsy_active_run_id");
+        localStorage.removeItem("autopsy_current_run_id");
+        localStorage.setItem(QUICK_GATE_SCHEMA_VERSION_KEY, QUICK_GATE_SCHEMA_VERSION);
+      }
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [industry, setIndustry] = useState(
     () => localStorage.getItem("autopsy_intake_industry") || "Cleaning",
@@ -293,32 +344,15 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   // Authoritative answer hydration from the backend. On every payload refresh
   // (including resume), pull saved answers so localAnswers + answeredIds reflect
-  // exactly what is persisted server-side. Prevents "Q10 at score 0/36" on
-  // resume and keeps the running score authoritative.
+  // exactly what is persisted server-side. Hydration is gated on the gateway
+  // payload's active option list — stale option IDs (from a previous question
+  // schema) are discarded so the user is forced to reselect.
   const answerHydrationQuery = useQuery({
     queryKey: ["autopsy", "answer_audit_hydration", runId],
     queryFn: () => getCurrentRunAnswerAudit(runId as string),
     enabled: !!runId,
     retry: false,
   });
-  useEffect(() => {
-    const rows = answerHydrationQuery.data;
-    if (!rows) return;
-    const nextAnswers: Record<string, string | number> = {};
-    const nextScores: Record<string, number> = {};
-    const nextAnswered = new Set<string>();
-    for (const r of rows) {
-      if (r.question_id == null) continue;
-      const qid = String(r.question_id);
-      if (r.selected_option_id != null) nextAnswers[qid] = r.selected_option_id as any;
-      const n = Number(r.score_value);
-      if (Number.isFinite(n)) nextScores[qid] = n;
-      nextAnswered.add(qid);
-    }
-    setLocalAnswers(nextAnswers);
-    setAnswerScores(nextScores);
-    setAnsweredIds(nextAnswered);
-  }, [answerHydrationQuery.data]);
 
   // Resume prompt: if the user lands on the start screen and an incomplete
   // run is recorded in localStorage, offer to resume or discard before
@@ -417,6 +451,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     mutationFn: recordAutopsyAnswer,
     onSuccess: async (_d, vars) => {
       setError(null);
+      setStaleAnswerWarning(null);
       const justAnsweredId = String(vars.question_id);
       setAnsweredIds((prev) => {
         const next = new Set(prev);
@@ -431,13 +466,44 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
     },
-    onError: (e: any) =>
+    onError: async (e: any, vars: any) => {
+      const msg = String(e?.message ?? e ?? "");
+      const isInvalidOption = /invalid\s+answer\s+option/i.test(msg);
+      if (isInvalidOption && vars?.question_id != null) {
+        const qid = String(vars.question_id);
+        // Clear the stale selection for this question and force a reselect.
+        setLocalAnswers((prev) => {
+          const next = { ...prev };
+          delete next[qid];
+          return next;
+        });
+        setAnswerScores((prev) => {
+          const next = { ...prev };
+          delete next[qid];
+          return next;
+        });
+        setAnsweredIds((prev) => {
+          const next = new Set(prev);
+          next.delete(qid);
+          return next;
+        });
+        setPendingSelection(null);
+        setStaleAnswerWarning(
+          "Saved answer was stale after question update. Please reselect your answer.",
+        );
+        // Refetch the current question's options so any stale option IDs are
+        // replaced with the active set.
+        await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
+        await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
+        return;
+      }
       setError({
         rpc: "record_autopsy_answer",
-        message: e?.message ?? String(e),
+        message: msg,
         step: "question",
         runId,
-      }),
+      });
+    },
   });
 
   const finalizeMutation = useMutation({
@@ -506,6 +572,44 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   });
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
+
+  // Hydrate localAnswers from backend audit, validating each saved option
+  // against the question's current active option list. Stale options (from
+  // an earlier question schema) are dropped silently and a warning is shown.
+  useEffect(() => {
+    const rows = answerHydrationQuery.data;
+    if (!rows || questions.length === 0) return;
+    const questionById = new Map<string, GatewayQuestion>(
+      questions.map((q) => [String(q.question_id), q] as [string, GatewayQuestion]),
+    );
+    const nextAnswers: Record<string, string | number> = {};
+    const nextScores: Record<string, number> = {};
+    const nextAnswered = new Set<string>();
+    let droppedAny = false;
+    for (const r of rows) {
+      if (r.question_id == null) continue;
+      const qid = String(r.question_id);
+      const q = questionById.get(qid);
+      const opt = findActiveOptionForQuestion(q, r.selected_option_id as any);
+      if (!opt) {
+        if (r.selected_option_id != null) droppedAny = true;
+        continue;
+      }
+      nextAnswers[qid] = r.selected_option_id as any;
+      const n = Number(r.score_value);
+      if (Number.isFinite(n)) nextScores[qid] = n;
+      nextAnswered.add(qid);
+    }
+    setLocalAnswers(nextAnswers);
+    setAnswerScores(nextScores);
+    setAnsweredIds(nextAnswered);
+    if (droppedAny) {
+      setStaleAnswerWarning(
+        "Saved answer was stale after question update. Please reselect your answer.",
+      );
+    }
+  }, [answerHydrationQuery.data, questions]);
+
   const isAnswered = (q: GatewayQuestion) =>
     answeredIds.has(String(q.question_id)) || localAnswers[String(q.question_id)] != null || !!q.answered || q.selected_option != null;
 
@@ -651,6 +755,32 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function handleSelect(value: string | number) {
     if (!runId || !currentQuestion) return;
     const qid = String(currentQuestion.question_id);
+    // Validate the option belongs to the current question's active option set
+    // before any state mutation or RPC. Prevents "Invalid answer option for
+    // question" backend rejections from stale local/resume state.
+    const validOpt = findActiveOptionForQuestion(currentQuestion, value);
+    if (!validOpt) {
+      setLocalAnswers((prev) => {
+        const next = { ...prev };
+        delete next[qid];
+        return next;
+      });
+      setAnswerScores((prev) => {
+        const next = { ...prev };
+        delete next[qid];
+        return next;
+      });
+      setAnsweredIds((prev) => {
+        const next = new Set(prev);
+        next.delete(qid);
+        return next;
+      });
+      setPendingSelection(null);
+      setStaleAnswerWarning(
+        "Saved answer was stale after question update. Please reselect your answer.",
+      );
+      return;
+    }
     setPendingSelection(value);
     setLocalAnswers((prev) => ({ ...prev, [qid]: value }));
     setAnsweredIds((prev) => {
@@ -658,15 +788,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       next.add(qid);
       return next;
     });
-    const selectedOpt = ((currentQuestion.options ?? []) as any[]).find(
-      (o) =>
-        o &&
-        typeof o === "object" &&
-        (String(o.id) === String(value) ||
-          String(o.option_id) === String(value) ||
-          String(o.value) === String(value)),
-    );
-    const selectedScore = Number(selectedOpt?.score_value ?? selectedOpt?.score);
+    const selectedScore = Number(validOpt?.score_value ?? validOpt?.score);
     if (Number.isFinite(selectedScore)) {
       setAnswerScores((prev) => ({ ...prev, [qid]: selectedScore }));
       setSavedScoreOverride(null);
@@ -689,6 +811,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const alreadySaved =
       localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
     if (!alreadySaved) {
+      // Re-validate before resubmission to avoid stale option IDs.
+      if (!findActiveOptionForQuestion(currentQuestion, pendingSelection)) {
+        setPendingSelection(null);
+        setStaleAnswerWarning(
+          "Saved answer was stale after question update. Please reselect your answer.",
+        );
+        return;
+      }
       try {
         await answerMutation.mutateAsync({
           run_id: runId,
@@ -871,6 +1001,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         </div>
 
         {error && <ErrorPanel error={error} />}
+
+        {staleAnswerWarning && view === "question" && (
+          <Alert className="mb-4 border-amber-500/40 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Answer needs to be reselected</AlertTitle>
+            <AlertDescription>{staleAnswerWarning}</AlertDescription>
+          </Alert>
+        )}
 
         {view === "start" && (
           <StartView
