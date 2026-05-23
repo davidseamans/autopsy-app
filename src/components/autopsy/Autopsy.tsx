@@ -1859,15 +1859,13 @@ function VerdictView({
 
       {/* 4. Dimension Pressure Profile */}
       <SurfaceCard title="Dimension Pressure Profile">
-        <p className="text-sm text-muted-foreground mb-4">
+        <SectionMicrocopy>
           {isPerfectScore
-            ? "Scores per dimension. No primary constraint is active at perfect score."
+            ? "All domains are fully proven at this level. No primary constraint is active."
             : tiedWatchpointNotice
-              ? `${tiedWatchpointNotice} Scores remain watchpoints rather than a single primary constraint.`
-            : suppressFailureLanguage
-            ? "Scores per dimension. A balanced profile indicates no single dimension is dominating risk."
-            : "Scores per dimension, sorted weakest to strongest. The weakest dimension drives the primary constraint."}
-        </p>
+              ? "Lowest domains are tied. Treat them as watchpoints under operating load, not as a single blocker."
+              : "Shows how each domain scored. Weakest scores identify the constraint, watchpoint, or proof risk."}
+        </SectionMicrocopy>
         <DimensionPressureGraph
           rows={dimensionScores}
           hasData={hasDimensionData}
@@ -1917,6 +1915,7 @@ function VerdictView({
         tiedWatchpointNotice={tiedWatchpointNotice}
         isHardFail={isHardFail}
         primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
+        microcopy="Summarises the structural state created by the score, hard-fail status, and weakest domain."
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1931,6 +1930,7 @@ function VerdictView({
                 ? String(firstSelectedHardFail.selected_option_id)
                 : null
           }
+          microcopy="Shows why the selected hard-fail answer overrides the score and blocks progression."
         />
       )}
 
@@ -1943,12 +1943,22 @@ function VerdictView({
           isBlocked={isBlocked}
           failureDrivers={sanitizeVerdictCopy(supportingBlocks?.failure_drivers, isHardFail)}
           framing={framing}
+          microcopy={
+            Number.isFinite(scoreNumeric) && scoreNumeric >= 30
+              ? "Identifies watchpoints to monitor during execution. These are not blockers unless evidence deteriorates."
+              : Number.isFinite(scoreNumeric) && scoreNumeric >= 22
+                ? "Identifies the stability risks most likely to weaken the business under real operating pressure."
+                : "Ranks the main pressure, next pressure, and compounding third pressure."
+          }
         />
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
       {isHardFail ? null : isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
+          <SectionMicrocopy>
+            Shows the operating watchpoints to monitor as the business enters execution.
+          </SectionMicrocopy>
           <div className="space-y-3 text-sm leading-relaxed">
             <p>No active watchpoint identified.</p>
             <p className="text-muted-foreground">
@@ -1958,6 +1968,9 @@ function VerdictView({
         </SurfaceCard>
       ) : suppressFailureLanguage || tiedWatchpointNotice ? (
         <SurfaceCard title="Structural Profile">
+          <SectionMicrocopy>
+            Shows the operating watchpoints to monitor as the business enters execution.
+          </SectionMicrocopy>
           <div className="space-y-3 text-sm leading-relaxed">
             <p>
               {tiedWatchpointNotice ?? "This run shows a balanced dimension profile with no dominant failure pressure."}
@@ -1994,12 +2007,20 @@ function VerdictView({
         evidenceFallback={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
           framing={framing}
           primaryFallback={dimensionScores[0]?.label ?? dimensionScores[0]?.code ?? null}
+          microcopy={
+            Number.isFinite(scoreNumeric) && scoreNumeric >= 30
+              ? "Shows the operating watchpoints to monitor as the business enters execution."
+              : "Shows the causal path from the primary constraint to blocked progression."
+          }
         />
       )}
 
       {/* 7. Verdict Judgement — lead voice with integrated decision block */}
       {hasContent(effectiveVerdictBody) && (
         <SurfaceCard title="Verdict Judgement">
+          <SectionMicrocopy>
+            Plain-English decision logic. This section explains what the result permits, blocks, or requires next.
+          </SectionMicrocopy>
           {isHardFail ? (
             <div className="grid gap-4 md:grid-cols-2 mb-6 pb-6 border-b border-[hsl(var(--autopsy-border))]">
               <div>
@@ -2072,6 +2093,11 @@ function VerdictView({
         tiedWatchpointNotice={tiedWatchpointNotice}
         evidenceOverride={sanitizeVerdictCopy(supportingBlocks?.evidence_required?.[0]?.body, isHardFail)}
         actionOverride={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
+        microcopy={
+          isPerfectScore
+            ? "No recovery action is required. Retest only if assumptions, operating load, or structure materially change."
+            : "Defines the proof required before retesting or progression can reopen."
+        }
       />
 
       {/* 10. Legacy mechanism sections — only when narrative_output is absent */}
