@@ -1276,11 +1276,14 @@ function VerdictView({
       ? Number((payload as any).integrity.score_total_live)
       : null;
   const isHardFail = hasSelectedHardFail;
-  const isCriticalStop =
+  const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
     (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.criticalStopMax;
+  // A hard-fail always routes to Critical Stop regardless of score band.
+  const isHardFailCriticalStop = isHardFail;
+  const isCriticalStop = isScoreBandCriticalStop || isHardFailCriticalStop;
   const isScoreBandNotViable =
     !isHardFail &&
     !isCriticalStop &&
@@ -1300,6 +1303,13 @@ function VerdictView({
     : isProgressionLocked
       ? "locked"
       : opStateKey;
+
+  // Perfect score: 36/36 with every domain at max (6) and no hard-fail.
+  const isPerfectScore =
+    !isHardFail &&
+    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore &&
+    hasDimensionData &&
+    dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
 
   const band: VerdictBand = getVerdictBand({
     verdictName,
@@ -1379,10 +1389,10 @@ function VerdictView({
       >
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {isHardFail
-              ? "Status: Completed · Blocking Failure"
-                : isCriticalStop
-                  ? "Status: Completed · Critical Stop"
+            {isHardFailCriticalStop
+              ? "Status: Completed · Critical Stop (Hard-Fail Triggered)"
+                : isScoreBandCriticalStop
+                  ? "Status: Completed · Critical Stop (Score-Band)"
                   : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
@@ -1406,6 +1416,17 @@ function VerdictView({
               return "Verdict";
             })()}
           </h1>
+          {isHardFailCriticalStop && (
+            <div className="max-w-xl space-y-1">
+              <div className="text-sm font-semibold text-red-800">
+                Hard-fail condition triggered
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                This score would normally fall into a different band, but a
+                non-negotiable blocker has stopped progression.
+              </p>
+            </div>
+          )}
           {run.score_total != null && (
             <div className="text-base">
               <span className="text-muted-foreground">Score: </span>
@@ -1415,7 +1436,7 @@ function VerdictView({
               <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
           )}
-          {primaryConstraint && !suppressFailureLanguage && !hasCascade && (
+          {primaryConstraint && !suppressFailureLanguage && !hasCascade && !isPerfectScore && (
             <Badge
               variant="outline"
               className={cn(
@@ -1424,6 +1445,14 @@ function VerdictView({
               )}
             >
               {framing.rankPrimary} · {primaryConstraint}
+            </Badge>
+          )}
+          {isPerfectScore && (
+            <Badge
+              variant="outline"
+              className={cn("uppercase tracking-wider text-[10px] px-3 py-1", framing.badgeClass)}
+            >
+              No Active Blocker Identified · Monitor Under Load
             </Badge>
           )}
           {suppressFailureLanguage && (
@@ -1447,6 +1476,9 @@ function VerdictView({
         isProgressionLocked={isProgressionBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isHardFailCriticalStop={isHardFailCriticalStop}
+        isScoreBandCriticalStop={isScoreBandCriticalStop}
+        isPerfectScore={isPerfectScore}
         operatingInstruction={sanitizeVerdictCopy(cascadeSeverity?.operating_instruction, isHardFail)}
         requiredActionFallback={sanitizeVerdictCopy(supportingBlocks?.required_actions?.[0]?.body, isHardFail)}
       />
@@ -1503,6 +1535,8 @@ function VerdictView({
         isBlocked={isBlocked}
         isScoreBandNotViable={isScoreBandNotViable}
         isCriticalStop={isCriticalStop}
+        isHardFailCriticalStop={isHardFailCriticalStop}
+        isScoreBandCriticalStop={isScoreBandCriticalStop}
       />
 
       {isHardFail && !isScoreBandNotViable && (
