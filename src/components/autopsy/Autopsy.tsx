@@ -2129,6 +2129,8 @@ function RecoveryRetestPanel({
   isBlocked,
   isScoreBandNotViable,
   isCriticalStop,
+  isPerfectScore,
+  isStructurallyViable,
   evidenceOverride,
   actionOverride,
 }: {
@@ -2136,12 +2138,18 @@ function RecoveryRetestPanel({
   isBlocked?: boolean;
   isScoreBandNotViable?: boolean;
   isCriticalStop?: boolean;
+  isPerfectScore?: boolean;
+  isStructurallyViable?: boolean;
   evidenceOverride?: string | null;
   actionOverride?: string | null;
 }) {
   const resolved = resolveRecoverySignal(run);
   const recovery =
-    isCriticalStop
+    isPerfectScore
+      ? "No recovery signal required. Maintain telemetry and review cadence."
+    : isStructurallyViable
+      ? "Evidence maintained under operating load."
+    : isCriticalStop
       ? "Outside Safe Progression Pathway"
       : isScoreBandNotViable
       ? "Repair Worksheet Required"
@@ -2150,7 +2158,9 @@ function RecoveryRetestPanel({
       : resolved === "Recovery signal not returned"
         ? null
         : sanitizeVerdictCopy(resolved, !!isBlocked);
-  const retest = isCriticalStop
+  const retest = isPerfectScore
+    ? "No recovery action required. Retest only after meaningful operating change, scaling pressure, or structural drift."
+    : isCriticalStop
     ? "Autopsy is not opening Stage 1 from this result. Education, advice, or a complete rethink is required before retesting."
     : isScoreBandNotViable
     ? "Progression is locked until the Repair Worksheet is completed and the required proof is recorded."
@@ -2159,7 +2169,10 @@ function RecoveryRetestPanel({
     : hasContent(evidenceOverride)
       ? null
       : sanitizeVerdictCopy(run.retest_condition, !!isBlocked);
-  const worksheet = run.worksheet_output;
+  const worksheet = isPerfectScore
+    ? "No repair worksheet required. Enter Stage 1 with telemetry and review cadence active."
+    : run.worksheet_output;
+  const worksheetIsString = typeof worksheet === "string";
   if (!hasContent(recovery) && !hasContent(retest) && !hasContent(worksheet)) return null;
   const renderBlock = (value: any) => {
     if (value == null) return "—";
@@ -2211,9 +2224,15 @@ function RecoveryRetestPanel({
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Worksheet Output
             </div>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
-              {renderBlock(worksheet)}
-            </pre>
+            {worksheetIsString ? (
+              <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                {worksheet as string}
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words leading-relaxed">
+                {renderBlock(worksheet)}
+              </pre>
+            )}
           </div>
         )}
         {hasContent(worksheet) && isCriticalStop && (
