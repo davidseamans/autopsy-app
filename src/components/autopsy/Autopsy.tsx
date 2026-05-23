@@ -1915,6 +1915,8 @@ function VerdictView({
         isScoreBandCriticalStop={isScoreBandCriticalStop}
         isPerfectScore={isPerfectScore}
         tiedWatchpointNotice={tiedWatchpointNotice}
+        isHardFail={isHardFail}
+        primaryRiskLabel={primaryConstraint || humanize((run as any).primary_risk_code) || null}
       />
 
       {isHardFail && !isScoreBandNotViable && (
