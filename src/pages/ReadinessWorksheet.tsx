@@ -89,7 +89,7 @@ export default function ReadinessWorksheet() {
   const scoreTotal = Number(run.score_total ?? run.total_score ?? NaN);
   const isNotViableBand =
     /not\s*viable/i.test(verdictName) ||
-    (Number.isFinite(scoreTotal) && scoreTotal >= 4 && scoreTotal <= 9);
+    (Number.isFinite(scoreTotal) && scoreTotal >= 5 && scoreTotal <= 11);
 
   // Seed / refresh progression record once we have the verdict.
   useEffect(() => {

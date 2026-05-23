@@ -144,7 +144,7 @@ function RunCard({ r, inProgress }: { r: RunRow; inProgress?: boolean }) {
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
             {r.score_total != null && (
               <span>
-                Score <span className="text-foreground font-medium">{r.score_total}</span> / 30
+                Score <span className="text-foreground font-medium">{r.score_total}</span> / 36
               </span>
             )}
             {constraint && (

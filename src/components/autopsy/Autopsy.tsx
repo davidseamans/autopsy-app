@@ -56,6 +56,23 @@ import type { SelectedAnswerAuditRow } from "./rpc";
 
 type View = "start" | "question" | "verdict";
 
+/* --------- Quick Gate v1 scoring config (12Q / 6 domains / 36 max) ---------- */
+export const QUICK_GATE_CONFIG = {
+  totalQuestions: 12,
+  domainsCount: 6,
+  domainMaxScore: 6,
+  maxScore: 36,
+  perfectScore: 36,
+  // Verdict band thresholds (inclusive lower bound)
+  bandThresholds: {
+    criticalStopMax: 4,        // 0–4
+    notViableMax: 11,          // 5–11
+    highRiskMax: 21,           // 12–21
+    viableMax: 29,             // 22–29
+    structurallyViableMin: 30, // 30–36
+  },
+} as const;
+
 interface RpcError {
   rpc: string;
   message: string;
@@ -1094,7 +1111,7 @@ function ProgressHeader({
           Question {Math.min(currentIndex + 1, total)} of {total}
         </span>
         <span className="text-muted-foreground">
-          Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / 30
+          Score: <span className="font-medium text-foreground">{scoreSoFar}</span> / {scoreMax || QUICK_GATE_CONFIG.maxScore}
         </span>
       </div>
       <div className="h-2 rounded-full bg-[hsl(var(--autopsy-border))] overflow-hidden">
@@ -1249,13 +1266,13 @@ function VerdictView({
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
     (scoreNumeric as number) >= 0 &&
-    (scoreNumeric as number) <= 3;
+    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.criticalStopMax;
   const isScoreBandNotViable =
     !isHardFail &&
     !isCriticalStop &&
     Number.isFinite(scoreNumeric) &&
-    (scoreNumeric as number) >= 4 &&
-    (scoreNumeric as number) <= 9;
+    (scoreNumeric as number) > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax &&
+    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.notViableMax;
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
@@ -1381,7 +1398,7 @@ function VerdictView({
               <span className="font-semibold text-foreground text-lg">
                 {String(run.score_total)}
               </span>
-              <span className="text-muted-foreground"> / 30</span>
+              <span className="text-muted-foreground"> / {QUICK_GATE_CONFIG.maxScore}</span>
             </div>
           )}
           {primaryConstraint && !suppressFailureLanguage && !hasCascade && (
@@ -2179,10 +2196,10 @@ export function getVerdictBand(opts: {
   if (/viable/i.test(verdictName)) return "viable";
   const s = typeof score === "number" ? score : Number(score);
   if (Number.isFinite(s)) {
-    if (s >= 25) return "structurally_viable";
-    if (s >= 18) return "viable";
-    if (s >= 10) return "high_risk";
-    if (s >= 4) return "not_viable";
+    if (s >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin) return "structurally_viable";
+    if (s > QUICK_GATE_CONFIG.bandThresholds.highRiskMax) return "viable";
+    if (s > QUICK_GATE_CONFIG.bandThresholds.notViableMax) return "high_risk";
+    if (s > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax) return "not_viable";
     return "critical_stop";
   }
   return "high_risk";
@@ -2234,7 +2251,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     topologyTitle: "Pressure Topology",
     topologyIntro:
       "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
-    chainTitle: "Failure Chain",
+    chainTitle: "Pressure Topology",
     pathLabel: "Failure Path",
     proofLabel: "Proof Required Before Proceeding",
     outcomeLabel: "Stop — Do Not Proceed",
@@ -2250,7 +2267,7 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     topologyTitle: "Pressure Topology",
     topologyIntro:
       "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
-    chainTitle: "Pressure Chain",
+    chainTitle: "Pressure Topology",
     pathLabel: "Pressure Path",
     proofLabel: "Evidence Required",
     outcomeLabel: "Proceed Only If",
