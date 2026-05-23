@@ -1961,6 +1961,9 @@ function RecoveryRetestPanel({
           Controlled Progression
         </span>
       </div>
+      <p className="text-xs text-muted-foreground/80 mb-4">
+        Defines the proof required before retesting or progression can reopen.
+      </p>
       <div className="space-y-4">
         {hasContent(recovery) && (
           <div className="rounded-lg border-l-4 border-l-[hsl(var(--autopsy-accent))] border border-[hsl(var(--autopsy-border))] p-4 bg-background">
@@ -2057,7 +2060,12 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
     .replace(
       /Progression is blocked until the score-band condition is corrected and retested\.?/gi,
       "Progression is locked until the Repair Worksheet is completed and the required proof is recorded.",
-    );
+    )
+    // Normalize Verdict Judgement metadata casing
+    .replace(/(^|\n)\s*severity\s*:\s*score[-\s]?band\s+failure\b/gi, "$1Severity: Score-band failure")
+    .replace(/(^|\n)\s*operational state\s*:\s*blocked\b/gi, "$1Operational State: Blocked")
+    .replace(/(^|\n)\s*progression\s*:\s*progression\s+blocked\b/gi, "$1Progression: Progression blocked")
+    .replace(/(^|\n)\s*required recovery signal\s*:\s*([a-z])/g, (_m, p1, c) => `${p1}Required Recovery Signal: ${c.toUpperCase()}`);
 }
 
 function VerdictHardFailDebug({
@@ -2903,8 +2911,8 @@ function PressureTopology({
 
   return (
     <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
-      <p className="text-sm text-muted-foreground mb-4">
-        {framing?.topologyIntro ?? "Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it."}
+      <p className="text-xs text-muted-foreground/80 mb-4">
+        Ranked pressures showing the main blocker, next pressure, and compounding third pressure.
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
@@ -3047,6 +3055,9 @@ function MechanicalFailureChain({
           Causal Sequence
         </span>
       </div>
+      <p className="text-xs text-muted-foreground/80 mb-4">
+        Shows the causal path from primary blocker to blocked progression.
+      </p>
       {framing?.chainNote && (
         <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
       )}
