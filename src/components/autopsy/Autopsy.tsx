@@ -1598,7 +1598,7 @@ function VerdictView({
           weakest={weakest}
           suppress={suppressFailureLanguage}
           opState={effectiveOpState}
-          isPerfectScore={isPerfectScore}
+          isPerfectScore={isPerfectScore || hasTiedWatchpoint || allDomainsTied}
           primaryLabel={framing.rankPrimary}
         />
 
