@@ -2197,6 +2197,8 @@ function OperationalStatePanel({
   isScoreBandCriticalStop,
   isPerfectScore,
   isStructurallyViable,
+  isHardFail,
+  primaryRiskLabel,
   operatingInstruction,
   requiredActionFallback,
 }: {
@@ -2209,14 +2211,18 @@ function OperationalStatePanel({
   isScoreBandCriticalStop?: boolean;
   isPerfectScore?: boolean;
   isStructurallyViable?: boolean;
+  isHardFail?: boolean;
+  primaryRiskLabel?: string | null;
   operatingInstruction?: string | null;
   requiredActionFallback?: string | null;
 }) {
   const opKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const effective = isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
+  const effective = isHardFail || isBlocked ? "blocked" : isProgressionLocked ? "locked" : opKey;
   const style = operationalStyle(effective);
   // Hard-fail display relabelling (does not mutate backend values)
-  const progressionDisplay = isPerfectScore
+  const progressionDisplay = isHardFail
+    ? "Blocked by hard-fail condition"
+    : isPerfectScore
     ? "Scalable"
     : isStructurallyViable
       ? "Controlled progression"
@@ -2229,7 +2235,9 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "PROGRESSION LOCKED"
     : humanize(run.progression_state) || "—";
-  const rawPermissionBias = isPerfectScore
+  const rawPermissionBias = isHardFail
+    ? "Repair hard-fail condition before retesting"
+    : isPerfectScore
     ? "Open Stage 1 Dashboard"
     : isStructurallyViable
       ? "Proceed with execution watchpoints"
@@ -2240,13 +2248,20 @@ function OperationalStatePanel({
     : isProgressionLocked
       ? "Repair Worksheet Required"
     : humanize(run.permission_bias) || "—";
-  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable)
+  const permissionBiasDisplay = (isPerfectScore || isStructurallyViable || isHardFail)
     ? rawPermissionBias
     : cleanProceedOnlyIf(
         sanitizeVerdictCopy(rawPermissionBias, !!isBlocked),
         operatingInstruction || requiredActionFallback,
       );
-  const recoveryDisplay = isPerfectScore
+  const backendRecovery =
+    typeof run.required_recovery_signal === "string" && run.required_recovery_signal.trim()
+      ? run.required_recovery_signal.trim()
+      : null;
+  const recoveryDisplay = isHardFail
+    ? (backendRecovery ||
+        `Hard-fail condition${primaryRiskLabel ? ` on ${primaryRiskLabel}` : ""} corrected and proven under real operating conditions.`)
+    : isPerfectScore
     ? "No recovery signal required. Maintain telemetry and review cadence."
     : isStructurallyViable
       ? "Evidence maintained under operating load."
