@@ -1416,12 +1416,18 @@ function VerdictView({
   // Progression locking is not the same as a hard-fail. Hard-fail display is
   // sourced ONLY from the selected answer option for this run.
   const opStateKey = String(run.operational_state ?? "").trim().toLowerCase();
-  const scoreNumeric = run.score_total != null
-    ? Number(run.score_total)
-    : (payload as any)?.integrity?.score_total_live != null
-      ? Number((payload as any).integrity.score_total_live)
-      : null;
-  const isHardFail = hasSelectedHardFail;
+  const backendScoreTotal = Number(run.score_total);
+  const adjustedScore = Number((run as any).adjusted_score);
+  const livePayloadScore = Number((payload as any)?.integrity?.score_total_live);
+  const scoreNumeric = Number.isFinite(backendScoreTotal)
+    ? backendScoreTotal
+    : Number.isFinite(adjustedScore)
+      ? adjustedScore
+      : Number.isFinite(livePayloadScore)
+        ? livePayloadScore
+        : null;
+  const hardFailQuestionId = firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? null;
+  const isHardFail = hardFailQuestionId != null || hasSelectedHardFail;
   const isScoreBandCriticalStop =
     !isHardFail &&
     Number.isFinite(scoreNumeric) &&
@@ -1450,12 +1456,11 @@ function VerdictView({
       ? "locked"
       : opStateKey;
 
-  // Perfect score: 36/36 with every domain at max (6) and no hard-fail.
+  // Perfect score override is global: 36/36 and no hard-fail, regardless of
+  // stale primary-risk or weakest-dimension payload fields.
   const isPerfectScore =
     !isHardFail &&
-    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore &&
-    hasDimensionData &&
-    dimensionScores.every((d) => Number(d.score) >= QUICK_GATE_CONFIG.domainMaxScore);
+    Number(scoreNumeric) === QUICK_GATE_CONFIG.perfectScore;
 
   // Tied-min watchpoint detection for 30–35 (Structurally Viable but not perfect).
   // When multiple domains tie for the minimum score, do not arbitrarily label
@@ -1474,7 +1479,7 @@ function VerdictView({
     (scoreNumeric as number) >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin &&
     (scoreNumeric as number) < QUICK_GATE_CONFIG.perfectScore;
   const allDomainsTied =
-    hasDimensionData && tiedMinCount === dimensionScores.length;
+    isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount === dimensionScores.length;
   const hasTiedWatchpoint =
     isStructurallyViableNonPerfect && hasDimensionData && tiedMinCount > 1;
   const tiedWatchpointNotice = allDomainsTied
@@ -1483,6 +1488,12 @@ function VerdictView({
       ? "No dominant watchpoint — lowest domains are tied."
       : null;
   const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
+  const displayScore = scoreNumeric;
+  const effectiveVerdictBody = isPerfectScore
+    ? "Structurally viable. No primary constraint or repair worksheet is required. Maintain telemetry and review cadence under operating load."
+    : tiedWatchpointNotice
+      ? `${tiedWatchpointNotice} No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.`
+      : verdictBody;
 
   const band: VerdictBand = getVerdictBand({
     verdictName,
