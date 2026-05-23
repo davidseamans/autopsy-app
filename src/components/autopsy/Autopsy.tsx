@@ -1916,35 +1916,16 @@ function VerdictView({
       />
 
       {isHardFail && !isScoreBandNotViable && (
-        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 shadow-sm p-6">
-          <div className="text-[10px] uppercase tracking-wider text-destructive font-semibold mb-2">
-            Blocking Failure Triggered
-          </div>
-          <p className="text-sm leading-relaxed">
-            A hard-fail condition was triggered by a selected answer during this assessment.
-            Progression is blocked. The business is not viable in its current
-            form. The hard-fail condition must be corrected and retested before
-            progression can be reconsidered.
-          </p>
-          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
-            <div>
-              <div className="uppercase tracking-wider text-muted-foreground">Source Question</div>
-              <div className="font-mono font-semibold">
-                {firstSelectedHardFail?.question_number ?? firstSelectedHardFail?.question_id ?? "—"}
-              </div>
-            </div>
-            <div>
-              <div className="uppercase tracking-wider text-muted-foreground">Selected Option</div>
-              <div className="font-mono font-semibold break-words">
-                {firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? "—"}
-              </div>
-            </div>
-          </div>
-        </div>
+        <HardFailChainPanel
+          primaryRisk={primaryConstraint || humanize((run as any).primary_risk_code) || "the hard-fail dimension"}
+          questionNumber={firstSelectedHardFail?.question_number ?? null}
+          questionId={firstSelectedHardFail?.question_id ?? (run as any).hard_fail_question_id ?? null}
+          optionLabel={firstSelectedHardFail?.selected_option_label ?? firstSelectedHardFail?.selected_option_id ?? null}
+        />
       )}
 
       {/* 6. Pressure Topology — interacting business pressures */}
-      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && (
+      {hasCascade && !isPerfectScore && !tiedWatchpointNotice && !isHardFail && (
         <PressureTopology
           primary={cascadePrimary}
           secondary={cascadeSecondary}
@@ -1956,7 +1937,7 @@ function VerdictView({
       )}
 
       {/* 7. Mechanical Failure Chain — causal diagram */}
-      {isPerfectScore ? (
+      {isHardFail ? null : isPerfectScore ? (
         <SurfaceCard title="Execution Watchpoints">
           <div className="space-y-3 text-sm leading-relaxed">
             <p>No active watchpoint identified.</p>
