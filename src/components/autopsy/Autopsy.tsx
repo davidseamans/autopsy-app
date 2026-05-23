@@ -291,6 +291,12 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [loadingStuck, setLoadingStuck] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
   const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
+  // Optimistic-save tracking. saveStatus drives subtle per-question micro-status
+  // ("saving" / "saved" / "error"). pendingSavesRef holds in-flight save
+  // promises so finalisation can wait for all of them deterministically without
+  // making the UI feel laggy during answer selection.
+  const [saveStatus, setSaveStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const pendingSavesRef = useRef<Map<string, Promise<unknown>>>(new Map());
 
   // Schema-version guard: if the stored Quick Gate schema version does not
   // match the current one, clear stale local answer state on first mount.
