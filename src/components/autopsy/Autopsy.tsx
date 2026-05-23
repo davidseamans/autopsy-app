@@ -1539,6 +1539,7 @@ function VerdictView({
         isCriticalStop={isCriticalStop}
         isHardFailCriticalStop={isHardFailCriticalStop}
         isScoreBandCriticalStop={isScoreBandCriticalStop}
+        isPerfectScore={isPerfectScore}
       />
 
       {isHardFail && !isScoreBandNotViable && (
@@ -1932,6 +1933,7 @@ function PressureCollapsePanel({
   isCriticalStop,
   isHardFailCriticalStop,
   isScoreBandCriticalStop,
+  isPerfectScore,
 }: {
   run: any;
   isBlocked?: boolean;
@@ -1939,9 +1941,12 @@ function PressureCollapsePanel({
   isCriticalStop?: boolean;
   isHardFailCriticalStop?: boolean;
   isScoreBandCriticalStop?: boolean;
+  isPerfectScore?: boolean;
 }) {
   const rawPressureStage = humanize(run.pressure_stage);
-  const stageDisplay = isHardFailCriticalStop
+  const stageDisplay = isPerfectScore
+    ? "EXECUTION WATCHPOINT"
+    : isHardFailCriticalStop
     ? "HARD-FAIL TRIGGERED"
     : isScoreBandCriticalStop
       ? "CRITICAL STOP"
@@ -1955,7 +1960,9 @@ function PressureCollapsePanel({
         ? "PROGRESSION LOCKED"
         : sanitizeVerdictCopy(rawPressureStage, false);
   const rawFailureType = humanize(run.failure_type);
-  const failureTypeDisplay = isHardFailCriticalStop
+  const failureTypeDisplay = isPerfectScore
+    ? "Execution watchpoint"
+    : isHardFailCriticalStop
     ? "Hard-fail override"
     : isScoreBandCriticalStop
     ? "Score-band Critical Stop"
@@ -1973,7 +1980,13 @@ function PressureCollapsePanel({
     ...(suppressPressureSummary
       ? []
       : [{ label: "Pressure Summary", value: sanitizeVerdictCopy(run.pressure_summary, !!isBlocked), prose: true }]),
-    { label: "Collapse Pattern", value: sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked), prose: true },
+    {
+      label: isPerfectScore ? "Watchpoint Pattern" : "Collapse Pattern",
+      value: isPerfectScore
+        ? "No collapse pattern assigned. Track watchpoints under operating load."
+        : sanitizeVerdictCopy(run.collapse_pattern, !!isBlocked),
+      prose: true,
+    },
   ];
   const visible = items.filter((i) => hasContent(i.value));
   if (visible.length === 0) return null;
