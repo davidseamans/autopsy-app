@@ -2113,16 +2113,28 @@ function VerdictView({
         } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
           routingBand = "not_viable";
         }
-        const copy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        const baseCopy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        const copy = isHardFail
+          ? {
+              ...baseCopy,
+              title: "Critical Stop — hard-fail repair required",
+              body:
+                "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
+              primaryCta: {
+                label: "Start Hard-Fail Repair Worksheet",
+                to: (id: string) => `/autopsy/run/${id}/worksheet`,
+              },
+            }
+          : baseCopy;
         return (
           <SurfaceCard title="Progression Routing">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
-                  Stage Permission: {progression?.stagePermission ?? "Locked"}
+                  Stage Permission: {isHardFail ? "Locked" : (progression?.stagePermission ?? "Locked")}
                 </span>
                 <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide text-muted-foreground">
-                  Worksheet: {progression?.worksheetStatus ?? "Not Started"}
+                  Worksheet: {isHardFail ? "Required" : (progression?.worksheetStatus ?? "Not Started")}
                 </span>
               </div>
               <div className="font-medium">{copy.title}</div>
