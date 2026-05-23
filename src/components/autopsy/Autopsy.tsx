@@ -3047,6 +3047,9 @@ function MechanicalFailureChain({
           Causal Sequence
         </span>
       </div>
+      <p className="text-xs text-muted-foreground/80 mb-4">
+        Shows the causal path from primary blocker to blocked progression.
+      </p>
       {framing?.chainNote && (
         <p className="text-sm text-muted-foreground mb-4">{framing.chainNote}</p>
       )}
