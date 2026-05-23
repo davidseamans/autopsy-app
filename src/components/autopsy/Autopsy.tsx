@@ -2708,11 +2708,13 @@ function HardFailChainPanel({
   questionNumber,
   questionId,
   optionLabel,
+  microcopy,
 }: {
   primaryRisk: string;
   questionNumber: number | string | null;
   questionId: string | number | null;
   optionLabel: string | null;
+  microcopy?: string;
 }) {
   const risk = primaryRisk && primaryRisk.trim() ? primaryRisk : "the hard-fail dimension";
   const cards = [
@@ -2733,6 +2735,7 @@ function HardFailChainPanel({
           Override
         </span>
       </div>
+      {microcopy && <SectionMicrocopy>{microcopy}</SectionMicrocopy>}
       <p className="text-sm leading-relaxed text-foreground mb-4">
         A non-negotiable blocker was triggered by a selected answer. This overrides the
         score band. Correct the hard-fail condition, prove the correction, and retest
