@@ -1002,6 +1002,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
         {error && <ErrorPanel error={error} />}
 
+        {staleAnswerWarning && view === "question" && (
+          <Alert className="mb-4 border-amber-500/40 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Answer needs to be reselected</AlertTitle>
+            <AlertDescription>{staleAnswerWarning}</AlertDescription>
+          </Alert>
+        )}
+
         {view === "start" && (
           <StartView
             industry={industry}
