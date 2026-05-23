@@ -418,11 +418,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     onSuccess: async (_d, vars) => {
       setError(null);
       const justAnsweredId = String(vars.question_id);
-      let nextSize = 0;
       setAnsweredIds((prev) => {
         const next = new Set(prev);
         next.add(justAnsweredId);
-        nextSize = next.size;
         return next;
       });
       setLocalAnswers((prev) => ({
@@ -430,11 +428,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         [String(vars.question_id)]: vars.selected_option,
       }));
       setPendingSelection(null);
+      await qc.invalidateQueries({ queryKey: ["autopsy", "answer_audit_hydration", runId] });
       await qc.invalidateQueries({ queryKey: ["autopsy", "payload", runId] });
-      // Auto-finalize when last question was just answered.
-      if (questions.length > 0 && nextSize >= questions.length && runId) {
-        await finalizeAndLoad();
-      }
     },
     onError: (e: any) =>
       setError({
@@ -512,7 +507,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   const questions = useMemo(() => sortedQuestions(payloadQuery.data), [payloadQuery.data]);
   const isAnswered = (q: GatewayQuestion) =>
-    !!q.answered || q.selected_option != null || answeredIds.has(String(q.question_id));
+    answeredIds.has(String(q.question_id)) || localAnswers[String(q.question_id)] != null || !!q.answered || q.selected_option != null;
 
   const currentIndex = useMemo(() => {
     if (manualIndex != null) {
@@ -584,9 +579,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         anyNumeric = true;
         max += Math.max(...scoreOpts);
       }
-      const sel =
-        q.selected_option ?? localAnswers[String(q.question_id)] ?? null;
+      const qid = String(q.question_id);
+      const sel = localAnswers[qid] ?? q.selected_option ?? null;
       if (sel != null) {
+        const hydratedScore = answerScores[qid];
+        if (Number.isFinite(hydratedScore)) {
+          sum += hydratedScore;
+          continue;
+        }
         const selOpt = rawOpts.find(
           (o) =>
             o &&
@@ -615,7 +615,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     // Prefer live derived sum during in-progress runs; only fall back to backend
     // aggregate scores once the run is completed (so verdict matches final score).
     const isCompleted = runStatus === "completed";
-    const finalScore = isCompleted
+    const finalScore = savedScoreOverride != null
+      ? savedScoreOverride
+      : isCompleted
       ? (Number.isFinite(backendScore)
           ? backendScore
           : Number.isFinite(liveScore)
@@ -623,14 +625,13 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             : sum)
       : sum;
     return { scoreSoFar: finalScore, scoreMax: max, scoreNumeric: anyNumeric };
-  }, [questions, localAnswers, payloadQuery.data]);
+  }, [questions, localAnswers, answerScores, payloadQuery.data, savedScoreOverride]);
 
   // Preselect previously saved answer when the current question changes.
   useEffect(() => {
     if (view !== "question" || !currentQuestion) return;
     const qid = String(currentQuestion.question_id);
-    const prior =
-      currentQuestion.selected_option ?? localAnswers[qid] ?? null;
+    const prior = localAnswers[qid] ?? currentQuestion.selected_option ?? null;
     setPendingSelection(prior as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQuestion?.question_id, view]);
