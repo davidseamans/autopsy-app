@@ -3590,6 +3590,7 @@ function PressureTopology({
   isBlocked,
   failureDrivers,
   framing,
+  microcopy,
 }: {
   primary: any;
   secondary: any;
@@ -3597,6 +3598,7 @@ function PressureTopology({
   isBlocked?: boolean;
   failureDrivers?: SupportingBlockItem[];
   framing?: BandFraming;
+  microcopy?: string;
 }) {
   const PUBLIC_DIM_NAME: Record<string, string> = {
     cash_reality: "Cash Runway",
@@ -3655,9 +3657,9 @@ function PressureTopology({
 
   return (
     <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
-      <p className="text-xs text-muted-foreground/80 mb-4">
-        Ranked pressures showing the main blocker, next pressure, and compounding third pressure.
-      </p>
+      <SectionMicrocopy>
+        {microcopy ?? "Ranks the main pressure, next pressure, and compounding third pressure."}
+      </SectionMicrocopy>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
           const dim = publicNameFor(t.data);
