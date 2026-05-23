@@ -2903,8 +2903,8 @@ function PressureTopology({
 
   return (
     <SurfaceCard title={framing?.topologyTitle ?? "Pressure Topology"}>
-      <p className="text-sm text-muted-foreground mb-4">
-        {framing?.topologyIntro ?? "Interacting business pressures, ranked by structural weight on the verdict. The Main Blocker is the dominant pressure; the others compound it."}
+      <p className="text-xs text-muted-foreground/80 mb-4">
+        Ranked pressures showing the main blocker, next pressure, and compounding third pressure.
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         {tiers.map((t) => {
