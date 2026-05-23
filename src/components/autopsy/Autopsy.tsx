@@ -811,6 +811,14 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const alreadySaved =
       localAnswers[qid] != null && String(localAnswers[qid]) === String(pendingSelection);
     if (!alreadySaved) {
+      // Re-validate before resubmission to avoid stale option IDs.
+      if (!findActiveOptionForQuestion(currentQuestion, pendingSelection)) {
+        setPendingSelection(null);
+        setStaleAnswerWarning(
+          "Saved answer was stale after question update. Please reselect your answer.",
+        );
+        return;
+      }
       try {
         await answerMutation.mutateAsync({
           run_id: runId,
