@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound.tsx";
 import Placeholder from "@/pages/Placeholder";
 import Launchpad from "@/pages/Launchpad";
 import BusinessSetup from "@/pages/BusinessSetup";
+import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
             <Route path="/stage-1" element={<Stage1 />} />
             <Route path="/launchpad" element={<Launchpad />} />
+            <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
             <Route path="/business-setup" element={<BusinessSetup />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/accounts" element={<Accounts />} />
