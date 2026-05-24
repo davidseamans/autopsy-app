@@ -19,17 +19,21 @@ import {
   Briefcase,
   Users,
   Building2,
+  Rocket,
+  IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
-  { title: "Stage 1", url: "/stage-1", icon: LayoutDashboard },
+  { title: "Launchpad", url: "/launchpad", icon: Rocket },
   { title: "Leads", url: "/leads", icon: Users },
   { title: "Accounts", url: "/accounts", icon: Building2 },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
+  { title: "Stage 1", url: "/stage-1", icon: LayoutDashboard },
+  { title: "Business Setup", url: "/business-setup", icon: IdCard },
 ];
 
 function AppSidebar() {
