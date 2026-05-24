@@ -16,6 +16,8 @@ import Quotes from "@/pages/crm/Quotes";
 import Jobs from "@/pages/crm/Jobs";
 import NotFound from "./pages/NotFound.tsx";
 import Placeholder from "@/pages/Placeholder";
+import Launchpad from "@/pages/Launchpad";
+import BusinessSetup from "@/pages/BusinessSetup";
 
 const queryClient = new QueryClient();
 
@@ -36,8 +38,8 @@ const App = () => (
             <Route path="/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
             <Route path="/stage-1" element={<Stage1 />} />
-            <Route path="/launchpad" element={<Placeholder title="Launchpad Intake" />} />
-            <Route path="/business-setup" element={<Placeholder title="Business Identity Gate" />} />
+            <Route path="/launchpad" element={<Launchpad />} />
+            <Route path="/business-setup" element={<BusinessSetup />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/pipeline" element={<Pipeline />} />

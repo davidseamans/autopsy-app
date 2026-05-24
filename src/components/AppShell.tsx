@@ -32,7 +32,7 @@ const items = [
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
-  { title: "Stage 1", url: "/stage-1", icon: LayoutDashboard },
+  { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
   { title: "Business Setup", url: "/business-setup", icon: IdCard },
 ];
 
