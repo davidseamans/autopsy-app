@@ -1049,6 +1049,17 @@ export function JobDetailSheet({
             {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
           </SheetDescription>
         </SheetHeader>
+        {onOpenDetailedReport && (
+          <div className="mt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpenDetailedReport(draft.n)}
+            >
+              Detailed Report
+            </Button>
+          </div>
+        )}
 
         <div className="mt-4 space-y-5">
           {/* 1. Job / Site Summary */}
