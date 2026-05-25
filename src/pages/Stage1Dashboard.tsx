@@ -46,6 +46,9 @@ import {
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
+const fmtMoney = (n: number) =>
+  n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 // ---------- Sample fixtures for the KPI drill-downs ----------
 // These mirror the operating story used by the existing ledger.
 const METHOD_ROWS = [
@@ -56,19 +59,19 @@ const METHOD_ROWS = [
 
 const QUOTE_ROWS = [
   { number: "Q-1001", client: "M. Patel", site: "Unit 4, Buderim", value: 1200, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", value: 900, status: "Accepted", followUp: "", reason: "" },
+  { number: "Q-1002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", value: 1850, status: "Accepted", followUp: "", reason: "" },
   { number: "Q-1003", client: "Sunrise Cafe", site: "Main Street kitchen", value: 2400, status: "Sent", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1004", client: "QML", site: "Maroochydore", value: 6000, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1005", client: "QML", site: "Nambour", value: 6000, status: "Pending", followUp: "2026-05-29", reason: "" },
+  { number: "Q-1004", client: "QML", site: "Maroochydore Service Centre", value: 5000, status: "Accepted", followUp: "", reason: "" },
+  { number: "Q-1005", client: "QML", site: "Nambour Service Centre", value: 6050, status: "Pending", followUp: "2026-05-29", reason: "" },
   { number: "Q-0998", client: "B. Adams", site: "Caloundra", value: 800, status: "Rejected", followUp: "", reason: "Too expensive" },
 ];
 
 const JOB_ROWS = [
-  { job: "J-001", client: "M. Patel", site: "Unit 4, Buderim", status: "Completed", start: "2026-05-04", income: 1200, costs: 864, gm: 28, evidence: "Attached" },
-  { job: "J-002", client: "K. Nguyen", site: "12 Beach Rd", status: "Completed", start: "2026-05-08", income: 900, costs: 702, gm: 22, evidence: "Attached" },
-  { job: "J-003", client: "Sunrise Cafe", site: "Main Street", status: "Active", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
-  { job: "J-004", client: "QML", site: "Maroochydore", status: "Scheduled", start: "2026-05-26", income: 6000, costs: 3900, gm: 35, evidence: "Attached" },
-  { job: "J-005", client: "QML", site: "Nambour", status: "Accepted", start: "2026-05-30", income: 6000, costs: 3900, gm: 35, evidence: "Missing" },
+  { job: "J-001", client: "M. Patel", site: "Unit 4, Buderim", status: "Paid", start: "2026-05-04", income: 1200, costs: 864, gm: 28, evidence: "Attached" },
+  { job: "J-002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", status: "Paid", start: "2026-05-08", income: 1850, costs: 1443, gm: 22, evidence: "Attached" },
+  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "Active", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
+  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Signed", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
+  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Mobilising", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
 ];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -412,7 +415,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                       <div className="font-medium leading-tight">{r.client}</div>
                       <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
                     </TableCell>
-                    <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${fmtMoney(r.value)}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
@@ -431,7 +434,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <div className="font-medium">{r.client}</div>
                 <div className="text-xs text-muted-foreground">{r.site}</div>
                 <div className="flex justify-between text-xs">
-                  <span>Value</span><span className="font-medium">${r.value.toLocaleString()}</span>
+                  <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span>Follow-up</span><span>{r.followUp || "—"}</span>
@@ -477,8 +480,8 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                       </TableCell>
                       <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.start}</TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
                       <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
                       <TableCell>{r.evidence}</TableCell>
                     </TableRow>
@@ -499,8 +502,8 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   <div className="font-medium">{r.client}</div>
                   <div className="text-xs text-muted-foreground">{r.site}</div>
                   <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
                   <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
                 </div>
@@ -534,9 +537,9 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                         <div className="font-medium leading-tight">{r.client}</div>
                         <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
                       </TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(gp)}</TableCell>
                       <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
                       <TableCell className={m.tone}>{m.label}</TableCell>
                     </TableRow>
@@ -555,9 +558,9 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                     <span className="font-mono text-xs">{r.job}</span>
                     <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
                   </div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${gp.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
                 </div>
               );
@@ -703,8 +706,8 @@ export default function Stage1Dashboard() {
           tone={gmStatus.tone}
           primary={`${gmPct}%`}
           secondaries={[
-            { k: "Total income", v: `$${totalIncome.toLocaleString()}` },
-            { k: "Total job costs", v: `$${totalCosts.toLocaleString()}` },
+            { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
+            { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
             { k: "Status", v: gmStatus.label },
           ]}
           onClick={() => setDrill("margin")}
@@ -782,13 +785,13 @@ export default function Stage1Dashboard() {
                         <TableCell>{u.proofType}</TableCell>
                         <TableCell>{u.status}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${income.toLocaleString()}` : "—"}
+                          {income > 0 ? `$${fmtMoney(income)}` : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {costs > 0 ? `$${costs.toLocaleString()}` : "—"}
+                          {costs > 0 ? `$${fmtMoney(costs)}` : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${gp.toLocaleString()}` : "—"}
+                          {income > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPct}%
