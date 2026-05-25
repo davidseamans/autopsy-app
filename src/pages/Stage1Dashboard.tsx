@@ -44,6 +44,7 @@ import {
   IdCard,
   Loader2,
 } from "lucide-react";
+import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
 // ---------- Sample fixtures for the KPI drill-downs ----------
 // These mirror the operating story used by the existing ledger.
@@ -605,6 +606,14 @@ export default function Stage1Dashboard() {
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [reportN, setReportN] = useState<number | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const openReport = (n: number) => {
+    setReportN(n);
+    setReportOpen(true);
+  };
+  const reportUnit = units.find((u) => u.n === reportN) ?? null;
 
   const scorecard = useMemo(() => computeScorecard(units), [units]);
   const selectedUnit = units.find((u) => u.n === selectedN) ?? null;
@@ -733,6 +742,7 @@ export default function Stage1Dashboard() {
                     <TableHead className="text-right">Job Costs</TableHead>
                     <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
+                    <TableHead className="text-right">Detailed Report</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -783,6 +793,15 @@ export default function Stage1Dashboard() {
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPct}%
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
+                          >
+                            Detailed Report
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -802,9 +821,16 @@ export default function Stage1Dashboard() {
         onVoid={() => { /* no-op */ }}
         onArchive={() => { /* no-op */ }}
         onDelete={() => { /* no-op */ }}
+        onOpenDetailedReport={(n) => openReport(n)}
       />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
       <DrillCurtain drill={drill} onOpenChange={(o) => { if (!o) setDrill(null); }} />
+      <DetailedJobCostReport
+        unit={reportUnit}
+        allUnits={units}
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+      />
     </div>
   );
 }
