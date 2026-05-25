@@ -251,8 +251,8 @@ function BusinessDetailsDialog({
     onOpenChange(false);
   }
 
-  const F = ({ id, label, required, type = "text" }: { id: keyof BDForm; label: string; required?: boolean; type?: string }) => (
-    <div className="space-y-1.5">
+  const field = (id: keyof BDForm, label: string, required?: boolean, type: string = "text") => (
+    <div className="space-y-1.5" key={id}>
       <Label htmlFor={id}>
         {label} {required && <span className="text-destructive">*</span>}
       </Label>
@@ -276,16 +276,16 @@ function BusinessDetailsDialog({
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          <F id="business_name" label="Business name" required />
-          <F id="abn" label="ABN" required />
-          <F id="trading_name" label="Trading name (if different)" />
-          <F id="business_address" label="Business address" required />
-          <F id="contact_name" label="Contact name" required />
-          <F id="phone" label="Contact phone" required />
-          <F id="email" label="Contact email" required type="email" />
-          <F id="industry" label="Industry" required />
+          {field("business_name", "Business name", true)}
+          {field("abn", "ABN", true)}
+          {field("trading_name", "Trading name (if different)")}
+          {field("business_address", "Business address", true)}
+          {field("contact_name", "Contact name", true)}
+          {field("phone", "Contact phone", true)}
+          {field("email", "Contact email", true, "email")}
+          {field("industry", "Industry", true)}
           <div className="md:col-span-2">
-            <F id="service_area" label="Service area" required />
+            {field("service_area", "Service area", true)}
           </div>
           <div className="md:col-span-2 space-y-1.5">
             <Label htmlFor="notes">Notes</Label>
