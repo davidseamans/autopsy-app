@@ -374,7 +374,7 @@ type GBCategory =
   | "Insurance"
   | "Other";
 
-interface GBExpense {
+export interface GBExpense {
   id: string;
   expenseDate?: string;
   supplier?: string;
