@@ -9,6 +9,8 @@ import AutopsyHistory from "@/pages/AutopsyHistory";
 import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
 import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
 import Stage1 from "@/pages/Stage1";
+import Stage1Dashboard from "@/pages/Stage1Dashboard";
+import Stage1Archived from "@/pages/Stage1Archived";
 import Leads from "@/pages/crm/Leads";
 import Accounts from "@/pages/crm/Accounts";
 import Pipeline from "@/pages/crm/Pipeline";
@@ -38,7 +40,8 @@ const App = () => (
             <Route path="/autopsy/run/:runId/readiness" element={<ReadinessWorksheet />} />
             <Route path="/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
-            <Route path="/stage-1" element={<Stage1 />} />
+            <Route path="/stage-1" element={<Stage1Dashboard />} />
+            <Route path="/stage-1-archived" element={<Stage1Archived />} />
             <Route path="/launchpad" element={<Launchpad />} />
             <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
             <Route path="/business-setup" element={<BusinessSetup />} />
