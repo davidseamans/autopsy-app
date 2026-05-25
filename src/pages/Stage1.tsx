@@ -897,6 +897,7 @@ export function JobDetailSheet({
   onVoid,
   onArchive,
   onDelete,
+  onOpenDetailedReport,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -907,6 +908,7 @@ export function JobDetailSheet({
   onVoid: (n: number, reason: string) => void;
   onArchive: (n: number) => void;
   onDelete: (n: number) => void;
+  onOpenDetailedReport?: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
   const [mode, setMode] = useState<"view" | "edit">("view");
