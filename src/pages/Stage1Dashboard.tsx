@@ -397,7 +397,6 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <TableRow>
                   <TableHead>Quote #</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
@@ -408,8 +407,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 {QUOTE_ROWS.map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
-                    <TableCell>{r.client}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                    <TableCell>
+                      <div className="font-medium leading-tight">{r.client}</div>
+                      <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                    </TableCell>
                     <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
