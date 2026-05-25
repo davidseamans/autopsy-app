@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -129,9 +128,6 @@ type BDForm = {
   contact_name: string;
   phone: string;
   email: string;
-  industry: string;
-  service_area: string;
-  notes: string;
 };
 const EMPTY_BD: BDForm = {
   business_name: "",
@@ -141,12 +137,9 @@ const EMPTY_BD: BDForm = {
   contact_name: "",
   phone: "",
   email: "",
-  industry: "",
-  service_area: "",
-  notes: "",
 };
 const BD_REQUIRED: (keyof BDForm)[] = [
-  "business_name", "abn", "business_address", "contact_name", "phone", "email", "industry", "service_area",
+  "business_name", "abn", "business_address", "contact_name", "phone", "email",
 ];
 const BD_EXTRA_KEY = "stage1.business_details.extras";
 
@@ -179,9 +172,6 @@ function useBusinessDetails() {
             abn: data.abn ?? "",
             trading_name: extras.trading_name ?? "",
             business_address: extras.business_address ?? "",
-            industry: extras.industry ?? "",
-            service_area: extras.service_area ?? "",
-            notes: extras.notes ?? "",
           };
           setForm(merged);
           setComplete(BD_REQUIRED.every((k) => String(merged[k] ?? "").trim().length > 0));
@@ -216,9 +206,6 @@ function useBusinessDetails() {
       JSON.stringify({
         trading_name: next.trading_name,
         business_address: next.business_address,
-        industry: next.industry,
-        service_area: next.service_area,
-        notes: next.notes,
       }),
     );
     setForm(next);
@@ -287,18 +274,12 @@ function BusinessDetailsDialog({
           {field("business_name", "Business name", true)}
           {field("abn", "ABN", true)}
           {field("trading_name", "Trading name (if different)")}
-          {field("business_address", "Business address", true)}
+          <div className="md:col-span-2">
+            {field("business_address", "Business address", true)}
+          </div>
           {field("contact_name", "Contact name", true)}
           {field("phone", "Contact phone", true)}
           {field("email", "Contact email", true, "email")}
-          {field("industry", "Industry", true)}
-          <div className="md:col-span-2">
-            {field("service_area", "Service area", true)}
-          </div>
-          <div className="md:col-span-2 space-y-1.5">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} />
-          </div>
         </div>
 
         {err && <p className="text-xs text-destructive">{err}</p>}
