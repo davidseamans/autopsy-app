@@ -456,11 +456,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <TableRow>
                   <TableHead>Job</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Start</TableHead>
                   <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
+                  <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
                   <TableHead>Evidence</TableHead>
                 </TableRow>
@@ -471,8 +470,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   return (
                     <TableRow key={r.job}>
                       <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell>{r.client}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                      <TableCell>
+                        <div className="font-medium leading-tight">{r.client}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                      </TableCell>
                       <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.start}</TableCell>
                       <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
