@@ -199,8 +199,10 @@ export function DetailedJobCostReport({
 
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
-  const grossProfit = incomeT.net - costT.net;
-  const gmPct = incomeT.net > 0 ? (grossProfit / incomeT.net) * 100 : 0;
+  // Match the front-page Simple Job Cost Ledger exactly: use gross (incl. GST)
+  // values so the GM % reconciles across every surface.
+  const grossProfit = incomeT.gross - costT.gross;
+  const gmPct = incomeT.gross > 0 ? (grossProfit / incomeT.gross) * 100 : 0;
   const gmTone = gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600";
 
   // Global GB expenses across all units
@@ -309,16 +311,16 @@ export function DetailedJobCostReport({
           {/* Section 4 — Job Gross Profit */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              4. Job Gross Profit
+              4. Job Result
             </h3>
             <div className="rounded-md border p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
-                <div className="text-xs text-muted-foreground">Net Income ex GST</div>
-                <div className="font-semibold tabular-nums">${fmt(incomeT.net)}</div>
+                <div className="text-xs text-muted-foreground">Income</div>
+                <div className="font-semibold tabular-nums">${fmt(incomeT.gross)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Net Job Costs ex GST</div>
-                <div className="font-semibold tabular-nums">${fmt(costT.net)}</div>
+                <div className="text-xs text-muted-foreground">Job Costs</div>
+                <div className="font-semibold tabular-nums">${fmt(costT.gross)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Gross Profit</div>
@@ -330,8 +332,8 @@ export function DetailedJobCostReport({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Formula: gross_profit = net_income_ex_gst − net_job_costs_ex_gst. gross_margin_% =
-              gross_profit / net_income_ex_gst.
+              Formula: gross_profit = income − job_costs. gross_margin_% = gross_profit / income.
+              Values match the front-page Simple Job Cost Ledger.
             </p>
           </section>
 
