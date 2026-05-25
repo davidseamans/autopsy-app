@@ -21,6 +21,7 @@ import {
   Building2,
   Rocket,
   IdCard,
+  Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ const items = [
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
+  { title: "Preliminary First 5 Jobs Dashboard — Archived", url: "/stage-1-archived", icon: Archive },
   { title: "Business Setup", url: "/business-setup", icon: IdCard },
 ];
 
