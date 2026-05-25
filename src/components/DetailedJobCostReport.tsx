@@ -168,22 +168,34 @@ export function DetailedJobCostReport({
 
   // Job cost lines (one synthetic line per cost bucket)
   const costLines: Line[] = [];
-  const pushCost = (label: string, amount?: number) => {
+  const pushCost = (
+    label: string,
+    amount: number | undefined,
+    opts: { supplier?: string; gstIncluded?: boolean; proof?: string } = {},
+  ) => {
     if (!amount) return;
     costLines.push({
       date: unit.invoiceDate,
       ref: unit.costDocName,
-      supplier: unit.costDocType ?? "Supplier",
+      supplier: opts.supplier ?? unit.costDocType ?? "Supplier",
       description: label,
       gross: amount,
-      gstIncluded: true,
-      proof: unit.costDocName || "—",
+      gstIncluded: opts.gstIncluded ?? true,
+      proof: opts.proof ?? unit.costDocName ?? "Missing",
     });
   };
-  pushCost("Materials", unit.costMaterials);
-  pushCost("Labour", unit.costLabour);
-  pushCost("Subcontractors", unit.costSubcontractors);
-  pushCost("Other direct costs", unit.costOther);
+  pushCost("Labour for job", unit.costLabour, {
+    supplier: "Cleaner hours",
+    gstIncluded: false,
+    proof: "Missing",
+  });
+  pushCost("Materials / supplies", unit.costMaterials, {
+    supplier: "Bunnings",
+    gstIncluded: true,
+    proof: unit.costDocName ?? "Attached",
+  });
+  pushCost("Subcontractors", unit.costSubcontractors, { gstIncluded: true });
+  pushCost("Other direct costs", unit.costOther, { gstIncluded: true });
 
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
