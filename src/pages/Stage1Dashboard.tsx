@@ -320,23 +320,285 @@ function BusinessDetailsDialog({
 // ---------- Drill-down panel (inline, horizontal) ----------
 type DrillKey = "leads" | "conversions" | "jobs" | "margin";
 
-function DrillPanel({ kind }: { kind: DrillKey }) {
+const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
+  leads: {
+    title: "Lead Method Performance",
+    subtitle: "Where leads are coming from and what is converting.",
+  },
+  conversions: {
+    title: "Quote Conversion Board",
+    subtitle: "Quotes issued, accepted, rejected, and pending.",
+  },
+  jobs: {
+    title: "Active Jobs Register",
+    subtitle: "Current and completed jobs contributing to Stage 1 proof.",
+  },
+  margin: {
+    title: "Gross Margin Summary",
+    subtitle: "Income, job costs, gross profit, and margin by job.",
+  },
+};
+
+function DrillBody({ kind }: { kind: DrillKey }) {
+  return (
+    <div className="space-y-4">
+      {kind === "leads" && (
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Method</TableHead>
+                  <TableHead className="text-right">Attempts</TableHead>
+                  <TableHead className="text-right">Contacts</TableHead>
+                  <TableHead className="text-right">Leads</TableHead>
+                  <TableHead className="text-right">Quotes</TableHead>
+                  <TableHead className="text-right">Jobs</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {METHOD_ROWS.map((r) => (
+                  <TableRow key={r.method}>
+                    <TableCell className="font-medium">{r.method}</TableCell>
+                    <TableCell className="text-right">{r.attempts}</TableCell>
+                    <TableCell className="text-right">{r.contacts}</TableCell>
+                    <TableCell className="text-right">{r.leads}</TableCell>
+                    <TableCell className="text-right">{r.quotes}</TableCell>
+                    <TableCell className="text-right">{r.jobs}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.notes}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Mobile stacked cards */}
+          <div className="md:hidden space-y-3">
+            {METHOD_ROWS.map((r) => (
+              <div key={r.method} className="rounded-md border p-3">
+                <div className="font-medium">{r.method}</div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
+                  <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
+                  <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
+                  <div><div className="text-muted-foreground">Quotes</div><div>{r.quotes}</div></div>
+                  <div><div className="text-muted-foreground">Jobs</div><div>{r.jobs}</div></div>
+                </div>
+                {r.notes && <div className="mt-2 text-xs text-muted-foreground">{r.notes}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {kind === "conversions" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Quote #</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Site</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Follow-up</TableHead>
+                  <TableHead>Rejection</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {QUOTE_ROWS.map((r) => (
+                  <TableRow key={r.number}>
+                    <TableCell className="font-mono text-xs">{r.number}</TableCell>
+                    <TableCell>{r.client}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                    <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
+                    <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="md:hidden space-y-3">
+            {QUOTE_ROWS.map((r) => (
+              <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs">{r.number}</span>
+                  <Badge variant="outline">{r.status}</Badge>
+                </div>
+                <div className="font-medium">{r.client}</div>
+                <div className="text-xs text-muted-foreground">{r.site}</div>
+                <div className="flex justify-between text-xs">
+                  <span>Value</span><span className="font-medium">${r.value.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Follow-up</span><span>{r.followUp || "—"}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Rejection</span><span>{r.reason || "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
+            Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
+          </p>
+        </>
+      )}
+
+      {kind === "jobs" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Site</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead className="text-right">Income</TableHead>
+                  <TableHead className="text-right">Costs</TableHead>
+                  <TableHead className="text-right">GM %</TableHead>
+                  <TableHead>Evidence</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {JOB_ROWS.map((r) => {
+                  const m = marginStatus(r.gm);
+                  return (
+                    <TableRow key={r.job}>
+                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
+                      <TableCell>{r.client}</TableCell>
+                      <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                      <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{r.start}</TableCell>
+                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
+                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
+                      <TableCell>{r.evidence}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="md:hidden space-y-3">
+            {JOB_ROWS.map((r) => {
+              const m = marginStatus(r.gm);
+              return (
+                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs">{r.job}</span>
+                    <Badge variant="outline">{r.status}</Badge>
+                  </div>
+                  <div className="font-medium">{r.client}</div>
+                  <div className="text-xs text-muted-foreground">{r.site}</div>
+                  <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
+                  <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {kind === "margin" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Job</TableHead>
+                  <TableHead className="text-right">Income</TableHead>
+                  <TableHead className="text-right">Costs</TableHead>
+                  <TableHead className="text-right">Gross profit</TableHead>
+                  <TableHead className="text-right">GM %</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {JOB_ROWS.map((r) => {
+                  const gp = r.income - r.costs;
+                  const m = marginStatus(r.gm);
+                  return (
+                    <TableRow key={r.job}>
+                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
+                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
+                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
+                      <TableCell className={m.tone}>{m.label}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="md:hidden space-y-3">
+            {JOB_ROWS.map((r) => {
+              const gp = r.income - r.costs;
+              const m = marginStatus(r.gm);
+              return (
+                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs">{r.job}</span>
+                    <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
+                  </div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${gp.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Pass ≥ 30%. Watch 20–29%. Fail &lt; 20%. Formula: gross_profit = income − job_costs; gross_margin_% = gross_profit / income.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DrillCurtain({
+  drill,
+  onOpenChange,
+}: {
+  drill: DrillKey | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const meta = drill ? DRILL_META[drill] : null;
+  return (
+    <Sheet open={!!drill} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
+      >
+        <div className="p-6 space-y-4">
+          <SheetHeader>
+            <SheetTitle>{meta?.title}</SheetTitle>
+            <SheetDescription>{meta?.subtitle}</SheetDescription>
+          </SheetHeader>
+          {drill && <DrillBody kind={drill} />}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// (legacy inline panel removed — curtain only)
+function _LegacyInlinePanel_unused({ kind }: { kind: DrillKey }) {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">
-          {kind === "leads" && "Method Performance"}
-          {kind === "conversions" && "Quote Status Board"}
-          {kind === "jobs" && "Active Jobs Register"}
-          {kind === "margin" && "Margin Summary"}
-        </CardTitle>
-        <CardDescription className="text-xs">
-          {kind === "leads" && "Where leads are coming from and what's converting."}
-          {kind === "conversions" && "Quote pipeline and rejection reasons."}
-          {kind === "jobs" && "Active and completed jobs with margin and evidence status."}
-          {kind === "margin" && "Gross profit and margin status by job."}
-        </CardDescription>
-      </CardHeader>
       <CardContent className="overflow-x-auto">
         {kind === "leads" && (
           <>
