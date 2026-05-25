@@ -304,7 +304,7 @@ type ProofType =
 
 type GateStatus = "Locked" | "Conditional" | "Unlocked";
 
-interface ProofUnit {
+export interface ProofUnit {
   n: number;
   client: string;
   jobSite?: string;
