@@ -304,7 +304,7 @@ type ProofType =
 
 type GateStatus = "Locked" | "Conditional" | "Unlocked";
 
-interface ProofUnit {
+export interface ProofUnit {
   n: number;
   client: string;
   jobSite?: string;
@@ -395,7 +395,7 @@ const BASE_POINTS: Record<ProofType, number> = {
   "Referral Job": 20,
 };
 
-function scoreUnit(u: ProofUnit): number {
+export function scoreUnit(u: ProofUnit): number {
   let pts = BASE_POINTS[u.proofType] ?? 0;
   if (u.isNewClient) pts += 15;
   if (u.isAdditionalSite) pts += 10;
@@ -406,7 +406,7 @@ function scoreUnit(u: ProofUnit): number {
   return pts;
 }
 
-function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
+export function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
   if (concentrationClient && u.client === concentrationClient) {
     return "Concentration warning";
   }
@@ -416,7 +416,7 @@ function unitRisk(u: ProofUnit, concentrationClient: string | null): string {
   return "—";
 }
 
-const SEED_UNITS: ProofUnit[] = [
+export const SEED_UNITS: ProofUnit[] = [
   { n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200, quoteValue: 1200 },
   { n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900, quoteValue: 900 },
   { n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400, quoteValue: 2400 },
@@ -424,7 +424,7 @@ const SEED_UNITS: ProofUnit[] = [
   { n: 5, client: "QML", jobSite: "Nambour Service Centre", proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000, quoteValue: 6000 },
 ];
 
-function computeScorecard(units: ProofUnit[]) {
+export function computeScorecard(units: ProofUnit[]) {
   const totalRevenue = units.reduce((s, u) => s + (u.projectedRevenue ?? 0), 0);
   // Concentration: any single client > 70% of points OR projected revenue
   const byClientPoints: Record<string, number> = {};
@@ -605,7 +605,7 @@ function Stage1GoalBanner() {
   );
 }
 
-function riskCellClass(risk: string) {
+export function riskCellClass(risk: string) {
   if (risk.includes("blocker")) return "text-red-600";
   if (risk.includes("warning") || risk.includes("missing")) return "text-amber-600";
   return "text-muted-foreground";
@@ -887,7 +887,7 @@ function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   );
 }
 
-function JobDetailSheet({
+export function JobDetailSheet({
   unit,
   open,
   onOpenChange,
