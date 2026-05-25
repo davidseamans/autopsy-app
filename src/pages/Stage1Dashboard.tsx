@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   SEED_UNITS,
   computeScorecard,
-  scoreUnit,
-  unitRisk,
-  riskCellClass,
   JobDetailSheet,
   type ProofUnit,
 } from "./Stage1";
@@ -400,7 +397,6 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <TableRow>
                   <TableHead>Quote #</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
@@ -411,8 +407,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 {QUOTE_ROWS.map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
-                    <TableCell>{r.client}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                    <TableCell>
+                      <div className="font-medium leading-tight">{r.client}</div>
+                      <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                    </TableCell>
                     <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
@@ -458,11 +456,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <TableRow>
                   <TableHead>Job</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Start</TableHead>
                   <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
+                  <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
                   <TableHead>Evidence</TableHead>
                 </TableRow>
@@ -473,8 +470,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   return (
                     <TableRow key={r.job}>
                       <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell>{r.client}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.site}</TableCell>
+                      <TableCell>
+                        <div className="font-medium leading-tight">{r.client}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                      </TableCell>
                       <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.start}</TableCell>
                       <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
@@ -516,10 +515,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Job</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
-                  <TableHead className="text-right">Gross profit</TableHead>
+                  <TableHead className="text-right">Job Costs</TableHead>
+                  <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -530,7 +529,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   const m = marginStatus(r.gm);
                   return (
                     <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
+                      <TableCell>
+                        <div className="font-medium leading-tight">{r.client}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                      </TableCell>
                       <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
                       <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
                       <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
@@ -727,15 +729,25 @@ export default function Stage1Dashboard() {
                     <TableHead>Client</TableHead>
                     <TableHead>Proof Type</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Income</TableHead>
+                    <TableHead className="text-right">Job Costs</TableHead>
+                    <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
-                    <TableHead className="text-right">Points</TableHead>
-                    <TableHead>Risk</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {units.map((u) => {
-                    const risk = unitRisk(u, scorecard.concentrationClient);
                     const isSel = u.n === selectedN;
+                    const income = u.invoiceAmount ?? 0;
+                    const costs =
+                      (u.costMaterials ?? 0) +
+                      (u.costLabour ?? 0) +
+                      (u.costSubcontractors ?? 0) +
+                      (u.costOther ?? 0);
+                    const gp = income - costs;
+                    const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+                    const gmTone =
+                      gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600";
                     return (
                       <TableRow
                         key={u.n}
@@ -759,11 +771,18 @@ export default function Stage1Dashboard() {
                         </TableCell>
                         <TableCell>{u.proofType}</TableCell>
                         <TableCell>{u.status}</TableCell>
-                        <TableCell className="text-right">
-                          <span className={u.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{u.gm}%</span>
+                        <TableCell className="text-right tabular-nums">
+                          {income > 0 ? `$${income.toLocaleString()}` : "—"}
                         </TableCell>
-                        <TableCell className="text-right">{scoreUnit(u)}</TableCell>
-                        <TableCell className={riskCellClass(risk)}>{risk}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {costs > 0 ? `$${costs.toLocaleString()}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {income > 0 ? `$${gp.toLocaleString()}` : "—"}
+                        </TableCell>
+                        <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
+                          {gmPct}%
+                        </TableCell>
                       </TableRow>
                     );
                   })}
