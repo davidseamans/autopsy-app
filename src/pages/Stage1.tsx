@@ -374,7 +374,7 @@ type GBCategory =
   | "Insurance"
   | "Other";
 
-interface GBExpense {
+export interface GBExpense {
   id: string;
   expenseDate?: string;
   supplier?: string;
@@ -897,6 +897,7 @@ export function JobDetailSheet({
   onVoid,
   onArchive,
   onDelete,
+  onOpenDetailedReport,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -907,6 +908,7 @@ export function JobDetailSheet({
   onVoid: (n: number, reason: string) => void;
   onArchive: (n: number) => void;
   onDelete: (n: number) => void;
+  onOpenDetailedReport?: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -1047,6 +1049,17 @@ export function JobDetailSheet({
             {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
           </SheetDescription>
         </SheetHeader>
+        {onOpenDetailedReport && (
+          <div className="mt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpenDetailedReport(draft.n)}
+            >
+              Detailed Report
+            </Button>
+          </div>
+        )}
 
         <div className="mt-4 space-y-5">
           {/* 1. Job / Site Summary */}
