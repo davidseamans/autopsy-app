@@ -415,7 +415,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                       <div className="font-medium leading-tight">{r.client}</div>
                       <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
                     </TableCell>
-                    <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${fmtMoney(r.value)}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
@@ -434,7 +434,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 <div className="font-medium">{r.client}</div>
                 <div className="text-xs text-muted-foreground">{r.site}</div>
                 <div className="flex justify-between text-xs">
-                  <span>Value</span><span className="font-medium">${r.value.toLocaleString()}</span>
+                  <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span>Follow-up</span><span>{r.followUp || "—"}</span>
@@ -480,8 +480,8 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                       </TableCell>
                       <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.start}</TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
                       <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
                       <TableCell>{r.evidence}</TableCell>
                     </TableRow>
@@ -502,8 +502,8 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   <div className="font-medium">{r.client}</div>
                   <div className="text-xs text-muted-foreground">{r.site}</div>
                   <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
                   <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
                 </div>
@@ -537,9 +537,9 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                         <div className="font-medium leading-tight">{r.client}</div>
                         <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
                       </TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
+                      <TableCell className="text-right">${fmtMoney(gp)}</TableCell>
                       <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
                       <TableCell className={m.tone}>{m.label}</TableCell>
                     </TableRow>
@@ -558,9 +558,9 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                     <span className="font-mono text-xs">{r.job}</span>
                     <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
                   </div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
-                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${gp.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
                 </div>
               );
@@ -706,8 +706,8 @@ export default function Stage1Dashboard() {
           tone={gmStatus.tone}
           primary={`${gmPct}%`}
           secondaries={[
-            { k: "Total income", v: `$${totalIncome.toLocaleString()}` },
-            { k: "Total job costs", v: `$${totalCosts.toLocaleString()}` },
+            { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
+            { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
             { k: "Status", v: gmStatus.label },
           ]}
           onClick={() => setDrill("margin")}
@@ -785,13 +785,13 @@ export default function Stage1Dashboard() {
                         <TableCell>{u.proofType}</TableCell>
                         <TableCell>{u.status}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${income.toLocaleString()}` : "—"}
+                          {income > 0 ? `$${fmtMoney(income)}` : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {costs > 0 ? `$${costs.toLocaleString()}` : "—"}
+                          {costs > 0 ? `$${fmtMoney(costs)}` : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${gp.toLocaleString()}` : "—"}
+                          {income > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPct}%
