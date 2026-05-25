@@ -515,10 +515,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Job</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
-                  <TableHead className="text-right">Gross profit</TableHead>
+                  <TableHead className="text-right">Job Costs</TableHead>
+                  <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -529,7 +529,10 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                   const m = marginStatus(r.gm);
                   return (
                     <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
+                      <TableCell>
+                        <div className="font-medium leading-tight">{r.client}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                      </TableCell>
                       <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
                       <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
                       <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
