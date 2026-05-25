@@ -417,11 +417,63 @@ export function unitRisk(u: ProofUnit, concentrationClient: string | null): stri
 }
 
 export const SEED_UNITS: ProofUnit[] = [
-  { n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim", proofType: "Completed Job", status: "Paid", gm: 28, evidence: true, isNewClient: true, projectedRevenue: 1200, quoteValue: 1200 },
-  { n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba", proofType: "Completed Job", status: "Paid", gm: 22, evidence: true, isNewClient: true, projectedRevenue: 900, quoteValue: 900 },
-  { n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean", proofType: "Recurring Job", status: "Active", gm: 22, evidence: false, isNewClient: true, recurringFirstInvoicePaid: true, projectedRevenue: 2400, quoteValue: 2400 },
-  { n: 4, client: "QML", jobSite: "Maroochydore Service Centre", proofType: "Contract Site", status: "Signed", gm: 35, evidence: true, isNewClient: true, projectedRevenue: 6000, quoteValue: 6000 },
-  { n: 5, client: "QML", jobSite: "Nambour Service Centre", proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false, isAdditionalSite: true, projectedRevenue: 6000, quoteValue: 6000 },
+  {
+    n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim",
+    proofType: "Completed Job", status: "Paid", gm: 28, evidence: true,
+    isNewClient: true, projectedRevenue: 1200, quoteValue: 1200,
+    invoiceAmount: 1200, invoiceDate: "12/05/2026", invoiceStatus: "Paid",
+    invoiceDocType: "Customer Invoice", invoiceDocName: "INV-001",
+    costLabour: 620, costMaterials: 244,
+    costDocType: "Materials Receipt", costDocName: "Bunnings receipt",
+    paymentStatus: "Paid", paymentDate: "12/05/2026", paymentAmount: 1200, paymentMethod: "Bank Transfer",
+    gbExpenses: [
+      { id: "gb-1", expenseDate: "10/05/2026", supplier: "Ampol", description: "Fuel", category: "Fuel / Vehicle", amount: 88, gstIncluded: true, receiptName: "ampol-10may.pdf" },
+    ],
+  },
+  {
+    n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba",
+    proofType: "Completed Job", status: "Paid", gm: 22, evidence: true,
+    isNewClient: true, projectedRevenue: 1850, quoteValue: 1850,
+    invoiceAmount: 1850, invoiceDate: "14/05/2026", invoiceStatus: "Paid",
+    invoiceDocType: "Customer Invoice", invoiceDocName: "INV-002",
+    costLabour: 980, costMaterials: 463,
+    costDocType: "Materials Receipt", costDocName: "Supplier receipt",
+    paymentStatus: "Paid", paymentDate: "15/05/2026", paymentAmount: 1850, paymentMethod: "Bank Transfer",
+  },
+  {
+    n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean",
+    proofType: "Recurring Job", status: "Active", gm: 22, evidence: false,
+    isNewClient: true, recurringFirstInvoicePaid: true,
+    projectedRevenue: 2400, quoteValue: 2400,
+    invoiceAmount: 2400, invoiceDate: "16/05/2026", invoiceStatus: "Sent",
+    invoiceDocType: "Customer Invoice", invoiceDocName: "INV-003",
+    costLabour: 1200, costMaterials: 672,
+    paymentStatus: "Not Paid",
+    gbExpenses: [
+      { id: "gb-2", expenseDate: "11/05/2026", supplier: "Telstra", description: "Mobile phone", category: "Phone / Internet", amount: 79, gstIncluded: true, receiptName: "telstra-may.pdf" },
+    ],
+  },
+  {
+    n: 4, client: "QML", jobSite: "Maroochydore Service Centre",
+    proofType: "Contract Site", status: "Signed", gm: 35, evidence: true,
+    isNewClient: true, projectedRevenue: 5000, quoteValue: 5000,
+    invoiceAmount: 5000, invoiceDate: "18/05/2026", invoiceStatus: "Invoiced",
+    invoiceDocType: "Signed Contract", invoiceDocName: "QML-MAR-Contract.pdf",
+    costLabour: 2200, costMaterials: 1050,
+    paymentStatus: "Part Paid",
+    gbExpenses: [
+      { id: "gb-3", expenseDate: "13/05/2026", supplier: "Bunnings", description: "Small tools", category: "Small Tools", amount: 132, gstIncluded: true },
+    ],
+  },
+  {
+    n: 5, client: "QML", jobSite: "Nambour Service Centre",
+    proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false,
+    isAdditionalSite: true, projectedRevenue: 6050, quoteValue: 6050,
+    invoiceAmount: 6050, invoiceDate: "20/05/2026", invoiceStatus: "Sent",
+    invoiceDocType: "Signed Contract", invoiceDocName: "QML-NAM-Contract.pdf",
+    costLabour: 2600, costMaterials: 1332.5,
+    paymentStatus: "Not Paid",
+  },
 ];
 
 export function computeScorecard(units: ProofUnit[]) {
