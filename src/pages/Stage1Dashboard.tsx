@@ -485,7 +485,18 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
-  const [drill, setDrill] = useState<DrillKey>(null);
+  const [drill, setDrill] = useState<DrillKey>("leads");
+  const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
+  const [selectedN, setSelectedN] = useState<number | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const scorecard = useMemo(() => computeScorecard(units), [units]);
+  const selectedUnit = units.find((u) => u.n === selectedN) ?? null;
+
+  const openUnit = (n: number) => {
+    setSelectedN(n);
+    setSheetOpen(true);
+  };
 
   // Compute KPI aggregates from fixtures
   const totalLeads = METHOD_ROWS.reduce((s, r) => s + r.leads, 0);
@@ -575,26 +586,145 @@ export default function Stage1Dashboard() {
         />
       </section>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-            First 5 Jobs Progress &amp; Simple Job Cost Ledger
-          </CardTitle>
-          <CardDescription className="text-xs">
-            The proof table and Job / Contract Site Detail modal below are preserved unchanged from the working ledger.
-            Click any row to open the Job / Contract Site Detail modal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* ---- Bottom half: existing Simple Job Cost Ledger + Job/Contract Site Detail modal ---- */}
-          <div className="border-t">
-            <Stage1 />
-          </div>
-        </CardContent>
-      </Card>
+      {/* ---- Middle: inline drill-down panel reacting to KPI click ---- */}
+      <DrillPanel kind={drill} />
 
-      <DrillSheet open={drill !== null} onClose={() => setDrill(null)} kind={drill} />
+      {/* ---- Bottom: two-column ledger + selected job summary ---- */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 space-y-3">
+          {scorecard.blockers.map((b) => (
+            <div key={b} className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
+              <span className="font-semibold">Blocker: </span>{b}
+            </div>
+          ))}
+          {scorecard.warnings.map((w) => (
+            <div key={w} className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+              <span className="font-semibold">Risk warning: </span>{w}
+            </div>
+          ))}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
+              <CardDescription className="text-xs">
+                Five-job proof table. Click a row to view its summary on the right, or open the full Job / Contract Site Detail modal.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">#</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Proof Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">GM %</TableHead>
+                    <TableHead className="text-right">Points</TableHead>
+                    <TableHead>Risk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {units.map((u) => {
+                    const risk = unitRisk(u, scorecard.concentrationClient);
+                    const isSel = u.n === selectedN;
+                    return (
+                      <TableRow
+                        key={u.n}
+                        className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
+                        onClick={() => setSelectedN(u.n)}
+                        onDoubleClick={() => openUnit(u.n)}
+                      >
+                        <TableCell className="font-medium">{u.n}</TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openUnit(u.n); }}
+                            className="text-left hover:underline focus:outline-none"
+                          >
+                            <div className="font-medium leading-tight">{u.client}</div>
+                            {u.jobSite ? (
+                              <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                            ) : (
+                              <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                            )}
+                          </button>
+                        </TableCell>
+                        <TableCell>{u.proofType}</TableCell>
+                        <TableCell>{u.status}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={u.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{u.gm}%</span>
+                        </TableCell>
+                        <TableCell className="text-right">{scoreUnit(u)}</TableCell>
+                        <TableCell className={riskCellClass(risk)}>{risk}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column: selected job summary */}
+        <Card className="h-fit lg:sticky lg:top-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Selected Job Summary</CardTitle>
+            <CardDescription className="text-xs">
+              {selectedUnit
+                ? "Read-only snapshot. Open the full modal for actions and evidence."
+                : "Select a job from the ledger to view its proof summary."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {!selectedUnit && (
+              <p className="text-muted-foreground text-xs">No job selected.</p>
+            )}
+            {selectedUnit && (() => {
+              const u = selectedUnit;
+              const risk = unitRisk(u, scorecard.concentrationClient);
+              const income = u.projectedRevenue ?? 0;
+              const costs = Math.round(income * (1 - u.gm / 100));
+              const gp = income - costs;
+              const row = (k: string, v: React.ReactNode) => (
+                <div className="flex justify-between gap-3 border-b last:border-0 py-1.5">
+                  <span className="text-muted-foreground">{k}</span>
+                  <span className="font-medium text-right">{v}</span>
+                </div>
+              );
+              return (
+                <>
+                  {row("Client", u.client)}
+                  {row("Site", u.jobSite || "—")}
+                  {row("Proof Type", u.proofType)}
+                  {row("Status", u.status)}
+                  {row("GM %", <span className={u.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{u.gm}%</span>)}
+                  {row("Points", scoreUnit(u))}
+                  {row("Risk", <span className={riskCellClass(risk)}>{risk}</span>)}
+                  {row("Income", `$${income.toLocaleString()}`)}
+                  {row("Job Costs", `$${costs.toLocaleString()}`)}
+                  {row("Gross Profit", `$${gp.toLocaleString()}`)}
+                  {row("Evidence", u.evidence ? "Attached" : "Missing")}
+                  {row("Next Action", scorecard.nextAction)}
+                  <Button className="w-full mt-3" onClick={() => setSheetOpen(true)}>
+                    Open Full Job / Contract Site Detail
+                  </Button>
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      </section>
+
+      <JobDetailSheet
+        unit={selectedUnit}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onSave={(u) => setUnits((prev) => prev.map((p) => (p.n === u.n ? u : p)))}
+        onJumpToFinancials={() => { /* no-op on dashboard */ }}
+        concentrationClient={scorecard.concentrationClient}
+        onVoid={() => { /* no-op */ }}
+        onArchive={() => { /* no-op */ }}
+        onDelete={() => { /* no-op */ }}
+      />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
     </div>
   );
