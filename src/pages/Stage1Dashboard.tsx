@@ -485,7 +485,7 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
-  const [drill, setDrill] = useState<DrillKey>("leads");
+  const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -587,11 +587,16 @@ export default function Stage1Dashboard() {
       </section>
 
       {/* ---- Middle: inline drill-down panel reacting to KPI click ---- */}
-      <DrillPanel kind={drill} />
+      {drill ? (
+        <DrillPanel kind={drill} />
+      ) : (
+        <div className="rounded-md border border-dashed bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+          Select a KPI card to drill down.
+        </div>
+      )}
 
-      {/* ---- Bottom: two-column ledger + selected job summary ---- */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-3">
+      {/* ---- Bottom: full-width ledger ---- */}
+      <section className="space-y-3">
           {scorecard.blockers.map((b) => (
             <div key={b} className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
               <span className="font-semibold">Blocker: </span>{b}
@@ -606,7 +611,7 @@ export default function Stage1Dashboard() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
               <CardDescription className="text-xs">
-                Five-job proof table. Click a row to view its summary on the right, or open the full Job / Contract Site Detail modal.
+                Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -630,8 +635,7 @@ export default function Stage1Dashboard() {
                       <TableRow
                         key={u.n}
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
-                        onClick={() => setSelectedN(u.n)}
-                        onDoubleClick={() => openUnit(u.n)}
+                        onClick={() => openUnit(u.n)}
                       >
                         <TableCell className="font-medium">{u.n}</TableCell>
                         <TableCell>
@@ -662,56 +666,6 @@ export default function Stage1Dashboard() {
               </Table>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Right column: selected job summary */}
-        <Card className="h-fit lg:sticky lg:top-4">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Selected Job Summary</CardTitle>
-            <CardDescription className="text-xs">
-              {selectedUnit
-                ? "Read-only snapshot. Open the full modal for actions and evidence."
-                : "Select a job from the ledger to view its proof summary."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {!selectedUnit && (
-              <p className="text-muted-foreground text-xs">No job selected.</p>
-            )}
-            {selectedUnit && (() => {
-              const u = selectedUnit;
-              const risk = unitRisk(u, scorecard.concentrationClient);
-              const income = u.projectedRevenue ?? 0;
-              const costs = Math.round(income * (1 - u.gm / 100));
-              const gp = income - costs;
-              const row = (k: string, v: React.ReactNode) => (
-                <div className="flex justify-between gap-3 border-b last:border-0 py-1.5">
-                  <span className="text-muted-foreground">{k}</span>
-                  <span className="font-medium text-right">{v}</span>
-                </div>
-              );
-              return (
-                <>
-                  {row("Client", u.client)}
-                  {row("Site", u.jobSite || "—")}
-                  {row("Proof Type", u.proofType)}
-                  {row("Status", u.status)}
-                  {row("GM %", <span className={u.gm >= 30 ? "text-emerald-600" : "text-amber-600"}>{u.gm}%</span>)}
-                  {row("Points", scoreUnit(u))}
-                  {row("Risk", <span className={riskCellClass(risk)}>{risk}</span>)}
-                  {row("Income", `$${income.toLocaleString()}`)}
-                  {row("Job Costs", `$${costs.toLocaleString()}`)}
-                  {row("Gross Profit", `$${gp.toLocaleString()}`)}
-                  {row("Evidence", u.evidence ? "Attached" : "Missing")}
-                  {row("Next Action", scorecard.nextAction)}
-                  <Button className="w-full mt-3" onClick={() => setSheetOpen(true)}>
-                    Open Full Job / Contract Site Detail
-                  </Button>
-                </>
-              );
-            })()}
-          </CardContent>
-        </Card>
       </section>
 
       <JobDetailSheet
