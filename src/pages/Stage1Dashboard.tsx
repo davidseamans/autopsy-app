@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   SEED_UNITS,
   computeScorecard,
-  scoreUnit,
-  unitRisk,
-  riskCellClass,
   JobDetailSheet,
   type ProofUnit,
 } from "./Stage1";
