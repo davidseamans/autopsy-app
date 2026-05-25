@@ -320,26 +320,32 @@ function BusinessDetailsDialog({
 // ---------- Drill-down panel (inline, horizontal) ----------
 type DrillKey = "leads" | "conversions" | "jobs" | "margin";
 
-function DrillPanel({ kind }: { kind: DrillKey }) {
+const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
+  leads: {
+    title: "Lead Method Performance",
+    subtitle: "Where leads are coming from and what is converting.",
+  },
+  conversions: {
+    title: "Quote Conversion Board",
+    subtitle: "Quotes issued, accepted, rejected, and pending.",
+  },
+  jobs: {
+    title: "Active Jobs Register",
+    subtitle: "Current and completed jobs contributing to Stage 1 proof.",
+  },
+  margin: {
+    title: "Gross Margin Summary",
+    subtitle: "Income, job costs, gross profit, and margin by job.",
+  },
+};
+
+function DrillBody({ kind }: { kind: DrillKey }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">
-          {kind === "leads" && "Method Performance"}
-          {kind === "conversions" && "Quote Status Board"}
-          {kind === "jobs" && "Active Jobs Register"}
-          {kind === "margin" && "Margin Summary"}
-        </CardTitle>
-        <CardDescription className="text-xs">
-          {kind === "leads" && "Where leads are coming from and what's converting."}
-          {kind === "conversions" && "Quote pipeline and rejection reasons."}
-          {kind === "jobs" && "Active and completed jobs with margin and evidence status."}
-          {kind === "margin" && "Gross profit and margin status by job."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
-        {kind === "leads" && (
-          <>
+    <div className="space-y-4">
+      {kind === "leads" && (
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -366,11 +372,29 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
                 ))}
               </TableBody>
             </Table>
-          </>
-        )}
+          </div>
+          {/* Mobile stacked cards */}
+          <div className="md:hidden space-y-3">
+            {METHOD_ROWS.map((r) => (
+              <div key={r.method} className="rounded-md border p-3">
+                <div className="font-medium">{r.method}</div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
+                  <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
+                  <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
+                  <div><div className="text-muted-foreground">Quotes</div><div>{r.quotes}</div></div>
+                  <div><div className="text-muted-foreground">Jobs</div><div>{r.jobs}</div></div>
+                </div>
+                {r.notes && <div className="mt-2 text-xs text-muted-foreground">{r.notes}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
-        {kind === "conversions" && (
-          <>
+      {kind === "conversions" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -397,15 +421,38 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
                 ))}
               </TableBody>
             </Table>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
-              Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
-            </p>
-          </>
-        )}
+          </div>
+          <div className="md:hidden space-y-3">
+            {QUOTE_ROWS.map((r) => (
+              <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs">{r.number}</span>
+                  <Badge variant="outline">{r.status}</Badge>
+                </div>
+                <div className="font-medium">{r.client}</div>
+                <div className="text-xs text-muted-foreground">{r.site}</div>
+                <div className="flex justify-between text-xs">
+                  <span>Value</span><span className="font-medium">${r.value.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Follow-up</span><span>{r.followUp || "—"}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Rejection</span><span>{r.reason || "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
+            Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
+          </p>
+        </>
+      )}
 
-        {kind === "jobs" && (
-          <>
+      {kind === "jobs" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -439,11 +486,33 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
                 })}
               </TableBody>
             </Table>
-          </>
-        )}
+          </div>
+          <div className="md:hidden space-y-3">
+            {JOB_ROWS.map((r) => {
+              const m = marginStatus(r.gm);
+              return (
+                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs">{r.job}</span>
+                    <Badge variant="outline">{r.status}</Badge>
+                  </div>
+                  <div className="font-medium">{r.client}</div>
+                  <div className="text-xs text-muted-foreground">{r.site}</div>
+                  <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
+                  <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-        {kind === "margin" && (
-          <>
+      {kind === "margin" && (
+        <>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -472,15 +541,60 @@ function DrillPanel({ kind }: { kind: DrillKey }) {
                 })}
               </TableBody>
             </Table>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Pass ≥ 30%. Watch 20–29%. Fail &lt; 20%. Formula: gross_profit = income − job_costs; gross_margin_% = gross_profit / income.
-            </p>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+          <div className="md:hidden space-y-3">
+            {JOB_ROWS.map((r) => {
+              const gp = r.income - r.costs;
+              const m = marginStatus(r.gm);
+              return (
+                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs">{r.job}</span>
+                    <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
+                  </div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${r.income.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${r.costs.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${gp.toLocaleString()}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Pass ≥ 30%. Watch 20–29%. Fail &lt; 20%. Formula: gross_profit = income − job_costs; gross_margin_% = gross_profit / income.
+          </p>
+        </>
+      )}
+    </div>
   );
 }
+
+function DrillCurtain({
+  drill,
+  onOpenChange,
+}: {
+  drill: DrillKey | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const meta = drill ? DRILL_META[drill] : null;
+  return (
+    <Sheet open={!!drill} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
+      >
+        <div className="p-6 space-y-4">
+          <SheetHeader>
+            <SheetTitle>{meta?.title}</SheetTitle>
+            <SheetDescription>{meta?.subtitle}</SheetDescription>
+          </SheetHeader>
+          {drill && <DrillBody kind={drill} />}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
@@ -586,15 +700,6 @@ export default function Stage1Dashboard() {
         />
       </section>
 
-      {/* ---- Middle: inline drill-down panel reacting to KPI click ---- */}
-      {drill ? (
-        <DrillPanel kind={drill} />
-      ) : (
-        <div className="rounded-md border border-dashed bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-          Select a KPI card to drill down.
-        </div>
-      )}
-
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
           {scorecard.blockers.map((b) => (
@@ -680,6 +785,7 @@ export default function Stage1Dashboard() {
         onDelete={() => { /* no-op */ }}
       />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
+      <DrillCurtain drill={drill} onOpenChange={(o) => { if (!o) setDrill(null); }} />
     </div>
   );
 }
