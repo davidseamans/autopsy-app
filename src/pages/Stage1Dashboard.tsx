@@ -595,154 +595,6 @@ function DrillCurtain({
   );
 }
 
-// (legacy inline panel removed — curtain only)
-function _LegacyInlinePanel_unused({ kind }: { kind: DrillKey }) {
-  return (
-    <Card>
-      <CardContent className="overflow-x-auto">
-        {kind === "leads" && (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Attempts</TableHead>
-                  <TableHead className="text-right">Contacts</TableHead>
-                  <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">Quotes</TableHead>
-                  <TableHead className="text-right">Jobs</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {METHOD_ROWS.map((r) => (
-                  <TableRow key={r.method}>
-                    <TableCell className="font-medium">{r.method}</TableCell>
-                    <TableCell className="text-right">{r.attempts}</TableCell>
-                    <TableCell className="text-right">{r.contacts}</TableCell>
-                    <TableCell className="text-right">{r.leads}</TableCell>
-                    <TableCell className="text-right">{r.quotes}</TableCell>
-                    <TableCell className="text-right">{r.jobs}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.notes}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </>
-        )}
-
-        {kind === "conversions" && (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Quote #</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Follow-up</TableHead>
-                  <TableHead>Rejection</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {QUOTE_ROWS.map((r) => (
-                  <TableRow key={r.number}>
-                    <TableCell className="font-mono text-xs">{r.number}</TableCell>
-                    <TableCell>{r.client}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.site}</TableCell>
-                    <TableCell className="text-right">${r.value.toLocaleString()}</TableCell>
-                    <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
-              Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
-            </p>
-          </>
-        )}
-
-        {kind === "jobs" && (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Site</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
-                  <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Evidence</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {JOB_ROWS.map((r) => {
-                  const m = marginStatus(r.gm);
-                  return (
-                    <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell>{r.client}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.site}</TableCell>
-                      <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{r.start}</TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
-                      <TableCell>{r.evidence}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </>
-        )}
-
-        {kind === "margin" && (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job</TableHead>
-                  <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Costs</TableHead>
-                  <TableHead className="text-right">Gross profit</TableHead>
-                  <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {JOB_ROWS.map((r) => {
-                  const gp = r.income - r.costs;
-                  const m = marginStatus(r.gm);
-                  return (
-                    <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell className="text-right">${r.income.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${r.costs.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${gp.toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
-                      <TableCell className={m.tone}>{m.label}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Pass ≥ 30%. Watch 20–29%. Fail &lt; 20%. Formula: gross_profit = income − job_costs; gross_margin_% = gross_profit / income.
-            </p>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
@@ -848,15 +700,6 @@ export default function Stage1Dashboard() {
         />
       </section>
 
-      {/* ---- Middle: inline drill-down panel reacting to KPI click ---- */}
-      {drill ? (
-        <DrillPanel kind={drill} />
-      ) : (
-        <div className="rounded-md border border-dashed bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-          Select a KPI card to drill down.
-        </div>
-      )}
-
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
           {scorecard.blockers.map((b) => (
@@ -942,6 +785,7 @@ export default function Stage1Dashboard() {
         onDelete={() => { /* no-op */ }}
       />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
+      <DrillCurtain drill={drill} onOpenChange={(o) => { if (!o) setDrill(null); }} />
     </div>
   );
 }
