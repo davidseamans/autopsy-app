@@ -317,28 +317,30 @@ function BusinessDetailsDialog({
   );
 }
 
-// ---------- Drill-down sheets ----------
-type DrillKey = null | "leads" | "conversions" | "jobs" | "margin";
+// ---------- Drill-down panel (inline, horizontal) ----------
+type DrillKey = "leads" | "conversions" | "jobs" | "margin";
 
-function DrillSheet({
-  open,
-  onClose,
-  kind,
-}: {
-  open: boolean;
-  onClose: () => void;
-  kind: DrillKey;
-}) {
+function DrillPanel({ kind }: { kind: DrillKey }) {
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          {kind === "leads" && "Method Performance"}
+          {kind === "conversions" && "Quote Status Board"}
+          {kind === "jobs" && "Active Jobs Register"}
+          {kind === "margin" && "Margin Summary"}
+        </CardTitle>
+        <CardDescription className="text-xs">
+          {kind === "leads" && "Where leads are coming from and what's converting."}
+          {kind === "conversions" && "Quote pipeline and rejection reasons."}
+          {kind === "jobs" && "Active and completed jobs with margin and evidence status."}
+          {kind === "margin" && "Gross profit and margin status by job."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
         {kind === "leads" && (
           <>
-            <SheetHeader>
-              <SheetTitle>Method Performance</SheetTitle>
-              <SheetDescription>Where leads are coming from and what's converting.</SheetDescription>
-            </SheetHeader>
-            <Table className="mt-4">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Method</TableHead>
@@ -369,11 +371,7 @@ function DrillSheet({
 
         {kind === "conversions" && (
           <>
-            <SheetHeader>
-              <SheetTitle>Quote Status</SheetTitle>
-              <SheetDescription>Quote pipeline and rejection reasons.</SheetDescription>
-            </SheetHeader>
-            <Table className="mt-4">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Quote #</TableHead>
@@ -408,11 +406,7 @@ function DrillSheet({
 
         {kind === "jobs" && (
           <>
-            <SheetHeader>
-              <SheetTitle>Job Register</SheetTitle>
-              <SheetDescription>Active and completed jobs with margin and evidence status.</SheetDescription>
-            </SheetHeader>
-            <Table className="mt-4">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Job</TableHead>
@@ -450,11 +444,7 @@ function DrillSheet({
 
         {kind === "margin" && (
           <>
-            <SheetHeader>
-              <SheetTitle>Margin Summary</SheetTitle>
-              <SheetDescription>Gross profit and margin status by job.</SheetDescription>
-            </SheetHeader>
-            <Table className="mt-4">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Job</TableHead>
@@ -487,8 +477,8 @@ function DrillSheet({
             </p>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </CardContent>
+    </Card>
   );
 }
 
