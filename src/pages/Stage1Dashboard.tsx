@@ -1,5 +1,13 @@
-import { useEffect, useState } from "react";
-import Stage1 from "./Stage1";
+import { useEffect, useMemo, useState } from "react";
+import {
+  SEED_UNITS,
+  computeScorecard,
+  scoreUnit,
+  unitRisk,
+  riskCellClass,
+  JobDetailSheet,
+  type ProofUnit,
+} from "./Stage1";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +44,6 @@ import {
   Briefcase,
   TrendingUp,
   Lock,
-  CheckCircle2,
   IdCard,
   Loader2,
 } from "lucide-react";
