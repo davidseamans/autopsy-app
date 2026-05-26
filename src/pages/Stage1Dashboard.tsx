@@ -385,9 +385,13 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
 function DrillBody({
   kind,
   methodRows,
+  quotes,
+  onConvert,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
+  quotes: Quote[];
+  onConvert: (q: Quote) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -453,10 +457,11 @@ function DrillBody({
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
                   <TableHead>Rejection</TableHead>
+                  <TableHead className="text-right">Conversion</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {QUOTE_ROWS.map((r) => (
+                {quotes.map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
@@ -465,15 +470,28 @@ function DrillBody({
                     </TableCell>
                     <TableCell className="text-right">${fmtMoney(r.value)}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {r.status === "Accepted" ? (
+                        r.converted ? (
+                          <span className="text-xs text-muted-foreground">Already converted</span>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
+                            Convert to Job
+                          </Button>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {QUOTE_ROWS.map((r) => (
+            {quotes.map((r) => (
               <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
@@ -485,17 +503,29 @@ function DrillBody({
                   <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span>Follow-up</span><span>{r.followUp || "—"}</span>
+                  <span>Follow-up</span><span>{r.followUp ? isoToAU(r.followUp) : "—"}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
+                {r.status === "Accepted" && (
+                  <div className="pt-1">
+                    {r.converted ? (
+                      <span className="text-xs text-muted-foreground">Already converted</span>
+                    ) : (
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
+                        Convert to Job
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
             Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
             Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
+            Only accepted quotes can be converted to jobs.
           </p>
         </>
       )}
