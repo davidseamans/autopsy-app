@@ -1106,22 +1106,25 @@ export function JobDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Job / Contract Site Detail</SheetTitle>
-          <SheetDescription>
-            {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
-          </SheetDescription>
-        </SheetHeader>
-        {onOpenDetailedReport && (
-          <div className="mt-3">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenDetailedReport(draft.n)}
-            >
-              Detailed Report
-            </Button>
+          <div className="flex items-start justify-between gap-3 pr-10">
+            <div className="min-w-0">
+              <SheetTitle>Job / Contract Site Detail</SheetTitle>
+              <SheetDescription>
+                {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
+              </SheetDescription>
+            </div>
+            {onOpenDetailedReport && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => onOpenDetailedReport(draft.n)}
+              >
+                Detailed Report
+              </Button>
+            )}
           </div>
-        )}
+        </SheetHeader>
 
         <div className="mt-4 space-y-5">
           {/* 1. Job / Site Summary */}
