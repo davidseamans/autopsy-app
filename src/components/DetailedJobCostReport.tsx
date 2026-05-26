@@ -225,8 +225,11 @@ export function DetailedJobCostReport({
   }
   const gbT = totals(gbLines);
 
-  const paymentStatus = unit.paymentStatus ?? "Not Paid";
   const evidenceStatus = unit.evidence ? "Attached" : "Missing";
+  const incomeAsPerQuote = unit.quoteValue ?? 0;
+  const paymentReceived = unit.paymentAmount ?? 0;
+  const outstanding = incomeAsPerQuote - paymentReceived;
+  const jobNumber = unit.jobNumber ?? `J-${1000 + unit.n}`;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -247,13 +250,22 @@ export function DetailedJobCostReport({
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               1. Job Summary
             </h3>
-            <div className="rounded-md border p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div className="rounded-md border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+              <div>
+                <div className="text-xs text-muted-foreground">Job #</div>
+                <div className="font-mono">{jobNumber}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Source Quote #</div>
+                <div className="font-mono">{unit.sourceQuote ?? "—"}</div>
+              </div>
               <div>
                 <div className="text-xs text-muted-foreground">Client</div>
                 <div className="font-medium">{unit.client}</div>
-                <div className="text-xs text-muted-foreground">
-                  {unit.jobSite ?? "Site not entered"}
-                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Job / Site Location</div>
+                <div>{unit.jobSite ?? "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Proof Type</div>
@@ -266,18 +278,26 @@ export function DetailedJobCostReport({
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Payment Status</div>
-                <div>
-                  <Badge variant="outline">{paymentStatus}</Badge>
-                </div>
+                <div className="text-xs text-muted-foreground">Income as per quote</div>
+                <div className="font-semibold tabular-nums">${fmt(incomeAsPerQuote)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">GM %</div>
-                <div className={`font-medium ${gmTone}`}>{gmPct.toFixed(1)}%</div>
+                <div className="text-xs text-muted-foreground">Payment Received</div>
+                <div className="font-semibold tabular-nums">${fmt(paymentReceived)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Outstanding</div>
+                <div className={`font-semibold tabular-nums ${outstanding > 0 ? "text-amber-600" : ""}`}>
+                  ${fmt(outstanding)}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Evidence</div>
                 <div>{evidenceStatus}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">GM %</div>
+                <div className={`font-medium ${gmTone}`}>{gmPct.toFixed(1)}%</div>
               </div>
             </div>
           </section>
