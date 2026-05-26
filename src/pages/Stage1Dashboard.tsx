@@ -111,6 +111,8 @@ type Quote = {
   reason: string;
   converted?: boolean;
   convertedToN?: number;
+  sourceActivityId?: string;
+  method?: string;
 };
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
@@ -659,7 +661,6 @@ function DrillCurtain({
   methodRows,
   onLogActivity,
   quotes,
-  onAddQuote,
   onConvert,
 }: {
   drill: DrillKey | null;
@@ -667,7 +668,6 @@ function DrillCurtain({
   methodRows: typeof METHOD_BASELINE;
   onLogActivity: () => void;
   quotes: Quote[];
-  onAddQuote: () => void;
   onConvert: (q: Quote) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
@@ -690,12 +690,6 @@ function DrillCurtain({
                   Log Activity
                 </Button>
               )}
-              {drill === "conversions" && (
-                <Button size="sm" onClick={onAddQuote} className="gap-1.5 shrink-0">
-                  <Plus className="h-4 w-4" />
-                  Add Quote
-                </Button>
-              )}
             </div>
           </SheetHeader>
           {drill && (
@@ -712,122 +706,6 @@ function DrillCurtain({
   );
 }
 
-
-function AddQuoteDialog({
-  open,
-  onOpenChange,
-  onSave,
-  nextNumber,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onSave: (q: Quote) => void;
-  nextNumber: string;
-}) {
-  const [client, setClient] = useState("");
-  const [site, setSite] = useState("");
-  const [amount, setAmount] = useState<string>("");
-  const [quoteDate, setQuoteDate] = useState<string>("");
-  const [followUp, setFollowUp] = useState<string>("");
-  const [status, setStatus] = useState<QuoteStatus>("Draft");
-  const [reason, setReason] = useState<string>("");
-
-  useEffect(() => {
-    if (open) {
-      setClient(""); setSite(""); setAmount(""); setQuoteDate("");
-      setFollowUp(""); setStatus("Draft"); setReason("");
-    }
-  }, [open]);
-
-  const amt = Number(amount);
-  const needsReason = status === "Rejected";
-  const canSave =
-    client.trim().length > 0 &&
-    !isNaN(amt) && amt > 0 &&
-    (!needsReason || reason.trim().length > 0);
-
-  const save = () => {
-    const q: Quote = {
-      number: nextNumber,
-      client: client.trim(),
-      site: site.trim(),
-      value: amt,
-      status,
-      quoteDate,
-      followUp,
-      reason: needsReason ? reason : "",
-    };
-    onSave(q);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Quote</DialogTitle>
-          <DialogDescription>
-            Create a quote record. Jobs are created later by converting an accepted quote.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="aq-client">Client <span className="text-destructive">*</span></Label>
-            <Input id="aq-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="aq-site">Job Location</Label>
-            <Input id="aq-site" value={site} onChange={(e) => setSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="aq-amt">Quote Amount (incl. GST) <span className="text-destructive">*</span></Label>
-            <Input id="aq-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="aq-qd">Quote Date</Label>
-              <Input id="aq-qd" type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} />
-              {quoteDate && <p className="text-[11px] text-muted-foreground">{isoToAU(quoteDate)}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="aq-fu">Follow-up Date</Label>
-              <Input id="aq-fu" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
-              {followUp && <p className="text-[11px] text-muted-foreground">{isoToAU(followUp)}</p>}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="aq-status">Status</Label>
-            <select
-              id="aq-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as QuoteStatus)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {QUOTE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          {needsReason && (
-            <div className="space-y-1.5">
-              <Label htmlFor="aq-reason">Rejection Reason <span className="text-destructive">*</span></Label>
-              <select
-                id="aq-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">Select a reason…</option>
-                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-          )}
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Quote</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function ConvertQuoteDialog({
   quote,
@@ -876,10 +754,12 @@ function LogActivityDialog({
   open,
   onOpenChange,
   onSave,
+  nextQuoteNumberStart,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: LeadActivity) => void;
+  onSave: (a: LeadActivity, newQuotes: Quote[]) => void;
+  nextQuoteNumberStart: number;
 }) {
   const [date, setDate] = useState("");
   const [method, setMethod] = useState(METHOD_OPTIONS[0]);
@@ -887,37 +767,88 @@ function LogActivityDialog({
   const [contacts, setContacts] = useState<string>("");
   const [quotes, setQuotes] = useState<string>("");
   const [notes, setNotes] = useState("");
+  type QRow = {
+    client: string;
+    site: string;
+    amount: string;
+    followUp: string;
+    status: "Draft" | "Sent" | "Pending";
+  };
+  const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
+  const [rows, setRows] = useState<QRow[]>([]);
 
   useEffect(() => {
     if (open) {
       setDate(""); setMethod(METHOD_OPTIONS[0]);
       setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
+      setRows([]);
     }
   }, [open]);
 
-  const canSave = !!date && !!method;
+  const qGen = Math.max(0, parseInt(quotes || "0", 10) || 0);
+
+  // Keep rows count in sync with Quotes Generated input
+  useEffect(() => {
+    setRows((prev) => {
+      if (qGen === prev.length) return prev;
+      if (qGen > prev.length) {
+        return [...prev, ...Array.from({ length: qGen - prev.length }, blankRow)];
+      }
+      return prev.slice(0, qGen);
+    });
+  }, [qGen]);
+
+  const rowComplete = (r: QRow) => {
+    const amt = Number(r.amount);
+    if (!r.client.trim()) return false;
+    if (!r.site.trim()) return false;
+    if (isNaN(amt) || amt <= 0) return false;
+    if (!r.status) return false;
+    if (r.status !== "Draft" && !r.followUp) return false;
+    return true;
+  };
+  const completeCount = rows.filter(rowComplete).length;
+  const countOk = completeCount === qGen;
+  const canSave = !!date && !!method && countOk;
 
   const save = () => {
+    const activityId = `act-${Date.now()}`;
     const a: LeadActivity = {
-      id: `act-${Date.now()}`,
+      id: activityId,
       activity_date: date,
       method,
       attempts: Number(attempts) || 0,
       contacts_made: Number(contacts) || 0,
-      quotes_generated: Number(quotes) || 0,
+      quotes_generated: qGen,
       notes: notes.trim(),
       created_at: new Date().toISOString(),
     };
-    onSave(a);
+    const newQuotes: Quote[] = rows.map((r, i) => ({
+      number: `Q-${nextQuoteNumberStart + i}`,
+      client: r.client.trim(),
+      site: r.site.trim(),
+      value: Number(r.amount),
+      status: r.status as QuoteStatus,
+      quoteDate: date,
+      followUp: r.followUp,
+      reason: "",
+      sourceActivityId: activityId,
+      method,
+    }));
+    onSave(a, newQuotes);
   };
+
+  const updateRow = (i: number, patch: Partial<QRow>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Log Activity</DialogTitle>
           <DialogDescription>
             Record a dated lead-generation activity. Aggregates into Lead Method Performance.
+            When Quotes Generated is greater than zero, enter matching quote details below.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -957,6 +888,62 @@ function LogActivityDialog({
             <Label htmlFor="la-notes">Notes</Label>
             <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
           </div>
+
+          {qGen > 0 && (
+            <div className="space-y-2 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-semibold">Quote Details Required</div>
+                <p className="text-xs text-muted-foreground">
+                  You entered {qGen} quote{qGen === 1 ? "" : "s"} generated. Enter {qGen} quote record{qGen === 1 ? "" : "s"} before saving this activity.
+                </p>
+              </div>
+              {rows.map((r, i) => (
+                <div key={i} className="rounded-md border p-3 space-y-2 bg-muted/30">
+                  <div className="text-xs font-medium text-muted-foreground">Quote {i + 1} of {qGen}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Client <span className="text-destructive">*</span></Label>
+                      <Input value={r.client} onChange={(e) => updateRow(i, { client: e.target.value })} placeholder="e.g. M. Patel" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Job Location <span className="text-destructive">*</span></Label>
+                      <Input value={r.site} onChange={(e) => updateRow(i, { site: e.target.value })} placeholder="e.g. Unit 4, Buderim" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Quote Amount <span className="text-destructive">*</span></Label>
+                      <Input type="number" min={0} step="0.01" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        Follow-up Date {r.status !== "Draft" && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
+                      <p className="text-[11px] text-muted-foreground">
+                        {r.followUp ? isoToAU(r.followUp) : (r.status === "Draft" ? "Optional for Draft" : "dd/mm/yyyy")}
+                      </p>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">Initial Status <span className="text-destructive">*</span></Label>
+                      <select
+                        value={r.status}
+                        onChange={(e) => updateRow(i, { status: e.target.value as QRow["status"] })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="Draft">Draft</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Pending">Pending</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!countOk && (
+                <p className="text-xs text-destructive">
+                  Quotes Generated must match the number of quote records entered. ({completeCount} of {qGen} complete)
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -979,7 +966,6 @@ export default function Stage1Dashboard() {
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
-  const [addQuoteOpen, setAddQuoteOpen] = useState(false);
   const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
 
   const methodRows = useMemo(() => {
@@ -1029,12 +1015,12 @@ export default function Stage1Dashboard() {
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
 
-  const nextQuoteNumber = useMemo(() => {
+  const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
       .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
       .filter((n) => !isNaN(n));
     const max = nums.length ? Math.max(...nums) : 1000;
-    return `Q-${max + 1}`;
+    return max + 1;
   }, [quotes]);
 
   const handleConvert = (q: Quote) => {
@@ -1253,17 +1239,7 @@ export default function Stage1Dashboard() {
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
         quotes={quotes}
-        onAddQuote={() => setAddQuoteOpen(true)}
         onConvert={(q) => setConvertQuote(q)}
-      />
-      <AddQuoteDialog
-        open={addQuoteOpen}
-        onOpenChange={setAddQuoteOpen}
-        onSave={(q) => {
-          setQuotes((prev) => [q, ...prev]);
-          setAddQuoteOpen(false);
-        }}
-        nextNumber={nextQuoteNumber}
       />
       <ConvertQuoteDialog
         quote={convertQuote}
@@ -1274,8 +1250,10 @@ export default function Stage1Dashboard() {
       <LogActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={(a) => {
+        nextQuoteNumberStart={nextQuoteNumberStart}
+        onSave={(a, newQuotes) => {
           setActivities((prev) => [...prev, a]);
+          if (newQuotes.length) setQuotes((prev) => [...newQuotes, ...prev]);
           setLogActOpen(false);
         }}
       />
