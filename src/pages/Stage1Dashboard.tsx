@@ -760,7 +760,7 @@ function LogActivityDialog({
     site: string;
     amount: string;
     followUp: string;
-    status: "Draft" | "Sent" | "Pending";
+    status: "Sent";
   };
   const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
   const [rows, setRows] = useState<QRow[]>([]);
@@ -791,8 +791,7 @@ function LogActivityDialog({
     if (!r.client.trim()) return false;
     if (!r.site.trim()) return false;
     if (isNaN(amt) || amt <= 0) return false;
-    if (!r.status) return false;
-    if (r.status !== "Draft" && !r.followUp) return false;
+    if (!r.followUp) return false;
     return true;
   };
   const completeCount = rows.filter(rowComplete).length;
@@ -909,24 +908,19 @@ function LogActivityDialog({
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">
-                        Follow-up Date {r.status !== "Draft" && <span className="text-destructive">*</span>}
+                        Follow-up Date <span className="text-destructive">*</span>
                       </Label>
                       <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
                       <p className="text-[11px] text-muted-foreground">
-                        {r.followUp ? isoToAU(r.followUp) : (r.status === "Draft" ? "Optional for Draft" : "dd/mm/yyyy")}
+                        {r.followUp ? isoToAU(r.followUp) : "dd/mm/yyyy"}
                       </p>
                     </div>
                     <div className="space-y-1 md:col-span-2">
-                      <Label className="text-xs">Initial Status <span className="text-destructive">*</span></Label>
-                      <select
-                        value={r.status}
-                        onChange={(e) => updateRow(i, { status: e.target.value as QRow["status"] })}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="Draft">Draft</option>
-                        <option value="Sent">Sent</option>
-                        <option value="Pending">Pending</option>
-                      </select>
+                      <Label className="text-xs">Initial Status</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Quotes created from Log Activity are saved as <span className="font-medium text-foreground">Sent</span>.
+                        Update status later from the Quote Conversion Board.
+                      </p>
                     </div>
                   </div>
                 </div>
