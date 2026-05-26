@@ -1152,7 +1152,7 @@ export default function Stage1Dashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">#</TableHead>
+                    <TableHead className="w-20">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Proof Type</TableHead>
                     <TableHead>Status</TableHead>
@@ -1182,7 +1182,7 @@ export default function Stage1Dashboard() {
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-medium">{u.n}</TableCell>
+                        <TableCell className="font-mono text-xs">{u.jobNumber ?? `J-${1000 + u.n}`}</TableCell>
                         <TableCell>
                           <button
                             type="button"
