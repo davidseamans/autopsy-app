@@ -597,32 +597,70 @@ function DrillBody({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Job</TableHead>
+                  <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
+                  <TableHead>Source Quote #</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Start</TableHead>
+                  <TableHead>Scheduled Date</TableHead>
                   <TableHead className="text-right">Income</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
+                  <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Evidence</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {JOB_ROWS.map((r) => {
-                  const m = marginStatus(r.gm);
+                {units.map((u) => {
+                  const income = u.invoiceAmount ?? 0;
+                  const costs =
+                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const gp = income - costs;
+                  const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+                  const m = marginStatus(gmPct);
+                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
-                    <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell>
-                        <div className="font-medium leading-tight">{r.client}</div>
-                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                    <TableRow
+                      key={u.n}
+                      className="cursor-pointer hover:bg-muted/30"
+                      onClick={() => onOpenUnit(u.n)}
+                    >
+                      <TableCell className="font-mono text-xs">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                          className="hover:underline focus:outline-none"
+                        >
+                          {jobNum}
+                        </button>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{r.start}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
-                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
-                      <TableCell>{r.evidence}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                          className="text-left hover:underline focus:outline-none"
+                        >
+                          <div className="font-medium leading-tight">{u.client}</div>
+                          {u.jobSite && (
+                            <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
+                      <TableCell><Badge variant="outline">{u.status}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -630,22 +668,34 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {JOB_ROWS.map((r) => {
-              const m = marginStatus(r.gm);
+            {units.map((u) => {
+              const income = u.invoiceAmount ?? 0;
+              const costs =
+                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const gp = income - costs;
+              const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+              const m = marginStatus(gmPct);
+              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
-                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                <button
+                  key={u.n}
+                  type="button"
+                  onClick={() => onOpenUnit(u.n)}
+                  className="block w-full text-left rounded-md border p-3 space-y-1 text-sm hover:bg-muted/30"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{r.job}</span>
-                    <Badge variant="outline">{r.status}</Badge>
+                    <span className="font-mono text-xs">{jobNum}</span>
+                    <Badge variant="outline">{u.status}</Badge>
                   </div>
-                  <div className="font-medium">{r.client}</div>
-                  <div className="text-xs text-muted-foreground">{r.site}</div>
-                  <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
-                  <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
-                </div>
+                  <div className="font-medium">{u.client}</div>
+                  {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
+                  <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Scheduled</span><span>{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
+                </button>
               );
             })}
           </div>
