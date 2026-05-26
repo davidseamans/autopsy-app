@@ -734,25 +734,36 @@ function DrillCurtain({
 }
 
 
-function ConvertQuoteDialog({
+function QuoteActivityDialog({
   quote,
   open,
   onOpenChange,
-  onConfirm,
+  onSave,
 }: {
   quote: Quote | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (q: Quote) => void;
+  onSave: (q: Quote, newStatus: QuoteStatus, reason: string) => void;
 }) {
+  const [status, setStatus] = useState<QuoteStatus>("Sent");
+  const [reason, setReason] = useState<string>("");
+
+  useEffect(() => {
+    if (open && quote) {
+      setStatus(quote.status);
+      setReason(quote.reason || "");
+    }
+  }, [open, quote]);
+
+  const canSave = !!quote && (status !== "Rejected" || !!reason);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Convert this accepted quote into a job?</DialogTitle>
+          <DialogTitle>Quote Activity</DialogTitle>
           <DialogDescription>
-            A job shell will be created in the Simple Job Cost Ledger using this quote's details.
-            You can then add invoices, costs and payment proof from the Job / Contract Site Detail curtain.
+            Update the status of the selected quote. Accepting creates one job in the Simple Job Cost Ledger.
           </DialogDescription>
         </DialogHeader>
         {quote && (
@@ -761,11 +772,48 @@ function ConvertQuoteDialog({
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">Client</span><span className="font-medium text-right">{quote.client}</span></div>
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">Job Location</span><span className="text-right">{quote.site || "—"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Current Status</span><span>{quote.status}</span></div>
           </div>
         )}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="qa-status">New Status <span className="text-destructive">*</span></Label>
+            <select
+              id="qa-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as QuoteStatus)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="Sent">Sent</option>
+              <option value="Accepted">Accepted</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          {status === "Rejected" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <select
+                id="qa-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {status === "Accepted" && (
+            <p className="text-xs text-muted-foreground">
+              Accepting creates a new job with the next sequential Job # in the Simple Job Cost Ledger and removes this quote from the active board.
+            </p>
+          )}
+        </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => quote && onConfirm(quote)} disabled={!quote}>Convert to Job</Button>
+          <Button onClick={() => quote && onSave(quote, status, reason)} disabled={!canSave}>
+            Save Quote Activity
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
