@@ -313,6 +313,7 @@ export interface CostLine {
 
 export interface ProofUnit {
   n: number;
+  jobNumber?: string;
   client: string;
   jobSite?: string;
   proofType: ProofType;
@@ -428,6 +429,7 @@ export function unitRisk(u: ProofUnit, concentrationClient: string | null): stri
 export const SEED_UNITS: ProofUnit[] = [
   {
     n: 1, client: "M. Patel", jobSite: "Unit 4, Buderim",
+    jobNumber: "J-1001", sourceQuote: "Q-1001",
     proofType: "Completed Job", status: "Paid", gm: 28, evidence: true,
     isNewClient: true, projectedRevenue: 1200, quoteValue: 1200,
     invoiceAmount: 1200, invoiceDate: "12/05/2026", invoiceStatus: "Paid",
@@ -441,6 +443,7 @@ export const SEED_UNITS: ProofUnit[] = [
   },
   {
     n: 2, client: "K. Nguyen", jobSite: "12 Beach Rd, Mooloolaba",
+    jobNumber: "J-1002", sourceQuote: "Q-1002",
     proofType: "Completed Job", status: "Paid", gm: 22, evidence: true,
     isNewClient: true, projectedRevenue: 1850, quoteValue: 1850,
     invoiceAmount: 1850, invoiceDate: "14/05/2026", invoiceStatus: "Paid",
@@ -451,6 +454,7 @@ export const SEED_UNITS: ProofUnit[] = [
   },
   {
     n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean",
+    jobNumber: "J-1003", sourceQuote: "Q-1003",
     proofType: "Recurring Job", status: "Active", gm: 22, evidence: false,
     isNewClient: true, recurringFirstInvoicePaid: true,
     projectedRevenue: 2400, quoteValue: 2400,
@@ -464,6 +468,7 @@ export const SEED_UNITS: ProofUnit[] = [
   },
   {
     n: 4, client: "QML", jobSite: "Maroochydore Service Centre",
+    jobNumber: "J-1004", sourceQuote: "Q-1004",
     proofType: "Contract Site", status: "Signed", gm: 35, evidence: true,
     isNewClient: true, projectedRevenue: 5000, quoteValue: 5000,
     invoiceAmount: 5000, invoiceDate: "18/05/2026", invoiceStatus: "Invoiced",
@@ -476,6 +481,7 @@ export const SEED_UNITS: ProofUnit[] = [
   },
   {
     n: 5, client: "QML", jobSite: "Nambour Service Centre",
+    jobNumber: "J-1005", sourceQuote: "Q-1005",
     proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false,
     isAdditionalSite: true, projectedRevenue: 6050, quoteValue: 6050,
     invoiceAmount: 6050, invoiceDate: "20/05/2026", invoiceStatus: "Sent",
