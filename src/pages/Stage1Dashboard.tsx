@@ -1376,7 +1376,7 @@ export default function Stage1Dashboard() {
       client: q.client,
       jobSite: q.site || undefined,
       proofType: "Completed Job",
-      status: "Mobilising",
+      status: "Scheduled",
       gm: 0,
       evidence: false,
       isNewClient: true,
@@ -1640,6 +1640,8 @@ export default function Stage1Dashboard() {
         onQuoteActivity={openQuoteActivity}
         onUpdateQuote={handleUpdateQuote}
         onOpenQuoteDetail={handleOpenQuoteDetail}
+        units={units}
+        onOpenUnit={(n) => { setDrill(null); openUnit(n); }}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
