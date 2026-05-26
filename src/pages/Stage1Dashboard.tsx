@@ -782,10 +782,18 @@ export default function Stage1Dashboard() {
           ))}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
-              <CardDescription className="text-xs">
-                Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
-              </CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
+                  <CardDescription className="text-xs">
+                    Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
+                  </CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setAddJobOpen(true)} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Add Job
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
