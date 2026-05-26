@@ -111,6 +111,8 @@ type Quote = {
   reason: string;
   converted?: boolean;
   convertedToN?: number;
+  convertedJobNumber?: string;
+  convertedAt?: string;
   sourceActivityId?: string;
   method?: string;
 };
@@ -463,7 +465,7 @@ function DrillBody({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quotes.map((r) => (
+                {quotes.filter((q) => !q.converted).map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
@@ -476,13 +478,9 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
                       {r.status === "Accepted" ? (
-                        r.converted ? (
-                          <span className="text-xs text-muted-foreground">Already converted</span>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
-                            Convert to Job
-                          </Button>
-                        )
+                        <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
+                          Convert to Job
+                        </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -493,7 +491,7 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {quotes.map((r) => (
+            {quotes.filter((q) => !q.converted).map((r) => (
               <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
@@ -512,22 +510,17 @@ function DrillBody({
                 </div>
                 {r.status === "Accepted" && (
                   <div className="pt-1">
-                    {r.converted ? (
-                      <span className="text-xs text-muted-foreground">Already converted</span>
-                    ) : (
-                      <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
-                        Convert to Job
-                      </Button>
-                    )}
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
+                      Convert to Job
+                    </Button>
                   </div>
                 )}
               </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
-            Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
-            Only accepted quotes can be converted to jobs.
+            Active quotes only. Converted accepted quotes move to the Simple Job Cost Ledger and are hidden here.
+            Only Accepted quotes can be converted to jobs.
           </p>
         </>
       )}
@@ -731,13 +724,8 @@ function ConvertQuoteDialog({
         {quote && (
           <div className="space-y-2 text-sm rounded-md border p-3">
             <div className="flex justify-between"><span className="text-muted-foreground">Quote #</span><span className="font-mono">{quote.number}</span></div>
-            <div className="flex justify-between gap-3">
-              <span className="text-muted-foreground">Client</span>
-              <span className="text-right">
-                <div className="font-medium">{quote.client}</div>
-                <div className="text-xs text-muted-foreground">{quote.site}</div>
-              </span>
-            </div>
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Client</span><span className="font-medium text-right">{quote.client}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Job Location</span><span className="text-right">{quote.site || "—"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
           </div>
         )}
@@ -1031,12 +1019,18 @@ export default function Stage1Dashboard() {
 
   const handleConvert = (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
+    const maxJobNum = units.reduce((m, u) => {
+      const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
+      return isNaN(num) ? m : Math.max(m, num);
+    }, 1000);
+    const jobNumber = `J-${maxJobNum + 1}`;
     const unit: ProofUnit = {
       n: nextN,
+      jobNumber,
       client: q.client,
       jobSite: q.site || undefined,
       proofType: "Completed Job",
-      status: "Not Started",
+      status: "Mobilising",
       gm: 0,
       evidence: false,
       isNewClient: true,
@@ -1046,7 +1040,11 @@ export default function Stage1Dashboard() {
     };
     setUnits((prev) => [...prev, unit]);
     setQuotes((prev) =>
-      prev.map((p) => (p.number === q.number ? { ...p, converted: true, convertedToN: nextN } : p)),
+      prev.map((p) =>
+        p.number === q.number
+          ? { ...p, converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
+          : p,
+      ),
     );
     setConvertQuote(null);
   };
@@ -1149,7 +1147,7 @@ export default function Stage1Dashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">#</TableHead>
+                    <TableHead className="w-20">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Proof Type</TableHead>
                     <TableHead>Status</TableHead>
@@ -1179,7 +1177,7 @@ export default function Stage1Dashboard() {
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-medium">{u.n}</TableCell>
+                        <TableCell className="font-mono text-xs">{u.jobNumber ?? `J-${1000 + u.n}`}</TableCell>
                         <TableCell>
                           <button
                             type="button"
