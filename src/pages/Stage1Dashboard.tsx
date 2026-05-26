@@ -451,7 +451,6 @@ function DrillBody({
 
       {kind === "conversions" && (
         <>
-          {(() => null)()}
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
