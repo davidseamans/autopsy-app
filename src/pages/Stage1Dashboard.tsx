@@ -136,9 +136,9 @@ const SEED_QUOTES: Quote[] = [
 const JOB_ROWS = [
   { job: "J-001", client: "M. Patel", site: "Unit 4, Buderim", status: "Paid", start: "2026-05-04", income: 1200, costs: 864, gm: 28, evidence: "Attached" },
   { job: "J-002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", status: "Paid", start: "2026-05-08", income: 1850, costs: 1443, gm: 22, evidence: "Attached" },
-  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "Active", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
-  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Signed", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
-  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Mobilising", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
+  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "In Progress", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
+  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Scheduled", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
+  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Scheduled", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
 ];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -397,6 +397,8 @@ function DrillBody({
   onSelectQuote,
   onUpdateQuote,
   onOpenQuoteDetail,
+  units,
+  onOpenUnit,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
@@ -405,6 +407,8 @@ function DrillBody({
   onSelectQuote: (n: string) => void;
   onUpdateQuote: (n: string) => void;
   onOpenQuoteDetail: (n: string) => void;
+  units: ProofUnit[];
+  onOpenUnit: (n: number) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -593,32 +597,70 @@ function DrillBody({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Job</TableHead>
+                  <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
+                  <TableHead>Source Quote #</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Start</TableHead>
+                  <TableHead>Scheduled Date</TableHead>
                   <TableHead className="text-right">Income</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
+                  <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Evidence</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {JOB_ROWS.map((r) => {
-                  const m = marginStatus(r.gm);
+                {units.map((u) => {
+                  const income = u.invoiceAmount ?? 0;
+                  const costs =
+                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const gp = income - costs;
+                  const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+                  const m = marginStatus(gmPct);
+                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
-                    <TableRow key={r.job}>
-                      <TableCell className="font-mono text-xs">{r.job}</TableCell>
-                      <TableCell>
-                        <div className="font-medium leading-tight">{r.client}</div>
-                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                    <TableRow
+                      key={u.n}
+                      className="cursor-pointer hover:bg-muted/30"
+                      onClick={() => onOpenUnit(u.n)}
+                    >
+                      <TableCell className="font-mono text-xs">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                          className="hover:underline focus:outline-none"
+                        >
+                          {jobNum}
+                        </button>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{r.start}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
-                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
-                      <TableCell>{r.evidence}</TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                          className="text-left hover:underline focus:outline-none"
+                        >
+                          <div className="font-medium leading-tight">{u.client}</div>
+                          {u.jobSite && (
+                            <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
+                      <TableCell><Badge variant="outline">{u.status}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); onOpenUnit(u.n); }}
+                        >
+                          View Details
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -626,22 +668,34 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {JOB_ROWS.map((r) => {
-              const m = marginStatus(r.gm);
+            {units.map((u) => {
+              const income = u.invoiceAmount ?? 0;
+              const costs =
+                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const gp = income - costs;
+              const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+              const m = marginStatus(gmPct);
+              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
-                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                <button
+                  key={u.n}
+                  type="button"
+                  onClick={() => onOpenUnit(u.n)}
+                  className="block w-full text-left rounded-md border p-3 space-y-1 text-sm hover:bg-muted/30"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{r.job}</span>
-                    <Badge variant="outline">{r.status}</Badge>
+                    <span className="font-mono text-xs">{jobNum}</span>
+                    <Badge variant="outline">{u.status}</Badge>
                   </div>
-                  <div className="font-medium">{r.client}</div>
-                  <div className="text-xs text-muted-foreground">{r.site}</div>
-                  <div className="flex justify-between text-xs"><span>Start</span><span>{r.start}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
-                  <div className="flex justify-between text-xs"><span>Evidence</span><span>{r.evidence}</span></div>
-                </div>
+                  <div className="font-medium">{u.client}</div>
+                  {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
+                  <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Scheduled</span><span>{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
+                </button>
               );
             })}
           </div>
@@ -721,6 +775,8 @@ function DrillCurtain({
   onQuoteActivity,
   onUpdateQuote,
   onOpenQuoteDetail,
+  units,
+  onOpenUnit,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
@@ -732,6 +788,8 @@ function DrillCurtain({
   onQuoteActivity: () => void;
   onUpdateQuote: (n: string) => void;
   onOpenQuoteDetail: (n: string) => void;
+  units: ProofUnit[];
+  onOpenUnit: (n: number) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -769,6 +827,8 @@ function DrillCurtain({
               onSelectQuote={onSelectQuote}
               onUpdateQuote={onUpdateQuote}
               onOpenQuoteDetail={onOpenQuoteDetail}
+              units={units}
+              onOpenUnit={onOpenUnit}
             />
           )}
         </div>
@@ -1316,7 +1376,7 @@ export default function Stage1Dashboard() {
       client: q.client,
       jobSite: q.site || undefined,
       proofType: "Completed Job",
-      status: "Mobilising",
+      status: "Scheduled",
       gm: 0,
       evidence: false,
       isNewClient: true,
@@ -1580,6 +1640,8 @@ export default function Stage1Dashboard() {
         onQuoteActivity={openQuoteActivity}
         onUpdateQuote={handleUpdateQuote}
         onOpenQuoteDetail={handleOpenQuoteDetail}
+        units={units}
+        onOpenUnit={(n) => { setDrill(null); openUnit(n); }}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}

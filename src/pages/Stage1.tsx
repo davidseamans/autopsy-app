@@ -455,7 +455,7 @@ export const SEED_UNITS: ProofUnit[] = [
   {
     n: 3, client: "Sunrise Cafe", jobSite: "Main Street kitchen clean",
     jobNumber: "J-1003", sourceQuote: "Q-1003",
-    proofType: "Recurring Job", status: "Active", gm: 22, evidence: false,
+    proofType: "Recurring Job", status: "In Progress", gm: 22, evidence: false,
     isNewClient: true, recurringFirstInvoicePaid: true,
     projectedRevenue: 2400, quoteValue: 2400,
     invoiceAmount: 2400, invoiceDate: "16/05/2026", invoiceStatus: "Sent",
@@ -469,7 +469,7 @@ export const SEED_UNITS: ProofUnit[] = [
   {
     n: 4, client: "QML", jobSite: "Maroochydore Service Centre",
     jobNumber: "J-1004", sourceQuote: "Q-1004",
-    proofType: "Contract Site", status: "Signed", gm: 35, evidence: true,
+    proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: true,
     isNewClient: true, projectedRevenue: 5000, quoteValue: 5000,
     invoiceAmount: 5000, invoiceDate: "18/05/2026", invoiceStatus: "Invoiced",
     invoiceDocType: "Signed Contract", invoiceDocName: "QML-MAR-Contract.pdf",
@@ -482,7 +482,7 @@ export const SEED_UNITS: ProofUnit[] = [
   {
     n: 5, client: "QML", jobSite: "Nambour Service Centre",
     jobNumber: "J-1005", sourceQuote: "Q-1005",
-    proofType: "Contract Site", status: "Mobilising", gm: 35, evidence: false,
+    proofType: "Contract Site", status: "Scheduled", gm: 35, evidence: false,
     isAdditionalSite: true, projectedRevenue: 6050, quoteValue: 6050,
     invoiceAmount: 6050, invoiceDate: "20/05/2026", invoiceStatus: "Sent",
     invoiceDocType: "Signed Contract", invoiceDocName: "QML-NAM-Contract.pdf",
@@ -519,7 +519,7 @@ export function computeScorecard(units: ProofUnit[]) {
   const validUnits = units.filter(
     (u) => u.client && u.proofType && u.status && typeof u.gm === "number"
   );
-  const payingStatuses = new Set(["Paid", "Active", "Signed", "Mobilising", "Renewed"]);
+  const payingStatuses = new Set(["Scheduled", "In Progress", "Completed", "Paid"]);
   const payingClients = new Set(
     units.filter((u) => payingStatuses.has(u.status)).map((u) => u.client)
   );
@@ -683,31 +683,11 @@ function kindForProof(t: ProofType): "oneoff" | "contract" {
   return t === "Signed Contract" || t === "Contract Site" ? "contract" : "oneoff";
 }
 
-function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[] {
-  if (kind === "contract") {
-    const order = ["Draft", "Sent", "Signed", "Mobilising", "Active", "Renewed", "Ended", "Cancelled"];
-    if (current === "Cancelled") return ["Cancelled", "Draft"]; // reopen path
-    if (current === "Ended") return ["Ended", "Renewed", "Cancelled"];
-    const i = Math.max(0, order.indexOf(current));
-    const fwd = order.slice(i);
-    // Active only after Signed/Mobilising
-    return Array.from(new Set([
-      current,
-      ...fwd.filter((s) => {
-        if (s === "Active") return ["Signed", "Mobilising", "Active"].includes(current);
-        return true;
-      }),
-    ]));
-  }
-  const order = ["Open", "Scheduled", "Active", "Completed", "Paid", "Cancelled"];
-  if (current === "Cancelled") return ["Cancelled", "Open"]; // reopen
-  if (current === "Paid") return ["Paid"]; // terminal
-  const i = Math.max(0, order.indexOf(current));
-  const fwd = order.slice(i);
-  return fwd.filter((s) => {
-    if (s === "Paid") return current === "Completed"; // Paid only after Completed
-    return true;
-  });
+function allowedStatuses(current: string, _kind: "oneoff" | "contract"): string[] {
+  const order = ["Scheduled", "In Progress", "Completed", "Paid"];
+  const normalized = order.includes(current) ? current : "Scheduled";
+  const i = Math.max(0, order.indexOf(normalized));
+  return Array.from(new Set([current, ...order.slice(i)]));
 }
 
 function Stage1SummaryDialog({
@@ -1954,8 +1934,8 @@ function LogActivityForm() {
 
 // ----- Financial Proof: local data store (frontend-only, scope-limited) -----
 type JobKind = "oneoff" | "contract";
-const ONEOFF_STATUSES = ["Open", "Scheduled", "Active", "Completed", "Paid", "Cancelled"] as const;
-const CONTRACT_STATUSES = ["Draft", "Sent", "Signed", "Mobilising", "Active", "Renewed", "Ended", "Cancelled"] as const;
+const ONEOFF_STATUSES = ["Scheduled", "In Progress", "Completed", "Paid"] as const;
+const CONTRACT_STATUSES = ["Scheduled", "In Progress", "Completed", "Paid"] as const;
 type OneoffStatus = (typeof ONEOFF_STATUSES)[number];
 type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
@@ -2029,9 +2009,9 @@ const SEED_CLIENTS: FPClient[] = [
 ];
 const SEED_JOBS: FPJob[] = [
   { id: "j1", client_id: "c1", job_name: "Front yard clean", kind: "oneoff", proof_type: "Completed Job", status: "Paid" },
-  { id: "j2", client_id: "c2", job_name: "Weekly cafe clean", kind: "oneoff", proof_type: "Recurring Job", status: "Active" },
-  { id: "j3", client_id: "c3", job_name: "Site A contract", kind: "contract", proof_type: "Contract Site", status: "Signed" },
-  { id: "j4", client_id: "c3", job_name: "Site B contract", kind: "contract", proof_type: "Contract Site", status: "Mobilising" },
+  { id: "j2", client_id: "c2", job_name: "Weekly cafe clean", kind: "oneoff", proof_type: "Recurring Job", status: "In Progress" },
+  { id: "j3", client_id: "c3", job_name: "Site A contract", kind: "contract", proof_type: "Contract Site", status: "Scheduled" },
+  { id: "j4", client_id: "c3", job_name: "Site B contract", kind: "contract", proof_type: "Contract Site", status: "Scheduled" },
 ];
 
 const PROOF_TYPES: ProofType[] = [
@@ -2056,13 +2036,11 @@ const DOC_TYPES = [
 
 function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
-  if (["paid", "active", "signed", "renewed"].includes(s))
-    return "border-emerald-400 text-emerald-700 bg-emerald-50";
-  if (["cancelled", "ended", "rejected"].includes(s))
-    return "border-red-400 text-red-700 bg-red-50";
-  if (["completed", "mobilising", "sent"].includes(s))
-    return "border-blue-400 text-blue-700 bg-blue-50";
-  return "border-amber-400 text-amber-700 bg-amber-50";
+  if (s === "paid") return "border-emerald-400 text-emerald-700 bg-emerald-50";
+  if (s === "completed") return "border-blue-400 text-blue-700 bg-blue-50";
+  if (s === "in progress") return "border-indigo-400 text-indigo-700 bg-indigo-50";
+  if (s === "scheduled") return "border-amber-400 text-amber-700 bg-amber-50";
+  return "border-muted-foreground/40 text-muted-foreground bg-muted/40";
 }
 
 function FinancialsForm() {
