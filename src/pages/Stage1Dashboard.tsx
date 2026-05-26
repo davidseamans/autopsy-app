@@ -1083,6 +1083,8 @@ export default function Stage1Dashboard() {
   const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
   const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
   const [quoteActivityError, setQuoteActivityError] = useState<string | null>(null);
+  const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
+  const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -1195,6 +1197,26 @@ export default function Stage1Dashboard() {
     }
     setQuoteActivityError(null);
     setQuoteActivityOpen(true);
+  };
+
+  // Row-level Update: target that exact row, no prior selection required.
+  const handleUpdateQuote = (n: string) => {
+    setSelectedQuoteNumber(n);
+    setQuoteActivityError(null);
+    setQuoteActivityOpen(true);
+  };
+
+  const handleOpenQuoteDetail = (n: string) => {
+    setQuoteDetailNumber(n);
+    setQuoteDetailOpen(true);
+  };
+
+  const handleSaveQuoteDetail = (patch: Partial<Quote>) => {
+    if (!quoteDetailNumber) return;
+    setQuotes((prev) =>
+      prev.map((p) => (p.number === quoteDetailNumber ? { ...p, ...patch } : p)),
+    );
+    setQuoteDetailOpen(false);
   };
 
   return (
@@ -1394,12 +1416,20 @@ export default function Stage1Dashboard() {
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
         onQuoteActivity={openQuoteActivity}
+        onUpdateQuote={handleUpdateQuote}
+        onOpenQuoteDetail={handleOpenQuoteDetail}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
         open={quoteActivityOpen}
         onOpenChange={setQuoteActivityOpen}
         onSave={handleQuoteActivitySave}
+      />
+      <QuoteDetailDialog
+        quote={quotes.find((q) => q.number === quoteDetailNumber) ?? null}
+        open={quoteDetailOpen}
+        onOpenChange={setQuoteDetailOpen}
+        onSave={handleSaveQuoteDetail}
       />
       <LogActivityDialog
         open={logActOpen}
