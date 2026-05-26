@@ -635,6 +635,187 @@ function DrillCurtain({
 
 
 export default function Stage1Dashboard() {
+  /* dialogs below */
+  return null as any;
+}
+
+function AddJobDialog({
+  open,
+  onOpenChange,
+  onSave,
+  nextN,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (u: ProofUnit) => void;
+  nextN: number;
+}) {
+  const [client, setClient] = useState("");
+  const [jobSite, setJobSite] = useState("");
+  const [amount, setAmount] = useState<string>("");
+  const [scheduled, setScheduled] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setClient(""); setJobSite(""); setAmount(""); setScheduled("");
+    }
+  }, [open]);
+
+  const canSave = client.trim().length > 0;
+
+  const save = () => {
+    const amt = Number(amount);
+    const unit: ProofUnit = {
+      n: nextN,
+      client: client.trim(),
+      jobSite: jobSite.trim() || undefined,
+      proofType: "Completed Job",
+      status: "Draft",
+      gm: 0,
+      evidence: false,
+      isNewClient: true,
+      quoteValue: !isNaN(amt) && amt > 0 ? amt : undefined,
+      projectedRevenue: !isNaN(amt) && amt > 0 ? amt : undefined,
+      scheduledDate: scheduled ? isoToAU(scheduled) : undefined,
+    };
+    onSave(unit);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Job</DialogTitle>
+          <DialogDescription>
+            Create the job shell. Enter Customer Invoice, Job Costs and Payment Proof from the Job / Contract Site Detail curtain.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-client">Client <span className="text-destructive">*</span></Label>
+            <Input id="aj-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-site">Job Location</Label>
+            <Input id="aj-site" value={jobSite} onChange={(e) => setJobSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-amt">Quote / Contract Amount (incl. GST)</Label>
+            <Input id="aj-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-date">Scheduled Date</Label>
+            <Input id="aj-date" type="date" value={scheduled} onChange={(e) => setScheduled(e.target.value)} />
+            {scheduled && (
+              <p className="text-[11px] text-muted-foreground">{isoToAU(scheduled)}</p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>Save Job</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LogActivityDialog({
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (a: LeadActivity) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [method, setMethod] = useState(METHOD_OPTIONS[0]);
+  const [attempts, setAttempts] = useState<string>("");
+  const [contacts, setContacts] = useState<string>("");
+  const [quotes, setQuotes] = useState<string>("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setDate(""); setMethod(METHOD_OPTIONS[0]);
+      setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
+    }
+  }, [open]);
+
+  const canSave = !!date && !!method;
+
+  const save = () => {
+    const a: LeadActivity = {
+      id: `act-${Date.now()}`,
+      activity_date: date,
+      method,
+      attempts: Number(attempts) || 0,
+      contacts_made: Number(contacts) || 0,
+      quotes_generated: Number(quotes) || 0,
+      notes: notes.trim(),
+      created_at: new Date().toISOString(),
+    };
+    onSave(a);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Log Activity</DialogTitle>
+          <DialogDescription>
+            Record a dated lead-generation activity. Aggregates into Lead Method Performance.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="la-date">Activity Date <span className="text-destructive">*</span></Label>
+            <Input id="la-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">
+              {date ? `Entered as ${isoToAU(date)}` : "dd/mm/yyyy (e.g. 28/05/2026)"}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="la-method">Method</Label>
+            <select
+              id="la-method"
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="la-att">Attempts</Label>
+              <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="la-con">Contacts Made</Label>
+              <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="la-qt">Quotes Generated</Label>
+              <Input id="la-qt" type="number" min={0} value={quotes} onChange={(e) => setQuotes(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="la-notes">Notes</Label>
+            <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>Save Activity</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Stage1DashboardImpl_unused() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
