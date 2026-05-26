@@ -111,6 +111,8 @@ type Quote = {
   reason: string;
   converted?: boolean;
   convertedToN?: number;
+  sourceActivityId?: string;
+  method?: string;
 };
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
