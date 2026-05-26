@@ -724,13 +724,8 @@ function ConvertQuoteDialog({
         {quote && (
           <div className="space-y-2 text-sm rounded-md border p-3">
             <div className="flex justify-between"><span className="text-muted-foreground">Quote #</span><span className="font-mono">{quote.number}</span></div>
-            <div className="flex justify-between gap-3">
-              <span className="text-muted-foreground">Client</span>
-              <span className="text-right">
-                <div className="font-medium">{quote.client}</div>
-                <div className="text-xs text-muted-foreground">{quote.site}</div>
-              </span>
-            </div>
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Client</span><span className="font-medium text-right">{quote.client}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">Job Location</span><span className="text-right">{quote.site || "—"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
           </div>
         )}
