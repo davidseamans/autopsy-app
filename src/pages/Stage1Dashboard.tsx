@@ -397,6 +397,8 @@ function DrillBody({
   onSelectQuote,
   onUpdateQuote,
   onOpenQuoteDetail,
+  units,
+  onOpenUnit,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
@@ -405,6 +407,8 @@ function DrillBody({
   onSelectQuote: (n: string) => void;
   onUpdateQuote: (n: string) => void;
   onOpenQuoteDetail: (n: string) => void;
+  units: ProofUnit[];
+  onOpenUnit: (n: number) => void;
 }) {
   return (
     <div className="space-y-4">
