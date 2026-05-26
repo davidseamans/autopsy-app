@@ -352,7 +352,13 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   },
 };
 
-function DrillBody({ kind }: { kind: DrillKey }) {
+function DrillBody({
+  kind,
+  methodRows,
+}: {
+  kind: DrillKey;
+  methodRows: typeof METHOD_BASELINE;
+}) {
   return (
     <div className="space-y-4">
       {kind === "leads" && (
@@ -372,7 +378,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {METHOD_ROWS.map((r) => (
+                {methodRows.map((r) => (
                   <TableRow key={r.method}>
                     <TableCell className="font-medium">{r.method}</TableCell>
                     <TableCell className="text-right">{r.attempts}</TableCell>
@@ -388,7 +394,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
           </div>
           {/* Mobile stacked cards */}
           <div className="md:hidden space-y-3">
-            {METHOD_ROWS.map((r) => (
+            {methodRows.map((r) => (
               <div key={r.method} className="rounded-md border p-3">
                 <div className="font-medium">{r.method}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
