@@ -946,7 +946,9 @@ function LogActivityDialog({
       followUp: r.followUp,
       reason: "",
       sourceActivityId: activityId,
+      sourceActivityDate: date,
       method,
+      createdAt: new Date().toISOString(),
     }));
     onSave(a, newQuotes);
   };
