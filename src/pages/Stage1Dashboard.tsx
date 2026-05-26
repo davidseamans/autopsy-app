@@ -87,13 +87,43 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_ROWS = [
-  { number: "Q-1001", client: "M. Patel", site: "Unit 4, Buderim", value: 1200, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", value: 1850, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1003", client: "Sunrise Cafe", site: "Main Street kitchen", value: 2400, status: "Sent", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1004", client: "QML", site: "Maroochydore Service Centre", value: 5000, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1005", client: "QML", site: "Nambour Service Centre", value: 6050, status: "Pending", followUp: "2026-05-29", reason: "" },
-  { number: "Q-0998", client: "B. Adams", site: "Caloundra", value: 800, status: "Rejected", followUp: "", reason: "Too expensive" },
+const QUOTE_STATUSES = ["Draft", "Sent", "Pending", "Accepted", "Rejected", "Expired"] as const;
+type QuoteStatus = typeof QUOTE_STATUSES[number];
+const REJECTION_REASONS = [
+  "Too expensive",
+  "No confidence",
+  "Poor fit",
+  "Slow response",
+  "Competitor chosen",
+  "Scope unclear",
+  "No budget",
+  "Other",
+] as const;
+
+type Quote = {
+  number: string;
+  client: string;
+  site: string;
+  value: number;
+  status: QuoteStatus;
+  quoteDate: string;   // iso yyyy-mm-dd
+  followUp: string;    // iso yyyy-mm-dd
+  reason: string;
+  converted?: boolean;
+  convertedToN?: number;
+};
+
+// Seed: the five accepted quotes that produced the five ledger jobs,
+// plus a handful of in-flight / rejected quotes for the conversion board.
+const SEED_QUOTES: Quote[] = [
+  { number: "Q-1001", client: "M. Patel",      site: "Unit 4, Buderim",                value: 1200, status: "Accepted", quoteDate: "2026-04-28", followUp: "", reason: "", converted: true, convertedToN: 1 },
+  { number: "Q-1002", client: "K. Nguyen",     site: "12 Beach Rd, Mooloolaba",        value: 1850, status: "Accepted", quoteDate: "2026-05-01", followUp: "", reason: "", converted: true, convertedToN: 2 },
+  { number: "Q-1003", client: "Sunrise Cafe",  site: "Main Street kitchen clean",      value: 2400, status: "Accepted", quoteDate: "2026-05-06", followUp: "", reason: "", converted: true, convertedToN: 3 },
+  { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4 },
+  { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5 },
+  { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "" },
+  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Pending",  quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
+  { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive" },
 ];
 
 const JOB_ROWS = [
