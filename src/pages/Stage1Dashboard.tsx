@@ -603,9 +603,11 @@ function DrillBody({
                   <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Source Quote #</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Scheduled Date</TableHead>
-                  <TableHead className="text-right">Income</TableHead>
+                  <TableHead className="text-right">
+                    <div className="leading-tight">Income</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
+                  </TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
@@ -614,7 +616,9 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.invoiceAmount ?? 0;
+                  const income = u.quoteValue ?? 0;
+                  const paid = u.paymentAmount ?? 0;
+                  const outstanding = income - paid;
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
@@ -649,9 +653,10 @@ function DrillBody({
                         </button>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
-                      <TableCell><Badge variant="outline">{u.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
+                        {income > 0 ? fmtSignedMoney(outstanding) : "—"}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
