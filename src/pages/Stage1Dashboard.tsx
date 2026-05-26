@@ -976,9 +976,11 @@ export default function Stage1Dashboard() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [addJobOpen, setAddJobOpen] = useState(false);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
+  const [addQuoteOpen, setAddQuoteOpen] = useState(false);
+  const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -1013,18 +1015,49 @@ export default function Stage1Dashboard() {
     setSheetOpen(true);
   };
 
-  // Compute KPI aggregates from fixtures
+  // Compute KPI aggregates from current state
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
-  const quotesSent = QUOTE_ROWS.filter((q) => q.status !== "Draft").length;
-  const quotesAccepted = QUOTE_ROWS.filter((q) => q.status === "Accepted").length;
+  const quotesSent = quotes.filter((q) => q.status !== "Draft").length;
+  const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
-  const activeJobs = JOB_ROWS.filter((j) => ["Active", "Scheduled", "Accepted"].includes(j.status)).length;
-  const completedJobs = JOB_ROWS.filter((j) => j.status === "Completed").length;
+  // Jobs in the ledger are only those created from accepted, converted quotes.
+  const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
+  const completedJobs = units.filter((u) => u.status === "Paid").length;
   const totalIncome = JOB_ROWS.reduce((s, r) => s + r.income, 0);
   const totalCosts = JOB_ROWS.reduce((s, r) => s + r.costs, 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
+
+  const nextQuoteNumber = useMemo(() => {
+    const nums = quotes
+      .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
+      .filter((n) => !isNaN(n));
+    const max = nums.length ? Math.max(...nums) : 1000;
+    return `Q-${max + 1}`;
+  }, [quotes]);
+
+  const handleConvert = (q: Quote) => {
+    const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
+    const unit: ProofUnit = {
+      n: nextN,
+      client: q.client,
+      jobSite: q.site || undefined,
+      proofType: "Completed Job",
+      status: "Not Started",
+      gm: 0,
+      evidence: false,
+      isNewClient: true,
+      quoteValue: q.value,
+      projectedRevenue: q.value,
+      sourceQuote: q.number,
+    };
+    setUnits((prev) => [...prev, unit]);
+    setQuotes((prev) =>
+      prev.map((p) => (p.number === q.number ? { ...p, converted: true, convertedToN: nextN } : p)),
+    );
+    setConvertQuote(null);
+  };
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
@@ -1115,18 +1148,10 @@ export default function Stage1Dashboard() {
           ))}
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
-                  <CardDescription className="text-xs">
-                    Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
-                  </CardDescription>
-                </div>
-                <Button size="sm" onClick={() => setAddJobOpen(true)} className="gap-1.5 shrink-0">
-                  <Plus className="h-4 w-4" />
-                  Add Job
-                </Button>
-              </div>
+              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
+              <CardDescription className="text-xs">
+                Jobs created by converting accepted quotes from the Quote Conversion Board. Click a row to open the Job / Contract Site Detail curtain.
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -1227,15 +1252,24 @@ export default function Stage1Dashboard() {
         onOpenChange={(o) => { if (!o) setDrill(null); }}
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
+        quotes={quotes}
+        onAddQuote={() => setAddQuoteOpen(true)}
+        onConvert={(q) => setConvertQuote(q)}
       />
-      <AddJobDialog
-        open={addJobOpen}
-        onOpenChange={setAddJobOpen}
-        onSave={(u) => {
-          setUnits((prev) => [...prev, u]);
-          setAddJobOpen(false);
+      <AddQuoteDialog
+        open={addQuoteOpen}
+        onOpenChange={setAddQuoteOpen}
+        onSave={(q) => {
+          setQuotes((prev) => [q, ...prev]);
+          setAddQuoteOpen(false);
         }}
-        nextN={(units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1}
+        nextNumber={nextQuoteNumber}
+      />
+      <ConvertQuoteDialog
+        quote={convertQuote}
+        open={!!convertQuote}
+        onOpenChange={(o) => { if (!o) setConvertQuote(null); }}
+        onConfirm={handleConvert}
       />
       <LogActivityDialog
         open={logActOpen}
