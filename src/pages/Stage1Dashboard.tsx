@@ -395,12 +395,16 @@ function DrillBody({
   quotes,
   selectedQuoteNumber,
   onSelectQuote,
+  onUpdateQuote,
+  onOpenQuoteDetail,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
+  onUpdateQuote: (n: string) => void;
+  onOpenQuoteDetail: (n: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -462,6 +466,7 @@ function DrillBody({
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
                   <TableHead>Quote #</TableHead>
+                  <TableHead>Quote Date</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
@@ -488,7 +493,16 @@ function DrillBody({
                         aria-label={`Select ${r.number}`}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{r.number}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                        className="hover:underline focus:outline-none"
+                      >
+                        {r.number}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{r.quoteDate ? isoToAU(r.quoteDate) : "—"}</TableCell>
                     <TableCell>
                       <div className="font-medium leading-tight">{r.client}</div>
                       <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
@@ -498,13 +512,22 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}
-                      >
-                        Update
-                      </Button>
+                      <div className="inline-flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); onUpdateQuote(r.number); }}
+                        >
+                          Update
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                   );
@@ -522,11 +545,20 @@ function DrillBody({
                 onClick={() => onSelectQuote(r.number)}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">{r.number}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {r.number}
+                  </button>
                   <Badge variant="outline">{r.status}</Badge>
                 </div>
                 <div className="font-medium">{r.client}</div>
                 <div className="text-xs text-muted-foreground">{r.site}</div>
+                <div className="flex justify-between text-xs">
+                  <span>Quote Date</span><span>{r.quoteDate ? isoToAU(r.quoteDate) : "—"}</span>
+                </div>
                 <div className="flex justify-between text-xs">
                   <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
@@ -536,9 +568,12 @@ function DrillBody({
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
-                <div className="pt-1">
-                  <Button size="sm" variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}>
-                    {isSel ? "Selected · tap Quote Activity" : "Select"}
+                <div className="pt-1 grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}>
+                    View
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onUpdateQuote(r.number); }}>
+                    Update
                   </Button>
                 </div>
               </div>
