@@ -49,6 +49,9 @@ import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Signed money display: handles negatives as "-$X.XX" rather than "$-X.XX"
+const fmtSignedMoney = (n: number) => `${n < 0 ? "-" : ""}$${fmtMoney(Math.abs(n))}`;
+
 // Convert yyyy-mm-dd (from <input type="date">) to dd/mm/yyyy for AU display
 const isoToAU = (iso: string) => {
   if (!iso) return "";
