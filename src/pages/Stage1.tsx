@@ -683,31 +683,11 @@ function kindForProof(t: ProofType): "oneoff" | "contract" {
   return t === "Signed Contract" || t === "Contract Site" ? "contract" : "oneoff";
 }
 
-function allowedStatuses(current: string, kind: "oneoff" | "contract"): string[] {
-  if (kind === "contract") {
-    const order = ["Draft", "Sent", "Signed", "Mobilising", "Active", "Renewed", "Ended", "Cancelled"];
-    if (current === "Cancelled") return ["Cancelled", "Draft"]; // reopen path
-    if (current === "Ended") return ["Ended", "Renewed", "Cancelled"];
-    const i = Math.max(0, order.indexOf(current));
-    const fwd = order.slice(i);
-    // Active only after Signed/Mobilising
-    return Array.from(new Set([
-      current,
-      ...fwd.filter((s) => {
-        if (s === "Active") return ["Signed", "Mobilising", "Active"].includes(current);
-        return true;
-      }),
-    ]));
-  }
-  const order = ["Open", "Scheduled", "Active", "Completed", "Paid", "Cancelled"];
-  if (current === "Cancelled") return ["Cancelled", "Open"]; // reopen
-  if (current === "Paid") return ["Paid"]; // terminal
-  const i = Math.max(0, order.indexOf(current));
-  const fwd = order.slice(i);
-  return fwd.filter((s) => {
-    if (s === "Paid") return current === "Completed"; // Paid only after Completed
-    return true;
-  });
+function allowedStatuses(current: string, _kind: "oneoff" | "contract"): string[] {
+  const order = ["Scheduled", "In Progress", "Completed", "Paid"];
+  const normalized = order.includes(current) ? current : "Scheduled";
+  const i = Math.max(0, order.indexOf(normalized));
+  return Array.from(new Set([current, ...order.slice(i)]));
 }
 
 function Stage1SummaryDialog({
