@@ -42,19 +42,50 @@ import {
   Lock,
   IdCard,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Convert yyyy-mm-dd (from <input type="date">) to dd/mm/yyyy for AU display
+const isoToAU = (iso: string) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+};
+
 // ---------- Sample fixtures for the KPI drill-downs ----------
 // These mirror the operating story used by the existing ledger.
-const METHOD_ROWS = [
+// Baseline figures for fields that aren't captured by Log Activity (leads, jobs)
+// plus a static baseline note. Attempts / contacts / quotes are aggregated from
+// dated activity records on top of this baseline.
+const METHOD_BASELINE = [
   { method: "Phone Outreach", attempts: 18, contacts: 7, leads: 5, quotes: 2, jobs: 1, notes: "Best mornings 8–10am" },
   { method: "Referral Request", attempts: 6, contacts: 4, leads: 4, quotes: 3, jobs: 2, notes: "Highest converting" },
   { method: "Local Flyer", attempts: 150, contacts: 3, leads: 2, quotes: 1, jobs: 0, notes: "Slow conversion" },
 ];
+const METHOD_OPTIONS = [
+  "Phone Outreach",
+  "Referral Request",
+  "Local Flyer",
+  "Email Outreach",
+  "Walk-in",
+  "Other",
+];
+
+type LeadActivity = {
+  id: string;
+  activity_date: string; // yyyy-mm-dd
+  method: string;
+  attempts: number;
+  contacts_made: number;
+  quotes_generated: number;
+  notes: string;
+  created_at: string;
+};
 
 const QUOTE_ROWS = [
   { number: "Q-1001", client: "M. Patel", site: "Unit 4, Buderim", value: 1200, status: "Accepted", followUp: "", reason: "" },
@@ -321,7 +352,13 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   },
 };
 
-function DrillBody({ kind }: { kind: DrillKey }) {
+function DrillBody({
+  kind,
+  methodRows,
+}: {
+  kind: DrillKey;
+  methodRows: typeof METHOD_BASELINE;
+}) {
   return (
     <div className="space-y-4">
       {kind === "leads" && (
@@ -341,7 +378,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {METHOD_ROWS.map((r) => (
+                {methodRows.map((r) => (
                   <TableRow key={r.method}>
                     <TableCell className="font-medium">{r.method}</TableCell>
                     <TableCell className="text-right">{r.attempts}</TableCell>
@@ -357,7 +394,7 @@ function DrillBody({ kind }: { kind: DrillKey }) {
           </div>
           {/* Mobile stacked cards */}
           <div className="md:hidden space-y-3">
-            {METHOD_ROWS.map((r) => (
+            {methodRows.map((r) => (
               <div key={r.method} className="rounded-md border p-3">
                 <div className="font-medium">{r.method}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
@@ -559,9 +596,13 @@ function DrillBody({ kind }: { kind: DrillKey }) {
 function DrillCurtain({
   drill,
   onOpenChange,
+  methodRows,
+  onLogActivity,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
+  methodRows: typeof METHOD_BASELINE;
+  onLogActivity: () => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -572,16 +613,202 @@ function DrillCurtain({
       >
         <div className="p-6 space-y-4">
           <SheetHeader>
-            <SheetTitle>{meta?.title}</SheetTitle>
-            <SheetDescription>{meta?.subtitle}</SheetDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <SheetTitle>{meta?.title}</SheetTitle>
+                <SheetDescription>{meta?.subtitle}</SheetDescription>
+              </div>
+              {drill === "leads" && (
+                <Button size="sm" onClick={onLogActivity} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Log Activity
+                </Button>
+              )}
+            </div>
           </SheetHeader>
-          {drill && <DrillBody kind={drill} />}
+          {drill && <DrillBody kind={drill} methodRows={methodRows} />}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
+
+function AddJobDialog({
+  open,
+  onOpenChange,
+  onSave,
+  nextN,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (u: ProofUnit) => void;
+  nextN: number;
+}) {
+  const [client, setClient] = useState("");
+  const [jobSite, setJobSite] = useState("");
+  const [amount, setAmount] = useState<string>("");
+  const [scheduled, setScheduled] = useState<string>("");
+
+  useEffect(() => {
+    if (open) {
+      setClient(""); setJobSite(""); setAmount(""); setScheduled("");
+    }
+  }, [open]);
+
+  const canSave = client.trim().length > 0;
+
+  const save = () => {
+    const amt = Number(amount);
+    const unit: ProofUnit = {
+      n: nextN,
+      client: client.trim(),
+      jobSite: jobSite.trim() || undefined,
+      proofType: "Completed Job",
+      status: "Draft",
+      gm: 0,
+      evidence: false,
+      isNewClient: true,
+      quoteValue: !isNaN(amt) && amt > 0 ? amt : undefined,
+      projectedRevenue: !isNaN(amt) && amt > 0 ? amt : undefined,
+      scheduledDate: scheduled ? isoToAU(scheduled) : undefined,
+    };
+    onSave(unit);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Job</DialogTitle>
+          <DialogDescription>
+            Create the job shell. Enter Customer Invoice, Job Costs and Payment Proof from the Job / Contract Site Detail curtain.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-client">Client <span className="text-destructive">*</span></Label>
+            <Input id="aj-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-site">Job Location</Label>
+            <Input id="aj-site" value={jobSite} onChange={(e) => setJobSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-amt">Quote / Contract Amount (incl. GST)</Label>
+            <Input id="aj-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="aj-date">Scheduled Date</Label>
+            <Input id="aj-date" type="date" value={scheduled} onChange={(e) => setScheduled(e.target.value)} />
+            {scheduled && (
+              <p className="text-[11px] text-muted-foreground">{isoToAU(scheduled)}</p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>Save Job</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LogActivityDialog({
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (a: LeadActivity) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [method, setMethod] = useState(METHOD_OPTIONS[0]);
+  const [attempts, setAttempts] = useState<string>("");
+  const [contacts, setContacts] = useState<string>("");
+  const [quotes, setQuotes] = useState<string>("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setDate(""); setMethod(METHOD_OPTIONS[0]);
+      setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
+    }
+  }, [open]);
+
+  const canSave = !!date && !!method;
+
+  const save = () => {
+    const a: LeadActivity = {
+      id: `act-${Date.now()}`,
+      activity_date: date,
+      method,
+      attempts: Number(attempts) || 0,
+      contacts_made: Number(contacts) || 0,
+      quotes_generated: Number(quotes) || 0,
+      notes: notes.trim(),
+      created_at: new Date().toISOString(),
+    };
+    onSave(a);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Log Activity</DialogTitle>
+          <DialogDescription>
+            Record a dated lead-generation activity. Aggregates into Lead Method Performance.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="la-date">Activity Date <span className="text-destructive">*</span></Label>
+            <Input id="la-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">
+              {date ? `Entered as ${isoToAU(date)}` : "dd/mm/yyyy (e.g. 28/05/2026)"}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="la-method">Method</Label>
+            <select
+              id="la-method"
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="la-att">Attempts</Label>
+              <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="la-con">Contacts Made</Label>
+              <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="la-qt">Quotes Generated</Label>
+              <Input id="la-qt" type="number" min={0} value={quotes} onChange={(e) => setQuotes(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="la-notes">Notes</Label>
+            <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>Save Activity</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
@@ -592,6 +819,28 @@ export default function Stage1Dashboard() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [addJobOpen, setAddJobOpen] = useState(false);
+  const [logActOpen, setLogActOpen] = useState(false);
+  const [activities, setActivities] = useState<LeadActivity[]>([]);
+
+  const methodRows = useMemo(() => {
+    return METHOD_BASELINE.map((b) => {
+      const acts = activities.filter((a) => a.method === b.method);
+      const addAtt = acts.reduce((s, a) => s + (a.attempts || 0), 0);
+      const addCon = acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
+      const addQt  = acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
+      const extraNote = acts.length
+        ? `${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`
+        : "";
+      return {
+        ...b,
+        attempts: b.attempts + addAtt,
+        contacts: b.contacts + addCon,
+        quotes: b.quotes + addQt,
+        notes: extraNote ? `${b.notes} · ${extraNote}` : b.notes,
+      };
+    });
+  }, [activities]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -608,7 +857,7 @@ export default function Stage1Dashboard() {
   };
 
   // Compute KPI aggregates from fixtures
-  const totalLeads = METHOD_ROWS.reduce((s, r) => s + r.leads, 0);
+  const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
   const quotesSent = QUOTE_ROWS.filter((q) => q.status !== "Draft").length;
   const quotesAccepted = QUOTE_ROWS.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
@@ -709,10 +958,18 @@ export default function Stage1Dashboard() {
           ))}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
-              <CardDescription className="text-xs">
-                Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
-              </CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
+                  <CardDescription className="text-xs">
+                    Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
+                  </CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setAddJobOpen(true)} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Add Job
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -808,7 +1065,29 @@ export default function Stage1Dashboard() {
         onOpenDetailedReport={(n) => openReport(n)}
       />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
-      <DrillCurtain drill={drill} onOpenChange={(o) => { if (!o) setDrill(null); }} />
+      <DrillCurtain
+        drill={drill}
+        onOpenChange={(o) => { if (!o) setDrill(null); }}
+        methodRows={methodRows}
+        onLogActivity={() => setLogActOpen(true)}
+      />
+      <AddJobDialog
+        open={addJobOpen}
+        onOpenChange={setAddJobOpen}
+        onSave={(u) => {
+          setUnits((prev) => [...prev, u]);
+          setAddJobOpen(false);
+        }}
+        nextN={(units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1}
+      />
+      <LogActivityDialog
+        open={logActOpen}
+        onOpenChange={setLogActOpen}
+        onSave={(a) => {
+          setActivities((prev) => [...prev, a]);
+          setLogActOpen(false);
+        }}
+      />
       <DetailedJobCostReport
         unit={reportUnit}
         allUnits={units}
