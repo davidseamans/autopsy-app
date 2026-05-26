@@ -677,7 +677,9 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.invoiceAmount ?? 0;
+              const income = u.quoteValue ?? 0;
+              const paid = u.paymentAmount ?? 0;
+              const outstanding = income - paid;
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
@@ -698,8 +700,8 @@ function DrillBody({
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Scheduled</span><span>{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
