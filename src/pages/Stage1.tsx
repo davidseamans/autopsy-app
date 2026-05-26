@@ -326,6 +326,7 @@ export interface ProofUnit {
   projectedRevenue?: number;
   quoteValue?: number;
   scheduledDate?: string;
+  sourceQuote?: string;
   notes?: string;
   nextAction?: string;
   // Customer Invoice / Contract
