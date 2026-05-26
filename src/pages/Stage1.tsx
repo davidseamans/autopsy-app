@@ -1239,25 +1239,97 @@ export function JobDetailSheet({
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
             <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Materials</Label>
-                <Input type="number" value={draft.costMaterials ?? ""} onChange={(e) => setDraft({ ...draft, costMaterials: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Labour</Label>
-                <Input type="number" value={draft.costLabour ?? ""} onChange={(e) => setDraft({ ...draft, costLabour: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Subcontractors</Label>
-                <Input type="number" value={draft.costSubcontractors ?? ""} onChange={(e) => setDraft({ ...draft, costSubcontractors: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Other Direct Costs</Label>
-                <Input type="number" value={draft.costOther ?? ""} onChange={(e) => setDraft({ ...draft, costOther: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
+            <p className="text-xs text-muted-foreground">
+              Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
+            </p>
+            <div className="space-y-2">
+              {(draft.costLines ?? []).map((line, idx) => {
+                const gstAmt = line.gstIncluded && line.amount ? +(line.amount / 11).toFixed(2) : 0;
+                return (
+                  <div key={line.id} className="rounded border p-2 space-y-2">
+                    <div className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-12 sm:col-span-6 space-y-1">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          value={line.description}
+                          placeholder="e.g. Materials, Subcontractor help"
+                          onChange={(e) => {
+                            const next = [...(draft.costLines ?? [])];
+                            next[idx] = { ...line, description: e.target.value };
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-6 sm:col-span-3 space-y-1">
+                        <Label className="text-xs">Amount</Label>
+                        <Input
+                          type="number"
+                          value={line.amount ?? ""}
+                          onChange={(e) => {
+                            const next = [...(draft.costLines ?? [])];
+                            next[idx] = { ...line, amount: e.target.value === "" ? undefined : Number(e.target.value) };
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-2 space-y-1">
+                        <Label className="text-xs">GST incl.</Label>
+                        <div className="h-10 flex items-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={line.gstIncluded}
+                            onChange={(e) => {
+                              const next = [...(draft.costLines ?? [])];
+                              next[idx] = { ...line, gstIncluded: e.target.checked };
+                              setDraft({ ...draft, costLines: next });
+                            }}
+                          />
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {line.gstIncluded && gstAmt > 0 ? `GST $${gstAmt.toFixed(2)}` : "No GST"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const seed: CostLine[] =
+                    (draft.costLines && draft.costLines.length > 0)
+                      ? draft.costLines
+                      : [
+                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true }] : []),
+                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false }] : []),
+                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true }] : []),
+                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true }] : []),
+                        ];
+                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true }];
+                  setDraft({ ...draft, costLines: next });
+                }}
+              >
+                Add Cost Line
+              </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
+              {fieldRow("Total Job Costs", costs > 0 ? `$${costs.toLocaleString()}` : "—")}
               {fieldRow("Gross Profit", invAmt > 0 ? `$${grossProfit.toLocaleString()}` : "—")}
               {fieldRow("GM %", computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "—")}
             </div>
