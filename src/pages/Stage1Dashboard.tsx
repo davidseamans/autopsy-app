@@ -87,13 +87,43 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_ROWS = [
-  { number: "Q-1001", client: "M. Patel", site: "Unit 4, Buderim", value: 1200, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", value: 1850, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1003", client: "Sunrise Cafe", site: "Main Street kitchen", value: 2400, status: "Sent", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1004", client: "QML", site: "Maroochydore Service Centre", value: 5000, status: "Accepted", followUp: "", reason: "" },
-  { number: "Q-1005", client: "QML", site: "Nambour Service Centre", value: 6050, status: "Pending", followUp: "2026-05-29", reason: "" },
-  { number: "Q-0998", client: "B. Adams", site: "Caloundra", value: 800, status: "Rejected", followUp: "", reason: "Too expensive" },
+const QUOTE_STATUSES = ["Draft", "Sent", "Pending", "Accepted", "Rejected", "Expired"] as const;
+type QuoteStatus = typeof QUOTE_STATUSES[number];
+const REJECTION_REASONS = [
+  "Too expensive",
+  "No confidence",
+  "Poor fit",
+  "Slow response",
+  "Competitor chosen",
+  "Scope unclear",
+  "No budget",
+  "Other",
+] as const;
+
+type Quote = {
+  number: string;
+  client: string;
+  site: string;
+  value: number;
+  status: QuoteStatus;
+  quoteDate: string;   // iso yyyy-mm-dd
+  followUp: string;    // iso yyyy-mm-dd
+  reason: string;
+  converted?: boolean;
+  convertedToN?: number;
+};
+
+// Seed: the five accepted quotes that produced the five ledger jobs,
+// plus a handful of in-flight / rejected quotes for the conversion board.
+const SEED_QUOTES: Quote[] = [
+  { number: "Q-1001", client: "M. Patel",      site: "Unit 4, Buderim",                value: 1200, status: "Accepted", quoteDate: "2026-04-28", followUp: "", reason: "", converted: true, convertedToN: 1 },
+  { number: "Q-1002", client: "K. Nguyen",     site: "12 Beach Rd, Mooloolaba",        value: 1850, status: "Accepted", quoteDate: "2026-05-01", followUp: "", reason: "", converted: true, convertedToN: 2 },
+  { number: "Q-1003", client: "Sunrise Cafe",  site: "Main Street kitchen clean",      value: 2400, status: "Accepted", quoteDate: "2026-05-06", followUp: "", reason: "", converted: true, convertedToN: 3 },
+  { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4 },
+  { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5 },
+  { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "" },
+  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Pending",  quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
+  { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive" },
 ];
 
 const JOB_ROWS = [
@@ -355,9 +385,13 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
 function DrillBody({
   kind,
   methodRows,
+  quotes,
+  onConvert,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
+  quotes: Quote[];
+  onConvert: (q: Quote) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -423,10 +457,11 @@ function DrillBody({
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
                   <TableHead>Rejection</TableHead>
+                  <TableHead className="text-right">Conversion</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {QUOTE_ROWS.map((r) => (
+                {quotes.map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
@@ -435,15 +470,28 @@ function DrillBody({
                     </TableCell>
                     <TableCell className="text-right">${fmtMoney(r.value)}</TableCell>
                     <TableCell><Badge variant="outline">{r.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{r.followUp || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {r.status === "Accepted" ? (
+                        r.converted ? (
+                          <span className="text-xs text-muted-foreground">Already converted</span>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
+                            Convert to Job
+                          </Button>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {QUOTE_ROWS.map((r) => (
+            {quotes.map((r) => (
               <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
@@ -455,17 +503,29 @@ function DrillBody({
                   <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span>Follow-up</span><span>{r.followUp || "—"}</span>
+                  <span>Follow-up</span><span>{r.followUp ? isoToAU(r.followUp) : "—"}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
+                {r.status === "Accepted" && (
+                  <div className="pt-1">
+                    {r.converted ? (
+                      <span className="text-xs text-muted-foreground">Already converted</span>
+                    ) : (
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
+                        Convert to Job
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
             Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
             Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
+            Only accepted quotes can be converted to jobs.
           </p>
         </>
       )}
@@ -598,11 +658,17 @@ function DrillCurtain({
   onOpenChange,
   methodRows,
   onLogActivity,
+  quotes,
+  onAddQuote,
+  onConvert,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
   onLogActivity: () => void;
+  quotes: Quote[];
+  onAddQuote: () => void;
+  onConvert: (q: Quote) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -624,9 +690,22 @@ function DrillCurtain({
                   Log Activity
                 </Button>
               )}
+              {drill === "conversions" && (
+                <Button size="sm" onClick={onAddQuote} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Add Quote
+                </Button>
+              )}
             </div>
           </SheetHeader>
-          {drill && <DrillBody kind={drill} methodRows={methodRows} />}
+          {drill && (
+            <DrillBody
+              kind={drill}
+              methodRows={methodRows}
+              quotes={quotes}
+              onConvert={onConvert}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -634,81 +713,159 @@ function DrillCurtain({
 }
 
 
-function AddJobDialog({
+function AddQuoteDialog({
   open,
   onOpenChange,
   onSave,
-  nextN,
+  nextNumber,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (u: ProofUnit) => void;
-  nextN: number;
+  onSave: (q: Quote) => void;
+  nextNumber: string;
 }) {
   const [client, setClient] = useState("");
-  const [jobSite, setJobSite] = useState("");
+  const [site, setSite] = useState("");
   const [amount, setAmount] = useState<string>("");
-  const [scheduled, setScheduled] = useState<string>("");
+  const [quoteDate, setQuoteDate] = useState<string>("");
+  const [followUp, setFollowUp] = useState<string>("");
+  const [status, setStatus] = useState<QuoteStatus>("Draft");
+  const [reason, setReason] = useState<string>("");
 
   useEffect(() => {
     if (open) {
-      setClient(""); setJobSite(""); setAmount(""); setScheduled("");
+      setClient(""); setSite(""); setAmount(""); setQuoteDate("");
+      setFollowUp(""); setStatus("Draft"); setReason("");
     }
   }, [open]);
 
-  const canSave = client.trim().length > 0;
+  const amt = Number(amount);
+  const needsReason = status === "Rejected";
+  const canSave =
+    client.trim().length > 0 &&
+    !isNaN(amt) && amt > 0 &&
+    (!needsReason || reason.trim().length > 0);
 
   const save = () => {
-    const amt = Number(amount);
-    const unit: ProofUnit = {
-      n: nextN,
+    const q: Quote = {
+      number: nextNumber,
       client: client.trim(),
-      jobSite: jobSite.trim() || undefined,
-      proofType: "Completed Job",
-      status: "Draft",
-      gm: 0,
-      evidence: false,
-      isNewClient: true,
-      quoteValue: !isNaN(amt) && amt > 0 ? amt : undefined,
-      projectedRevenue: !isNaN(amt) && amt > 0 ? amt : undefined,
-      scheduledDate: scheduled ? isoToAU(scheduled) : undefined,
+      site: site.trim(),
+      value: amt,
+      status,
+      quoteDate,
+      followUp,
+      reason: needsReason ? reason : "",
     };
-    onSave(unit);
+    onSave(q);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Job</DialogTitle>
+          <DialogTitle>Add Quote</DialogTitle>
           <DialogDescription>
-            Create the job shell. Enter Customer Invoice, Job Costs and Payment Proof from the Job / Contract Site Detail curtain.
+            Create a quote record. Jobs are created later by converting an accepted quote.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="aj-client">Client <span className="text-destructive">*</span></Label>
-            <Input id="aj-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
+            <Label htmlFor="aq-client">Client <span className="text-destructive">*</span></Label>
+            <Input id="aq-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-site">Job Location</Label>
-            <Input id="aj-site" value={jobSite} onChange={(e) => setJobSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
+            <Label htmlFor="aq-site">Job Location</Label>
+            <Input id="aq-site" value={site} onChange={(e) => setSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-amt">Quote / Contract Amount (incl. GST)</Label>
-            <Input id="aj-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+            <Label htmlFor="aq-amt">Quote Amount (incl. GST) <span className="text-destructive">*</span></Label>
+            <Input id="aq-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-qd">Quote Date</Label>
+              <Input id="aq-qd" type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} />
+              {quoteDate && <p className="text-[11px] text-muted-foreground">{isoToAU(quoteDate)}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-fu">Follow-up Date</Label>
+              <Input id="aq-fu" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
+              {followUp && <p className="text-[11px] text-muted-foreground">{isoToAU(followUp)}</p>}
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-date">Scheduled Date</Label>
-            <Input id="aj-date" type="date" value={scheduled} onChange={(e) => setScheduled(e.target.value)} />
-            {scheduled && (
-              <p className="text-[11px] text-muted-foreground">{isoToAU(scheduled)}</p>
-            )}
+            <Label htmlFor="aq-status">Status</Label>
+            <select
+              id="aq-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as QuoteStatus)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {QUOTE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
+          {needsReason && (
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <select
+                id="aq-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Job</Button>
+          <Button onClick={save} disabled={!canSave}>Save Quote</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConvertQuoteDialog({
+  quote,
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  quote: Quote | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (q: Quote) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Convert this accepted quote into a job?</DialogTitle>
+          <DialogDescription>
+            A job shell will be created in the Simple Job Cost Ledger using this quote's details.
+            You can then add invoices, costs and payment proof from the Job / Contract Site Detail curtain.
+          </DialogDescription>
+        </DialogHeader>
+        {quote && (
+          <div className="space-y-2 text-sm rounded-md border p-3">
+            <div className="flex justify-between"><span className="text-muted-foreground">Quote #</span><span className="font-mono">{quote.number}</span></div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Client</span>
+              <span className="text-right">
+                <div className="font-medium">{quote.client}</div>
+                <div className="text-xs text-muted-foreground">{quote.site}</div>
+              </span>
+            </div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
+          </div>
+        )}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => quote && onConfirm(quote)} disabled={!quote}>Convert to Job</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -819,9 +976,11 @@ export default function Stage1Dashboard() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [addJobOpen, setAddJobOpen] = useState(false);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
+  const [addQuoteOpen, setAddQuoteOpen] = useState(false);
+  const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -856,18 +1015,49 @@ export default function Stage1Dashboard() {
     setSheetOpen(true);
   };
 
-  // Compute KPI aggregates from fixtures
+  // Compute KPI aggregates from current state
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
-  const quotesSent = QUOTE_ROWS.filter((q) => q.status !== "Draft").length;
-  const quotesAccepted = QUOTE_ROWS.filter((q) => q.status === "Accepted").length;
+  const quotesSent = quotes.filter((q) => q.status !== "Draft").length;
+  const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
-  const activeJobs = JOB_ROWS.filter((j) => ["Active", "Scheduled", "Accepted"].includes(j.status)).length;
-  const completedJobs = JOB_ROWS.filter((j) => j.status === "Completed").length;
+  // Jobs in the ledger are only those created from accepted, converted quotes.
+  const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
+  const completedJobs = units.filter((u) => u.status === "Paid").length;
   const totalIncome = JOB_ROWS.reduce((s, r) => s + r.income, 0);
   const totalCosts = JOB_ROWS.reduce((s, r) => s + r.costs, 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
+
+  const nextQuoteNumber = useMemo(() => {
+    const nums = quotes
+      .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
+      .filter((n) => !isNaN(n));
+    const max = nums.length ? Math.max(...nums) : 1000;
+    return `Q-${max + 1}`;
+  }, [quotes]);
+
+  const handleConvert = (q: Quote) => {
+    const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
+    const unit: ProofUnit = {
+      n: nextN,
+      client: q.client,
+      jobSite: q.site || undefined,
+      proofType: "Completed Job",
+      status: "Not Started",
+      gm: 0,
+      evidence: false,
+      isNewClient: true,
+      quoteValue: q.value,
+      projectedRevenue: q.value,
+      sourceQuote: q.number,
+    };
+    setUnits((prev) => [...prev, unit]);
+    setQuotes((prev) =>
+      prev.map((p) => (p.number === q.number ? { ...p, converted: true, convertedToN: nextN } : p)),
+    );
+    setConvertQuote(null);
+  };
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
@@ -958,18 +1148,10 @@ export default function Stage1Dashboard() {
           ))}
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
-                  <CardDescription className="text-xs">
-                    Five-job proof table. Click a row to open the full Job / Contract Site Detail modal.
-                  </CardDescription>
-                </div>
-                <Button size="sm" onClick={() => setAddJobOpen(true)} className="gap-1.5 shrink-0">
-                  <Plus className="h-4 w-4" />
-                  Add Job
-                </Button>
-              </div>
+              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
+              <CardDescription className="text-xs">
+                Jobs created by converting accepted quotes from the Quote Conversion Board. Click a row to open the Job / Contract Site Detail curtain.
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -1070,15 +1252,24 @@ export default function Stage1Dashboard() {
         onOpenChange={(o) => { if (!o) setDrill(null); }}
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
+        quotes={quotes}
+        onAddQuote={() => setAddQuoteOpen(true)}
+        onConvert={(q) => setConvertQuote(q)}
       />
-      <AddJobDialog
-        open={addJobOpen}
-        onOpenChange={setAddJobOpen}
-        onSave={(u) => {
-          setUnits((prev) => [...prev, u]);
-          setAddJobOpen(false);
+      <AddQuoteDialog
+        open={addQuoteOpen}
+        onOpenChange={setAddQuoteOpen}
+        onSave={(q) => {
+          setQuotes((prev) => [q, ...prev]);
+          setAddQuoteOpen(false);
         }}
-        nextN={(units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1}
+        nextNumber={nextQuoteNumber}
+      />
+      <ConvertQuoteDialog
+        quote={convertQuote}
+        open={!!convertQuote}
+        onOpenChange={(o) => { if (!o) setConvertQuote(null); }}
+        onConfirm={handleConvert}
       />
       <LogActivityDialog
         open={logActOpen}
