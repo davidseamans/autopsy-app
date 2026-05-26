@@ -634,11 +634,6 @@ function DrillCurtain({
 }
 
 
-export default function Stage1Dashboard() {
-  /* dialogs below */
-  return null as any;
-}
-
 function AddJobDialog({
   open,
   onOpenChange,
@@ -815,7 +810,7 @@ function LogActivityDialog({
   );
 }
 
-function Stage1DashboardImpl_unused() {
+export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
