@@ -1068,6 +1068,166 @@ function LogActivityDialog({
   );
 }
 
+function QuoteDetailDialog({
+  quote,
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  quote: Quote | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (patch: Partial<Quote>) => void;
+}) {
+  const [client, setClient] = useState("");
+  const [site, setSite] = useState("");
+  const [amount, setAmount] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [reason, setReason] = useState("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open && quote) {
+      setClient(quote.client);
+      setSite(quote.site || "");
+      setAmount(String(quote.value));
+      setFollowUp(quote.followUp || "");
+      setReason(quote.reason || "");
+      setNotes(quote.notes || "");
+    }
+  }, [open, quote]);
+
+  if (!quote) return null;
+  const readOnly = !!quote.converted;
+  const isSent = quote.status === "Sent" && !readOnly;
+  const isRejected = quote.status === "Rejected" && !readOnly;
+  const hadNotes = !!quote.notes;
+
+  const handleSave = () => {
+    if (readOnly) { onOpenChange(false); return; }
+    const patch: Partial<Quote> = {};
+    if (isSent) {
+      const v = Number(amount);
+      patch.client = client.trim() || quote.client;
+      patch.site = site.trim();
+      patch.value = isNaN(v) ? quote.value : v;
+      patch.followUp = followUp;
+    }
+    if (isRejected) {
+      patch.reason = reason;
+      if (hadNotes) patch.notes = notes;
+    }
+    onSave(patch);
+  };
+
+  const row = (k: string, v: React.ReactNode) => (
+    <div className="flex justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="text-right">{v}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Quote Detail</DialogTitle>
+          <DialogDescription>
+            {readOnly
+              ? "This quote has been converted to a job and is read-only."
+              : isSent
+                ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
+                : "Status changes happen in Quote Activity."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 rounded-md border p-3">
+          {row("Quote #", <span className="font-mono">{quote.number}</span>)}
+          {row("Quote Date", quote.quoteDate ? isoToAU(quote.quoteDate) : "—")}
+          {row("Source Activity Date", quote.sourceActivityDate ? isoToAU(quote.sourceActivityDate) : (quote.quoteDate ? isoToAU(quote.quoteDate) : "—"))}
+          {row("Lead Method", quote.method || "—")}
+          {row("Current Status", quote.status)}
+          {quote.converted && row("Converted Job #", <span className="font-mono">{quote.convertedJobNumber || "—"}</span>)}
+          {row("Created At", quote.createdAt ? isoToAU(quote.createdAt.slice(0, 10)) : "—")}
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Client</Label>
+            <Input
+              value={client}
+              onChange={(e) => setClient(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Job Location</Label>
+            <Input
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Quote Amount</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Follow-up Date</Label>
+            <Input
+              type="date"
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              disabled={!isSent}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {followUp ? isoToAU(followUp) : "dd/mm/yyyy"}
+            </p>
+          </div>
+          {(quote.status === "Rejected" || isRejected) && (
+            <div className="space-y-1.5">
+              <Label>Rejection Reason</Label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={!isRejected}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {hadNotes && (
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={!isRejected}
+              />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          {!readOnly && (isSent || isRejected) && (
+            <Button onClick={handleSave}>Save Changes</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
