@@ -1146,6 +1146,7 @@ export default function Stage1Dashboard() {
   const openQuoteActivity = () => {
     if (!selectedQuoteNumber) {
       setQuoteActivityError("Select a quote first.");
+      window.alert("Select a quote first.");
       return;
     }
     setQuoteActivityError(null);
