@@ -111,6 +111,8 @@ type Quote = {
   reason: string;
   converted?: boolean;
   convertedToN?: number;
+  convertedJobNumber?: string;
+  convertedAt?: string;
   sourceActivityId?: string;
   method?: string;
 };
