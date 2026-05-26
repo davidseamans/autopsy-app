@@ -114,20 +114,23 @@ type Quote = {
   convertedJobNumber?: string;
   convertedAt?: string;
   sourceActivityId?: string;
+  sourceActivityDate?: string;
   method?: string;
+  notes?: string;
+  createdAt?: string;
 };
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
 // plus a handful of in-flight / rejected quotes for the conversion board.
 const SEED_QUOTES: Quote[] = [
-  { number: "Q-1001", client: "M. Patel",      site: "Unit 4, Buderim",                value: 1200, status: "Accepted", quoteDate: "2026-04-28", followUp: "", reason: "", converted: true, convertedToN: 1 },
-  { number: "Q-1002", client: "K. Nguyen",     site: "12 Beach Rd, Mooloolaba",        value: 1850, status: "Accepted", quoteDate: "2026-05-01", followUp: "", reason: "", converted: true, convertedToN: 2 },
-  { number: "Q-1003", client: "Sunrise Cafe",  site: "Main Street kitchen clean",      value: 2400, status: "Accepted", quoteDate: "2026-05-06", followUp: "", reason: "", converted: true, convertedToN: 3 },
-  { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4 },
-  { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5 },
-  { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Sent",     quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
-  { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive" },
+  { number: "Q-1001", client: "M. Patel",      site: "Unit 4, Buderim",                value: 1200, status: "Accepted", quoteDate: "2026-04-28", followUp: "", reason: "", converted: true, convertedToN: 1, convertedJobNumber: "J-1001", method: "Referral Request", createdAt: "2026-04-28T09:00:00Z" },
+  { number: "Q-1002", client: "K. Nguyen",     site: "12 Beach Rd, Mooloolaba",        value: 1850, status: "Accepted", quoteDate: "2026-05-01", followUp: "", reason: "", converted: true, convertedToN: 2, convertedJobNumber: "J-1002", method: "Phone Outreach", createdAt: "2026-05-01T09:00:00Z" },
+  { number: "Q-1003", client: "Sunrise Cafe",  site: "Main Street kitchen clean",      value: 2400, status: "Accepted", quoteDate: "2026-05-06", followUp: "", reason: "", converted: true, convertedToN: 3, convertedJobNumber: "J-1003", method: "Referral Request", createdAt: "2026-05-06T09:00:00Z" },
+  { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4, convertedJobNumber: "J-1004", method: "Referral Request", createdAt: "2026-05-18T09:00:00Z" },
+  { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5, convertedJobNumber: "J-1005", method: "Referral Request", createdAt: "2026-05-22T09:00:00Z" },
+  { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "", method: "Phone Outreach", createdAt: "2026-05-20T09:00:00Z" },
+  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Sent",     quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "", method: "Referral Request", createdAt: "2026-05-22T09:00:00Z" },
+  { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive", method: "Local Flyer", createdAt: "2026-04-12T09:00:00Z" },
 ];
 
 const JOB_ROWS = [
@@ -392,12 +395,16 @@ function DrillBody({
   quotes,
   selectedQuoteNumber,
   onSelectQuote,
+  onUpdateQuote,
+  onOpenQuoteDetail,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
+  onUpdateQuote: (n: string) => void;
+  onOpenQuoteDetail: (n: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -459,6 +466,7 @@ function DrillBody({
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
                   <TableHead>Quote #</TableHead>
+                  <TableHead>Quote Date</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
@@ -485,7 +493,16 @@ function DrillBody({
                         aria-label={`Select ${r.number}`}
                       />
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{r.number}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                        className="hover:underline focus:outline-none"
+                      >
+                        {r.number}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{r.quoteDate ? isoToAU(r.quoteDate) : "—"}</TableCell>
                     <TableCell>
                       <div className="font-medium leading-tight">{r.client}</div>
                       <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
@@ -495,13 +512,22 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}
-                      >
-                        Update
-                      </Button>
+                      <div className="inline-flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); onUpdateQuote(r.number); }}
+                        >
+                          Update
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                   );
@@ -519,11 +545,20 @@ function DrillBody({
                 onClick={() => onSelectQuote(r.number)}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs">{r.number}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {r.number}
+                  </button>
                   <Badge variant="outline">{r.status}</Badge>
                 </div>
                 <div className="font-medium">{r.client}</div>
                 <div className="text-xs text-muted-foreground">{r.site}</div>
+                <div className="flex justify-between text-xs">
+                  <span>Quote Date</span><span>{r.quoteDate ? isoToAU(r.quoteDate) : "—"}</span>
+                </div>
                 <div className="flex justify-between text-xs">
                   <span>Value</span><span className="font-medium">${fmtMoney(r.value)}</span>
                 </div>
@@ -533,9 +568,12 @@ function DrillBody({
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
-                <div className="pt-1">
-                  <Button size="sm" variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}>
-                    {isSel ? "Selected · tap Quote Activity" : "Select"}
+                <div className="pt-1 grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onOpenQuoteDetail(r.number); }}>
+                    View
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onUpdateQuote(r.number); }}>
+                    Update
                   </Button>
                 </div>
               </div>
@@ -681,6 +719,8 @@ function DrillCurtain({
   selectedQuoteNumber,
   onSelectQuote,
   onQuoteActivity,
+  onUpdateQuote,
+  onOpenQuoteDetail,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
@@ -690,6 +730,8 @@ function DrillCurtain({
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
   onQuoteActivity: () => void;
+  onUpdateQuote: (n: string) => void;
+  onOpenQuoteDetail: (n: string) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -725,6 +767,8 @@ function DrillCurtain({
               quotes={quotes}
               selectedQuoteNumber={selectedQuoteNumber}
               onSelectQuote={onSelectQuote}
+              onUpdateQuote={onUpdateQuote}
+              onOpenQuoteDetail={onOpenQuoteDetail}
             />
           )}
         </div>
@@ -902,7 +946,9 @@ function LogActivityDialog({
       followUp: r.followUp,
       reason: "",
       sourceActivityId: activityId,
+      sourceActivityDate: date,
       method,
+      createdAt: new Date().toISOString(),
     }));
     onSave(a, newQuotes);
   };
@@ -1024,6 +1070,166 @@ function LogActivityDialog({
   );
 }
 
+function QuoteDetailDialog({
+  quote,
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  quote: Quote | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (patch: Partial<Quote>) => void;
+}) {
+  const [client, setClient] = useState("");
+  const [site, setSite] = useState("");
+  const [amount, setAmount] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [reason, setReason] = useState("");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open && quote) {
+      setClient(quote.client);
+      setSite(quote.site || "");
+      setAmount(String(quote.value));
+      setFollowUp(quote.followUp || "");
+      setReason(quote.reason || "");
+      setNotes(quote.notes || "");
+    }
+  }, [open, quote]);
+
+  if (!quote) return null;
+  const readOnly = !!quote.converted;
+  const isSent = quote.status === "Sent" && !readOnly;
+  const isRejected = quote.status === "Rejected" && !readOnly;
+  const hadNotes = !!quote.notes;
+
+  const handleSave = () => {
+    if (readOnly) { onOpenChange(false); return; }
+    const patch: Partial<Quote> = {};
+    if (isSent) {
+      const v = Number(amount);
+      patch.client = client.trim() || quote.client;
+      patch.site = site.trim();
+      patch.value = isNaN(v) ? quote.value : v;
+      patch.followUp = followUp;
+    }
+    if (isRejected) {
+      patch.reason = reason;
+      if (hadNotes) patch.notes = notes;
+    }
+    onSave(patch);
+  };
+
+  const row = (k: string, v: React.ReactNode) => (
+    <div className="flex justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="text-right">{v}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Quote Detail</DialogTitle>
+          <DialogDescription>
+            {readOnly
+              ? "This quote has been converted to a job and is read-only."
+              : isSent
+                ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
+                : "Status changes happen in Quote Activity."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2 rounded-md border p-3">
+          {row("Quote #", <span className="font-mono">{quote.number}</span>)}
+          {row("Quote Date", quote.quoteDate ? isoToAU(quote.quoteDate) : "—")}
+          {row("Source Activity Date", quote.sourceActivityDate ? isoToAU(quote.sourceActivityDate) : (quote.quoteDate ? isoToAU(quote.quoteDate) : "—"))}
+          {row("Lead Method", quote.method || "—")}
+          {row("Current Status", quote.status)}
+          {quote.converted && row("Converted Job #", <span className="font-mono">{quote.convertedJobNumber || "—"}</span>)}
+          {row("Created At", quote.createdAt ? isoToAU(quote.createdAt.slice(0, 10)) : "—")}
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Client</Label>
+            <Input
+              value={client}
+              onChange={(e) => setClient(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Job Location</Label>
+            <Input
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Quote Amount</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={!isSent}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Follow-up Date</Label>
+            <Input
+              type="date"
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              disabled={!isSent}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {followUp ? isoToAU(followUp) : "dd/mm/yyyy"}
+            </p>
+          </div>
+          {(quote.status === "Rejected" || isRejected) && (
+            <div className="space-y-1.5">
+              <Label>Rejection Reason</Label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={!isRejected}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {hadNotes && (
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={!isRejected}
+              />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          {!readOnly && (isSent || isRejected) && (
+            <Button onClick={handleSave}>Save Changes</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Stage1Dashboard() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
@@ -1039,6 +1245,8 @@ export default function Stage1Dashboard() {
   const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
   const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
   const [quoteActivityError, setQuoteActivityError] = useState<string | null>(null);
+  const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
+  const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -1151,6 +1359,26 @@ export default function Stage1Dashboard() {
     }
     setQuoteActivityError(null);
     setQuoteActivityOpen(true);
+  };
+
+  // Row-level Update: target that exact row, no prior selection required.
+  const handleUpdateQuote = (n: string) => {
+    setSelectedQuoteNumber(n);
+    setQuoteActivityError(null);
+    setQuoteActivityOpen(true);
+  };
+
+  const handleOpenQuoteDetail = (n: string) => {
+    setQuoteDetailNumber(n);
+    setQuoteDetailOpen(true);
+  };
+
+  const handleSaveQuoteDetail = (patch: Partial<Quote>) => {
+    if (!quoteDetailNumber) return;
+    setQuotes((prev) =>
+      prev.map((p) => (p.number === quoteDetailNumber ? { ...p, ...patch } : p)),
+    );
+    setQuoteDetailOpen(false);
   };
 
   return (
@@ -1350,12 +1578,20 @@ export default function Stage1Dashboard() {
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
         onQuoteActivity={openQuoteActivity}
+        onUpdateQuote={handleUpdateQuote}
+        onOpenQuoteDetail={handleOpenQuoteDetail}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
         open={quoteActivityOpen}
         onOpenChange={setQuoteActivityOpen}
         onSave={handleQuoteActivitySave}
+      />
+      <QuoteDetailDialog
+        quote={quotes.find((q) => q.number === quoteDetailNumber) ?? null}
+        open={quoteDetailOpen}
+        onOpenChange={setQuoteDetailOpen}
+        onSave={handleSaveQuoteDetail}
       />
       <LogActivityDialog
         open={logActOpen}
