@@ -1521,50 +1521,6 @@ export function JobDetailSheet({
             </Button>
           </div>
 
-          {/* Actions */}
-          <div className="rounded-md border p-3 space-y-3">
-            <div className="font-medium text-sm">Actions</div>
-            <div className="flex flex-wrap gap-2">
-              {mode === "view" && !isLocked && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (isReviewed) setEditGateOpen(true);
-                    else setMode("edit");
-                  }}
-                >
-                  Edit
-                </Button>
-              )}
-              {mode === "edit" && (
-                <>
-                  <Button
-                    onClick={save}
-                    disabled={isReviewed && !correctionReason.trim()}
-                  >
-                    Save Changes
-                  </Button>
-                  <Button variant="outline" onClick={cancelEdit}>Cancel Changes</Button>
-                </>
-              )}
-              {!isLocked && (
-                <Button variant="outline" onClick={() => setVoidOpen(true)}>Void Record</Button>
-              )}
-              {!isLocked && (
-                <Button variant="outline" onClick={() => setArchiveOpen(true)}>Archive Record</Button>
-              )}
-              {canDelete && (
-                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete Draft</Button>
-              )}
-              <Button variant="ghost" className="ml-auto" onClick={() => onOpenChange(false)}>Close</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Void this record if it should no longer count toward Stage 1 but must remain in history.
-              Archive this record if it is no longer active but should be kept.
-              Delete is only available for empty draft mistakes.
-            </p>
-          </div>
-
           {/* Summary dialog */}
           <Stage1SummaryDialog
             open={showSummary}
