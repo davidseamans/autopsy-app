@@ -596,9 +596,13 @@ function DrillBody({
 function DrillCurtain({
   drill,
   onOpenChange,
+  methodRows,
+  onLogActivity,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
+  methodRows: typeof METHOD_BASELINE;
+  onLogActivity: () => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -609,10 +613,20 @@ function DrillCurtain({
       >
         <div className="p-6 space-y-4">
           <SheetHeader>
-            <SheetTitle>{meta?.title}</SheetTitle>
-            <SheetDescription>{meta?.subtitle}</SheetDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <SheetTitle>{meta?.title}</SheetTitle>
+                <SheetDescription>{meta?.subtitle}</SheetDescription>
+              </div>
+              {drill === "leads" && (
+                <Button size="sm" onClick={onLogActivity} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Log Activity
+                </Button>
+              )}
+            </div>
           </SheetHeader>
-          {drill && <DrillBody kind={drill} />}
+          {drill && <DrillBody kind={drill} methodRows={methodRows} />}
         </div>
       </SheetContent>
     </Sheet>
