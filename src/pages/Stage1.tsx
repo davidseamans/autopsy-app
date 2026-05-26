@@ -971,7 +971,7 @@ export function JobDetailSheet({
   onOpenDetailedReport?: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
-  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [mode, setMode] = useState<"view" | "edit">("edit");
   const [correctionReason, setCorrectionReason] = useState<string>("");
   const [showSummary, setShowSummary] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
@@ -981,7 +981,7 @@ export function JobDetailSheet({
   const [editGateOpen, setEditGateOpen] = useState(false);
   useEffect(() => {
     setDraft(unit);
-    setMode("view");
+    setMode("edit");
     setCorrectionReason("");
   }, [unit]);
   if (!draft) return null;
