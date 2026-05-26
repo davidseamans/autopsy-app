@@ -87,7 +87,7 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_STATUSES = ["Draft", "Sent", "Pending", "Accepted", "Rejected", "Expired"] as const;
+const QUOTE_STATUSES = ["Sent", "Accepted", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 const REJECTION_REASONS = [
   "Too expensive",
@@ -126,7 +126,7 @@ const SEED_QUOTES: Quote[] = [
   { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4 },
   { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5 },
   { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Pending",  quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
+  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Sent",     quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
   { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive" },
 ];
 
@@ -390,12 +390,14 @@ function DrillBody({
   kind,
   methodRows,
   quotes,
-  onConvert,
+  selectedQuoteNumber,
+  onSelectQuote,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
   quotes: Quote[];
-  onConvert: (q: Quote) => void;
+  selectedQuoteNumber: string | null;
+  onSelectQuote: (n: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -455,18 +457,34 @@ function DrillBody({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>Quote #</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
                   <TableHead>Rejection</TableHead>
-                  <TableHead className="text-right">Conversion</TableHead>
+                  <TableHead className="text-right">Activity</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quotes.filter((q) => !q.converted).map((r) => (
-                  <TableRow key={r.number}>
+                {quotes.filter((q) => !q.converted).map((r) => {
+                  const isSel = r.number === selectedQuoteNumber;
+                  return (
+                  <TableRow
+                    key={r.number}
+                    className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
+                    onClick={() => onSelectQuote(r.number)}
+                  >
+                    <TableCell>
+                      <input
+                        type="radio"
+                        name="quote-select"
+                        checked={isSel}
+                        onChange={() => onSelectQuote(r.number)}
+                        aria-label={`Select ${r.number}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
                       <div className="font-medium leading-tight">{r.client}</div>
@@ -477,22 +495,29 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
-                      {r.status === "Accepted" ? (
-                        <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
-                          Convert to Job
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}
+                      >
+                        Update
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {quotes.filter((q) => !q.converted).map((r) => (
-              <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
+            {quotes.filter((q) => !q.converted).map((r) => {
+              const isSel = r.number === selectedQuoteNumber;
+              return (
+              <div
+                key={r.number}
+                className={`rounded-md border p-3 space-y-1 text-sm cursor-pointer ${isSel ? "bg-muted/60" : ""}`}
+                onClick={() => onSelectQuote(r.number)}
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
                   <Badge variant="outline">{r.status}</Badge>
@@ -508,19 +533,18 @@ function DrillBody({
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
-                {r.status === "Accepted" && (
-                  <div className="pt-1">
-                    <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
-                      Convert to Job
-                    </Button>
-                  </div>
-                )}
+                <div className="pt-1">
+                  <Button size="sm" variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}>
+                    {isSel ? "Selected · tap Quote Activity" : "Select"}
+                  </Button>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground">
-            Active quotes only. Converted accepted quotes move to the Simple Job Cost Ledger and are hidden here.
-            Only Accepted quotes can be converted to jobs.
+            Active quotes only. Select a row and use <span className="font-medium text-foreground">Quote Activity</span> to update status.
+            Accepting a quote creates one job in the Simple Job Cost Ledger and removes the quote from this list.
           </p>
         </>
       )}
@@ -654,14 +678,18 @@ function DrillCurtain({
   methodRows,
   onLogActivity,
   quotes,
-  onConvert,
+  selectedQuoteNumber,
+  onSelectQuote,
+  onQuoteActivity,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
   onLogActivity: () => void;
   quotes: Quote[];
-  onConvert: (q: Quote) => void;
+  selectedQuoteNumber: string | null;
+  onSelectQuote: (n: string) => void;
+  onQuoteActivity: () => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -683,6 +711,11 @@ function DrillCurtain({
                   Log Activity
                 </Button>
               )}
+              {drill === "conversions" && (
+                <Button size="sm" onClick={onQuoteActivity} className="gap-1.5 shrink-0">
+                  Quote Activity
+                </Button>
+              )}
             </div>
           </SheetHeader>
           {drill && (
@@ -690,7 +723,8 @@ function DrillCurtain({
               kind={drill}
               methodRows={methodRows}
               quotes={quotes}
-              onConvert={onConvert}
+              selectedQuoteNumber={selectedQuoteNumber}
+              onSelectQuote={onSelectQuote}
             />
           )}
         </div>
@@ -700,25 +734,36 @@ function DrillCurtain({
 }
 
 
-function ConvertQuoteDialog({
+function QuoteActivityDialog({
   quote,
   open,
   onOpenChange,
-  onConfirm,
+  onSave,
 }: {
   quote: Quote | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onConfirm: (q: Quote) => void;
+  onSave: (q: Quote, newStatus: QuoteStatus, reason: string) => void;
 }) {
+  const [status, setStatus] = useState<QuoteStatus>("Sent");
+  const [reason, setReason] = useState<string>("");
+
+  useEffect(() => {
+    if (open && quote) {
+      setStatus(quote.status);
+      setReason(quote.reason || "");
+    }
+  }, [open, quote]);
+
+  const canSave = !!quote && (status !== "Rejected" || !!reason);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Convert this accepted quote into a job?</DialogTitle>
+          <DialogTitle>Quote Activity</DialogTitle>
           <DialogDescription>
-            A job shell will be created in the Simple Job Cost Ledger using this quote's details.
-            You can then add invoices, costs and payment proof from the Job / Contract Site Detail curtain.
+            Update the status of the selected quote. Accepting creates one job in the Simple Job Cost Ledger.
           </DialogDescription>
         </DialogHeader>
         {quote && (
@@ -727,11 +772,48 @@ function ConvertQuoteDialog({
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">Client</span><span className="font-medium text-right">{quote.client}</span></div>
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">Job Location</span><span className="text-right">{quote.site || "—"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Current Status</span><span>{quote.status}</span></div>
           </div>
         )}
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="qa-status">New Status <span className="text-destructive">*</span></Label>
+            <select
+              id="qa-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as QuoteStatus)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="Sent">Sent</option>
+              <option value="Accepted">Accepted</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          {status === "Rejected" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="qa-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <select
+                id="qa-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+          {status === "Accepted" && (
+            <p className="text-xs text-muted-foreground">
+              Accepting creates a new job with the next sequential Job # in the Simple Job Cost Ledger and removes this quote from the active board.
+            </p>
+          )}
+        </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => quote && onConfirm(quote)} disabled={!quote}>Convert to Job</Button>
+          <Button onClick={() => quote && onSave(quote, status, reason)} disabled={!canSave}>
+            Save Quote Activity
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -760,7 +842,7 @@ function LogActivityDialog({
     site: string;
     amount: string;
     followUp: string;
-    status: "Draft" | "Sent" | "Pending";
+    status: "Sent";
   };
   const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
   const [rows, setRows] = useState<QRow[]>([]);
@@ -791,8 +873,7 @@ function LogActivityDialog({
     if (!r.client.trim()) return false;
     if (!r.site.trim()) return false;
     if (isNaN(amt) || amt <= 0) return false;
-    if (!r.status) return false;
-    if (r.status !== "Draft" && !r.followUp) return false;
+    if (!r.followUp) return false;
     return true;
   };
   const completeCount = rows.filter(rowComplete).length;
@@ -909,24 +990,19 @@ function LogActivityDialog({
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">
-                        Follow-up Date {r.status !== "Draft" && <span className="text-destructive">*</span>}
+                        Follow-up Date <span className="text-destructive">*</span>
                       </Label>
                       <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
                       <p className="text-[11px] text-muted-foreground">
-                        {r.followUp ? isoToAU(r.followUp) : (r.status === "Draft" ? "Optional for Draft" : "dd/mm/yyyy")}
+                        {r.followUp ? isoToAU(r.followUp) : "dd/mm/yyyy"}
                       </p>
                     </div>
                     <div className="space-y-1 md:col-span-2">
-                      <Label className="text-xs">Initial Status <span className="text-destructive">*</span></Label>
-                      <select
-                        value={r.status}
-                        onChange={(e) => updateRow(i, { status: e.target.value as QRow["status"] })}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="Draft">Draft</option>
-                        <option value="Sent">Sent</option>
-                        <option value="Pending">Pending</option>
-                      </select>
+                      <Label className="text-xs">Initial Status</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Quotes created from Log Activity are saved as <span className="font-medium text-foreground">Sent</span>.
+                        Update status later from the Quote Conversion Board.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -960,7 +1036,9 @@ export default function Stage1Dashboard() {
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
-  const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
+  const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
+  const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
+  const [quoteActivityError, setQuoteActivityError] = useState<string | null>(null);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -997,7 +1075,7 @@ export default function Stage1Dashboard() {
 
   // Compute KPI aggregates from current state
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
-  const quotesSent = quotes.filter((q) => q.status !== "Draft").length;
+  const quotesSent = quotes.length;
   const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
   // Jobs in the ledger are only those created from accepted, converted quotes.
@@ -1017,7 +1095,7 @@ export default function Stage1Dashboard() {
     return max + 1;
   }, [quotes]);
 
-  const handleConvert = (q: Quote) => {
+  const handleAcceptAndConvert = (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
     const maxJobNum = units.reduce((m, u) => {
       const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
@@ -1042,11 +1120,37 @@ export default function Stage1Dashboard() {
     setQuotes((prev) =>
       prev.map((p) =>
         p.number === q.number
-          ? { ...p, converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
+          ? { ...p, status: "Accepted", converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
           : p,
       ),
     );
-    setConvertQuote(null);
+  };
+
+  const handleQuoteActivitySave = (q: Quote, newStatus: QuoteStatus, reason: string) => {
+    if (q.converted) return;
+    if (newStatus === "Accepted") {
+      handleAcceptAndConvert(q);
+    } else {
+      setQuotes((prev) =>
+        prev.map((p) =>
+          p.number === q.number
+            ? { ...p, status: newStatus, reason: newStatus === "Rejected" ? reason : "" }
+            : p,
+        ),
+      );
+    }
+    setQuoteActivityOpen(false);
+    setSelectedQuoteNumber(null);
+  };
+
+  const openQuoteActivity = () => {
+    if (!selectedQuoteNumber) {
+      setQuoteActivityError("Select a quote first.");
+      window.alert("Select a quote first.");
+      return;
+    }
+    setQuoteActivityError(null);
+    setQuoteActivityOpen(true);
   };
 
   return (
@@ -1239,17 +1343,19 @@ export default function Stage1Dashboard() {
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
       <DrillCurtain
         drill={drill}
-        onOpenChange={(o) => { if (!o) setDrill(null); }}
+        onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
         quotes={quotes}
-        onConvert={(q) => setConvertQuote(q)}
+        selectedQuoteNumber={selectedQuoteNumber}
+        onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
+        onQuoteActivity={openQuoteActivity}
       />
-      <ConvertQuoteDialog
-        quote={convertQuote}
-        open={!!convertQuote}
-        onOpenChange={(o) => { if (!o) setConvertQuote(null); }}
-        onConfirm={handleConvert}
+      <QuoteActivityDialog
+        quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
+        open={quoteActivityOpen}
+        onOpenChange={setQuoteActivityOpen}
+        onSave={handleQuoteActivitySave}
       />
       <LogActivityDialog
         open={logActOpen}
