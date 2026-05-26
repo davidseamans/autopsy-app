@@ -42,19 +42,50 @@ import {
   Lock,
   IdCard,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Convert yyyy-mm-dd (from <input type="date">) to dd/mm/yyyy for AU display
+const isoToAU = (iso: string) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+};
+
 // ---------- Sample fixtures for the KPI drill-downs ----------
 // These mirror the operating story used by the existing ledger.
-const METHOD_ROWS = [
+// Baseline figures for fields that aren't captured by Log Activity (leads, jobs)
+// plus a static baseline note. Attempts / contacts / quotes are aggregated from
+// dated activity records on top of this baseline.
+const METHOD_BASELINE = [
   { method: "Phone Outreach", attempts: 18, contacts: 7, leads: 5, quotes: 2, jobs: 1, notes: "Best mornings 8–10am" },
   { method: "Referral Request", attempts: 6, contacts: 4, leads: 4, quotes: 3, jobs: 2, notes: "Highest converting" },
   { method: "Local Flyer", attempts: 150, contacts: 3, leads: 2, quotes: 1, jobs: 0, notes: "Slow conversion" },
 ];
+const METHOD_OPTIONS = [
+  "Phone Outreach",
+  "Referral Request",
+  "Local Flyer",
+  "Email Outreach",
+  "Walk-in",
+  "Other",
+];
+
+type LeadActivity = {
+  id: string;
+  activity_date: string; // yyyy-mm-dd
+  method: string;
+  attempts: number;
+  contacts_made: number;
+  quotes_generated: number;
+  notes: string;
+  created_at: string;
+};
 
 const QUOTE_ROWS = [
   { number: "Q-1001", client: "M. Patel", site: "Unit 4, Buderim", value: 1200, status: "Accepted", followUp: "", reason: "" },
