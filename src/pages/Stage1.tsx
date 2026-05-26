@@ -2036,13 +2036,11 @@ const DOC_TYPES = [
 
 function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
-  if (["paid", "active", "signed", "renewed"].includes(s))
-    return "border-emerald-400 text-emerald-700 bg-emerald-50";
-  if (["cancelled", "ended", "rejected"].includes(s))
-    return "border-red-400 text-red-700 bg-red-50";
-  if (["completed", "mobilising", "sent"].includes(s))
-    return "border-blue-400 text-blue-700 bg-blue-50";
-  return "border-amber-400 text-amber-700 bg-amber-50";
+  if (s === "paid") return "border-emerald-400 text-emerald-700 bg-emerald-50";
+  if (s === "completed") return "border-blue-400 text-blue-700 bg-blue-50";
+  if (s === "in progress") return "border-indigo-400 text-indigo-700 bg-indigo-50";
+  if (s === "scheduled") return "border-amber-400 text-amber-700 bg-amber-50";
+  return "border-muted-foreground/40 text-muted-foreground bg-muted/40";
 }
 
 function FinancialsForm() {
