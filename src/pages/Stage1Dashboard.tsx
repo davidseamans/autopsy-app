@@ -754,10 +754,12 @@ function LogActivityDialog({
   open,
   onOpenChange,
   onSave,
+  nextQuoteNumberStart,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: LeadActivity) => void;
+  onSave: (a: LeadActivity, newQuotes: Quote[]) => void;
+  nextQuoteNumberStart: number;
 }) {
   const [date, setDate] = useState("");
   const [method, setMethod] = useState(METHOD_OPTIONS[0]);
@@ -765,37 +767,88 @@ function LogActivityDialog({
   const [contacts, setContacts] = useState<string>("");
   const [quotes, setQuotes] = useState<string>("");
   const [notes, setNotes] = useState("");
+  type QRow = {
+    client: string;
+    site: string;
+    amount: string;
+    followUp: string;
+    status: "Draft" | "Sent" | "Pending";
+  };
+  const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
+  const [rows, setRows] = useState<QRow[]>([]);
 
   useEffect(() => {
     if (open) {
       setDate(""); setMethod(METHOD_OPTIONS[0]);
       setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
+      setRows([]);
     }
   }, [open]);
 
-  const canSave = !!date && !!method;
+  const qGen = Math.max(0, parseInt(quotes || "0", 10) || 0);
+
+  // Keep rows count in sync with Quotes Generated input
+  useEffect(() => {
+    setRows((prev) => {
+      if (qGen === prev.length) return prev;
+      if (qGen > prev.length) {
+        return [...prev, ...Array.from({ length: qGen - prev.length }, blankRow)];
+      }
+      return prev.slice(0, qGen);
+    });
+  }, [qGen]);
+
+  const rowComplete = (r: QRow) => {
+    const amt = Number(r.amount);
+    if (!r.client.trim()) return false;
+    if (!r.site.trim()) return false;
+    if (isNaN(amt) || amt <= 0) return false;
+    if (!r.status) return false;
+    if (r.status !== "Draft" && !r.followUp) return false;
+    return true;
+  };
+  const completeCount = rows.filter(rowComplete).length;
+  const countOk = completeCount === qGen;
+  const canSave = !!date && !!method && countOk;
 
   const save = () => {
+    const activityId = `act-${Date.now()}`;
     const a: LeadActivity = {
-      id: `act-${Date.now()}`,
+      id: activityId,
       activity_date: date,
       method,
       attempts: Number(attempts) || 0,
       contacts_made: Number(contacts) || 0,
-      quotes_generated: Number(quotes) || 0,
+      quotes_generated: qGen,
       notes: notes.trim(),
       created_at: new Date().toISOString(),
     };
-    onSave(a);
+    const newQuotes: Quote[] = rows.map((r, i) => ({
+      number: `Q-${nextQuoteNumberStart + i}`,
+      client: r.client.trim(),
+      site: r.site.trim(),
+      value: Number(r.amount),
+      status: r.status as QuoteStatus,
+      quoteDate: date,
+      followUp: r.followUp,
+      reason: "",
+      sourceActivityId: activityId,
+      method,
+    }));
+    onSave(a, newQuotes);
   };
+
+  const updateRow = (i: number, patch: Partial<QRow>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Log Activity</DialogTitle>
           <DialogDescription>
             Record a dated lead-generation activity. Aggregates into Lead Method Performance.
+            When Quotes Generated is greater than zero, enter matching quote details below.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -835,6 +888,62 @@ function LogActivityDialog({
             <Label htmlFor="la-notes">Notes</Label>
             <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
           </div>
+
+          {qGen > 0 && (
+            <div className="space-y-2 rounded-md border p-3">
+              <div>
+                <div className="text-sm font-semibold">Quote Details Required</div>
+                <p className="text-xs text-muted-foreground">
+                  You entered {qGen} quote{qGen === 1 ? "" : "s"} generated. Enter {qGen} quote record{qGen === 1 ? "" : "s"} before saving this activity.
+                </p>
+              </div>
+              {rows.map((r, i) => (
+                <div key={i} className="rounded-md border p-3 space-y-2 bg-muted/30">
+                  <div className="text-xs font-medium text-muted-foreground">Quote {i + 1} of {qGen}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Client <span className="text-destructive">*</span></Label>
+                      <Input value={r.client} onChange={(e) => updateRow(i, { client: e.target.value })} placeholder="e.g. M. Patel" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Job Location <span className="text-destructive">*</span></Label>
+                      <Input value={r.site} onChange={(e) => updateRow(i, { site: e.target.value })} placeholder="e.g. Unit 4, Buderim" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Quote Amount <span className="text-destructive">*</span></Label>
+                      <Input type="number" min={0} step="0.01" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        Follow-up Date {r.status !== "Draft" && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
+                      <p className="text-[11px] text-muted-foreground">
+                        {r.followUp ? isoToAU(r.followUp) : (r.status === "Draft" ? "Optional for Draft" : "dd/mm/yyyy")}
+                      </p>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">Initial Status <span className="text-destructive">*</span></Label>
+                      <select
+                        value={r.status}
+                        onChange={(e) => updateRow(i, { status: e.target.value as QRow["status"] })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="Draft">Draft</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Pending">Pending</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!countOk && (
+                <p className="text-xs text-destructive">
+                  Quotes Generated must match the number of quote records entered. ({completeCount} of {qGen} complete)
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
