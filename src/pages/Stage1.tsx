@@ -1017,6 +1017,14 @@ export function JobDetailSheet({
   const paymentProofOk = !!draft.paymentProofName;
   const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
 
+  // Outstanding = quote/contract value - payment received
+  const quoteVal = draft.quoteValue ?? 0;
+  const paidAmt = draft.paymentAmount ?? 0;
+  const outstanding = quoteVal - paidAmt;
+  const paidStatusMissingAmount =
+    draft.paymentStatus === "Paid" && (draft.paymentAmount == null || draft.paymentAmount === 0);
+  const paymentExceedsQuote = quoteVal > 0 && paidAmt > quoteVal;
+
   function save() {
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
