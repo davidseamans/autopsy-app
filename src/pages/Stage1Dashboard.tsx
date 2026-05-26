@@ -1552,8 +1552,11 @@ export default function Stage1Dashboard() {
                     <TableHead className="w-20">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Proof Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Income</TableHead>
+                    <TableHead className="text-right">
+                      <div className="leading-tight">Income</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
+                    </TableHead>
+                    <TableHead className="text-right">Outstanding</TableHead>
                     <TableHead className="text-right">Job Costs</TableHead>
                     <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
@@ -1563,7 +1566,9 @@ export default function Stage1Dashboard() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.invoiceAmount ?? 0;
+                    const income = u.quoteValue ?? 0;
+                    const paid = u.paymentAmount ?? 0;
+                    const outstanding = income - paid;
                     const costs =
                       (u.costMaterials ?? 0) +
                       (u.costLabour ?? 0) +
@@ -1595,9 +1600,11 @@ export default function Stage1Dashboard() {
                           </button>
                         </TableCell>
                         <TableCell>{u.proofType}</TableCell>
-                        <TableCell>{u.status}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {income > 0 ? `$${fmtMoney(income)}` : "—"}
+                        </TableCell>
+                        <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
+                          {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {costs > 0 ? `$${fmtMoney(costs)}` : "—"}
