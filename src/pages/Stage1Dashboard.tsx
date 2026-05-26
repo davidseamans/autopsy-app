@@ -1372,8 +1372,16 @@ export default function Stage1Dashboard() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = JOB_ROWS.reduce((s, r) => s + r.income, 0);
-  const totalCosts = JOB_ROWS.reduce((s, r) => s + r.costs, 0);
+  const totalIncome = units.reduce((s, u) => s + (u.quoteValue ?? 0), 0);
+  const totalCosts = units.reduce(
+    (s, u) =>
+      s +
+      (u.costMaterials ?? 0) +
+      (u.costLabour ?? 0) +
+      (u.costSubcontractors ?? 0) +
+      (u.costOther ?? 0),
+    0,
+  );
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
