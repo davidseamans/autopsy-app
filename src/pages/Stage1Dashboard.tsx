@@ -966,7 +966,6 @@ export default function Stage1Dashboard() {
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
-  const [addQuoteOpen, setAddQuoteOpen] = useState(false);
   const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
 
   const methodRows = useMemo(() => {
@@ -1016,12 +1015,12 @@ export default function Stage1Dashboard() {
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
 
-  const nextQuoteNumber = useMemo(() => {
+  const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
       .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
       .filter((n) => !isNaN(n));
     const max = nums.length ? Math.max(...nums) : 1000;
-    return `Q-${max + 1}`;
+    return max + 1;
   }, [quotes]);
 
   const handleConvert = (q: Quote) => {
@@ -1240,17 +1239,7 @@ export default function Stage1Dashboard() {
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
         quotes={quotes}
-        onAddQuote={() => setAddQuoteOpen(true)}
         onConvert={(q) => setConvertQuote(q)}
-      />
-      <AddQuoteDialog
-        open={addQuoteOpen}
-        onOpenChange={setAddQuoteOpen}
-        onSave={(q) => {
-          setQuotes((prev) => [q, ...prev]);
-          setAddQuoteOpen(false);
-        }}
-        nextNumber={nextQuoteNumber}
       />
       <ConvertQuoteDialog
         quote={convertQuote}
@@ -1261,8 +1250,10 @@ export default function Stage1Dashboard() {
       <LogActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={(a) => {
+        nextQuoteNumberStart={nextQuoteNumberStart}
+        onSave={(a, newQuotes) => {
           setActivities((prev) => [...prev, a]);
+          if (newQuotes.length) setQuotes((prev) => [...newQuotes, ...prev]);
           setLogActOpen(false);
         }}
       />
