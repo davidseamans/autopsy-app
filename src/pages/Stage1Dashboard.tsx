@@ -658,11 +658,17 @@ function DrillCurtain({
   onOpenChange,
   methodRows,
   onLogActivity,
+  quotes,
+  onAddQuote,
+  onConvert,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
   onLogActivity: () => void;
+  quotes: Quote[];
+  onAddQuote: () => void;
+  onConvert: (q: Quote) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -684,9 +690,22 @@ function DrillCurtain({
                   Log Activity
                 </Button>
               )}
+              {drill === "conversions" && (
+                <Button size="sm" onClick={onAddQuote} className="gap-1.5 shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Add Quote
+                </Button>
+              )}
             </div>
           </SheetHeader>
-          {drill && <DrillBody kind={drill} methodRows={methodRows} />}
+          {drill && (
+            <DrillBody
+              kind={drill}
+              methodRows={methodRows}
+              quotes={quotes}
+              onConvert={onConvert}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
