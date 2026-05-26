@@ -1170,19 +1170,25 @@ function QuoteDetailDialog({
   }, [open, quote]);
 
   if (!quote) return null;
-  const readOnly = !!quote.converted;
-  const isSent = quote.status === "Sent" && !readOnly;
-  const isRejected = quote.status === "Rejected" && !readOnly;
+  const isConverted = !!quote.converted;
+  // Converted quotes can still amend the flow-through fields (client, site, amount).
+  // Fully read-only is no longer the default.
+  const readOnly = false;
+  const isSent = quote.status === "Sent" && !isConverted;
+  const isRejected = quote.status === "Rejected" && !isConverted;
+  // Fields editable for amendment: Sent OR Converted (flow-through to job)
+  const canEditFlowThrough = isSent || isConverted;
   const hadNotes = !!quote.notes;
 
   const handleSave = () => {
-    if (readOnly) { onOpenChange(false); return; }
     const patch: Partial<Quote> = {};
-    if (isSent) {
+    if (canEditFlowThrough) {
       const v = Number(amount);
       patch.client = client.trim() || quote.client;
       patch.site = site.trim();
       patch.value = isNaN(v) ? quote.value : v;
+    }
+    if (isSent) {
       patch.followUp = followUp;
     }
     if (isRejected) {
@@ -1205,13 +1211,20 @@ function QuoteDetailDialog({
         <DialogHeader>
           <DialogTitle>Quote Detail</DialogTitle>
           <DialogDescription>
-            {readOnly
-              ? "This quote has been converted to a job and is read-only."
+            {isConverted
+              ? "This quote has been converted into a job. Amendments to client, location, or quote amount will update the linked job and ledger."
               : isSent
                 ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
                 : "Status changes happen in Quote Activity."}
           </DialogDescription>
         </DialogHeader>
+
+        {isConverted && (
+          <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-xs text-amber-900">
+            <div className="font-semibold">This quote has already been converted into a job.</div>
+            <div>Changing client, location, or quote amount will update the linked job and ledger.</div>
+          </div>
+        )}
 
         <div className="space-y-2 rounded-md border p-3">
           {row("Quote #", <span className="font-mono">{quote.number}</span>)}
@@ -1229,7 +1242,7 @@ function QuoteDetailDialog({
             <Input
               value={client}
               onChange={(e) => setClient(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1237,7 +1250,7 @@ function QuoteDetailDialog({
             <Input
               value={site}
               onChange={(e) => setSite(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1248,7 +1261,7 @@ function QuoteDetailDialog({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1290,8 +1303,8 @@ function QuoteDetailDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          {!readOnly && (isSent || isRejected) && (
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {(canEditFlowThrough || isRejected) && (
             <Button onClick={handleSave}>Save Changes</Button>
           )}
         </DialogFooter>
