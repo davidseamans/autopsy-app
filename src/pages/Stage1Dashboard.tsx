@@ -390,12 +390,14 @@ function DrillBody({
   kind,
   methodRows,
   quotes,
-  onConvert,
+  selectedQuoteNumber,
+  onSelectQuote,
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
   quotes: Quote[];
-  onConvert: (q: Quote) => void;
+  selectedQuoteNumber: string | null;
+  onSelectQuote: (n: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -455,18 +457,34 @@ function DrillBody({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>Quote #</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Follow-up</TableHead>
                   <TableHead>Rejection</TableHead>
-                  <TableHead className="text-right">Conversion</TableHead>
+                  <TableHead className="text-right">Activity</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quotes.filter((q) => !q.converted).map((r) => (
-                  <TableRow key={r.number}>
+                {quotes.filter((q) => !q.converted).map((r) => {
+                  const isSel = r.number === selectedQuoteNumber;
+                  return (
+                  <TableRow
+                    key={r.number}
+                    className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
+                    onClick={() => onSelectQuote(r.number)}
+                  >
+                    <TableCell>
+                      <input
+                        type="radio"
+                        name="quote-select"
+                        checked={isSel}
+                        onChange={() => onSelectQuote(r.number)}
+                        aria-label={`Select ${r.number}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
                       <div className="font-medium leading-tight">{r.client}</div>
@@ -477,22 +495,29 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.followUp ? isoToAU(r.followUp) : "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
-                      {r.status === "Accepted" ? (
-                        <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
-                          Convert to Job
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}
+                      >
+                        Update
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {quotes.filter((q) => !q.converted).map((r) => (
-              <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
+            {quotes.filter((q) => !q.converted).map((r) => {
+              const isSel = r.number === selectedQuoteNumber;
+              return (
+              <div
+                key={r.number}
+                className={`rounded-md border p-3 space-y-1 text-sm cursor-pointer ${isSel ? "bg-muted/60" : ""}`}
+                onClick={() => onSelectQuote(r.number)}
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
                   <Badge variant="outline">{r.status}</Badge>
@@ -508,19 +533,18 @@ function DrillBody({
                 <div className="flex justify-between text-xs">
                   <span>Rejection</span><span>{r.reason || "—"}</span>
                 </div>
-                {r.status === "Accepted" && (
-                  <div className="pt-1">
-                    <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
-                      Convert to Job
-                    </Button>
-                  </div>
-                )}
+                <div className="pt-1">
+                  <Button size="sm" variant="outline" className="w-full" onClick={(e) => { e.stopPropagation(); onSelectQuote(r.number); }}>
+                    {isSel ? "Selected · tap Quote Activity" : "Select"}
+                  </Button>
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground">
-            Active quotes only. Converted accepted quotes move to the Simple Job Cost Ledger and are hidden here.
-            Only Accepted quotes can be converted to jobs.
+            Active quotes only. Select a row and use <span className="font-medium text-foreground">Quote Activity</span> to update status.
+            Accepting a quote creates one job in the Simple Job Cost Ledger and removes the quote from this list.
           </p>
         </>
       )}
@@ -654,14 +678,18 @@ function DrillCurtain({
   methodRows,
   onLogActivity,
   quotes,
-  onConvert,
+  selectedQuoteNumber,
+  onSelectQuote,
+  onQuoteActivity,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
   onLogActivity: () => void;
   quotes: Quote[];
-  onConvert: (q: Quote) => void;
+  selectedQuoteNumber: string | null;
+  onSelectQuote: (n: string) => void;
+  onQuoteActivity: () => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -683,6 +711,11 @@ function DrillCurtain({
                   Log Activity
                 </Button>
               )}
+              {drill === "conversions" && (
+                <Button size="sm" onClick={onQuoteActivity} className="gap-1.5 shrink-0">
+                  Quote Activity
+                </Button>
+              )}
             </div>
           </SheetHeader>
           {drill && (
@@ -690,7 +723,8 @@ function DrillCurtain({
               kind={drill}
               methodRows={methodRows}
               quotes={quotes}
-              onConvert={onConvert}
+              selectedQuoteNumber={selectedQuoteNumber}
+              onSelectQuote={onSelectQuote}
             />
           )}
         </div>
