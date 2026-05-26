@@ -136,9 +136,9 @@ const SEED_QUOTES: Quote[] = [
 const JOB_ROWS = [
   { job: "J-001", client: "M. Patel", site: "Unit 4, Buderim", status: "Paid", start: "2026-05-04", income: 1200, costs: 864, gm: 28, evidence: "Attached" },
   { job: "J-002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", status: "Paid", start: "2026-05-08", income: 1850, costs: 1443, gm: 22, evidence: "Attached" },
-  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "Active", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
-  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Signed", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
-  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Mobilising", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
+  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "In Progress", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
+  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Scheduled", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
+  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Scheduled", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
 ];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
