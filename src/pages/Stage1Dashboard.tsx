@@ -87,7 +87,7 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_STATUSES = ["Draft", "Sent", "Pending", "Accepted", "Rejected", "Expired"] as const;
+const QUOTE_STATUSES = ["Sent", "Accepted", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 const REJECTION_REASONS = [
   "Too expensive",
@@ -126,7 +126,7 @@ const SEED_QUOTES: Quote[] = [
   { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4 },
   { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5 },
   { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "" },
-  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Pending",  quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
+  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Sent",     quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "" },
   { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive" },
 ];
 
