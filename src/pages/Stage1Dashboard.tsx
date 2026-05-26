@@ -1036,7 +1036,9 @@ export default function Stage1Dashboard() {
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
-  const [convertQuote, setConvertQuote] = useState<Quote | null>(null);
+  const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
+  const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
+  const [quoteActivityError, setQuoteActivityError] = useState<string | null>(null);
 
   const methodRows = useMemo(() => {
     return METHOD_BASELINE.map((b) => {
@@ -1073,7 +1075,7 @@ export default function Stage1Dashboard() {
 
   // Compute KPI aggregates from current state
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
-  const quotesSent = quotes.filter((q) => q.status !== "Draft").length;
+  const quotesSent = quotes.length;
   const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
   // Jobs in the ledger are only those created from accepted, converted quotes.
@@ -1093,7 +1095,7 @@ export default function Stage1Dashboard() {
     return max + 1;
   }, [quotes]);
 
-  const handleConvert = (q: Quote) => {
+  const handleAcceptAndConvert = (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
     const maxJobNum = units.reduce((m, u) => {
       const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
@@ -1118,11 +1120,36 @@ export default function Stage1Dashboard() {
     setQuotes((prev) =>
       prev.map((p) =>
         p.number === q.number
-          ? { ...p, converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
+          ? { ...p, status: "Accepted", converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
           : p,
       ),
     );
-    setConvertQuote(null);
+  };
+
+  const handleQuoteActivitySave = (q: Quote, newStatus: QuoteStatus, reason: string) => {
+    if (q.converted) return;
+    if (newStatus === "Accepted") {
+      handleAcceptAndConvert(q);
+    } else {
+      setQuotes((prev) =>
+        prev.map((p) =>
+          p.number === q.number
+            ? { ...p, status: newStatus, reason: newStatus === "Rejected" ? reason : "" }
+            : p,
+        ),
+      );
+    }
+    setQuoteActivityOpen(false);
+    setSelectedQuoteNumber(null);
+  };
+
+  const openQuoteActivity = () => {
+    if (!selectedQuoteNumber) {
+      setQuoteActivityError("Select a quote first.");
+      return;
+    }
+    setQuoteActivityError(null);
+    setQuoteActivityOpen(true);
   };
 
   return (
@@ -1315,17 +1342,19 @@ export default function Stage1Dashboard() {
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
       <DrillCurtain
         drill={drill}
-        onOpenChange={(o) => { if (!o) setDrill(null); }}
+        onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
         onLogActivity={() => setLogActOpen(true)}
         quotes={quotes}
-        onConvert={(q) => setConvertQuote(q)}
+        selectedQuoteNumber={selectedQuoteNumber}
+        onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
+        onQuoteActivity={openQuoteActivity}
       />
-      <ConvertQuoteDialog
-        quote={convertQuote}
-        open={!!convertQuote}
-        onOpenChange={(o) => { if (!o) setConvertQuote(null); }}
-        onConfirm={handleConvert}
+      <QuoteActivityDialog
+        quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
+        open={quoteActivityOpen}
+        onOpenChange={setQuoteActivityOpen}
+        onSave={handleQuoteActivitySave}
       />
       <LogActivityDialog
         open={logActOpen}
