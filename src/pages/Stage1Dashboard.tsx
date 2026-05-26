@@ -713,81 +713,159 @@ function DrillCurtain({
 }
 
 
-function AddJobDialog({
+function AddQuoteDialog({
   open,
   onOpenChange,
   onSave,
-  nextN,
+  nextNumber,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (u: ProofUnit) => void;
-  nextN: number;
+  onSave: (q: Quote) => void;
+  nextNumber: string;
 }) {
   const [client, setClient] = useState("");
-  const [jobSite, setJobSite] = useState("");
+  const [site, setSite] = useState("");
   const [amount, setAmount] = useState<string>("");
-  const [scheduled, setScheduled] = useState<string>("");
+  const [quoteDate, setQuoteDate] = useState<string>("");
+  const [followUp, setFollowUp] = useState<string>("");
+  const [status, setStatus] = useState<QuoteStatus>("Draft");
+  const [reason, setReason] = useState<string>("");
 
   useEffect(() => {
     if (open) {
-      setClient(""); setJobSite(""); setAmount(""); setScheduled("");
+      setClient(""); setSite(""); setAmount(""); setQuoteDate("");
+      setFollowUp(""); setStatus("Draft"); setReason("");
     }
   }, [open]);
 
-  const canSave = client.trim().length > 0;
+  const amt = Number(amount);
+  const needsReason = status === "Rejected";
+  const canSave =
+    client.trim().length > 0 &&
+    !isNaN(amt) && amt > 0 &&
+    (!needsReason || reason.trim().length > 0);
 
   const save = () => {
-    const amt = Number(amount);
-    const unit: ProofUnit = {
-      n: nextN,
+    const q: Quote = {
+      number: nextNumber,
       client: client.trim(),
-      jobSite: jobSite.trim() || undefined,
-      proofType: "Completed Job",
-      status: "Draft",
-      gm: 0,
-      evidence: false,
-      isNewClient: true,
-      quoteValue: !isNaN(amt) && amt > 0 ? amt : undefined,
-      projectedRevenue: !isNaN(amt) && amt > 0 ? amt : undefined,
-      scheduledDate: scheduled ? isoToAU(scheduled) : undefined,
+      site: site.trim(),
+      value: amt,
+      status,
+      quoteDate,
+      followUp,
+      reason: needsReason ? reason : "",
     };
-    onSave(unit);
+    onSave(q);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Job</DialogTitle>
+          <DialogTitle>Add Quote</DialogTitle>
           <DialogDescription>
-            Create the job shell. Enter Customer Invoice, Job Costs and Payment Proof from the Job / Contract Site Detail curtain.
+            Create a quote record. Jobs are created later by converting an accepted quote.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="aj-client">Client <span className="text-destructive">*</span></Label>
-            <Input id="aj-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
+            <Label htmlFor="aq-client">Client <span className="text-destructive">*</span></Label>
+            <Input id="aq-client" value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. M. Patel" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-site">Job Location</Label>
-            <Input id="aj-site" value={jobSite} onChange={(e) => setJobSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
+            <Label htmlFor="aq-site">Job Location</Label>
+            <Input id="aq-site" value={site} onChange={(e) => setSite(e.target.value)} placeholder="e.g. Unit 4, Buderim" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-amt">Quote / Contract Amount (incl. GST)</Label>
-            <Input id="aj-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+            <Label htmlFor="aq-amt">Quote Amount (incl. GST) <span className="text-destructive">*</span></Label>
+            <Input id="aq-amt" type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-qd">Quote Date</Label>
+              <Input id="aq-qd" type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} />
+              {quoteDate && <p className="text-[11px] text-muted-foreground">{isoToAU(quoteDate)}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-fu">Follow-up Date</Label>
+              <Input id="aq-fu" type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} />
+              {followUp && <p className="text-[11px] text-muted-foreground">{isoToAU(followUp)}</p>}
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="aj-date">Scheduled Date</Label>
-            <Input id="aj-date" type="date" value={scheduled} onChange={(e) => setScheduled(e.target.value)} />
-            {scheduled && (
-              <p className="text-[11px] text-muted-foreground">{isoToAU(scheduled)}</p>
-            )}
+            <Label htmlFor="aq-status">Status</Label>
+            <select
+              id="aq-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as QuoteStatus)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {QUOTE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
+          {needsReason && (
+            <div className="space-y-1.5">
+              <Label htmlFor="aq-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <select
+                id="aq-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select a reason…</option>
+                {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Job</Button>
+          <Button onClick={save} disabled={!canSave}>Save Quote</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConvertQuoteDialog({
+  quote,
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  quote: Quote | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (q: Quote) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Convert this accepted quote into a job?</DialogTitle>
+          <DialogDescription>
+            A job shell will be created in the Simple Job Cost Ledger using this quote's details.
+            You can then add invoices, costs and payment proof from the Job / Contract Site Detail curtain.
+          </DialogDescription>
+        </DialogHeader>
+        {quote && (
+          <div className="space-y-2 text-sm rounded-md border p-3">
+            <div className="flex justify-between"><span className="text-muted-foreground">Quote #</span><span className="font-mono">{quote.number}</span></div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Client</span>
+              <span className="text-right">
+                <div className="font-medium">{quote.client}</div>
+                <div className="text-xs text-muted-foreground">{quote.site}</div>
+              </span>
+            </div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Quote Amount</span><span>${fmtMoney(quote.value)}</span></div>
+          </div>
+        )}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => quote && onConfirm(quote)} disabled={!quote}>Convert to Job</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
