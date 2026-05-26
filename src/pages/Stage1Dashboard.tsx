@@ -643,6 +643,28 @@ export default function Stage1Dashboard() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [addJobOpen, setAddJobOpen] = useState(false);
+  const [logActOpen, setLogActOpen] = useState(false);
+  const [activities, setActivities] = useState<LeadActivity[]>([]);
+
+  const methodRows = useMemo(() => {
+    return METHOD_BASELINE.map((b) => {
+      const acts = activities.filter((a) => a.method === b.method);
+      const addAtt = acts.reduce((s, a) => s + (a.attempts || 0), 0);
+      const addCon = acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
+      const addQt  = acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
+      const extraNote = acts.length
+        ? `${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`
+        : "";
+      return {
+        ...b,
+        attempts: b.attempts + addAtt,
+        contacts: b.contacts + addCon,
+        quotes: b.quotes + addQt,
+        notes: extraNote ? `${b.notes} · ${extraNote}` : b.notes,
+      };
+    });
+  }, [activities]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -659,7 +681,7 @@ export default function Stage1Dashboard() {
   };
 
   // Compute KPI aggregates from fixtures
-  const totalLeads = METHOD_ROWS.reduce((s, r) => s + r.leads, 0);
+  const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
   const quotesSent = QUOTE_ROWS.filter((q) => q.status !== "Draft").length;
   const quotesAccepted = QUOTE_ROWS.filter((q) => q.status === "Accepted").length;
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
@@ -859,7 +881,29 @@ export default function Stage1Dashboard() {
         onOpenDetailedReport={(n) => openReport(n)}
       />
       <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
-      <DrillCurtain drill={drill} onOpenChange={(o) => { if (!o) setDrill(null); }} />
+      <DrillCurtain
+        drill={drill}
+        onOpenChange={(o) => { if (!o) setDrill(null); }}
+        methodRows={methodRows}
+        onLogActivity={() => setLogActOpen(true)}
+      />
+      <AddJobDialog
+        open={addJobOpen}
+        onOpenChange={setAddJobOpen}
+        onSave={(u) => {
+          setUnits((prev) => [...prev, u]);
+          setAddJobOpen(false);
+        }}
+        nextN={(units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1}
+      />
+      <LogActivityDialog
+        open={logActOpen}
+        onOpenChange={setLogActOpen}
+        onSave={(a) => {
+          setActivities((prev) => [...prev, a]);
+          setLogActOpen(false);
+        }}
+      />
       <DetailedJobCostReport
         unit={reportUnit}
         allUnits={units}
