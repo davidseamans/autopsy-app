@@ -304,6 +304,13 @@ type ProofType =
 
 type GateStatus = "Locked" | "Conditional" | "Unlocked";
 
+export interface CostLine {
+  id: string;
+  description: string;
+  amount?: number;
+  gstIncluded: boolean;
+}
+
 export interface ProofUnit {
   n: number;
   client: string;
@@ -334,6 +341,7 @@ export interface ProofUnit {
   costLabour?: number;
   costSubcontractors?: number;
   costOther?: number;
+  costLines?: CostLine[];
   costDocType?: "Supplier Receipt" | "Supplier Bill" | "Timesheet" | "Subcontractor Invoice" | "Materials Receipt" | "Other Cost Proof";
   costDocName?: string;
   // Payment Proof
@@ -963,7 +971,7 @@ export function JobDetailSheet({
   onOpenDetailedReport?: (n: number) => void;
 }) {
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
-  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [mode, setMode] = useState<"view" | "edit">("edit");
   const [correctionReason, setCorrectionReason] = useState<string>("");
   const [showSummary, setShowSummary] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
@@ -973,7 +981,7 @@ export function JobDetailSheet({
   const [editGateOpen, setEditGateOpen] = useState(false);
   useEffect(() => {
     setDraft(unit);
-    setMode("view");
+    setMode("edit");
     setCorrectionReason("");
   }, [unit]);
   if (!draft) return null;
@@ -1005,11 +1013,13 @@ export function JobDetailSheet({
 
   // Computed GM from invoice + direct costs (falls back to legacy GM on unit)
   const invAmt = draft.invoiceAmount ?? 0;
-  const costs =
+  const linesTotal = (draft.costLines ?? []).reduce((s, l) => s + (l.amount ?? 0), 0);
+  const legacyTotal =
     (draft.costMaterials ?? 0) +
     (draft.costLabour ?? 0) +
     (draft.costSubcontractors ?? 0) +
     (draft.costOther ?? 0);
+  const costs = draft.costLines && draft.costLines.length > 0 ? linesTotal : legacyTotal;
   const grossProfit = invAmt - costs;
   const computedGm = invAmt > 0 ? Math.round((grossProfit / invAmt) * 100) : null;
   const displayGm = computedGm ?? draft.gm;
@@ -1093,25 +1103,36 @@ export function JobDetailSheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && unit && JSON.stringify(draft) !== JSON.stringify(unit) && (!isReviewed || correctionReason.trim())) {
+          try { save(); } catch { /* noop */ }
+        }
+        onOpenChange(o);
+      }}
+    >
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Job / Contract Site Detail</SheetTitle>
-          <SheetDescription>
-            {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
-          </SheetDescription>
-        </SheetHeader>
-        {onOpenDetailedReport && (
-          <div className="mt-3">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenDetailedReport(draft.n)}
-            >
-              Detailed Report
-            </Button>
+          <div className="flex items-start justify-between gap-3 pr-10">
+            <div className="min-w-0">
+              <SheetTitle>Job / Contract Site Detail</SheetTitle>
+              <SheetDescription>
+                {draft.client} — {draft.jobSite ?? <span className="text-amber-600">Site not entered</span>}
+              </SheetDescription>
+            </div>
+            {onOpenDetailedReport && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => onOpenDetailedReport(draft.n)}
+              >
+                Detailed Report
+              </Button>
+            )}
           </div>
-        )}
+        </SheetHeader>
 
         <div className="mt-4 space-y-5">
           {/* 1. Job / Site Summary */}
@@ -1226,25 +1247,97 @@ export function JobDetailSheet({
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
             <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Materials</Label>
-                <Input type="number" value={draft.costMaterials ?? ""} onChange={(e) => setDraft({ ...draft, costMaterials: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Labour</Label>
-                <Input type="number" value={draft.costLabour ?? ""} onChange={(e) => setDraft({ ...draft, costLabour: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Subcontractors</Label>
-                <Input type="number" value={draft.costSubcontractors ?? ""} onChange={(e) => setDraft({ ...draft, costSubcontractors: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Other Direct Costs</Label>
-                <Input type="number" value={draft.costOther ?? ""} onChange={(e) => setDraft({ ...draft, costOther: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
+            <p className="text-xs text-muted-foreground">
+              Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
+            </p>
+            <div className="space-y-2">
+              {(draft.costLines ?? []).map((line, idx) => {
+                const gstAmt = line.gstIncluded && line.amount ? +(line.amount / 11).toFixed(2) : 0;
+                return (
+                  <div key={line.id} className="rounded border p-2 space-y-2">
+                    <div className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-12 sm:col-span-6 space-y-1">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          value={line.description}
+                          placeholder="e.g. Materials, Subcontractor help"
+                          onChange={(e) => {
+                            const next = [...(draft.costLines ?? [])];
+                            next[idx] = { ...line, description: e.target.value };
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-6 sm:col-span-3 space-y-1">
+                        <Label className="text-xs">Amount</Label>
+                        <Input
+                          type="number"
+                          value={line.amount ?? ""}
+                          onChange={(e) => {
+                            const next = [...(draft.costLines ?? [])];
+                            next[idx] = { ...line, amount: e.target.value === "" ? undefined : Number(e.target.value) };
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-2 space-y-1">
+                        <Label className="text-xs">GST incl.</Label>
+                        <div className="h-10 flex items-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={line.gstIncluded}
+                            onChange={(e) => {
+                              const next = [...(draft.costLines ?? [])];
+                              next[idx] = { ...line, gstIncluded: e.target.checked };
+                              setDraft({ ...draft, costLines: next });
+                            }}
+                          />
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {line.gstIncluded && gstAmt > 0 ? `GST $${gstAmt.toFixed(2)}` : "No GST"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
+                            setDraft({ ...draft, costLines: next });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const seed: CostLine[] =
+                    (draft.costLines && draft.costLines.length > 0)
+                      ? draft.costLines
+                      : [
+                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true }] : []),
+                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false }] : []),
+                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true }] : []),
+                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true }] : []),
+                        ];
+                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true }];
+                  setDraft({ ...draft, costLines: next });
+                }}
+              >
+                Add Cost Line
+              </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
+              {fieldRow("Total Job Costs", costs > 0 ? `$${costs.toLocaleString()}` : "—")}
               {fieldRow("Gross Profit", invAmt > 0 ? `$${grossProfit.toLocaleString()}` : "—")}
               {fieldRow("GM %", computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "—")}
             </div>
@@ -1434,50 +1527,6 @@ export function JobDetailSheet({
             <Button variant="secondary" className="w-full sm:w-auto" onClick={() => setShowSummary(true)}>
               View Stage 1 Summary
             </Button>
-          </div>
-
-          {/* Actions */}
-          <div className="rounded-md border p-3 space-y-3">
-            <div className="font-medium text-sm">Actions</div>
-            <div className="flex flex-wrap gap-2">
-              {mode === "view" && !isLocked && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (isReviewed) setEditGateOpen(true);
-                    else setMode("edit");
-                  }}
-                >
-                  Edit
-                </Button>
-              )}
-              {mode === "edit" && (
-                <>
-                  <Button
-                    onClick={save}
-                    disabled={isReviewed && !correctionReason.trim()}
-                  >
-                    Save Changes
-                  </Button>
-                  <Button variant="outline" onClick={cancelEdit}>Cancel Changes</Button>
-                </>
-              )}
-              {!isLocked && (
-                <Button variant="outline" onClick={() => setVoidOpen(true)}>Void Record</Button>
-              )}
-              {!isLocked && (
-                <Button variant="outline" onClick={() => setArchiveOpen(true)}>Archive Record</Button>
-              )}
-              {canDelete && (
-                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>Delete Draft</Button>
-              )}
-              <Button variant="ghost" className="ml-auto" onClick={() => onOpenChange(false)}>Close</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Void this record if it should no longer count toward Stage 1 but must remain in history.
-              Archive this record if it is no longer active but should be kept.
-              Delete is only available for empty draft mistakes.
-            </p>
           </div>
 
           {/* Summary dialog */}
