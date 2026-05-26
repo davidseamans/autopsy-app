@@ -334,6 +334,7 @@ export interface ProofUnit {
   costLabour?: number;
   costSubcontractors?: number;
   costOther?: number;
+  costLines?: CostLine[];
   costDocType?: "Supplier Receipt" | "Supplier Bill" | "Timesheet" | "Subcontractor Invoice" | "Materials Receipt" | "Other Cost Proof";
   costDocName?: string;
   // Payment Proof
