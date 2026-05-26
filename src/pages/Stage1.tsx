@@ -1145,6 +1145,8 @@ export function JobDetailSheet({
           {/* 1. Job / Site Summary */}
           <div className="rounded-md border bg-muted/30 p-3 space-y-1">
             {sectionTitle(1, "Job / Site Summary")}
+            {fieldRow("Job #", draft.jobNumber ?? `J-${1000 + draft.n}`)}
+            {fieldRow("Source Quote #", draft.sourceQuote || "—")}
             {fieldRow("Client", draft.client)}
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
             {fieldRow("Proof Type", draft.proofType)}
@@ -1152,8 +1154,6 @@ export function JobDetailSheet({
             {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
             {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
             {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
-            {fieldRow("Points", scoreUnit(draft))}
-            {fieldRow("Risk", <span className={riskCellClass(risk)}>{risk}</span>)}
           </div>
 
           {/* Blockers / warnings */}
