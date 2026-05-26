@@ -451,6 +451,7 @@ function DrillBody({
 
       {kind === "conversions" && (
         <>
+          {(() => null)()}
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
@@ -465,7 +466,7 @@ function DrillBody({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quotes.map((r) => (
+                {quotes.filter((q) => !q.converted).map((r) => (
                   <TableRow key={r.number}>
                     <TableCell className="font-mono text-xs">{r.number}</TableCell>
                     <TableCell>
@@ -478,13 +479,9 @@ function DrillBody({
                     <TableCell className="text-muted-foreground">{r.reason || "—"}</TableCell>
                     <TableCell className="text-right">
                       {r.status === "Accepted" ? (
-                        r.converted ? (
-                          <span className="text-xs text-muted-foreground">Already converted</span>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
-                            Convert to Job
-                          </Button>
-                        )
+                        <Button size="sm" variant="outline" onClick={() => onConvert(r)}>
+                          Convert to Job
+                        </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -495,7 +492,7 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {quotes.map((r) => (
+            {quotes.filter((q) => !q.converted).map((r) => (
               <div key={r.number} className="rounded-md border p-3 space-y-1 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{r.number}</span>
@@ -514,22 +511,17 @@ function DrillBody({
                 </div>
                 {r.status === "Accepted" && (
                   <div className="pt-1">
-                    {r.converted ? (
-                      <span className="text-xs text-muted-foreground">Already converted</span>
-                    ) : (
-                      <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
-                        Convert to Job
-                      </Button>
-                    )}
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => onConvert(r)}>
+                      Convert to Job
+                    </Button>
                   </div>
                 )}
               </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Allowed statuses: Draft, Sent, Pending, Accepted, Rejected, Expired. Allowed rejection reasons:
-            Too expensive, No confidence, Poor fit, Slow response, Competitor chosen, Scope unclear, No budget, Other.
-            Only accepted quotes can be converted to jobs.
+            Active quotes only. Converted accepted quotes move to the Simple Job Cost Ledger and are hidden here.
+            Only Accepted quotes can be converted to jobs.
           </p>
         </>
       )}
