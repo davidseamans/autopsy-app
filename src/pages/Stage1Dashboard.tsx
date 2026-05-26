@@ -49,6 +49,9 @@ import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Signed money display: handles negatives as "-$X.XX" rather than "$-X.XX"
+const fmtSignedMoney = (n: number) => `${n < 0 ? "-" : ""}$${fmtMoney(Math.abs(n))}`;
+
 // Convert yyyy-mm-dd (from <input type="date">) to dd/mm/yyyy for AU display
 const isoToAU = (iso: string) => {
   if (!iso) return "";
@@ -600,9 +603,11 @@ function DrillBody({
                   <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Source Quote #</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Scheduled Date</TableHead>
-                  <TableHead className="text-right">Income</TableHead>
+                  <TableHead className="text-right">
+                    <div className="leading-tight">Income</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
+                  </TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
@@ -611,7 +616,9 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.invoiceAmount ?? 0;
+                  const income = u.quoteValue ?? 0;
+                  const paid = u.paymentAmount ?? 0;
+                  const outstanding = income - paid;
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
@@ -646,9 +653,10 @@ function DrillBody({
                         </button>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
-                      <TableCell><Badge variant="outline">{u.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
+                        {income > 0 ? fmtSignedMoney(outstanding) : "—"}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
@@ -669,7 +677,9 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.invoiceAmount ?? 0;
+              const income = u.quoteValue ?? 0;
+              const paid = u.paymentAmount ?? 0;
+              const outstanding = income - paid;
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
@@ -690,8 +700,8 @@ function DrillBody({
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Scheduled</span><span>{u.scheduledDate ? isoToAU(u.scheduledDate) : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
@@ -1160,19 +1170,25 @@ function QuoteDetailDialog({
   }, [open, quote]);
 
   if (!quote) return null;
-  const readOnly = !!quote.converted;
-  const isSent = quote.status === "Sent" && !readOnly;
-  const isRejected = quote.status === "Rejected" && !readOnly;
+  const isConverted = !!quote.converted;
+  // Converted quotes can still amend the flow-through fields (client, site, amount).
+  // Fully read-only is no longer the default.
+  const readOnly = false;
+  const isSent = quote.status === "Sent" && !isConverted;
+  const isRejected = quote.status === "Rejected" && !isConverted;
+  // Fields editable for amendment: Sent OR Converted (flow-through to job)
+  const canEditFlowThrough = isSent || isConverted;
   const hadNotes = !!quote.notes;
 
   const handleSave = () => {
-    if (readOnly) { onOpenChange(false); return; }
     const patch: Partial<Quote> = {};
-    if (isSent) {
+    if (canEditFlowThrough) {
       const v = Number(amount);
       patch.client = client.trim() || quote.client;
       patch.site = site.trim();
       patch.value = isNaN(v) ? quote.value : v;
+    }
+    if (isSent) {
       patch.followUp = followUp;
     }
     if (isRejected) {
@@ -1195,13 +1211,20 @@ function QuoteDetailDialog({
         <DialogHeader>
           <DialogTitle>Quote Detail</DialogTitle>
           <DialogDescription>
-            {readOnly
-              ? "This quote has been converted to a job and is read-only."
+            {isConverted
+              ? "This quote has been converted into a job. Amendments to client, location, or quote amount will update the linked job and ledger."
               : isSent
                 ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
                 : "Status changes happen in Quote Activity."}
           </DialogDescription>
         </DialogHeader>
+
+        {isConverted && (
+          <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-xs text-amber-900">
+            <div className="font-semibold">This quote has already been converted into a job.</div>
+            <div>Changing client, location, or quote amount will update the linked job and ledger.</div>
+          </div>
+        )}
 
         <div className="space-y-2 rounded-md border p-3">
           {row("Quote #", <span className="font-mono">{quote.number}</span>)}
@@ -1219,7 +1242,7 @@ function QuoteDetailDialog({
             <Input
               value={client}
               onChange={(e) => setClient(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1227,7 +1250,7 @@ function QuoteDetailDialog({
             <Input
               value={site}
               onChange={(e) => setSite(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1238,7 +1261,7 @@ function QuoteDetailDialog({
               step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              disabled={!isSent}
+              disabled={!canEditFlowThrough}
             />
           </div>
           <div className="space-y-1.5">
@@ -1280,8 +1303,8 @@ function QuoteDetailDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          {!readOnly && (isSent || isRejected) && (
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          {(canEditFlowThrough || isRejected) && (
             <Button onClick={handleSave}>Save Changes</Button>
           )}
         </DialogFooter>
@@ -1349,8 +1372,16 @@ export default function Stage1Dashboard() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = JOB_ROWS.reduce((s, r) => s + r.income, 0);
-  const totalCosts = JOB_ROWS.reduce((s, r) => s + r.costs, 0);
+  const totalIncome = units.reduce((s, u) => s + (u.quoteValue ?? 0), 0);
+  const totalCosts = units.reduce(
+    (s, u) =>
+      s +
+      (u.costMaterials ?? 0) +
+      (u.costLabour ?? 0) +
+      (u.costSubcontractors ?? 0) +
+      (u.costOther ?? 0),
+    0,
+  );
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
@@ -1435,9 +1466,26 @@ export default function Stage1Dashboard() {
 
   const handleSaveQuoteDetail = (patch: Partial<Quote>) => {
     if (!quoteDetailNumber) return;
+    const original = quotes.find((q) => q.number === quoteDetailNumber);
     setQuotes((prev) =>
       prev.map((p) => (p.number === quoteDetailNumber ? { ...p, ...patch } : p)),
     );
+    // Flow-through to the linked job if this quote was already converted.
+    if (original?.converted && original.convertedToN != null) {
+      setUnits((prev) =>
+        prev.map((u) => {
+          if (u.n !== original.convertedToN) return u;
+          const next = { ...u };
+          if (patch.client !== undefined) next.client = patch.client;
+          if (patch.site !== undefined) next.jobSite = patch.site || undefined;
+          if (patch.value !== undefined) {
+            next.quoteValue = patch.value;
+            next.projectedRevenue = patch.value;
+          }
+          return next;
+        }),
+      );
+    }
     setQuoteDetailOpen(false);
   };
 
@@ -1542,8 +1590,11 @@ export default function Stage1Dashboard() {
                     <TableHead className="w-20">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Proof Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Income</TableHead>
+                    <TableHead className="text-right">
+                      <div className="leading-tight">Income</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
+                    </TableHead>
+                    <TableHead className="text-right">Outstanding</TableHead>
                     <TableHead className="text-right">Job Costs</TableHead>
                     <TableHead className="text-right">Gross Profit</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
@@ -1553,7 +1604,9 @@ export default function Stage1Dashboard() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.invoiceAmount ?? 0;
+                    const income = u.quoteValue ?? 0;
+                    const paid = u.paymentAmount ?? 0;
+                    const outstanding = income - paid;
                     const costs =
                       (u.costMaterials ?? 0) +
                       (u.costLabour ?? 0) +
@@ -1585,9 +1638,11 @@ export default function Stage1Dashboard() {
                           </button>
                         </TableCell>
                         <TableCell>{u.proofType}</TableCell>
-                        <TableCell>{u.status}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {income > 0 ? `$${fmtMoney(income)}` : "—"}
+                        </TableCell>
+                        <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
+                          {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {costs > 0 ? `$${fmtMoney(costs)}` : "—"}

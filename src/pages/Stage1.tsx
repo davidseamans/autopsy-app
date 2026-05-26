@@ -1017,6 +1017,14 @@ export function JobDetailSheet({
   const paymentProofOk = !!draft.paymentProofName;
   const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
 
+  // Outstanding = quote/contract value - payment received
+  const quoteVal = draft.quoteValue ?? 0;
+  const paidAmt = draft.paymentAmount ?? 0;
+  const outstanding = quoteVal - paidAmt;
+  const paidStatusMissingAmount =
+    draft.paymentStatus === "Paid" && (draft.paymentAmount == null || draft.paymentAmount === 0);
+  const paymentExceedsQuote = quoteVal > 0 && paidAmt > quoteVal;
+
   function save() {
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
@@ -1130,9 +1138,17 @@ export function JobDetailSheet({
             {fieldRow("Client", draft.client)}
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
             {fieldRow("Proof Type", draft.proofType)}
-            {fieldRow("Job / Contract Status", <Badge variant="outline" className={statusBadgeClass(draft.status)}>{draft.status}</Badge>)}
             {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
             {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
+            {fieldRow("Payment Received", draft.paymentAmount != null ? `$${draft.paymentAmount.toLocaleString()}` : "$0")}
+            {fieldRow(
+              "Outstanding",
+              quoteVal > 0 ? (
+                <span className={outstanding < 0 ? "text-red-600" : ""}>
+                  {`${outstanding < 0 ? "-" : ""}$${Math.abs(outstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                </span>
+              ) : "—",
+            )}
             {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
           </div>
 
@@ -1154,6 +1170,16 @@ export function JobDetailSheet({
             {draft.paymentStatus === "Paid" && !paymentProofOk && (
               <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
                 Payment proof missing: paid work must be supported by invoice, receipt, remittance, payment receipt, or transaction evidence.
+              </div>
+            )}
+            {paidStatusMissingAmount && (
+              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
+                Paid status requires payment amount.
+              </div>
+            )}
+            {paymentExceedsQuote && (
+              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+                Payment exceeds quoted amount. Check quote or payment amount.
               </div>
             )}
             {cashRequiresProof && (
