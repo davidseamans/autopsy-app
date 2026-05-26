@@ -1031,12 +1031,18 @@ export default function Stage1Dashboard() {
 
   const handleConvert = (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
+    const maxJobNum = units.reduce((m, u) => {
+      const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
+      return isNaN(num) ? m : Math.max(m, num);
+    }, 1000);
+    const jobNumber = `J-${maxJobNum + 1}`;
     const unit: ProofUnit = {
       n: nextN,
+      jobNumber,
       client: q.client,
       jobSite: q.site || undefined,
       proofType: "Completed Job",
-      status: "Not Started",
+      status: "Mobilising",
       gm: 0,
       evidence: false,
       isNewClient: true,
@@ -1046,7 +1052,11 @@ export default function Stage1Dashboard() {
     };
     setUnits((prev) => [...prev, unit]);
     setQuotes((prev) =>
-      prev.map((p) => (p.number === q.number ? { ...p, converted: true, convertedToN: nextN } : p)),
+      prev.map((p) =>
+        p.number === q.number
+          ? { ...p, converted: true, convertedToN: nextN, convertedJobNumber: jobNumber, convertedAt: new Date().toISOString() }
+          : p,
+      ),
     );
     setConvertQuote(null);
   };
