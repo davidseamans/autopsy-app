@@ -1566,16 +1566,6 @@ export default function Stage1Dashboard() {
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
-          {scorecard.blockers.map((b) => (
-            <div key={b} className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
-              <span className="font-semibold">Blocker: </span>{b}
-            </div>
-          ))}
-          {scorecard.warnings.map((w) => (
-            <div key={w} className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
-              <span className="font-semibold">Risk warning: </span>{w}
-            </div>
-          ))}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
