@@ -882,6 +882,12 @@ function LogActivityDialog({
             <div className="space-y-1.5">
               <Label htmlFor="la-qt">Quotes Generated</Label>
               <Input id="la-qt" type="number" min={0} value={quotes} onChange={(e) => setQuotes(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">
+                How many actual quotes did you issue from this activity session?
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                If greater than zero, you must enter one quote record for each quote before saving.
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -939,7 +945,7 @@ function LogActivityDialog({
               ))}
               {!countOk && (
                 <p className="text-xs text-destructive">
-                  Quotes Generated must match the number of quote records entered. ({completeCount} of {qGen} complete)
+                  Quotes Generated must match the number of completed quote records. ({completeCount} of {qGen} complete)
                 </p>
               )}
             </div>
