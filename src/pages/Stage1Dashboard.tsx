@@ -719,6 +719,8 @@ function DrillCurtain({
   selectedQuoteNumber,
   onSelectQuote,
   onQuoteActivity,
+  onUpdateQuote,
+  onOpenQuoteDetail,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
@@ -728,6 +730,8 @@ function DrillCurtain({
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
   onQuoteActivity: () => void;
+  onUpdateQuote: (n: string) => void;
+  onOpenQuoteDetail: (n: string) => void;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
@@ -763,6 +767,8 @@ function DrillCurtain({
               quotes={quotes}
               selectedQuoteNumber={selectedQuoteNumber}
               onSelectQuote={onSelectQuote}
+              onUpdateQuote={onUpdateQuote}
+              onOpenQuoteDetail={onOpenQuoteDetail}
             />
           )}
         </div>
