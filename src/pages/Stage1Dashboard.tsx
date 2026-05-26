@@ -718,6 +718,7 @@ function DrillBody({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">Income</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
@@ -727,19 +728,25 @@ function DrillBody({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {JOB_ROWS.map((r) => {
-                  const gp = r.income - r.costs;
-                  const m = marginStatus(r.gm);
+                {units.map((u) => {
+                  const income = u.quoteValue ?? 0;
+                  const costs =
+                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const gp = income - costs;
+                  const pct = income > 0 ? (gp / income) * 100 : 0;
+                  const m = marginStatus(pct);
+                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
-                    <TableRow key={r.job}>
+                    <TableRow key={u.n}>
+                      <TableCell className="font-mono text-xs">{jobNum}</TableCell>
                       <TableCell>
-                        <div className="font-medium leading-tight">{r.client}</div>
-                        <div className="text-xs text-muted-foreground leading-tight">{r.site}</div>
+                        <div className="font-medium leading-tight">{u.client}</div>
+                        {u.jobSite && <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>}
                       </TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.income)}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(r.costs)}</TableCell>
-                      <TableCell className="text-right">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium ${m.tone}`}>{r.gm}%</TableCell>
+                      <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
+                      <TableCell className="text-right tabular-nums">${fmtMoney(costs)}</TableCell>
+                      <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{pct.toFixed(1)}%</TableCell>
                       <TableCell className={m.tone}>{m.label}</TableCell>
                     </TableRow>
                   );
@@ -748,19 +755,26 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {JOB_ROWS.map((r) => {
-              const gp = r.income - r.costs;
-              const m = marginStatus(r.gm);
+            {units.map((u) => {
+              const income = u.quoteValue ?? 0;
+              const costs =
+                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const gp = income - costs;
+              const pct = income > 0 ? (gp / income) * 100 : 0;
+              const m = marginStatus(pct);
+              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
-                <div key={r.job} className="rounded-md border p-3 space-y-1 text-sm">
+                <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{r.job}</span>
+                    <span className="font-mono text-xs">{jobNum}</span>
                     <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
                   </div>
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(r.income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(r.costs)}</span></div>
+                  <div className="font-medium">{u.client}</div>
+                  {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
+                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{r.gm}%</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{pct.toFixed(1)}%</span></div>
                 </div>
               );
             })}
