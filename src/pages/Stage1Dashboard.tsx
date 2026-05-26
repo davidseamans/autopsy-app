@@ -1458,9 +1458,26 @@ export default function Stage1Dashboard() {
 
   const handleSaveQuoteDetail = (patch: Partial<Quote>) => {
     if (!quoteDetailNumber) return;
+    const original = quotes.find((q) => q.number === quoteDetailNumber);
     setQuotes((prev) =>
       prev.map((p) => (p.number === quoteDetailNumber ? { ...p, ...patch } : p)),
     );
+    // Flow-through to the linked job if this quote was already converted.
+    if (original?.converted && original.convertedToN != null) {
+      setUnits((prev) =>
+        prev.map((u) => {
+          if (u.n !== original.convertedToN) return u;
+          const next = { ...u };
+          if (patch.client !== undefined) next.client = patch.client;
+          if (patch.site !== undefined) next.jobSite = patch.site || undefined;
+          if (patch.value !== undefined) {
+            next.quoteValue = patch.value;
+            next.projectedRevenue = patch.value;
+          }
+          return next;
+        }),
+      );
+    }
     setQuoteDetailOpen(false);
   };
 
