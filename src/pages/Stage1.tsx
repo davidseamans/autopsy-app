@@ -304,6 +304,13 @@ type ProofType =
 
 type GateStatus = "Locked" | "Conditional" | "Unlocked";
 
+export interface CostLine {
+  id: string;
+  description: string;
+  amount?: number;
+  gstIncluded: boolean;
+}
+
 export interface ProofUnit {
   n: number;
   client: string;
