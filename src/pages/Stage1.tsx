@@ -1013,11 +1013,13 @@ export function JobDetailSheet({
 
   // Computed GM from invoice + direct costs (falls back to legacy GM on unit)
   const invAmt = draft.invoiceAmount ?? 0;
-  const costs =
+  const linesTotal = (draft.costLines ?? []).reduce((s, l) => s + (l.amount ?? 0), 0);
+  const legacyTotal =
     (draft.costMaterials ?? 0) +
     (draft.costLabour ?? 0) +
     (draft.costSubcontractors ?? 0) +
     (draft.costOther ?? 0);
+  const costs = draft.costLines && draft.costLines.length > 0 ? linesTotal : legacyTotal;
   const grossProfit = invAmt - costs;
   const computedGm = invAmt > 0 ? Math.round((grossProfit / invAmt) * 100) : null;
   const displayGm = computedGm ?? draft.gm;
