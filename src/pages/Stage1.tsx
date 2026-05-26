@@ -1103,7 +1103,15 @@ export function JobDetailSheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && unit && JSON.stringify(draft) !== JSON.stringify(unit) && (!isReviewed || correctionReason.trim())) {
+          try { save(); } catch { /* noop */ }
+        }
+        onOpenChange(o);
+      }}
+    >
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <div className="flex items-start justify-between gap-3 pr-10">
