@@ -65,11 +65,7 @@ const isoToAU = (iso: string) => {
 // Baseline figures for fields that aren't captured by Log Activity (leads, jobs)
 // plus a static baseline note. Attempts / contacts / quotes are aggregated from
 // dated activity records on top of this baseline.
-const METHOD_BASELINE = [
-  { method: "Phone Outreach", attempts: 18, contacts: 7, leads: 5, quotes: 2, jobs: 1, notes: "Best mornings 8–10am" },
-  { method: "Referral Request", attempts: 6, contacts: 4, leads: 4, quotes: 3, jobs: 2, notes: "Highest converting" },
-  { method: "Local Flyer", attempts: 150, contacts: 3, leads: 2, quotes: 1, jobs: 0, notes: "Slow conversion" },
-];
+const METHOD_BASELINE: { method: string; attempts: number; contacts: number; leads: number; quotes: number; jobs: number; notes: string }[] = [];
 const METHOD_OPTIONS = [
   "Phone Outreach",
   "Referral Request",
@@ -125,24 +121,9 @@ type Quote = {
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
 // plus a handful of in-flight / rejected quotes for the conversion board.
-const SEED_QUOTES: Quote[] = [
-  { number: "Q-1001", client: "M. Patel",      site: "Unit 4, Buderim",                value: 1200, status: "Accepted", quoteDate: "2026-04-28", followUp: "", reason: "", converted: true, convertedToN: 1, convertedJobNumber: "J-1001", method: "Referral Request", createdAt: "2026-04-28T09:00:00Z" },
-  { number: "Q-1002", client: "K. Nguyen",     site: "12 Beach Rd, Mooloolaba",        value: 1850, status: "Accepted", quoteDate: "2026-05-01", followUp: "", reason: "", converted: true, convertedToN: 2, convertedJobNumber: "J-1002", method: "Phone Outreach", createdAt: "2026-05-01T09:00:00Z" },
-  { number: "Q-1003", client: "Sunrise Cafe",  site: "Main Street kitchen clean",      value: 2400, status: "Accepted", quoteDate: "2026-05-06", followUp: "", reason: "", converted: true, convertedToN: 3, convertedJobNumber: "J-1003", method: "Referral Request", createdAt: "2026-05-06T09:00:00Z" },
-  { number: "Q-1004", client: "QML",           site: "Maroochydore Service Centre",    value: 5000, status: "Accepted", quoteDate: "2026-05-18", followUp: "", reason: "", converted: true, convertedToN: 4, convertedJobNumber: "J-1004", method: "Referral Request", createdAt: "2026-05-18T09:00:00Z" },
-  { number: "Q-1005", client: "QML",           site: "Nambour Service Centre",         value: 6050, status: "Accepted", quoteDate: "2026-05-22", followUp: "", reason: "", converted: true, convertedToN: 5, convertedJobNumber: "J-1005", method: "Referral Request", createdAt: "2026-05-22T09:00:00Z" },
-  { number: "Q-1006", client: "Coastal Dental",site: "Mooloolaba reception fit-out",   value: 3200, status: "Sent",     quoteDate: "2026-05-20", followUp: "2026-05-28", reason: "", method: "Phone Outreach", createdAt: "2026-05-20T09:00:00Z" },
-  { number: "Q-1007", client: "QML",           site: "Caloundra Service Centre",       value: 5800, status: "Sent",     quoteDate: "2026-05-22", followUp: "2026-05-29", reason: "", method: "Referral Request", createdAt: "2026-05-22T09:00:00Z" },
-  { number: "Q-0998", client: "B. Adams",      site: "Caloundra residence",            value: 800,  status: "Rejected", quoteDate: "2026-04-12", followUp: "", reason: "Too expensive", method: "Local Flyer", createdAt: "2026-04-12T09:00:00Z" },
-];
+const SEED_QUOTES: Quote[] = [];
 
-const JOB_ROWS = [
-  { job: "J-001", client: "M. Patel", site: "Unit 4, Buderim", status: "Paid", start: "2026-05-04", income: 1200, costs: 864, gm: 28, evidence: "Attached" },
-  { job: "J-002", client: "K. Nguyen", site: "12 Beach Rd, Mooloolaba", status: "Paid", start: "2026-05-08", income: 1850, costs: 1443, gm: 22, evidence: "Attached" },
-  { job: "J-003", client: "Sunrise Cafe", site: "Main Street kitchen clean", status: "In Progress", start: "2026-05-12", income: 2400, costs: 1872, gm: 22, evidence: "Missing" },
-  { job: "J-004", client: "QML", site: "Maroochydore Service Centre", status: "Scheduled", start: "2026-05-26", income: 5000, costs: 3250, gm: 35, evidence: "Attached" },
-  { job: "J-005", client: "QML", site: "Nambour Service Centre", status: "Scheduled", start: "2026-05-30", income: 6050, costs: 3932.5, gm: 35, evidence: "Missing" },
-];
+const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
