@@ -1327,23 +1327,36 @@ export default function Stage1Dashboard() {
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
   const methodRows = useMemo(() => {
-    return METHOD_BASELINE.map((b) => {
-      const acts = activities.filter((a) => a.method === b.method);
-      const addAtt = acts.reduce((s, a) => s + (a.attempts || 0), 0);
-      const addCon = acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
-      const addQt  = acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
-      const extraNote = acts.length
-        ? `${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`
-        : "";
+    const methods = new Set<string>();
+    METHOD_BASELINE.forEach((b) => methods.add(b.method));
+    activities.forEach((a) => a.method && methods.add(a.method));
+    quotes.forEach((q) => q.method && methods.add(q.method));
+    return Array.from(methods).map((method) => {
+      const baseline = METHOD_BASELINE.find((b) => b.method === method);
+      const acts = activities.filter((a) => a.method === method);
+      const qs = quotes.filter((q) => q.method === method);
+      const jobsCount = units.filter((u) => {
+        const src = quotes.find((q) => q.number === u.sourceQuoteNumber);
+        return src?.method === method;
+      }).length;
+      const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
+      const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
+      const quotesSum = (baseline?.quotes ?? 0) + acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
+      const leads = (baseline?.leads ?? 0) + acts.length;
+      const noteParts: string[] = [];
+      if (baseline?.notes) noteParts.push(baseline.notes);
+      if (acts.length) noteParts.push(`${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`);
       return {
-        ...b,
-        attempts: b.attempts + addAtt,
-        contacts: b.contacts + addCon,
-        quotes: b.quotes + addQt,
-        notes: extraNote ? `${b.notes} · ${extraNote}` : b.notes,
+        method,
+        attempts,
+        contacts,
+        leads,
+        quotes: quotesSum,
+        jobs: (baseline?.jobs ?? 0) + jobsCount,
+        notes: noteParts.join(" · "),
       };
     });
-  }, [activities]);
+  }, [activities, quotes, units]);
 
   const openReport = (n: number) => {
     setReportN(n);
