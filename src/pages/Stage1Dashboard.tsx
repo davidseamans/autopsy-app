@@ -1336,7 +1336,7 @@ export default function Stage1Dashboard() {
       const acts = activities.filter((a) => a.method === method);
       const qs = quotes.filter((q) => q.method === method);
       const jobsCount = units.filter((u) => {
-        const src = quotes.find((q) => q.number === u.sourceQuoteNumber);
+        const src = quotes.find((q) => q.number === u.sourceQuote);
         return src?.method === method;
       }).length;
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
