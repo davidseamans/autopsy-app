@@ -89,6 +89,8 @@ export default function BusinessSetup() {
           });
         }
         setSavedVerified(isBusinessVerified(data as any));
+        const pid = (data as any).id;
+        if (pid) setHistory(await fetchIdentityAudit(pid));
       }
       setLoading(false);
     })();
