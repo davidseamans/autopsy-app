@@ -25,78 +25,74 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const items = [
-  { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
-  { title: "Launchpad", url: "/launchpad", icon: Rocket },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Accounts", url: "/accounts", icon: Building2 },
-  { title: "Pipeline", url: "/pipeline", icon: GitBranch },
-  { title: "Quotes", url: "/quotes", icon: FileText },
-  { title: "Jobs", url: "/jobs", icon: Briefcase },
-  { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
-  { title: "Business Setup", url: "/business-setup", icon: IdCard },
-];
+type NavItem = { title: string; url: string; icon: typeof Stethoscope };
+type NavSection = { label: string | null; items: NavItem[] };
 
-const archiveItems = [
-  { title: "Preliminary First 5 Jobs Dashboard", url: "/stage-1-archived", icon: Archive },
+const navSections: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
+      { title: "Launchpad", url: "/launchpad", icon: Rocket },
+    ],
+  },
+  {
+    label: "Core",
+    items: [
+      { title: "Leads", url: "/leads", icon: Users },
+      { title: "Accounts", url: "/accounts", icon: Building2 },
+      { title: "Pipeline", url: "/pipeline", icon: GitBranch },
+      { title: "Quotes", url: "/quotes", icon: FileText },
+      { title: "Jobs", url: "/jobs", icon: Briefcase },
+    ],
+  },
+  {
+    label: "Stage 1",
+    items: [
+      { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
+      { title: "Business Details", url: "/business-setup", icon: IdCard },
+    ],
+  },
+  {
+    label: "Archive / Legacy",
+    items: [
+      { title: "Preliminary First 5 Jobs Dashboard", url: "/stage-1-archived", icon: Archive },
+    ],
+  },
 ];
 
 function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>CRM</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-2",
-                          isActive &&
-                            "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
-                        )
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Archive / Legacy</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {archiveItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-2",
-                          isActive &&
-                            "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
-                        )
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {navSections.map((section, i) => (
+          <SidebarGroup key={section.label ?? `top-${i}`}>
+            {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-2",
+                            isActive &&
+                              "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
+                          )
+                        }
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
     </Sidebar>
   );
