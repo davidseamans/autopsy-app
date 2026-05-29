@@ -88,6 +88,7 @@ import {
   Save,
   Clock,
 } from "lucide-react";
+import { Loader2, Receipt } from "lucide-react";
 
 // ----- Critical test state (acceptance fixture) -----
 const TEST_STATE = {
