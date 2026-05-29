@@ -39,7 +39,7 @@ import {
   FileText,
   Briefcase,
   TrendingUp,
-  Lock,
+  CheckCircle2,
   IdCard,
   Loader2,
   Plus,
