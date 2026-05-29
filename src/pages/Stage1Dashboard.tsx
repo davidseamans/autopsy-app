@@ -1792,10 +1792,24 @@ export default function Stage1Dashboard() {
         open={logActOpen}
         onOpenChange={setLogActOpen}
         nextQuoteNumberStart={nextQuoteNumberStart}
-        onSave={(a, newQuotes) => {
+        onSave={async (a, newQuotes) => {
           setActivities((prev) => [...prev, a]);
-          if (newQuotes.length) setQuotes((prev) => [...newQuotes, ...prev]);
           setLogActOpen(false);
+          for (const nq of newQuotes) {
+            const res = await createQuote({
+              client: nq.client,
+              site: nq.site,
+              value: nq.value,
+              followUp: nq.followUp,
+              quoteNotes: nq.notes,
+            });
+            if (res.ok && res.quote) {
+              const saved = { ...res.quote, method: nq.method, sourceActivityId: nq.sourceActivityId, sourceActivityDate: a.activity_date };
+              setQuotes((prev) => [saved, ...prev]);
+            } else {
+              toast({ title: "Quote not saved", description: res.error ?? "Backend write failed." });
+            }
+          }
         }}
       />
       <DetailedJobCostReport
