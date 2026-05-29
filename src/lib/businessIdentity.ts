@@ -17,6 +17,38 @@ export type BusinessProfile = {
 
 const REQUIRED: (keyof BusinessProfile)[] = ["business_name", "contact_name", "phone", "email", "abn"];
 
+export type IdentityAuditRow = {
+  id: string;
+  business_identity_profile_id: string | null;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+  changed_by: string | null;
+};
+
+/**
+ * Fetch the change history for a profile, newest first.
+ * Returns [] if the audit table is missing or empty (fails soft).
+ */
+export async function fetchIdentityAudit(profileId: string): Promise<IdentityAuditRow[]> {
+  try {
+    const { data, error } = await supabase
+      .from("business_identity_audit")
+      .select("*")
+      .eq("business_identity_profile_id", profileId)
+      .order("changed_at", { ascending: false });
+    if (error) {
+      console.warn("[business_identity_audit] fetch failed:", error.message);
+      return [];
+    }
+    return (data ?? []) as IdentityAuditRow[];
+  } catch (e) {
+    console.warn("[business_identity_audit] fetch threw:", e);
+    return [];
+  }
+}
+
 /** A business is Verified only when every gate passes. */
 export function isBusinessVerified(p: BusinessProfile | null | undefined): boolean {
   if (!p) return false;
