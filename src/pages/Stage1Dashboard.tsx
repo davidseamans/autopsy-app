@@ -1517,8 +1517,8 @@ export default function Stage1Dashboard() {
           )}
           {bd.loaded && bd.complete && (
             <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 gap-1.5 py-1.5 px-3">
-              <Lock className="h-3.5 w-3.5" />
-              Business details locked
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Business Details Verified
             </Badge>
           )}
         </div>
@@ -1526,7 +1526,7 @@ export default function Stage1Dashboard() {
 
       {bd.loaded && bd.complete && (
         <p className="text-xs text-muted-foreground -mt-2">
-          Business details are locked. Contact support to request a change.
+          Business Details have been verified and may be updated if required. Business Details remain available through the Business Details menu.
         </p>
       )}
 
