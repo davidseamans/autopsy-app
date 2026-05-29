@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   XCircle,
+  History,
 } from "lucide-react";
 import { isValidAbnChecksum, normalizeAbn, formatAbn } from "@/lib/abn";
 import { lookupAbr, type AbrLookupResult } from "@/lib/abrLookup";
