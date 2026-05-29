@@ -6,6 +6,8 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase } from "@/lib/supabase";
+import { provisionJob } from "@/lib/jobProvisioning";
+import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1403,13 +1405,27 @@ export default function Stage1Dashboard() {
     return max + 1;
   }, [quotes]);
 
-  const handleAcceptAndConvert = (q: Quote) => {
+  const handleAcceptAndConvert = async (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
     const maxJobNum = units.reduce((m, u) => {
       const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
       return isNaN(num) ? m : Math.max(m, num);
     }, 1000);
     const jobNumber = `J-${maxJobNum + 1}`;
+
+    // Create the real Core entity chain and a genuine job row.
+    const provisioned = await provisionJob({
+      client: q.client,
+      site: q.site,
+      value: q.value,
+      quoteNotes: q.notes,
+    });
+    if (provisioned.ok) {
+      toast({ title: "Job created", description: `${q.client} — job record saved.` });
+    } else {
+      toast({ title: "Job created locally", description: `Not saved to database: ${provisioned.error}` });
+    }
+
     const unit: ProofUnit = {
       n: nextN,
       jobNumber,
@@ -1423,6 +1439,11 @@ export default function Stage1Dashboard() {
       quoteValue: q.value,
       projectedRevenue: q.value,
       sourceQuote: q.number,
+      jobId: provisioned.jobId,
+      accountId: provisioned.accountId,
+      siteId: provisioned.siteId,
+      dbQuoteId: provisioned.quoteId,
+      dbQuoteNumber: provisioned.quoteNumber,
     };
     setUnits((prev) => [...prev, unit]);
     setQuotes((prev) =>
