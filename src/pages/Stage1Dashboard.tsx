@@ -6,7 +6,12 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase } from "@/lib/supabase";
-import { provisionJob } from "@/lib/jobProvisioning";
+import {
+  createQuote,
+  setQuoteOutcome,
+  convertQuoteToJob,
+  loadStage1Board,
+} from "@/lib/jobProvisioning";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,7 +93,7 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_STATUSES = ["Sent", "Accepted", "Rejected"] as const;
+const QUOTE_STATUSES = ["Sent", "Accepted", "Declined", "Expired", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 const REJECTION_REASONS = [
   "Too expensive",
@@ -119,6 +124,10 @@ type Quote = {
   method?: string;
   notes?: string;
   createdAt?: string;
+  // Real Core linkage (quotes table)
+  dbId?: string;
+  accountId?: string;
+  siteId?: string;
 };
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
@@ -866,7 +875,8 @@ function QuoteActivityDialog({
     }
   }, [open, quote]);
 
-  const canSave = !!quote && (status !== "Rejected" || !!reason);
+  const canSave =
+    !!quote && ((status !== "Rejected" && status !== "Declined") || !!reason);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -897,12 +907,14 @@ function QuoteActivityDialog({
             >
               <option value="Sent">Sent</option>
               <option value="Accepted">Accepted</option>
+              <option value="Declined">Declined</option>
+              <option value="Expired">Expired</option>
               <option value="Rejected">Rejected</option>
             </select>
           </div>
-          {status === "Rejected" && (
+          {(status === "Rejected" || status === "Declined") && (
             <div className="space-y-1.5">
-              <Label htmlFor="qa-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <Label htmlFor="qa-reason">Reason <span className="text-destructive">*</span></Label>
               <select
                 id="qa-reason"
                 value={reason}
@@ -1328,6 +1340,45 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
+  // Load the persisted Core quote board + job ledger so Stage 1 survives refresh.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { quotes: dbQuotes, jobs: dbJobs } = await loadStage1Board();
+        if (!active) return;
+        if (dbQuotes.length) {
+          setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
+        }
+        if (dbJobs.length) {
+          setUnits(
+            dbJobs.map((j, i) => ({
+              n: i + 1,
+              jobNumber: j.jobNumber,
+              client: j.client,
+              jobSite: j.site || undefined,
+              proofType: "Completed Job",
+              status: "Scheduled",
+              gm: 0,
+              evidence: false,
+              quoteValue: j.value,
+              projectedRevenue: j.value,
+              sourceQuote: j.sourceQuote,
+              jobId: j.jobId,
+              accountId: j.accountId,
+              siteId: j.siteId,
+              dbQuoteId: j.dbQuoteId,
+              dbQuoteNumber: j.dbQuoteNumber,
+            })),
+          );
+        }
+      } catch {
+        /* board stays empty; nothing persisted yet */
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   const methodRows = useMemo(() => {
     const methods = new Set<string>();
     METHOD_BASELINE.forEach((b) => methods.add(b.method));
@@ -1406,23 +1457,25 @@ export default function Stage1Dashboard() {
 
   const handleAcceptAndConvert = async (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
-    const maxJobNum = units.reduce((m, u) => {
-      const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
-      return isNaN(num) ? m : Math.max(m, num);
-    }, 1000);
-    const jobNumber = `J-${maxJobNum + 1}`;
-
-    // Create the real Core entity chain and a genuine job row.
-    const provisioned = await provisionJob({
-      client: q.client,
-      site: q.site,
-      value: q.value,
-      quoteNotes: q.notes,
-    });
-    if (provisioned.ok) {
-      toast({ title: "Job created", description: `${q.client} — job record saved.` });
+    // Convert the EXISTING accepted quote (lineage preserved) — no duplicate chain.
+    let jobNumber = `J-${1000 + nextN}`;
+    let jobId: string | undefined;
+    if (q.dbId && q.accountId && q.siteId) {
+      const res = await convertQuoteToJob({ quoteId: q.dbId, accountId: q.accountId, siteId: q.siteId });
+      if (res.ok) {
+        jobId = res.jobId;
+        if (res.jobNumber) jobNumber = res.jobNumber;
+        toast({ title: "Job created", description: `${q.client} — converted from ${q.number}.` });
+      } else {
+        toast({ title: "Conversion failed", description: res.error });
+        return;
+      }
     } else {
-      toast({ title: "Job created locally", description: `Not saved to database: ${provisioned.error}` });
+      toast({
+        title: "Cannot persist — backend required",
+        description: "This quote has no saved database id. Re-create it from Log Activity so it persists.",
+      });
+      return;
     }
 
     const unit: ProofUnit = {
@@ -1438,11 +1491,11 @@ export default function Stage1Dashboard() {
       quoteValue: q.value,
       projectedRevenue: q.value,
       sourceQuote: q.number,
-      jobId: provisioned.jobId,
-      accountId: provisioned.accountId,
-      siteId: provisioned.siteId,
-      dbQuoteId: provisioned.quoteId,
-      dbQuoteNumber: provisioned.quoteNumber,
+      jobId,
+      accountId: q.accountId,
+      siteId: q.siteId,
+      dbQuoteId: q.dbId,
+      dbQuoteNumber: q.number,
     };
     setUnits((prev) => [...prev, unit]);
     setQuotes((prev) =>
@@ -1454,15 +1507,24 @@ export default function Stage1Dashboard() {
     );
   };
 
-  const handleQuoteActivitySave = (q: Quote, newStatus: QuoteStatus, reason: string) => {
+  const handleQuoteActivitySave = async (q: Quote, newStatus: QuoteStatus, reason: string) => {
     if (q.converted) return;
     if (newStatus === "Accepted") {
-      handleAcceptAndConvert(q);
+      await handleAcceptAndConvert(q);
     } else {
+      if (q.dbId) {
+        const res = await setQuoteOutcome(q.dbId, newStatus, reason);
+        if (!res.ok) {
+          toast({ title: "Could not save outcome", description: res.error });
+          return;
+        }
+      } else {
+        toast({ title: "Cannot persist — backend required", description: "Quote has no saved database id." });
+      }
       setQuotes((prev) =>
         prev.map((p) =>
           p.number === q.number
-            ? { ...p, status: newStatus, reason: newStatus === "Rejected" ? reason : "" }
+            ? { ...p, status: newStatus, reason: (newStatus === "Rejected" || newStatus === "Declined") ? reason : "" }
             : p,
         ),
       );
@@ -1733,10 +1795,24 @@ export default function Stage1Dashboard() {
         open={logActOpen}
         onOpenChange={setLogActOpen}
         nextQuoteNumberStart={nextQuoteNumberStart}
-        onSave={(a, newQuotes) => {
+        onSave={async (a, newQuotes) => {
           setActivities((prev) => [...prev, a]);
-          if (newQuotes.length) setQuotes((prev) => [...newQuotes, ...prev]);
           setLogActOpen(false);
+          for (const nq of newQuotes) {
+            const res = await createQuote({
+              client: nq.client,
+              site: nq.site,
+              value: nq.value,
+              followUp: nq.followUp,
+              quoteNotes: nq.notes,
+            });
+            if (res.ok && res.quote) {
+              const saved = { ...res.quote, method: nq.method, sourceActivityId: nq.sourceActivityId, sourceActivityDate: a.activity_date };
+              setQuotes((prev) => [saved, ...prev]);
+            } else {
+              toast({ title: "Quote not saved", description: res.error ?? "Backend write failed." });
+            }
+          }
         }}
       />
       <DetailedJobCostReport
