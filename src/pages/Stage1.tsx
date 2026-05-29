@@ -1492,6 +1492,7 @@ export function JobDetailSheet({
   const [editGateOpen, setEditGateOpen] = useState(false);
   const [payEvents, setPayEvents] = useState<RevenueEventRow[]>([]);
   const [payControl, setPayControl] = useState<RevenueControlRow | null>(null);
+  const [handoverOpen, setHandoverOpen] = useState(false);
   useEffect(() => {
     setDraft(unit);
     setMode("edit");
