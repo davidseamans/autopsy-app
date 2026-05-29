@@ -1186,13 +1186,24 @@ export function JobDetailSheet({
   const paymentProofOk = !!draft.paymentProofName;
   const cashRequiresProof = draft.paymentMethod === "Cash with Receipt" && !paymentProofOk;
 
-  // Outstanding = quote/contract value - payment received
-  const quoteVal = draft.quoteValue ?? 0;
-  const paidAmt = draft.paymentAmount ?? 0;
-  const outstanding = quoteVal - paidAmt;
+  // Payment figures are derived from revenue_events / job_revenue_control — the single
+  // source of truth. Nothing about money received is stored on the local proof draft.
+  const eventsTotal = payEvents.reduce((s, e) => s + Number(e.amount ?? 0), 0);
+  const paymentReceived =
+    payControl?.revenue_collected != null ? Number(payControl.revenue_collected) : eventsTotal;
+  const approvedValue =
+    payControl?.approved_job_value != null && Number(payControl.approved_job_value) > 0
+      ? Number(payControl.approved_job_value)
+      : draft.quoteValue ?? 0;
+  const quoteVal = approvedValue;
+  const outstanding =
+    payControl?.outstanding_balance != null
+      ? Number(payControl.outstanding_balance)
+      : approvedValue - paymentReceived;
+  const collectionStatus = payControl?.collection_status ?? null;
   const paidStatusMissingAmount =
-    draft.paymentStatus === "Paid" && (draft.paymentAmount == null || draft.paymentAmount === 0);
-  const paymentExceedsQuote = quoteVal > 0 && paidAmt > quoteVal;
+    draft.paymentStatus === "Paid" && paymentReceived === 0;
+  const paymentExceedsQuote = approvedValue > 0 && paymentReceived > approvedValue;
 
   function save() {
     const original = unit!;
