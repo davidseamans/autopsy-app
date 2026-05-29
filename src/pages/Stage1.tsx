@@ -1625,10 +1625,6 @@ export function JobDetailSheet({
                 <Input type="date" value={draft.paymentDate ?? ""} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Payment Amount</Label>
-                <Input type="number" value={draft.paymentAmount ?? ""} onChange={(e) => setDraft({ ...draft, paymentAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
                 <Label className="text-xs">Payment Method</Label>
                 <Select value={draft.paymentMethod ?? ""} onValueChange={(v) => setDraft({ ...draft, paymentMethod: v as ProofUnit["paymentMethod"] })}>
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
@@ -1639,6 +1635,31 @@ export function JobDetailSheet({
               </div>
             </div>
             {fileInput("Attach Payment Proof (receipt, remittance, redacted screenshot)", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
+
+            {/* Live payment figures — derived from revenue_events for this job */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-md border bg-muted/20 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Received</div>
+                <div className="font-semibold tabular-nums">${paymentReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Outstanding</div>
+                <div className={`font-semibold tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>{`${outstanding < 0 ? "-" : ""}$${Math.abs(outstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</div>
+                <div className={`font-semibold text-xs ${collectionStatusLabel(collectionStatus).tone}`}>{collectionStatusLabel(collectionStatus).label}</div>
+              </div>
+            </div>
+
+            {/* Record a payment — writes to revenue_events against this job_id */}
+            <PaymentRecorder jobId={draft.jobId} disabled={isLocked} onRecorded={loadPayments} />
+
+            {/* Payment history for this job */}
+            <div className="space-y-1">
+              <div className="text-xs font-medium">Payment History</div>
+              <PaymentHistoryList rows={payEvents} />
+            </div>
           </div>
 
           {/* 5. Status & Next Action */}
