@@ -1415,23 +1415,25 @@ export default function Stage1Dashboard() {
 
   const handleAcceptAndConvert = async (q: Quote) => {
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
-    const maxJobNum = units.reduce((m, u) => {
-      const num = u.jobNumber ? parseInt(u.jobNumber.replace(/^J-/, ""), 10) : 1000 + u.n;
-      return isNaN(num) ? m : Math.max(m, num);
-    }, 1000);
-    const jobNumber = `J-${maxJobNum + 1}`;
-
-    // Create the real Core entity chain and a genuine job row.
-    const provisioned = await provisionJob({
-      client: q.client,
-      site: q.site,
-      value: q.value,
-      quoteNotes: q.notes,
-    });
-    if (provisioned.ok) {
-      toast({ title: "Job created", description: `${q.client} — job record saved.` });
+    // Convert the EXISTING accepted quote (lineage preserved) — no duplicate chain.
+    let jobNumber = `J-${1000 + nextN}`;
+    let jobId: string | undefined;
+    if (q.dbId && q.accountId && q.siteId) {
+      const res = await convertQuoteToJob({ quoteId: q.dbId, accountId: q.accountId, siteId: q.siteId });
+      if (res.ok) {
+        jobId = res.jobId;
+        if (res.jobNumber) jobNumber = res.jobNumber;
+        toast({ title: "Job created", description: `${q.client} — converted from ${q.number}.` });
+      } else {
+        toast({ title: "Conversion failed", description: res.error });
+        return;
+      }
     } else {
-      toast({ title: "Job created locally", description: `Not saved to database: ${provisioned.error}` });
+      toast({
+        title: "Cannot persist — backend required",
+        description: "This quote has no saved database id. Re-create it from Log Activity so it persists.",
+      });
+      return;
     }
 
     const unit: ProofUnit = {
@@ -1447,11 +1449,11 @@ export default function Stage1Dashboard() {
       quoteValue: q.value,
       projectedRevenue: q.value,
       sourceQuote: q.number,
-      jobId: provisioned.jobId,
-      accountId: provisioned.accountId,
-      siteId: provisioned.siteId,
-      dbQuoteId: provisioned.quoteId,
-      dbQuoteNumber: provisioned.quoteNumber,
+      jobId,
+      accountId: q.accountId,
+      siteId: q.siteId,
+      dbQuoteId: q.dbId,
+      dbQuoteNumber: q.number,
     };
     setUnits((prev) => [...prev, unit]);
     setQuotes((prev) =>
@@ -1463,15 +1465,24 @@ export default function Stage1Dashboard() {
     );
   };
 
-  const handleQuoteActivitySave = (q: Quote, newStatus: QuoteStatus, reason: string) => {
+  const handleQuoteActivitySave = async (q: Quote, newStatus: QuoteStatus, reason: string) => {
     if (q.converted) return;
     if (newStatus === "Accepted") {
-      handleAcceptAndConvert(q);
+      await handleAcceptAndConvert(q);
     } else {
+      if (q.dbId) {
+        const res = await setQuoteOutcome(q.dbId, newStatus, reason);
+        if (!res.ok) {
+          toast({ title: "Could not save outcome", description: res.error });
+          return;
+        }
+      } else {
+        toast({ title: "Cannot persist — backend required", description: "Quote has no saved database id." });
+      }
       setQuotes((prev) =>
         prev.map((p) =>
           p.number === q.number
-            ? { ...p, status: newStatus, reason: newStatus === "Rejected" ? reason : "" }
+            ? { ...p, status: newStatus, reason: (newStatus === "Rejected" || newStatus === "Declined") ? reason : "" }
             : p,
         ),
       );
