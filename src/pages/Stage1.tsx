@@ -1368,7 +1368,7 @@ export function JobDetailSheet({
             {fieldRow("Proof Type", draft.proofType)}
             {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
             {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
-            {fieldRow("Payment Received", draft.paymentAmount != null ? `$${draft.paymentAmount.toLocaleString()}` : "$0")}
+            {fieldRow("Payment Received", `$${paymentReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
             {fieldRow(
               "Outstanding",
               quoteVal > 0 ? (
@@ -1376,6 +1376,12 @@ export function JobDetailSheet({
                   {`${outstanding < 0 ? "-" : ""}$${Math.abs(outstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               ) : "—",
+            )}
+            {fieldRow(
+              "Collection Status",
+              <span className={collectionStatusLabel(collectionStatus).tone}>
+                {collectionStatusLabel(collectionStatus).label}
+              </span>,
             )}
             {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
           </div>
