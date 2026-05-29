@@ -18,14 +18,16 @@ export interface WriteResult {
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // ===== Revenue events (Payment Proof) — table: revenue_events =====
-// Real columns: id, job_id, amount, source, reference, created_at
-// (there is NO revenue_type column).
+// Verified live columns: id, job_id, amount, source, reference, revenue_type,
+// created_at. RLS ALLOWS inserts via the publishable key (an empty insert fails
+// only on the job_id NOT NULL constraint, not on RLS) — Payment Proof persists.
 export interface RevenueEventRow {
   id: string;
   job_id: string;
   amount: number;
   source: string | null;
   reference: string | null;
+  revenue_type: string | null;
   created_at: string;
 }
 
@@ -59,16 +61,92 @@ export async function recordPayment(input: {
   jobId: string;
   amount: number;
   source: string;
-  typeLabel?: string;
+  revenueType?: string;
   reference?: string;
 }): Promise<WriteResult> {
   try {
-    const refParts = [input.typeLabel, input.reference?.trim()].filter(Boolean);
     const { error } = await supabase.from("revenue_events").insert({
       job_id: input.jobId,
       amount: input.amount,
       source: input.source,
-      reference: refParts.length ? refParts.join(" — ") : null,
+      revenue_type: input.revenueType ?? null,
+      reference: input.reference?.trim() || null,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
+}
+
+// ===== Job Costs — table: job_costs (RLS BLOCKED for insert) =====
+// Verified live columns: id, job_id, labour_cost, consumables_cost, travel_cost,
+// labour_hours, labour_rate, notes, created_at, updated_at.
+// There is NO materials/subcontractor/other column and NO generic amount column.
+// Inserts currently fail with 42501 until an INSERT policy is added (see
+// BACKEND_BLOCKERS / the SQL in the build report).
+export interface JobCostsInput {
+  jobId: string;
+  labourCost?: number;
+  consumablesCost?: number;
+  travelCost?: number;
+  labourHours?: number;
+  labourRate?: number;
+  notes?: string;
+}
+
+export async function saveJobCosts(input: JobCostsInput): Promise<WriteResult> {
+  try {
+    const { error } = await supabase.from("job_costs").insert({
+      job_id: input.jobId,
+      labour_cost: input.labourCost ?? null,
+      consumables_cost: input.consumablesCost ?? null,
+      travel_cost: input.travelCost ?? null,
+      labour_hours: input.labourHours ?? null,
+      labour_rate: input.labourRate ?? null,
+      notes: input.notes?.trim() || null,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
+}
+
+// ===== Customer Invoice / Contract proof — table: documents (RLS BLOCKED) =====
+// Verified live columns: id, file_url, entity_id, entity_type, created_at.
+// documents is POLYMORPHIC — there is NO job_id column. A document is linked to
+// a job via entity_type='job' + entity_id=<jobs.id>. Inserts currently fail with
+// 42501 until an INSERT policy is added.
+export async function saveDocument(input: {
+  jobId: string;
+  fileUrl: string;
+}): Promise<WriteResult> {
+  try {
+    const { error } = await supabase.from("documents").insert({
+      entity_type: "job",
+      entity_id: input.jobId,
+      file_url: input.fileUrl,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: msg(e) };
+  }
+}
+
+// ===== Activity / audit trail — table: audit_log (RLS BLOCKED) =====
+// Verified live columns: id, action, entity, entity_id, created_at.
+// audit_log is a generic trail (action/entity), not a per-job next-action log.
+export async function appendAuditLog(input: {
+  action: string;
+  jobId: string;
+}): Promise<WriteResult> {
+  try {
+    const { error } = await supabase.from("audit_log").insert({
+      action: input.action,
+      entity: "job",
+      entity_id: input.jobId,
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
@@ -362,11 +440,18 @@ export async function updateJobStatus(
 }
 
 // ===== Known backend blockers — surfaced to the operator, never hidden =====
+// Verified live (publishable key) on the external Supabase project. revenue_events,
+// job_value_adjustments, job_handovers and job_referrals are WRITABLE and therefore
+// are NOT listed here. Only genuine blockers remain.
 export const BACKEND_BLOCKERS = {
-  documents: "documents — Row Level Security blocks inserts (needs an INSERT policy).",
-  job_costs: "job_costs — Row Level Security blocks inserts (needs an INSERT policy).",
-  revenue_events: "revenue_events — Row Level Security blocks inserts (needs an INSERT policy).",
-  audit_log: "audit_log — Row Level Security blocks inserts (needs an INSERT policy).",
-  business_expenses: "business_expenses — table does not exist yet (needs to be created).",
-  activity_log: "activity_log — table does not exist yet (needs to be created).",
+  documents:
+    "documents — Row Level Security blocks inserts (42501). Needs an INSERT policy. Linked polymorphically via entity_type='job' + entity_id=job_id.",
+  job_costs:
+    "job_costs — Row Level Security blocks inserts (42501). Needs an INSERT policy.",
+  audit_log:
+    "audit_log — Row Level Security blocks inserts (42501). Needs an INSERT policy.",
+  business_expenses:
+    "business_expenses — table does not exist (PGRST205). Needs to be created.",
+  activity_log:
+    "activity_log — table does not exist (PGRST205). Needs to be created.",
 } as const;
