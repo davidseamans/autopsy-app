@@ -2296,6 +2296,13 @@ export function JobDetailSheet({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Handover + referral capture */}
+          <HandoverDialog
+            jobId={draft.jobId}
+            open={handoverOpen}
+            onOpenChange={setHandoverOpen}
+          />
         </div>
 
         {/* Primary save action — always visible at the bottom of the workspace */}
@@ -2305,12 +2312,15 @@ export function JobDetailSheet({
               <Button
                 variant="outline"
                 className="w-full sm:w-auto"
-                disabled
-                title="Coming soon"
+                disabled={isLocked || !draft.jobId}
+                title={draft.jobId ? "Complete handover and capture referrals" : "Convert a quote to a job first"}
+                onClick={() => setHandoverOpen(true)}
               >
                 <Clock className="h-4 w-4" /> Complete Handover
               </Button>
-              <span className="text-[11px] text-muted-foreground">Coming Soon</span>
+              {!draft.jobId && (
+                <span className="text-[11px] text-muted-foreground">Needs a job record</span>
+              )}
             </div>
             <Button
               className="w-full sm:w-auto"
