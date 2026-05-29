@@ -84,6 +84,8 @@ import {
   Camera,
   Paperclip,
   Plus,
+  Save,
+  Clock,
 } from "lucide-react";
 
 // ----- Critical test state (acceptance fixture) -----
@@ -992,6 +994,35 @@ export function JobDetailSheet({
     setCorrectionReason("");
   }
 
+  // Save Progress — the primary, always-visible save action for this workspace.
+  // Persists the current form values into the dashboard's job record and keeps
+  // the panel open so the operator can carry on working.
+  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
+  const saveDisabled = isLocked || reviewedNeedsReason;
+  function saveProgress() {
+    if (saveDisabled) return;
+    const original = unit!;
+    const changes: { field: string; from: unknown; to: unknown }[] = [];
+    (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
+      if (k === "audit") return;
+      const a = (original as unknown as Record<string, unknown>)[k as string];
+      const b = (draft as unknown as Record<string, unknown>)[k as string];
+      if (JSON.stringify(a) !== JSON.stringify(b)) {
+        changes.push({ field: String(k), from: a, to: b });
+      }
+    });
+    const entry: AuditEntry = {
+      ts: new Date().toISOString(),
+      action: isReviewed ? "corrected" : "updated",
+      reason: isReviewed ? correctionReason || undefined : undefined,
+      changes,
+    };
+    const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
+    setDraft(next);
+    onSave(next);
+    toast({ title: "Progress Saved" });
+  }
+
   // Delete eligibility — only truly empty drafts
   const hasInvoiceProof = !!draft.invoiceDocName || !!draft.invoiceAmount;
   const hasCosts = !!(draft.costMaterials || draft.costLabour || draft.costSubcontractors || draft.costOther);
@@ -1579,6 +1610,35 @@ export function JobDetailSheet({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </div>
+
+        {/* Primary save action — always visible at the bottom of the workspace */}
+        <div className="sticky bottom-0 -mx-6 mt-2 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex flex-col items-center gap-1 sm:items-end">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled
+                title="Coming soon"
+              >
+                <Clock className="h-4 w-4" /> Complete Handover
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Coming Soon</span>
+            </div>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={saveProgress}
+              disabled={saveDisabled}
+            >
+              <Save className="h-4 w-4" /> Save Progress
+            </Button>
+          </div>
+          {reviewedNeedsReason && (
+            <p className="mt-1 text-right text-[11px] text-amber-600">
+              Add a correction reason above to save changes to this reviewed record.
+            </p>
+          )}
         </div>
       </SheetContent>
     </Sheet>
