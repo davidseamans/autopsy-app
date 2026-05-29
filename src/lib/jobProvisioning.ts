@@ -298,7 +298,6 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   const value = Number.isFinite(input.value as number) ? Number(input.value) : 0;
   try {
     const chain = await ensureChain(clientName, address, value);
-    if (!chain.ok) return { ok: false, error: chain.error };
     const { data, error } = await supabase
       .from("quotes")
       .insert({
