@@ -15,7 +15,12 @@ import {
 } from "lucide-react";
 import { isValidAbnChecksum, normalizeAbn, formatAbn } from "@/lib/abn";
 import { lookupAbr, type AbrLookupResult } from "@/lib/abrLookup";
-import { isBusinessVerified, writeIdentityAudit } from "@/lib/businessIdentity";
+import {
+  isBusinessVerified,
+  writeIdentityAudit,
+  fetchIdentityAudit,
+  type IdentityAuditRow,
+} from "@/lib/businessIdentity";
 
 type FormState = {
   business_name: string;
@@ -50,6 +55,7 @@ export default function BusinessSetup() {
   // Originals for audit comparison + saved-verified status
   const [orig, setOrig] = useState<{ business_name: string; abn: string } | null>(null);
   const [savedVerified, setSavedVerified] = useState(false);
+  const [history, setHistory] = useState<IdentityAuditRow[]>([]);
 
   useEffect(() => {
     (async () => {
