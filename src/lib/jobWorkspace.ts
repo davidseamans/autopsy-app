@@ -440,11 +440,18 @@ export async function updateJobStatus(
 }
 
 // ===== Known backend blockers — surfaced to the operator, never hidden =====
+// Verified live (publishable key) on the external Supabase project. revenue_events,
+// job_value_adjustments, job_handovers and job_referrals are WRITABLE and therefore
+// are NOT listed here. Only genuine blockers remain.
 export const BACKEND_BLOCKERS = {
-  documents: "documents — Row Level Security blocks inserts (needs an INSERT policy).",
-  job_costs: "job_costs — Row Level Security blocks inserts (needs an INSERT policy).",
-  revenue_events: "revenue_events — Row Level Security blocks inserts (needs an INSERT policy).",
-  audit_log: "audit_log — Row Level Security blocks inserts (needs an INSERT policy).",
-  business_expenses: "business_expenses — table does not exist yet (needs to be created).",
-  activity_log: "activity_log — table does not exist yet (needs to be created).",
+  documents:
+    "documents — Row Level Security blocks inserts (42501). Needs an INSERT policy. Linked polymorphically via entity_type='job' + entity_id=job_id.",
+  job_costs:
+    "job_costs — Row Level Security blocks inserts (42501). Needs an INSERT policy.",
+  audit_log:
+    "audit_log — Row Level Security blocks inserts (42501). Needs an INSERT policy.",
+  business_expenses:
+    "business_expenses — table does not exist (PGRST205). Needs to be created.",
+  activity_log:
+    "activity_log — table does not exist (PGRST205). Needs to be created.",
 } as const;
