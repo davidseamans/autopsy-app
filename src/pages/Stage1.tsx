@@ -1286,7 +1286,7 @@ export function JobDetailSheet({
   // Delete eligibility — only truly empty drafts
   const hasInvoiceProof = !!draft.invoiceDocName || !!draft.invoiceAmount;
   const hasCosts = !!(draft.costMaterials || draft.costLabour || draft.costSubcontractors || draft.costOther);
-  const hasPayment = !!draft.paymentProofName || !!draft.paymentAmount;
+  const hasPayment = !!draft.paymentProofName || paymentReceived > 0 || payEvents.length > 0;
   const hasGB = (draft.gbExpenses ?? []).length > 0;
   const hasReview = isReviewed;
   const isDraftLike = draft.status === "Draft" || draft.status === "Open";
