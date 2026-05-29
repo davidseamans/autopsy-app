@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { isBusinessVerified } from "@/lib/businessIdentity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,17 +19,6 @@ import {
 
 type SetupStatus = "loading" | "complete" | "incomplete";
 
-const REQUIRED_FIELDS = [
-  "business_name",
-  "contact_name",
-  "phone",
-  "email",
-  "abn",
-  "bank_account_name",
-  "bsb",
-  "account_number",
-];
-
 function StatusPill({ status }: { status: SetupStatus }) {
   if (status === "loading") {
     return (
@@ -40,13 +30,13 @@ function StatusPill({ status }: { status: SetupStatus }) {
   if (status === "complete") {
     return (
       <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600 text-white border-transparent">
-        <CheckCircle2 className="h-3 w-3" /> Complete
+        <CheckCircle2 className="h-3 w-3" /> Verified
       </Badge>
     );
   }
   return (
     <Badge variant="outline" className="gap-1 text-amber-700 border-amber-300 bg-amber-50">
-      <AlertCircle className="h-3 w-3" /> Incomplete
+      <AlertCircle className="h-3 w-3" /> Setup Required
     </Badge>
   );
 }
@@ -66,9 +56,7 @@ export default function Launchpad() {
         setSetupStatus("incomplete");
         return;
       }
-      const allFilled = REQUIRED_FIELDS.every((k) => !!String((data as any)[k] ?? "").trim());
-      const gstOk = !!(data as any).gst_registered_confirmed;
-      setSetupStatus(allFilled && gstOk ? "complete" : "incomplete");
+      setSetupStatus(isBusinessVerified(data as any) ? "complete" : "incomplete");
     })();
   }, []);
 
