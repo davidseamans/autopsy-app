@@ -81,19 +81,19 @@ export default function Launchpad() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-base">1. Complete Business Setup</CardTitle>
+                  <CardTitle className="text-base">1. Business Details</CardTitle>
                   <StatusPill status={setupStatus} />
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Confirm your business identity, ABN, GST status, and bank details. Nothing downstream works
-                  without this gate cleared.
+                  Confirm your business identity and verify an active, GST-registered ABN. Nothing downstream
+                  works without this gate cleared.
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline" size="sm">
                 <Link to="/business-setup">
-                  Go to Business Setup <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  Go to Business Details <ArrowRight className="ml-2 h-3.5 w-3.5" />
                 </Link>
               </Button>
             </CardContent>
