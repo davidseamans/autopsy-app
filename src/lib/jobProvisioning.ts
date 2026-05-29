@@ -210,11 +210,12 @@ const dateToIso = (d?: string) => {
 };
 
 // Reuse-or-create the Account -> Site -> Pipeline chain a quote requires.
+// Throws on any Data API error; callers run inside try/catch.
 async function ensureChain(
   clientName: string,
   address: string,
   value: number,
-): Promise<{ ok: true; accountId: string; siteId: string; pipelineId: string } | { ok: false; error: string }> {
+): Promise<{ accountId: string; siteId: string; pipelineId: string }> {
   // Account
   let accountId: string;
   const { data: existingAcc } = await supabase
@@ -222,7 +223,7 @@ async function ensureChain(
   if (existingAcc?.id) accountId = existingAcc.id as string;
   else {
     const { data, error } = await supabase.from("accounts").insert({ name: clientName }).select("id").single();
-    if (error) return { ok: false, error: `Account: ${error.message}` };
+    if (error) throw new Error(`Account: ${error.message}`);
     accountId = data.id as string;
   }
   // Site
@@ -233,14 +234,14 @@ async function ensureChain(
   else {
     const { data, error } = await supabase
       .from("sites").insert({ account_id: accountId, address, name: clientName }).select("id").single();
-    if (error) return { ok: false, error: `Site: ${error.message}` };
+    if (error) throw new Error(`Site: ${error.message}`);
     siteId = data.id as string;
   }
   // Pipeline
   const { data: pipe, error: pipeErr } = await supabase
     .from("pipeline").insert({ account_id: accountId, site_id: siteId, stage: "lead", value }).select("id").single();
-  if (pipeErr) return { ok: false, error: `Pipeline: ${pipeErr.message}` };
-  return { ok: true, accountId, siteId, pipelineId: pipe.id as string };
+  if (pipeErr) throw new Error(`Pipeline: ${pipeErr.message}`);
+  return { accountId, siteId, pipelineId: pipe.id as string };
 }
 
 // A quote as the Stage 1 board consumes it (decoupled from page-level types).
