@@ -84,6 +84,8 @@ import {
   Camera,
   Paperclip,
   Plus,
+  Save,
+  Clock,
 } from "lucide-react";
 
 // ----- Critical test state (acceptance fixture) -----
