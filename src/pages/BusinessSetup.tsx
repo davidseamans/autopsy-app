@@ -349,6 +349,8 @@ function ChangeHistoryPanel({ rows }: { rows: IdentityAuditRow[] }) {
   };
   const fieldLabel = (f: string) =>
     f === "business_name" ? "Business Name" : f === "abn" ? "ABN" : f;
+  // Newest first, maximum 5 visible.
+  const visible = rows.slice(0, 5);
   return (
     <Card>
       <CardHeader>
@@ -362,14 +364,14 @@ function ChangeHistoryPanel({ rows }: { rows: IdentityAuditRow[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2 font-medium">Changed At</th>
-                <th className="px-4 py-2 font-medium">Field Name</th>
+                <th className="px-4 py-2 font-medium">Date</th>
+                <th className="px-4 py-2 font-medium">Field</th>
                 <th className="px-4 py-2 font-medium">Old Value</th>
                 <th className="px-4 py-2 font-medium">New Value</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {visible.map((r) => (
                 <tr key={r.id} className="border-b last:border-0">
                   <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">{fmt(r.changed_at)}</td>
                   <td className="px-4 py-2">{fieldLabel(r.field_name)}</td>
