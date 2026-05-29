@@ -69,6 +69,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -332,6 +333,12 @@ export interface ProofUnit {
   sourceQuote?: string;
   notes?: string;
   nextAction?: string;
+  // Real Supabase linkage — this unit is a workspace over an existing job row.
+  jobId?: string;
+  accountId?: string;
+  siteId?: string;
+  dbQuoteId?: string;
+  dbQuoteNumber?: string;
   // Customer Invoice / Contract
   invoiceAmount?: number;
   invoiceDate?: string;
@@ -999,7 +1006,7 @@ export function JobDetailSheet({
   // the panel open so the operator can carry on working.
   const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
   const saveDisabled = isLocked || reviewedNeedsReason;
-  function saveProgress() {
+  async function saveProgress() {
     if (saveDisabled) return;
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
@@ -1020,7 +1027,26 @@ export function JobDetailSheet({
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
     setDraft(next);
     onSave(next);
-    toast({ title: "Progress Saved" });
+    // Persist against the real job row when this workspace is backed by one.
+    if (draft.jobId) {
+      const res = await persistJobProgress({
+        jobId: draft.jobId,
+        siteId: draft.siteId,
+        jobSite: draft.jobSite,
+        scheduledDate: draft.scheduledDate,
+        completed: draft.paymentStatus === "Paid" || draft.status === "Paid",
+      });
+      if (res.ok) {
+        toast({ title: "Progress Saved", description: "Saved to this job record." });
+      } else {
+        toast({ title: "Progress Saved locally", description: `Job record not updated: ${res.error}` });
+      }
+    } else {
+      toast({
+        title: "Progress Saved",
+        description: "Held in this session — convert a quote to create a job record.",
+      });
+    }
   }
 
   // Delete eligibility — only truly empty drafts
