@@ -197,6 +197,7 @@ export default function BusinessSetup() {
 
     setOrig({ business_name: form.business_name, abn: form.abn });
     setSavedVerified(true);
+    if (newId) setHistory(await fetchIdentityAudit(newId));
     setSaving(false);
     toast.success("✓ Business Details Verified");
   }
