@@ -875,7 +875,8 @@ function QuoteActivityDialog({
     }
   }, [open, quote]);
 
-  const canSave = !!quote && (status !== "Rejected" || !!reason);
+  const canSave =
+    !!quote && ((status !== "Rejected" && status !== "Declined") || !!reason);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
