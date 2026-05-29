@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { isBusinessVerified } from "@/lib/businessIdentity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,17 +19,6 @@ import {
 
 type SetupStatus = "loading" | "complete" | "incomplete";
 
-const REQUIRED_FIELDS = [
-  "business_name",
-  "contact_name",
-  "phone",
-  "email",
-  "abn",
-  "bank_account_name",
-  "bsb",
-  "account_number",
-];
-
 function StatusPill({ status }: { status: SetupStatus }) {
   if (status === "loading") {
     return (
@@ -40,13 +30,13 @@ function StatusPill({ status }: { status: SetupStatus }) {
   if (status === "complete") {
     return (
       <Badge className="gap-1 bg-emerald-600 hover:bg-emerald-600 text-white border-transparent">
-        <CheckCircle2 className="h-3 w-3" /> Complete
+        <CheckCircle2 className="h-3 w-3" /> Verified
       </Badge>
     );
   }
   return (
     <Badge variant="outline" className="gap-1 text-amber-700 border-amber-300 bg-amber-50">
-      <AlertCircle className="h-3 w-3" /> Incomplete
+      <AlertCircle className="h-3 w-3" /> Setup Required
     </Badge>
   );
 }
@@ -66,9 +56,7 @@ export default function Launchpad() {
         setSetupStatus("incomplete");
         return;
       }
-      const allFilled = REQUIRED_FIELDS.every((k) => !!String((data as any)[k] ?? "").trim());
-      const gstOk = !!(data as any).gst_registered_confirmed;
-      setSetupStatus(allFilled && gstOk ? "complete" : "incomplete");
+      setSetupStatus(isBusinessVerified(data as any) ? "complete" : "incomplete");
     })();
   }, []);
 
@@ -93,19 +81,19 @@ export default function Launchpad() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-base">1. Complete Business Setup</CardTitle>
+                  <CardTitle className="text-base">1. Business Details</CardTitle>
                   <StatusPill status={setupStatus} />
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Confirm your business identity, ABN, GST status, and bank details. Nothing downstream works
-                  without this gate cleared.
+                  Confirm your business identity and verify an active, GST-registered ABN. Nothing downstream
+                  works without this gate cleared.
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline" size="sm">
                 <Link to="/business-setup">
-                  Go to Business Setup <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  Go to Business Details <ArrowRight className="ml-2 h-3.5 w-3.5" />
                 </Link>
               </Button>
             </CardContent>
