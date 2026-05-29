@@ -6,7 +6,12 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase } from "@/lib/supabase";
-import { provisionJob } from "@/lib/jobProvisioning";
+import {
+  createQuote,
+  setQuoteOutcome,
+  convertQuoteToJob,
+  loadStage1Board,
+} from "@/lib/jobProvisioning";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
