@@ -332,6 +332,12 @@ export interface ProofUnit {
   sourceQuote?: string;
   notes?: string;
   nextAction?: string;
+  // Real Supabase linkage — this unit is a workspace over an existing job row.
+  jobId?: string;
+  accountId?: string;
+  siteId?: string;
+  dbQuoteId?: string;
+  dbQuoteNumber?: string;
   // Customer Invoice / Contract
   invoiceAmount?: number;
   invoiceDate?: string;
