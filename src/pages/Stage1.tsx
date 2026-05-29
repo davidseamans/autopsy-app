@@ -1826,6 +1826,11 @@ export function JobDetailSheet({
           {/* 2. Customer Invoice / Contract */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
+            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+              <span className="font-semibold">Attachment not yet persisted.</span> Invoice / contract
+              fields and amounts save with this job, but the uploaded file is held in this session only.
+              Document storage is blocked until backend SQL/RLS is completed — {BACKEND_BLOCKERS.documents}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Quote / Contract Amount</Label>
