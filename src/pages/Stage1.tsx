@@ -994,6 +994,35 @@ export function JobDetailSheet({
     setCorrectionReason("");
   }
 
+  // Save Progress — the primary, always-visible save action for this workspace.
+  // Persists the current form values into the dashboard's job record and keeps
+  // the panel open so the operator can carry on working.
+  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
+  const saveDisabled = isLocked || reviewedNeedsReason;
+  function saveProgress() {
+    if (saveDisabled) return;
+    const original = unit!;
+    const changes: { field: string; from: unknown; to: unknown }[] = [];
+    (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
+      if (k === "audit") return;
+      const a = (original as unknown as Record<string, unknown>)[k as string];
+      const b = (draft as unknown as Record<string, unknown>)[k as string];
+      if (JSON.stringify(a) !== JSON.stringify(b)) {
+        changes.push({ field: String(k), from: a, to: b });
+      }
+    });
+    const entry: AuditEntry = {
+      ts: new Date().toISOString(),
+      action: isReviewed ? "corrected" : "updated",
+      reason: isReviewed ? correctionReason || undefined : undefined,
+      changes,
+    };
+    const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
+    setDraft(next);
+    onSave(next);
+    toast({ title: "Progress Saved" });
+  }
+
   // Delete eligibility — only truly empty drafts
   const hasInvoiceProof = !!draft.invoiceDocName || !!draft.invoiceAmount;
   const hasCosts = !!(draft.costMaterials || draft.costLabour || draft.costSubcontractors || draft.costOther);
