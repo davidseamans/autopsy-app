@@ -1112,11 +1112,34 @@ export function JobDetailSheet({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editGateOpen, setEditGateOpen] = useState(false);
+  const [payEvents, setPayEvents] = useState<RevenueEventRow[]>([]);
+  const [payControl, setPayControl] = useState<RevenueControlRow | null>(null);
   useEffect(() => {
     setDraft(unit);
     setMode("edit");
     setCorrectionReason("");
   }, [unit]);
+  const jobId = unit?.jobId;
+  const loadPayments = useCallback(async () => {
+    if (!jobId) {
+      setPayEvents([]);
+      setPayControl(null);
+      return;
+    }
+    const [evRes, ctrlRes] = await Promise.all([
+      supabase
+        .from("revenue_events")
+        .select("*")
+        .eq("job_id", jobId)
+        .order("created_at", { ascending: false }),
+      supabase.from("job_revenue_control").select("*").eq("job_id", jobId).maybeSingle(),
+    ]);
+    setPayEvents((evRes.data ?? []) as RevenueEventRow[]);
+    setPayControl((ctrlRes.data ?? null) as RevenueControlRow | null);
+  }, [jobId]);
+  useEffect(() => {
+    loadPayments();
+  }, [loadPayments]);
   if (!draft) return null;
   const kind = kindForProof(draft.proofType);
   const statuses = allowedStatuses(draft.status, kind);
