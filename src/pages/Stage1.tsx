@@ -881,6 +881,205 @@ function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   );
 }
 
+// ---------- Payment (revenue_events) — single source of truth for money received ----------
+// Payment entry lives here, inside Job / Contract Site Detail. All payments write to
+// revenue_events against the current job_id; summary figures are derived from those rows
+// (and job_revenue_control), never duplicated into local proof state.
+type RevenueEventRow = {
+  id: string;
+  job_id: string;
+  amount: number;
+  revenue_type: string;
+  source: string;
+  reference: string | null;
+  created_at: string;
+};
+
+type RevenueControlRow = {
+  job_id: string;
+  approved_job_value: number | null;
+  revenue_collected: number | null;
+  outstanding_balance: number | null;
+  collection_status: string | null;
+};
+
+const REVENUE_TYPES = [
+  { value: "deposit", label: "Deposit" },
+  { value: "part_payment", label: "Part Payment" },
+  { value: "balance_payment", label: "Balance Payment" },
+  { value: "full_payment", label: "Full Payment" },
+] as const;
+
+const PAYMENT_SOURCES = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "card", label: "Card" },
+  { value: "other", label: "Other" },
+] as const;
+
+const revenueTypeLabel = (v: string) =>
+  REVENUE_TYPES.find((t) => t.value === v)?.label ?? v;
+const paymentSourceLabel = (v: string) =>
+  PAYMENT_SOURCES.find((s) => s.value === v)?.label ?? v;
+
+const collectionStatusLabel = (status: string | null): { label: string; tone: string } => {
+  switch (status) {
+    case "fully_collected":
+      return { label: "Fully Collected", tone: "text-emerald-600" };
+    case "outstanding_balance":
+      return { label: "Outstanding Balance", tone: "text-amber-600" };
+    case "over_collected_review":
+      return { label: "Over-Collection — Review", tone: "text-red-600" };
+    case "missing_quote_control":
+      return { label: "Missing Quote Control", tone: "text-muted-foreground" };
+    default:
+      return { label: status ?? "—", tone: "text-muted-foreground" };
+  }
+};
+
+const fmtPayDateTime = (iso: string) => {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleString();
+};
+
+// Inline "Record Payment" form — writes a single revenue_events row for this job.
+function PaymentRecorder({
+  jobId,
+  disabled,
+  onRecorded,
+}: {
+  jobId?: string;
+  disabled?: boolean;
+  onRecorded: () => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [revenueType, setRevenueType] = useState("");
+  const [source, setSource] = useState("");
+  const [reference, setReference] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const amountNum = parseFloat(amount);
+  const amountValid = !isNaN(amountNum) && amountNum > 0;
+  const canSave = !!jobId && amountValid && !!revenueType && !!source && !saving && !disabled;
+
+  async function record() {
+    if (!canSave || !jobId) return;
+    setSaving(true);
+    const { error } = await supabase.from("revenue_events").insert({
+      job_id: jobId,
+      amount: amountNum,
+      revenue_type: revenueType,
+      source,
+      reference: reference.trim() || null,
+    });
+    setSaving(false);
+    if (error) {
+      toast({ title: "Could not record payment", description: error.message });
+      return;
+    }
+    setAmount("");
+    setRevenueType("");
+    setSource("");
+    setReference("");
+    toast({ title: "Payment recorded", description: "Saved against this job." });
+    onRecorded();
+  }
+
+  if (!jobId) {
+    return (
+      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+        Convert an accepted quote into a job to record payments against this job.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border p-3 space-y-3">
+      <div className="text-xs font-medium">Record Payment</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Amount</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Revenue Type</Label>
+          <Select value={revenueType} onValueChange={setRevenueType}>
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              {REVENUE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Payment Source</Label>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Reference / Notes</Label>
+          <Input
+            placeholder="Optional"
+            maxLength={500}
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={record} disabled={!canSave}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+          Record Payment
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Read-only payment history for this job (revenue_events rows).
+function PaymentHistoryList({ rows }: { rows: RevenueEventRow[] }) {
+  if (!rows.length) {
+    return <p className="text-xs text-muted-foreground">No payments recorded yet.</p>;
+  }
+  return (
+    <div className="rounded-md border overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-xs">Date</TableHead>
+            <TableHead className="text-right text-xs">Amount</TableHead>
+            <TableHead className="text-xs">Type</TableHead>
+            <TableHead className="text-xs">Source</TableHead>
+            <TableHead className="text-xs">Reference</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell className="text-xs whitespace-nowrap text-muted-foreground">{fmtPayDateTime(r.created_at)}</TableCell>
+              <TableCell className="text-right tabular-nums text-xs font-medium">${Number(r.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+              <TableCell className="text-xs">{revenueTypeLabel(r.revenue_type)}</TableCell>
+              <TableCell className="text-xs">{paymentSourceLabel(r.source)}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{r.reference || "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export function JobDetailSheet({
   unit,
   open,
