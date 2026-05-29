@@ -88,7 +88,7 @@ type LeadActivity = {
   created_at: string;
 };
 
-const QUOTE_STATUSES = ["Sent", "Accepted", "Rejected"] as const;
+const QUOTE_STATUSES = ["Sent", "Accepted", "Declined", "Expired", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
 const REJECTION_REASONS = [
   "Too expensive",
@@ -119,6 +119,10 @@ type Quote = {
   method?: string;
   notes?: string;
   createdAt?: string;
+  // Real Core linkage (quotes table)
+  dbId?: string;
+  accountId?: string;
+  siteId?: string;
 };
 
 // Seed: the five accepted quotes that produced the five ledger jobs,
