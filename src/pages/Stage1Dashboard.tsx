@@ -45,6 +45,7 @@ import {
   Plus,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
+import { RevenuePanel } from "@/components/RevenuePanel";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
