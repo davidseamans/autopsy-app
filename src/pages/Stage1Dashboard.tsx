@@ -1337,6 +1337,45 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
+  // Load the persisted Core quote board + job ledger so Stage 1 survives refresh.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { quotes: dbQuotes, jobs: dbJobs } = await loadStage1Board();
+        if (!active) return;
+        if (dbQuotes.length) {
+          setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
+        }
+        if (dbJobs.length) {
+          setUnits(
+            dbJobs.map((j, i) => ({
+              n: i + 1,
+              jobNumber: j.jobNumber,
+              client: j.client,
+              jobSite: j.site || undefined,
+              proofType: "Completed Job",
+              status: "Scheduled",
+              gm: 0,
+              evidence: false,
+              quoteValue: j.value,
+              projectedRevenue: j.value,
+              sourceQuote: j.sourceQuote,
+              jobId: j.jobId,
+              accountId: j.accountId,
+              siteId: j.siteId,
+              dbQuoteId: j.dbQuoteId,
+              dbQuoteNumber: j.dbQuoteNumber,
+            })),
+          );
+        }
+      } catch {
+        /* board stays empty; nothing persisted yet */
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   const methodRows = useMemo(() => {
     const methods = new Set<string>();
     METHOD_BASELINE.forEach((b) => methods.add(b.method));
