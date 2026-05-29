@@ -2051,6 +2051,16 @@ export function JobDetailSheet({
             </div>
           </div>
 
+          {/* 4b. Write-Offs & Value Adjustments */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(4, "Write-Offs & Value Adjustments", DollarSign)}
+            <p className="text-xs text-muted-foreground">
+              Reduce the collectible value of this job (write-off, credit, or approved reduction).
+              Adjustments lower the outstanding balance — they never change the revenue actually received.
+            </p>
+            <WriteOffsSection jobId={draft.jobId} disabled={isLocked} />
+          </div>
+
           {/* 5. Status & Next Action */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(5, "Status & Next Action")}
