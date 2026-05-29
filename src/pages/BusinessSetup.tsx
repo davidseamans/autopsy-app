@@ -334,7 +334,53 @@ export default function BusinessSetup() {
           <ShieldCheck className="h-4 w-4 mr-1" /> Save Business Details
         </Button>
       </div>
+
+      <ChangeHistoryPanel rows={history} />
     </div>
+  );
+}
+
+function ChangeHistoryPanel({ rows }: { rows: IdentityAuditRow[] }) {
+  if (!rows.length) return null;
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? iso : d.toLocaleString();
+  };
+  const fieldLabel = (f: string) =>
+    f === "business_name" ? "Business Name" : f === "abn" ? "ABN" : f;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <History className="h-4 w-4" /> Change History
+        </CardTitle>
+        <CardDescription>Read-only record of changes to Business Name and ABN.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-y bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Changed At</th>
+                <th className="px-4 py-2 font-medium">Field Name</th>
+                <th className="px-4 py-2 font-medium">Old Value</th>
+                <th className="px-4 py-2 font-medium">New Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">{fmt(r.changed_at)}</td>
+                  <td className="px-4 py-2">{fieldLabel(r.field_name)}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{r.old_value ?? "—"}</td>
+                  <td className="px-4 py-2 font-medium">{r.new_value ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
