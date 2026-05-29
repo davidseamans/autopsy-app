@@ -1611,6 +1611,35 @@ export function JobDetailSheet({
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Primary save action — always visible at the bottom of the workspace */}
+        <div className="sticky bottom-0 -mx-6 mt-2 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex flex-col items-center gap-1 sm:items-end">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled
+                title="Coming soon"
+              >
+                <Clock className="h-4 w-4" /> Complete Handover
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Coming Soon</span>
+            </div>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={saveProgress}
+              disabled={saveDisabled}
+            >
+              <Save className="h-4 w-4" /> Save Progress
+            </Button>
+          </div>
+          {reviewedNeedsReason && (
+            <p className="mt-1 text-right text-[11px] text-amber-600">
+              Add a correction reason above to save changes to this reviewed record.
+            </p>
+          )}
+        </div>
       </SheetContent>
     </Sheet>
   );
