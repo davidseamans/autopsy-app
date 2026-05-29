@@ -71,6 +71,26 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
+  loadAdjustments,
+  saveAdjustment,
+  ADJUSTMENT_TYPES,
+  adjustmentTypeLabel,
+  type AdjustmentRow,
+  type AdjustmentType,
+  saveHandover,
+  loadHandover,
+  SATISFACTION_OPTIONS,
+  THANK_YOU_OPTIONS,
+  satisfactionLabel,
+  thankYouLabel,
+  type SatisfactionStatus,
+  type ThankYouAction,
+  type HandoverRow,
+  type ReferralRow,
+  type ReferralInput,
+  BACKEND_BLOCKERS,
+} from "@/lib/jobWorkspace";
+import {
   AlertTriangle,
   CheckCircle2,
   Lock,
@@ -1080,6 +1100,364 @@ function PaymentHistoryList({ rows }: { rows: RevenueEventRow[] }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Write-Offs / Value Adjustments — writes to job_value_adjustments (WRITABLE).
+// Lives inside the Job / Contract Site Detail workspace, keyed on the real job_id.
+// ---------------------------------------------------------------------------
+function WriteOffsSection({
+  jobId,
+  disabled,
+}: {
+  jobId?: string;
+  disabled?: boolean;
+}) {
+  const [rows, setRows] = useState<AdjustmentRow[]>([]);
+  const [adjType, setAdjType] = useState<AdjustmentType | "">("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [approved, setApproved] = useState(false);
+  const [docRef, setDocRef] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!jobId) {
+      setRows([]);
+      return;
+    }
+    setRows(await loadAdjustments(jobId));
+  }, [jobId]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const amountNum = parseFloat(amount);
+  const amountValid = !isNaN(amountNum) && amountNum > 0;
+  const canSave =
+    !!jobId && !!adjType && amountValid && reason.trim().length > 0 && !saving && !disabled;
+
+  async function add() {
+    if (!canSave || !jobId || !adjType) return;
+    setSaving(true);
+    const res = await saveAdjustment({
+      jobId,
+      adjustmentType: adjType,
+      amount: amountNum,
+      reason: reason.trim(),
+      approvedByCustomer: approved,
+      documentReference: docRef.trim() || undefined,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast({ title: "Could not save write-off", description: res.error });
+      return;
+    }
+    setAdjType("");
+    setAmount("");
+    setReason("");
+    setApproved(false);
+    setDocRef("");
+    toast({ title: "Adjustment saved", description: "Recorded against this job." });
+    refresh();
+  }
+
+  if (!jobId) {
+    return (
+      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+        Convert an accepted quote into a job to record write-offs against this job.
+      </div>
+    );
+  }
+
+  const total = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Adjustment Type</Label>
+          <Select value={adjType} onValueChange={(v) => setAdjType(v as AdjustmentType)}>
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              {ADJUSTMENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Amount</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </div>
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">Reason (required)</Label>
+          <Input
+            placeholder="Why is this value being adjusted?"
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <div className="col-span-2 space-y-1">
+          <Label className="text-xs">Document Reference</Label>
+          <Input
+            placeholder="Optional — credit note, customer approval, etc."
+            maxLength={500}
+            value={docRef}
+            onChange={(e) => setDocRef(e.target.value)}
+          />
+        </div>
+        <label className="col-span-2 flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={approved}
+            onChange={(e) => setApproved(e.target.checked)}
+          />
+          Approved by customer
+        </label>
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={add} disabled={!canSave}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Add Write-Off
+        </Button>
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs font-medium">
+          <span>Recorded Adjustments</span>
+          {rows.length > 0 && (
+            <span className="tabular-nums">Total ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          )}
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No adjustments recorded yet.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {rows.map((r) => (
+              <li key={r.id} className="rounded border bg-white px-2 py-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{adjustmentTypeLabel(r.adjustment_type)}</span>
+                  <span className="tabular-nums font-medium">${Number(r.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {r.reason}
+                  {r.approved_by_customer ? " · Customer approved" : ""}
+                  {r.document_reference ? ` · ${r.document_reference}` : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Handover + Referral capture — writes to job_handovers and job_referrals
+// (both WRITABLE), keyed on the real job_id. Referrals are captured in the same
+// flow so the operator completes the proof pack in one place.
+// ---------------------------------------------------------------------------
+function HandoverDialog({
+  jobId,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  jobId?: string;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSaved?: () => void;
+}) {
+  const [workCompleted, setWorkCompleted] = useState(false);
+  const [walkthrough, setWalkthrough] = useState(false);
+  const [satisfaction, setSatisfaction] = useState<SatisfactionStatus | "">("");
+  const [issueNotes, setIssueNotes] = useState("");
+  const [paymentChecked, setPaymentChecked] = useState(false);
+  const [referralRequested, setReferralRequested] = useState(false);
+  const [thankYou, setThankYou] = useState<ThankYouAction | "">("");
+  const [thankYouNotes, setThankYouNotes] = useState("");
+  const [referrals, setReferrals] = useState<ReferralInput[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const [existing, setExisting] = useState<HandoverRow | null>(null);
+  const [savedReferrals, setSavedReferrals] = useState<ReferralRow[]>([]);
+
+  const refresh = useCallback(async () => {
+    if (!jobId) {
+      setExisting(null);
+      setSavedReferrals([]);
+      return;
+    }
+    const { handover, referrals: refs } = await loadHandover(jobId);
+    setExisting(handover);
+    setSavedReferrals(refs);
+  }, [jobId]);
+  useEffect(() => {
+    if (open) refresh();
+  }, [open, refresh]);
+
+  const canSave = !!jobId && !!satisfaction && !saving;
+
+  async function save() {
+    if (!canSave || !jobId || !satisfaction) return;
+    setSaving(true);
+    const cleanRefs = referrals.filter((r) => (r.name || r.phone || r.email || "").toString().trim());
+    const res = await saveHandover({
+      jobId,
+      workCompletedAsAgreed: workCompleted,
+      customerWalkthroughCompleted: walkthrough,
+      satisfactionStatus: satisfaction,
+      issueNotes: issueNotes.trim() || undefined,
+      paymentStatusChecked: paymentChecked,
+      referralRequestMade: referralRequested,
+      referralCount: cleanRefs.length,
+      thankYouAction: thankYou || undefined,
+      thankYouNotes: thankYouNotes.trim() || undefined,
+      referrals: cleanRefs,
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast({ title: "Could not save handover", description: res.error });
+      return;
+    }
+    if (res.error) {
+      // Handover saved, referrals partially failed — surface, do not hide.
+      toast({ title: "Handover saved", description: res.error });
+    } else {
+      toast({
+        title: "Handover complete",
+        description: res.referralsSaved ? `Saved with ${res.referralsSaved} referral(s).` : "Saved against this job.",
+      });
+    }
+    setReferrals([]);
+    onSaved?.();
+    refresh();
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Complete Handover</DialogTitle>
+          <DialogDescription>
+            Close out the job with the customer and capture any referrals. Saved against this job record.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!jobId ? (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Convert an accepted quote into a job before completing handover.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {existing && (
+              <div className="rounded border-l-4 border-emerald-500 bg-emerald-50 p-2 text-xs text-emerald-900">
+                A handover was already recorded ({satisfactionLabel(existing.satisfaction_status)},
+                {" "}thank-you: {thankYouLabel(existing.thank_you_action)}). Saving again adds a new record.
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="h-4 w-4" checked={workCompleted} onChange={(e) => setWorkCompleted(e.target.checked)} />
+                Work completed as agreed
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="h-4 w-4" checked={walkthrough} onChange={(e) => setWalkthrough(e.target.checked)} />
+                Customer walkthrough completed
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="h-4 w-4" checked={paymentChecked} onChange={(e) => setPaymentChecked(e.target.checked)} />
+                Payment status checked
+              </label>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Customer Satisfaction (required)</Label>
+              <Select value={satisfaction} onValueChange={(v) => setSatisfaction(v as SatisfactionStatus)}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {SATISFACTION_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Issue Notes</Label>
+              <Textarea rows={2} value={issueNotes} onChange={(e) => setIssueNotes(e.target.value)} placeholder="Any issues raised at handover" />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Thank-You Action</Label>
+              <Select value={thankYou} onValueChange={(v) => setThankYou(v as ThankYouAction)}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {THANK_YOU_OPTIONS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Thank-You Notes</Label>
+              <Input value={thankYouNotes} onChange={(e) => setThankYouNotes(e.target.value)} placeholder="Optional" />
+            </div>
+
+            {/* Referral capture */}
+            <div className="rounded-md border p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" className="h-4 w-4" checked={referralRequested} onChange={(e) => setReferralRequested(e.target.checked)} />
+                Referral request made
+              </label>
+              {savedReferrals.length > 0 && (
+                <p className="text-xs text-muted-foreground">{savedReferrals.length} referral(s) already saved for this job.</p>
+              )}
+              {referrals.map((r, idx) => (
+                <div key={idx} className="rounded border p-2 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Name" value={r.name ?? ""} onChange={(e) => {
+                      const next = [...referrals]; next[idx] = { ...r, name: e.target.value }; setReferrals(next);
+                    }} />
+                    <Input placeholder="Phone" value={r.phone ?? ""} onChange={(e) => {
+                      const next = [...referrals]; next[idx] = { ...r, phone: e.target.value }; setReferrals(next);
+                    }} />
+                    <Input placeholder="Email" value={r.email ?? ""} onChange={(e) => {
+                      const next = [...referrals]; next[idx] = { ...r, email: e.target.value }; setReferrals(next);
+                    }} />
+                    <Input placeholder="Notes" value={r.notes ?? ""} onChange={(e) => {
+                      const next = [...referrals]; next[idx] = { ...r, notes: e.target.value }; setReferrals(next);
+                    }} />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => setReferrals(referrals.filter((_, i) => i !== idx))}>Remove</Button>
+                  </div>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={() => setReferrals([...referrals, {}])}>
+                <Plus className="h-4 w-4" /> Add Referral
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={save} disabled={!canSave}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            Save Handover
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function JobDetailSheet({
   unit,
   open,
@@ -1114,6 +1492,7 @@ export function JobDetailSheet({
   const [editGateOpen, setEditGateOpen] = useState(false);
   const [payEvents, setPayEvents] = useState<RevenueEventRow[]>([]);
   const [payControl, setPayControl] = useState<RevenueControlRow | null>(null);
+  const [handoverOpen, setHandoverOpen] = useState(false);
   useEffect(() => {
     setDraft(unit);
     setMode("edit");
@@ -1447,6 +1826,11 @@ export function JobDetailSheet({
           {/* 2. Customer Invoice / Contract */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
+            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+              <span className="font-semibold">Attachment not yet persisted.</span> Invoice / contract
+              fields and amounts save with this job, but the uploaded file is held in this session only.
+              Document storage is blocked until backend SQL/RLS is completed — {BACKEND_BLOCKERS.documents}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Quote / Contract Amount</Label>
@@ -1493,6 +1877,11 @@ export function JobDetailSheet({
           {/* 3. Job Costs */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
+            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
+              <span className="font-semibold">Job costs not yet persisted to the backend.</span> Cost
+              lines are held in this session and inform GM here, but the job_costs table blocks writes
+              until backend SQL/RLS is completed — {BACKEND_BLOCKERS.job_costs}
+            </div>
             <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
             <p className="text-xs text-muted-foreground">
               Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
@@ -1660,6 +2049,16 @@ export function JobDetailSheet({
               <div className="text-xs font-medium">Payment History</div>
               <PaymentHistoryList rows={payEvents} />
             </div>
+          </div>
+
+          {/* 4b. Write-Offs & Value Adjustments */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(4, "Write-Offs & Value Adjustments", DollarSign)}
+            <p className="text-xs text-muted-foreground">
+              Reduce the collectible value of this job (write-off, credit, or approved reduction).
+              Adjustments lower the outstanding balance — they never change the revenue actually received.
+            </p>
+            <WriteOffsSection jobId={draft.jobId} disabled={isLocked} />
           </div>
 
           {/* 5. Status & Next Action */}
@@ -1897,6 +2296,13 @@ export function JobDetailSheet({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Handover + referral capture */}
+          <HandoverDialog
+            jobId={draft.jobId}
+            open={handoverOpen}
+            onOpenChange={setHandoverOpen}
+          />
         </div>
 
         {/* Primary save action — always visible at the bottom of the workspace */}
@@ -1906,12 +2312,15 @@ export function JobDetailSheet({
               <Button
                 variant="outline"
                 className="w-full sm:w-auto"
-                disabled
-                title="Coming soon"
+                disabled={isLocked || !draft.jobId}
+                title={draft.jobId ? "Complete handover and capture referrals" : "Convert a quote to a job first"}
+                onClick={() => setHandoverOpen(true)}
               >
                 <Clock className="h-4 w-4" /> Complete Handover
               </Button>
-              <span className="text-[11px] text-muted-foreground">Coming Soon</span>
+              {!draft.jobId && (
+                <span className="text-[11px] text-muted-foreground">Needs a job record</span>
+              )}
             </div>
             <Button
               className="w-full sm:w-auto"
