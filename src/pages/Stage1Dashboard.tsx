@@ -1670,6 +1670,9 @@ export default function Stage1Dashboard() {
           </Card>
       </section>
 
+      {/* ---- Revenue Event Entry ---- */}
+      <RevenuePanel />
+
       <JobDetailSheet
         unit={selectedUnit}
         open={sheetOpen}
