@@ -71,6 +71,26 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
+  loadAdjustments,
+  saveAdjustment,
+  ADJUSTMENT_TYPES,
+  adjustmentTypeLabel,
+  type AdjustmentRow,
+  type AdjustmentType,
+  saveHandover,
+  loadHandover,
+  SATISFACTION_OPTIONS,
+  THANK_YOU_OPTIONS,
+  satisfactionLabel,
+  thankYouLabel,
+  type SatisfactionStatus,
+  type ThankYouAction,
+  type HandoverRow,
+  type ReferralRow,
+  type ReferralInput,
+  BACKEND_BLOCKERS,
+} from "@/lib/jobWorkspace";
+import {
   AlertTriangle,
   CheckCircle2,
   Lock,
