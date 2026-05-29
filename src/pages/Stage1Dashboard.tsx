@@ -906,12 +906,14 @@ function QuoteActivityDialog({
             >
               <option value="Sent">Sent</option>
               <option value="Accepted">Accepted</option>
+              <option value="Declined">Declined</option>
+              <option value="Expired">Expired</option>
               <option value="Rejected">Rejected</option>
             </select>
           </div>
-          {status === "Rejected" && (
+          {(status === "Rejected" || status === "Declined") && (
             <div className="space-y-1.5">
-              <Label htmlFor="qa-reason">Rejection Reason <span className="text-destructive">*</span></Label>
+              <Label htmlFor="qa-reason">Reason <span className="text-destructive">*</span></Label>
               <select
                 id="qa-reason"
                 value={reason}
