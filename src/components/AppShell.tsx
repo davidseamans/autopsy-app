@@ -34,8 +34,11 @@ const items = [
   { title: "Quotes", url: "/quotes", icon: FileText },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
-  { title: "Preliminary First 5 Jobs Dashboard — Archived", url: "/stage-1-archived", icon: Archive },
   { title: "Business Setup", url: "/business-setup", icon: IdCard },
+];
+
+const archiveItems = [
+  { title: "Preliminary First 5 Jobs Dashboard", url: "/stage-1-archived", icon: Archive },
 ];
 
 function AppSidebar() {
@@ -47,6 +50,32 @@ function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-2",
+                          isActive &&
+                            "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
+                        )
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Archive / Legacy</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {archiveItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink
