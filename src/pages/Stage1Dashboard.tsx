@@ -311,6 +311,22 @@ type ConstructionReadinessSummary = {
   [key: string]: any;
 };
 
+// UI boundary summary returned by public.get_stage1_ui_boundary_summary().
+// Debug/admin only — never exposed to normal users. Read-only.
+type UIBoundarySummary = {
+  product_facing?: Array<{
+    surface_name?: string | null;
+    mutation_risk?: boolean | null;
+    [key: string]: any;
+  }> | null;
+  admin_only?: Array<{ surface_name?: string | null; [key: string]: any }> | null;
+  debug_only?: Array<{ surface_name?: string | null; [key: string]: any }> | null;
+  service_only?: Array<{ surface_name?: string | null; [key: string]: any }> | null;
+  remove_before_release?: Array<{ surface_name?: string | null; [key: string]: any }> | null;
+  hardening_required?: Array<{ surface_name?: string | null; [key: string]: any }> | null;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1589,6 +1605,13 @@ export default function Stage1Dashboard() {
   const [constructionReadinessSummaryLoading, setConstructionReadinessSummaryLoading] = useState(false);
   const [constructionReadinessSummaryError, setConstructionReadinessSummaryError] = useState<string | null>(null);
 
+  // Debug/admin-only UI boundary summary (read-only, Supabase-owned)
+  // Hydrated via public.get_stage1_ui_boundary_summary().
+  // Debug/admin only — never exposed to normal users.
+  const [uiBoundarySummary, setUiBoundarySummary] = useState<UIBoundarySummary | null>(null);
+  const [uiBoundarySummaryLoading, setUiBoundarySummaryLoading] = useState(false);
+  const [uiBoundarySummaryError, setUiBoundarySummaryError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1871,6 +1894,27 @@ export default function Stage1Dashboard() {
       setConstructionReadinessSummaryError("Readiness summary threw an unexpected error.");
     } finally {
       setConstructionReadinessSummaryLoading(false);
+    }
+  };
+
+  // Debug/admin-only UI boundary summary fetch. Calls
+  // public.get_stage1_ui_boundary_summary. Read-only; never mutates anything.
+  const fetchUIBoundarySummary = async () => {
+    setUiBoundarySummaryLoading(true);
+    setUiBoundarySummaryError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_ui_boundary_summary");
+      if (error) {
+        console.warn("[ui_boundary_summary] RPC failed:", error.message);
+        setUiBoundarySummaryError(`UI boundary summary failed: ${error.message}`);
+        return;
+      }
+      setUiBoundarySummary(data as UIBoundarySummary);
+    } catch (err) {
+      console.warn("[ui_boundary_summary] RPC threw:", err);
+      setUiBoundarySummaryError("UI boundary summary threw an unexpected error.");
+    } finally {
+      setUiBoundarySummaryLoading(false);
     }
   };
 
@@ -2995,6 +3039,144 @@ export default function Stage1Dashboard() {
                   </summary>
                   <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
                     {JSON.stringify(constructionReadinessSummary, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug/admin-only UI boundary summary panel. Internal/admin only —
+          never shown to normal users. Read-only; does not mutate anything. */}
+      {isDebug() && (
+        <Card className="-mt-2 border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              UI Boundary Summary
+            </CardTitle>
+            <CardDescription>
+              Internal/admin only. Supabase-owned UI boundary classification.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchUIBoundarySummary}
+                disabled={uiBoundarySummaryLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {uiBoundarySummaryLoading ? "Refreshing…" : "Refresh UI Boundary Summary"}
+              </button>
+              {uiBoundarySummaryError && (
+                <span className="text-[11px] font-mono text-amber-600">
+                  {uiBoundarySummaryError}
+                </span>
+              )}
+            </div>
+            {uiBoundarySummary && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] font-mono">
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Product-facing</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.product_facing) ? uiBoundarySummary.product_facing.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Mutation-risk</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.product_facing)
+                        ? uiBoundarySummary.product_facing.filter((s) => s.mutation_risk).length
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Admin-only</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.admin_only) ? uiBoundarySummary.admin_only.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Debug-only</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.debug_only) ? uiBoundarySummary.debug_only.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Service-only</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.service_only) ? uiBoundarySummary.service_only.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remove before release</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.remove_before_release) ? uiBoundarySummary.remove_before_release.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Hardening required</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(uiBoundarySummary.hardening_required) ? uiBoundarySummary.hardening_required.length : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {Array.isArray(uiBoundarySummary.product_facing) && uiBoundarySummary.product_facing.length > 0 && (
+                  <div className="rounded-md border p-2 text-[11px] font-mono">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Product-facing candidates</div>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {uiBoundarySummary.product_facing.map((s, i) => (
+                        <li key={i}>
+                          {s.surface_name ?? "—"} {s.mutation_risk ? "(mutation-risk)" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {Array.isArray(uiBoundarySummary.remove_before_release) && uiBoundarySummary.remove_before_release.length > 0 && (
+                  <div className="rounded-md border p-2 text-[11px] font-mono">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Remove / gate before release</div>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {uiBoundarySummary.remove_before_release.map((s, i) => (
+                        <li key={i}>{s.surface_name ?? "—"}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono">
+                  {Array.isArray(uiBoundarySummary.admin_only) && uiBoundarySummary.admin_only.length > 0 && (
+                    <div className="rounded-md border p-2">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Admin-only surfaces</div>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {uiBoundarySummary.admin_only.map((s, i) => (
+                          <li key={i}>{s.surface_name ?? "—"}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {Array.isArray(uiBoundarySummary.service_only) && uiBoundarySummary.service_only.length > 0 && (
+                    <div className="rounded-md border p-2">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Service-only surfaces</div>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {uiBoundarySummary.service_only.map((s, i) => (
+                          <li key={i}>{s.surface_name ?? "—"}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <details className="text-[11px] font-mono">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Raw JSON
+                  </summary>
+                  <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
+                    {JSON.stringify(uiBoundarySummary, null, 2)}
                   </pre>
                 </details>
               </div>
