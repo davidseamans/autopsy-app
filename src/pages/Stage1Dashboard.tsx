@@ -216,6 +216,28 @@ type Stage1GateDecision = {
   total_required: number | null;
 };
 
+// Canonical Stage 1 commitment row, returned by the read-only RPC
+// public.get_stage1_commitments_snapshot(p_stage_progress_id uuid). Supabase
+// owns commitment state; this component only displays rows and never creates
+// or checks commitments client-side.
+type Stage1Commitment = {
+  commitment_id: string | null;
+  stage_progress_id: string | null;
+  user_id: string | null;
+  commitment_type: string | null;
+  commitment_label: string | null;
+  target_metric: string | null;
+  target_value: number | null;
+  baseline_value: number | null;
+  status: string | null;
+  due_at: string | null;
+  completion_checked_at: string | null;
+  actual_value_at_check: number | null;
+  follow_up_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1460,6 +1482,12 @@ export default function Stage1Dashboard() {
   const [stage1GateDecisionLoading, setStage1GateDecisionLoading] = useState(false);
   const [stage1GateDecisionError, setStage1GateDecisionError] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 commitments (read-only, Supabase-owned) ----
+  // Hydrated via public.get_stage1_commitments_snapshot(p_stage_progress_id).
+  // Supabase owns commitment state; this component only displays rows.
+  const [stage1Commitments, setStage1Commitments] = useState<Stage1Commitment[]>([]);
+  const [stage1CommitmentsLoaded, setStage1CommitmentsLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1577,6 +1605,39 @@ export default function Stage1Dashboard() {
         console.warn("[stage1_evaluation] RPC threw:", err);
       } finally {
         if (active) setStage1EvaluationLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Read-only hydration of canonical Stage 1 commitments. Only fires when
+  // stage_progress_id exists; never creates or checks commitments client-side.
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1Commitments([]);
+      setStage1CommitmentsLoaded(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_commitments_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn("[stage1_commitments] RPC failed:", error.message);
+          return;
+        }
+        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Commitment[];
+        if (active) setStage1Commitments(rows);
+      } catch (err) {
+        console.warn("[stage1_commitments] RPC threw:", err);
+      } finally {
+        if (active) setStage1CommitmentsLoaded(true);
       }
     })();
     return () => {
@@ -2252,6 +2313,71 @@ export default function Stage1Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1Commitments.length > 0 && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
+            <CardDescription>
+              Coach commitments for First 5 Jobs, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Commitment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead>Follow-up</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stage1Commitments.map((c) => {
+                    const cid = c.commitment_id ?? "";
+                    return (
+                      <TableRow key={cid || c.commitment_label || Math.random()}>
+                        <TableCell className="font-medium">
+                          {c.commitment_label ?? c.commitment_type ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{c.status ?? "—"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {c.target_metric ?? "—"}: {c.target_value ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {c.actual_value_at_check ?? 0} / {c.target_value ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {c.due_at ? isoToAU(c.due_at.slice(0, 10)) : "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {c.follow_up_message ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: commitments RPC returned zero rows */}
+      {isDebug() &&
+        stage1CommitmentsLoaded &&
+        stage1Snapshot?.stage_progress_id &&
+        stage1Commitments.length === 0 && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            No Stage 1 commitments created.
+          </div>
+        )}
 
       {/* Debug-only: evaluator returned no row */}
       {isDebug() &&
