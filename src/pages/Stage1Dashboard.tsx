@@ -2215,6 +2215,33 @@ export default function Stage1Dashboard() {
               </div>
             </div>
           )}
+          {stageProgressId && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={checkStage1Commitments}
+                disabled={stage1CommitmentCheckLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stage1CommitmentCheckLoading ? "Checking…" : "Check Commitments (debug)"}
+              </button>
+              {stage1CommitmentCheckError && (
+                <span className="text-amber-600">{stage1CommitmentCheckError}</span>
+              )}
+            </div>
+          )}
+          {stage1CommitmentCheck && (
+            <div className="mt-2 space-y-0.5">
+              <div className="uppercase tracking-wide">commitment_check_result</div>
+              <div>
+                commitment_id: {stage1CommitmentCheck.commitment_id ?? "—"}
+                {" · "}previous_status: {stage1CommitmentCheck.previous_status ?? "—"}
+                {" · "}new_status: {stage1CommitmentCheck.new_status ?? "—"}
+                {" · "}actual_value_at_check: {stage1CommitmentCheck.actual_value_at_check ?? "—"}
+                {" · "}operator_insight_id: {stage1CommitmentCheck.operator_insight_id ?? "—"}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
