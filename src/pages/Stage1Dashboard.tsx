@@ -1436,6 +1436,11 @@ export default function Stage1Dashboard() {
   const [stage1VerifyingId, setStage1VerifyingId] = useState<string | null>(null);
   const [stage1VerifyError, setStage1VerifyError] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 completion evaluation (read-only, Supabase-owned) ----
+  // Hydrated via public.evaluate_stage1_completion(p_stage_progress_id).
+  // Supabase owns the evaluator; this component only displays the result.
+  const [stage1Evaluation, setStage1Evaluation] = useState<Stage1Evaluation | null>(null);
+  const [stage1EvaluationLoaded, setStage1EvaluationLoaded] = useState(false);
 
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
