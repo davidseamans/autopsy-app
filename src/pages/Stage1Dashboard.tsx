@@ -1364,42 +1364,42 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
-  // ---- Canonical Stage 1 progress (READ-ONLY) ----
-  // Hydrated from public.stage_progress in autopsy-canonical. Used only as a
-  // canonical gate-status display input; never written from this component.
-  const [stageProgress, setStageProgress] = useState<StageProgressRow | null>(null);
-  const [stageProgressLoaded, setStageProgressLoaded] = useState(false);
+  // ---- Canonical Stage 1 snapshot (READ-ONLY, Supabase RPC) ----
+  // Hydrated via public.get_stage1_progress_snapshot(p_user_id). Supabase is
+  // the source of truth; used only as canonical gate-status display input and
+  // never written from this component.
+  const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
+  const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
 
-  // Read-only hydration of canonical stage_progress, guarded + isolated so it
+  // Read-only hydration through the canonical RPC, guarded + isolated so it
   // never affects the existing quotes/jobs board behaviour.
   useEffect(() => {
     let active = true;
     (async () => {
+      // TODO(auth): No authenticated user identifier is available in this
+      // component yet. When auth lands, pass the real user_id. Do NOT
+      // hard-code SYSTEM_ACTIVATION_TEST into production UI, and do not call
+      // the RPC without a real user id.
+      const currentUserId: string | null = null;
+      if (!currentUserId) {
+        if (active) setStage1SnapshotLoaded(true);
+        return; // no user id → no RPC call, preserve computed behaviour
+      }
       try {
-        // TODO(auth): No authenticated user identifier is available in this
-        // component yet. When auth lands, scope this read by the real user_id.
-        // Do NOT hard-code SYSTEM_ACTIVATION_TEST into production UI.
-        const currentUserId: string | null = null;
-        let query = supabase
-          .from("stage_progress")
-          .select(
-            "id, user_id, current_stage_code, current_gate_status, autopsy_run_id, started_at, unlocked_at, completed_at, last_activity_at, notes",
-          )
-          .eq("current_stage_code", "stage_1_first_five_jobs")
-          .order("last_activity_at", { ascending: false })
-          .limit(1);
-        if (currentUserId) query = query.eq("user_id", currentUserId);
-        const { data, error } = await query.maybeSingle();
+        const { data, error } = await supabase.rpc("get_stage1_progress_snapshot", {
+          p_user_id: currentUserId,
+        });
         if (!active) return;
         if (error) {
-          console.warn("[stage_progress] read failed:", error.message);
+          console.warn("[stage1_snapshot] RPC failed:", error.message);
           return; // preserve existing computed dashboard behaviour
         }
-        if (data) setStageProgress(data as StageProgressRow);
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setStage1Snapshot(row as Stage1Snapshot);
       } catch (err) {
-        console.warn("[stage_progress] read threw:", err);
+        console.warn("[stage1_snapshot] RPC threw:", err);
       } finally {
-        if (active) setStageProgressLoaded(true);
+        if (active) setStage1SnapshotLoaded(true);
       }
     })();
     return () => {
@@ -1679,14 +1679,17 @@ export default function Stage1Dashboard() {
         </p>
       )}
 
-      {/* Diagnostics: canonical stage_progress hydration (debug-only, read-only) */}
-      {isDebug() && stageProgressLoaded && (
+      {/* Diagnostics: canonical Stage 1 snapshot RPC hydration (debug-only, read-only) */}
+      {isDebug() && stage1SnapshotLoaded && (
         <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
-          <span className="uppercase tracking-wide mr-2">stage_progress</span>
-          loaded: {stageProgress ? "yes" : "no"}
-          {" · "}stage: {stageProgress?.current_stage_code ?? "—"}
-          {" · "}gate: {stageProgress?.current_gate_status ?? "—"}
-          {" · "}id: {stageProgress?.id ?? "—"}
+          <span className="uppercase tracking-wide mr-2">stage1_snapshot (rpc)</span>
+          loaded: {stage1Snapshot ? "yes" : "no"}
+          {" · "}stage: {stage1Snapshot?.current_stage_code ?? "—"}
+          {" · "}gate: {stage1Snapshot?.current_gate_status ?? "—"}
+          {" · "}id: {stage1Snapshot?.stage_progress_id ?? "—"}
+          {" · "}evidence: {stage1Snapshot?.verified_evidence_count ?? "—"}/{stage1Snapshot?.total_evidence_count ?? "—"}
+          {" · "}commits(met/open/missed/partial): {stage1Snapshot?.met_commitment_count ?? "—"}/{stage1Snapshot?.open_commitment_count ?? "—"}/{stage1Snapshot?.missed_commitment_count ?? "—"}/{stage1Snapshot?.partial_commitment_count ?? "—"}
+          {" · "}insights: {stage1Snapshot?.latest_operator_insight_count ?? "—"}
         </div>
       )}
 
