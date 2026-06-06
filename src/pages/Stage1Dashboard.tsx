@@ -3381,6 +3381,52 @@ export default function Stage1Dashboard() {
                     </div>
                   </div>
                 )}
+                {constructionReadinessSummary.rls_policy_posture && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">RPC-Only Count</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.rls_policy_posture.rpc_only_count ?? "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Template Read Allowed</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.rls_policy_posture.template_read_allowed_count ?? "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Public Read Candidates</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.rls_policy_posture.public_read_candidate_count ?? "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Direct Policy Expected</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.rls_policy_posture.direct_policy_expected_count ?? "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {Array.isArray(constructionReadinessSummary.rls_policy_posture.sensitive_rpc_only_tables) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Sensitive RPC-Only Tables</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.rls_policy_posture.sensitive_rpc_only_tables.map((t, idx) => (
+                            <div key={idx} className="flex items-center gap-2 px-2 py-1.5">
+                              <span className="inline-block h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                              <span className="font-semibold">{t}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Sensitive Stage 1 tables are RPC-only by design. Do not add broad direct table policies.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
                 {constructionReadinessSummary.rpc_security_classification && (
                   <div className="rounded-md border p-2 text-[11px] font-mono">
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">RPC Security Classification</div>
