@@ -1482,6 +1482,12 @@ export default function Stage1Dashboard() {
   const [stage1GateDecisionLoading, setStage1GateDecisionLoading] = useState(false);
   const [stage1GateDecisionError, setStage1GateDecisionError] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 commitments (read-only, Supabase-owned) ----
+  // Hydrated via public.get_stage1_commitments_snapshot(p_stage_progress_id).
+  // Supabase owns commitment state; this component only displays rows.
+  const [stage1Commitments, setStage1Commitments] = useState<Stage1Commitment[]>([]);
+  const [stage1CommitmentsLoaded, setStage1CommitmentsLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
