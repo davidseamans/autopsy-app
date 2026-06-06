@@ -1833,6 +1833,65 @@ export default function Stage1Dashboard() {
         </div>
       )}
 
+      {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
+            <CardDescription>
+              Canonical requirements for First 5 Jobs, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Requirement</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Verified</TableHead>
+                    <TableHead>Minimum standard</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...stage1Requirements]
+                    .sort(
+                      (a, b) =>
+                        (a.display_order ?? 0) - (b.display_order ?? 0),
+                    )
+                    .map((r) => (
+                      <TableRow key={r.stage_gate_evidence_id ?? r.requirement_code ?? Math.random()}>
+                        <TableCell className="font-medium">
+                          {r.evidence_label ?? r.requirement_code ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={r.verified ? "default" : "secondary"}>
+                            {r.evidence_status ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {r.minimum_standard ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: requirements RPC returned zero rows */}
+      {isDebug() &&
+        stage1RequirementsLoaded &&
+        stage1Snapshot?.stage_progress_id &&
+        stage1Requirements.length === 0 && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            No Stage 1 evidence requirements instantiated.
+          </div>
+        )}
+
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
