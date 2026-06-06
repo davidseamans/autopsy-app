@@ -2048,6 +2048,34 @@ export default function Stage1Dashboard() {
             )}
             {stage1ActivateMsg && <span>{stage1ActivateMsg}</span>}
           </div>
+          {stageProgressId && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={applyStage1GateDecision}
+                disabled={stage1GateDecisionLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stage1GateDecisionLoading ? "Applying…" : "Apply Gate Decision (debug)"}
+              </button>
+              {stage1GateDecisionError && (
+                <span className="text-amber-600">{stage1GateDecisionError}</span>
+              )}
+            </div>
+          )}
+          {stage1GateDecision && (
+            <div className="mt-2 space-y-0.5">
+              <div className="uppercase tracking-wide">gate_decision_result</div>
+              <div>
+                decision_id: {stage1GateDecision.decision_id ?? "—"}
+                {" · "}decision_status: {stage1GateDecision.decision_status ?? "—"}
+                {" · "}current_gate_status: {stage1GateDecision.current_gate_status ?? "—"}
+                {" · "}is_complete: {stage1GateDecision.is_complete ? "yes" : "no"}
+                {" · "}valid_count: {stage1GateDecision.valid_count ?? "—"}
+                {" / "}total_required: {stage1GateDecision.total_required ?? "—"}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
