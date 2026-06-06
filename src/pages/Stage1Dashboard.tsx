@@ -2214,7 +2214,7 @@ export default function Stage1Dashboard() {
   // state; this never writes stage_gate_evidence directly and never advances
   // stage gates or creates commitments/operator insights.
   const verifyStage1Evidence = async (
-    req: Stage1Requirement,
+    req: Stage1PublicEvidence,
     verified: boolean,
   ) => {
     const evidenceId = req.stage_gate_evidence_id;
