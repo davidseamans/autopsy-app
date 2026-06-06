@@ -161,6 +161,31 @@ type Stage1Snapshot = {
   latest_operator_insight_at: string | null;
 };
 
+// Canonical Stage 1 evidence requirement row, returned by the read-only RPC
+// public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id uuid).
+// Supabase owns the requirement templates and instantiated evidence rows; this
+// component only displays them and never computes requirement status or creates
+// evidence rows.
+type Stage1Requirement = {
+  stage_gate_evidence_id: string | null;
+  stage_progress_id: string | null;
+  stage_code: string | null;
+  requirement_code: string | null;
+  evidence_type: string | null;
+  evidence_label: string | null;
+  evidence_status: string | null;
+  verified: boolean | null;
+  verified_at: string | null;
+  minimum_standard: string | null;
+  required_count: number | null;
+  display_order: number | null;
+  related_table: string | null;
+  related_record_id: string | null;
+  evidence_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1376,6 +1401,13 @@ export default function Stage1Dashboard() {
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 evidence requirements (READ-ONLY, Supabase RPC) ----
+  // Hydrated via public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id).
+  // Supabase owns the requirement templates + instantiated evidence rows; this
+  // component only displays them and never creates/verifies evidence.
+  const [stage1Requirements, setStage1Requirements] = useState<Stage1Requirement[]>([]);
+  const [stage1RequirementsLoaded, setStage1RequirementsLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1426,6 +1458,46 @@ export default function Stage1Dashboard() {
   // returned canonical snapshot. No client-side eligibility, no direct writes.
   const [stage1Activating, setStage1Activating] = useState(false);
   const [stage1ActivateMsg, setStage1ActivateMsg] = useState<string | null>(null);
+
+  // Read-only hydration of canonical Stage 1 evidence requirements, keyed by the
+  // resolved stage_progress_id from the snapshot RPC. Only fires once a
+  // stage_progress_id exists; never reads stage_gate_evidence directly and never
+  // computes requirement status client-side.
+  const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1Requirements([]);
+      setStage1RequirementsLoaded(false);
+      return; // no stage_progress_id → do not call the requirements RPC
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_evidence_requirements_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn(
+            "[stage1_requirements] RPC failed:",
+            error.message,
+          );
+          return; // preserve existing dashboard behaviour
+        }
+        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
+        setStage1Requirements(rows);
+      } catch (err) {
+        console.warn("[stage1_requirements] RPC threw:", err);
+      } finally {
+        if (active) setStage1RequirementsLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
   const activateStage1 = async () => {
     if (!activeRunId) {
       setStage1ActivateMsg("No active Autopsy run id available.");
@@ -1760,6 +1832,65 @@ export default function Stage1Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
+            <CardDescription>
+              Canonical requirements for First 5 Jobs, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Requirement</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Verified</TableHead>
+                    <TableHead>Minimum standard</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...stage1Requirements]
+                    .sort(
+                      (a, b) =>
+                        (a.display_order ?? 0) - (b.display_order ?? 0),
+                    )
+                    .map((r) => (
+                      <TableRow key={r.stage_gate_evidence_id ?? r.requirement_code ?? Math.random()}>
+                        <TableCell className="font-medium">
+                          {r.evidence_label ?? r.requirement_code ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={r.verified ? "default" : "secondary"}>
+                            {r.evidence_status ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {r.minimum_standard ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: requirements RPC returned zero rows */}
+      {isDebug() &&
+        stage1RequirementsLoaded &&
+        stage1Snapshot?.stage_progress_id &&
+        stage1Requirements.length === 0 && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            No Stage 1 evidence requirements instantiated.
+          </div>
+        )}
 
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
