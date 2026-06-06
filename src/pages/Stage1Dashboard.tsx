@@ -2642,9 +2642,48 @@ export default function Stage1Dashboard() {
         </div>
       )}
 
+      {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1NextStepGuidance && (
+        <Card className="-mt-2 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Next step</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stage1NextStepGuidance.is_public_safe === true ? (
+              <div className="space-y-3">
+                {stage1NextStepGuidance.guidance_title && (
+                  <div className="text-lg font-semibold">
+                    {stage1NextStepGuidance.guidance_title}
+                  </div>
+                )}
+                {stage1NextStepGuidance.guidance_body && (
+                  <p className="text-sm text-muted-foreground">
+                    {stage1NextStepGuidance.guidance_body}
+                  </p>
+                )}
+                {stage1NextStepGuidance.primary_action_label && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      handleNextStepAction(stage1NextStepGuidance.primary_action_target)
+                    }
+                  >
+                    {stage1NextStepGuidance.primary_action_label}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Next step is not available yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
       {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
-        <Card className="-mt-2">
+        <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
             <CardDescription>
