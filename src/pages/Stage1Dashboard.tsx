@@ -1643,6 +1643,13 @@ export default function Stage1Dashboard() {
   const [uiBoundarySummaryLoading, setUiBoundarySummaryLoading] = useState(false);
   const [uiBoundarySummaryError, setUiBoundarySummaryError] = useState<string | null>(null);
 
+  // Debug/admin-only product surface plan summary (read-only, Supabase-owned)
+  // Hydrated via public.get_stage1_product_surface_plan_summary().
+  // Debug/admin only — never exposed to normal users.
+  const [productSurfacePlanSummary, setProductSurfacePlanSummary] = useState<ProductSurfacePlanSummary | null>(null);
+  const [productSurfacePlanSummaryLoading, setProductSurfacePlanSummaryLoading] = useState(false);
+  const [productSurfacePlanSummaryError, setProductSurfacePlanSummaryError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
