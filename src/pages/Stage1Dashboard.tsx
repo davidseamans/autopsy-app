@@ -284,6 +284,33 @@ type Stage1DebugControlSnapshot = {
   [key: string]: any;
 };
 
+// Construction readiness summary returned by
+// public.get_stage1_construction_readiness_summary(). Debug/admin only —
+// never exposed to normal users.
+type ConstructionReadinessSummary = {
+  construction_mode?: boolean | null;
+  latest_lifecycle_validation?: {
+    validation_status?: string | null;
+    tester_email?: string | null;
+    gate_status?: string | null;
+  } | null;
+  stage_progress_counts?: {
+    total_rows?: number | null;
+    passed_rows?: number | null;
+  } | null;
+  debug_validation_counts?: {
+    evidence_rows?: number | null;
+    decision_rows?: number | null;
+    insight_rows?: number | null;
+  } | null;
+  rpc_security_classification?: Record<string, any> | null;
+  hardening_phases?: Array<{
+    phase_number?: number | null;
+    status?: string | null;
+  }> | null;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1555,6 +1582,13 @@ export default function Stage1Dashboard() {
   const [stage1DebugControlSnapshotLoading, setStage1DebugControlSnapshotLoading] = useState(false);
   const [stage1DebugControlSnapshotError, setStage1DebugControlSnapshotError] = useState<string | null>(null);
 
+  // Debug/admin-only construction readiness summary (read-only, Supabase-owned)
+  // Hydrated via public.get_stage1_construction_readiness_summary().
+  // Debug/admin only — never exposed to normal users.
+  const [constructionReadinessSummary, setConstructionReadinessSummary] = useState<ConstructionReadinessSummary | null>(null);
+  const [constructionReadinessSummaryLoading, setConstructionReadinessSummaryLoading] = useState(false);
+  const [constructionReadinessSummaryError, setConstructionReadinessSummaryError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1816,6 +1850,27 @@ export default function Stage1Dashboard() {
       setStage1DebugControlSnapshotError("Debug snapshot threw an unexpected error.");
     } finally {
       setStage1DebugControlSnapshotLoading(false);
+    }
+  };
+
+  // Debug/admin-only construction readiness summary fetch. Calls
+  // public.get_stage1_construction_readiness_summary. Read-only; never mutates anything.
+  const fetchConstructionReadinessSummary = async () => {
+    setConstructionReadinessSummaryLoading(true);
+    setConstructionReadinessSummaryError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_construction_readiness_summary");
+      if (error) {
+        console.warn("[construction_readiness_summary] RPC failed:", error.message);
+        setConstructionReadinessSummaryError(`Readiness summary failed: ${error.message}`);
+        return;
+      }
+      setConstructionReadinessSummary(data as ConstructionReadinessSummary);
+    } catch (err) {
+      console.warn("[construction_readiness_summary] RPC threw:", err);
+      setConstructionReadinessSummaryError("Readiness summary threw an unexpected error.");
+    } finally {
+      setConstructionReadinessSummaryLoading(false);
     }
   };
 
@@ -2821,6 +2876,125 @@ export default function Stage1Dashboard() {
                   </summary>
                   <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
                     {JSON.stringify(stage1DebugControlSnapshot, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug/admin-only construction readiness summary panel. Internal/admin only —
+          never shown to normal users. Read-only; does not mutate anything. */}
+      {isDebug() && (
+        <Card className="-mt-2 border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Construction Readiness Summary
+            </CardTitle>
+            <CardDescription>
+              Internal/admin only. Platform construction readiness from Supabase.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchConstructionReadinessSummary}
+                disabled={constructionReadinessSummaryLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {constructionReadinessSummaryLoading ? "Refreshing…" : "Refresh Readiness Summary"}
+              </button>
+              {constructionReadinessSummaryError && (
+                <span className="text-[11px] font-mono text-amber-600">
+                  {constructionReadinessSummaryError}
+                </span>
+              )}
+            </div>
+            {constructionReadinessSummary && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Construction Mode</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.construction_mode === true ? "true" : "false"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest Lifecycle Validation</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.latest_lifecycle_validation?.validation_status ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Latest Gate Status</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.latest_lifecycle_validation?.gate_status ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tester Email</div>
+                    <div className="mt-1 text-sm font-semibold truncate" title={constructionReadinessSummary.latest_lifecycle_validation?.tester_email ?? ""}>
+                      {constructionReadinessSummary.latest_lifecycle_validation?.tester_email ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Stage 1 Total Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.stage_progress_counts?.total_rows ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Stage 1 Passed Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.stage_progress_counts?.passed_rows ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Debug Evidence Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.debug_validation_counts?.evidence_rows ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Debug Decision Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.debug_validation_counts?.decision_rows ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Debug Insight Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.debug_validation_counts?.insight_rows ?? "—"}
+                    </div>
+                  </div>
+                  {Array.isArray(constructionReadinessSummary.hardening_phases) &&
+                    constructionReadinessSummary.hardening_phases.map((phase, idx) => (
+                      <div key={idx} className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Hardening Phase {phase.phase_number ?? idx + 1}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {phase.status ?? "—"}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                {constructionReadinessSummary.rpc_security_classification && (
+                  <div className="rounded-md border p-2 text-[11px] font-mono">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">RPC Security Classification</div>
+                    <pre className="overflow-x-auto">
+                      {JSON.stringify(constructionReadinessSummary.rpc_security_classification, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                <details className="text-[11px] font-mono">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Raw JSON
+                  </summary>
+                  <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
+                    {JSON.stringify(constructionReadinessSummary, null, 2)}
                   </pre>
                 </details>
               </div>
