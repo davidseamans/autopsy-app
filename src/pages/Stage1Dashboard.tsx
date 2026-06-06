@@ -186,6 +186,24 @@ type Stage1Requirement = {
   updated_at: string | null;
 };
 
+// Canonical Stage 1 completion evaluation, returned by the read-only RPC
+// public.evaluate_stage1_completion(p_stage_progress_id uuid). Supabase owns
+// the evaluator; this component only displays the result and never computes
+// completion client-side.
+type Stage1Evaluation = {
+  stage_progress_id: string | null;
+  stage_code: string | null;
+  current_gate_status: string | null;
+  total_required: number | null;
+  valid_count: number | null;
+  submitted_count: number | null;
+  missing_count: number | null;
+  invalid_count: number | null;
+  waived_count: number | null;
+  is_complete: boolean | null;
+  recommended_gate_status: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
