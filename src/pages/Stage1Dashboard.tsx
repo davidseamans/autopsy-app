@@ -2173,7 +2173,7 @@ export default function Stage1Dashboard() {
   // never sets verified/valid, never writes stage_gate_evidence directly, and
   // never creates commitments or operator insights. After a successful submit it
   // re-fetches the canonical requirements snapshot to refresh displayed status.
-  const submitStage1Evidence = async (req: Stage1Requirement) => {
+  const submitStage1Evidence = async (req: Stage1PublicEvidence) => {
     const evidenceId = req.stage_gate_evidence_id;
     if (!evidenceId || !stageProgressId) return;
     setStage1SubmittingId(evidenceId);
