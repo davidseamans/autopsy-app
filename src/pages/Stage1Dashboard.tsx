@@ -248,6 +248,23 @@ type Stage1CommitmentCheckResult = {
   operator_insight_id: string | null;
 };
 
+// Internal-only operator insight review row, returned by the read-only RPC
+// public.get_operator_insights_review_snapshot(p_stage_progress_id, p_review_status, p_limit).
+// Supabase owns insight generation and review state. These rows are for
+// debug/admin internal review ONLY and must never be exposed to end users or
+// surfaced with public maturity language.
+type OperatorInsightReview = {
+  operator_insight_id: string | null;
+  review_status: string | null;
+  maturity_dimension: string | null;
+  signal: string | null;
+  commitment_label: string | null;
+  actual_value_at_check: number | null;
+  verified_evidence_count: number | null;
+  insight_text: string | null;
+  created_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
