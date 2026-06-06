@@ -1660,6 +1660,62 @@ export default function Stage1Dashboard() {
     }
   };
 
+  // Debug/admin-only gate decision action. Calls public.apply_stage1_gate_decision
+  // which evaluates completion server-side, writes a stage_gate_decisions audit row,
+  // and only updates stage_progress to passed if all required evidence is valid.
+  // Supabase owns evaluation, decision recording, and progression state.
+  const applyStage1GateDecision = async () => {
+    if (!stageProgressId) {
+      setStage1GateDecisionError("No stage_progress_id available.");
+      return;
+    }
+    setStage1GateDecisionLoading(true);
+    setStage1GateDecisionError(null);
+    setStage1GateDecision(null);
+    try {
+      const { data, error } = await supabase.rpc("apply_stage1_gate_decision", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_gate_decision] RPC failed:", error.message);
+        setStage1GateDecisionError(`Gate decision failed: ${error.message}`);
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        setStage1GateDecision(row as Stage1GateDecision);
+      }
+      // Re-fetch canonical snapshot, requirements, and evaluation
+      if (activeRunId) {
+        const { data: snapData, error: snapErr } = await supabase.rpc(
+          "get_stage1_progress_snapshot_by_run",
+          { p_run_id: activeRunId },
+        );
+        if (!snapErr) {
+          const snapRow = Array.isArray(snapData) ? snapData[0] : snapData;
+          if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
+        }
+      }
+      if (stageProgressId) {
+        const reqRows = await fetchStage1Requirements(stageProgressId);
+        setStage1Requirements(reqRows);
+        const { data: evalData, error: evalErr } = await supabase.rpc(
+          "evaluate_stage1_completion",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!evalErr) {
+          const evalRow = Array.isArray(evalData) ? evalData[0] : evalData;
+          if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
+        }
+      }
+    } catch (err) {
+      console.warn("[stage1_gate_decision] RPC threw:", err);
+      setStage1GateDecisionError("Gate decision threw an unexpected error.");
+    } finally {
+      setStage1GateDecisionLoading(false);
+    }
+  };
+
   const activateStage1 = async () => {
     if (!activeRunId) {
       setStage1ActivateMsg("No active Autopsy run id available.");
