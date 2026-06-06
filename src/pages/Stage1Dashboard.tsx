@@ -2869,6 +2869,13 @@ export default function Stage1Dashboard() {
                             <Badge variant={r.verified ? "default" : "secondary"}>
                               {r.evidence_status ?? "missing"}
                             </Badge>
+                            {!r.verified &&
+                              (r.evidence_status ?? "").toLowerCase() ===
+                                "submitted" && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Submitted — awaiting verification.
+                                </p>
+                              )}
                           </TableCell>
                           <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
                           <TableCell className="text-muted-foreground">
