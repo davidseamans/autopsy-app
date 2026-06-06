@@ -3326,9 +3326,54 @@ export default function Stage1Dashboard() {
                         <div className="mt-1 text-sm font-semibold">
                           {phase.status ?? "—"}
                         </div>
-                      </div>
-                    ))}
+                  </div>
+                ))}
+                {constructionReadinessSummary.public_wrapper_set && (
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Public Wrapper Set Complete</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.public_wrapper_set.complete === true ? "true" : "false"}
+                    </div>
+                  </div>
+                )}
+                {constructionReadinessSummary.public_wrapper_set && (
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Required Wrappers</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.public_wrapper_set.required_count ?? "—"}
+                    </div>
+                  </div>
+                )}
+                {constructionReadinessSummary.public_wrapper_set && (
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Classified Wrappers</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {constructionReadinessSummary.public_wrapper_set.classified_count ?? "—"}
+                    </div>
+                  </div>
+                )}
                 </div>
+                {Array.isArray(constructionReadinessSummary.public_wrapper_set?.wrappers) && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Wrapper Functions</div>
+                    <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                      {constructionReadinessSummary.public_wrapper_set.wrappers.map((w, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                            <span className="truncate font-semibold">{w.function_name ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                            <span>registered: {w.registered === true ? "true" : "false"}</span>
+                            <span>class: {w.classification ?? "—"}</span>
+                            <span>target: {w.production_target ?? "—"}</span>
+                            <span>hardening: {w.hardening_required === true ? "true" : "false"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {constructionReadinessSummary.rpc_security_classification && (
                   <div className="rounded-md border p-2 text-[11px] font-mono">
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">RPC Security Classification</div>
