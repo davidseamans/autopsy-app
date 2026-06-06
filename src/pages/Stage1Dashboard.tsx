@@ -1340,6 +1340,49 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
+  // ---- Canonical Stage 1 progress (READ-ONLY) ----
+  // Hydrated from public.stage_progress in autopsy-canonical. Used only as a
+  // canonical gate-status display input; never written from this component.
+  const [stageProgress, setStageProgress] = useState<StageProgressRow | null>(null);
+  const [stageProgressLoaded, setStageProgressLoaded] = useState(false);
+
+  // Read-only hydration of canonical stage_progress, guarded + isolated so it
+  // never affects the existing quotes/jobs board behaviour.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        // TODO(auth): No authenticated user identifier is available in this
+        // component yet. When auth lands, scope this read by the real user_id.
+        // Do NOT hard-code SYSTEM_ACTIVATION_TEST into production UI.
+        const currentUserId: string | null = null;
+        let query = supabase
+          .from("stage_progress")
+          .select(
+            "id, user_id, current_stage_code, current_gate_status, autopsy_run_id, started_at, unlocked_at, completed_at, last_activity_at, notes",
+          )
+          .eq("current_stage_code", "stage_1_first_five_jobs")
+          .order("last_activity_at", { ascending: false })
+          .limit(1);
+        if (currentUserId) query = query.eq("user_id", currentUserId);
+        const { data, error } = await query.maybeSingle();
+        if (!active) return;
+        if (error) {
+          console.warn("[stage_progress] read failed:", error.message);
+          return; // preserve existing computed dashboard behaviour
+        }
+        if (data) setStageProgress(data as StageProgressRow);
+      } catch (err) {
+        console.warn("[stage_progress] read threw:", err);
+      } finally {
+        if (active) setStageProgressLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Load the persisted Core quote board + job ledger so Stage 1 survives refresh.
   useEffect(() => {
     let active = true;
