@@ -1413,6 +1413,12 @@ export default function Stage1Dashboard() {
   const [stage1SubmitError, setStage1SubmitError] = useState<string | null>(null);
   const [stage1SubmitNotes, setStage1SubmitNotes] = useState<Record<string, string>>({});
 
+  // Debug/admin-only verification state. Supabase owns verification; this tracks
+  // pending RPC calls and any diagnostic error messages.
+  const [stage1VerifyingId, setStage1VerifyingId] = useState<string | null>(null);
+  const [stage1VerifyError, setStage1VerifyError] = useState<string | null>(null);
+
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
