@@ -265,6 +265,25 @@ type OperatorInsightReview = {
   created_at: string | null;
 };
 
+// Combined debug/control snapshot returned by
+// public.get_stage1_debug_control_snapshot(p_stage_progress_id). Debug/admin
+// only — never exposed to normal users.
+type Stage1DebugControlSnapshot = {
+  stage_progress?: Record<string, any> | null;
+  evaluation?: {
+    valid_count?: number | null;
+    total_required?: number | null;
+    is_complete?: boolean | null;
+    current_gate_status?: string | null;
+  } | null;
+  evidence?: any[] | null;
+  commitments?: any[] | null;
+  gate_decisions?: any[] | null;
+  operator_insights?: any[] | null;
+  debug_validation?: any;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
