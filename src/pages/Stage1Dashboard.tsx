@@ -1421,6 +1421,45 @@ export default function Stage1Dashboard() {
     };
   }, []);
 
+  // Debug/admin-only Stage 1 activation. Supabase owns ALL activation logic;
+  // this only *requests* activation by the active Autopsy run id and stores the
+  // returned canonical snapshot. No client-side eligibility, no direct writes.
+  const [stage1Activating, setStage1Activating] = useState(false);
+  const [stage1ActivateMsg, setStage1ActivateMsg] = useState<string | null>(null);
+  const activateStage1 = async () => {
+    if (!activeRunId) {
+      setStage1ActivateMsg("No active Autopsy run id available.");
+      return;
+    }
+    setStage1Activating(true);
+    setStage1ActivateMsg(null);
+    try {
+      const { data, error } = await supabase.rpc(
+        "activate_stage1_from_autopsy_run",
+        { p_run_id: activeRunId },
+      );
+      if (error) {
+        console.warn("[stage1_activate] RPC failed:", error.message);
+        setStage1ActivateMsg(`Activation failed: ${error.message}`);
+        return; // preserve existing dashboard behaviour
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        setStage1Snapshot(row as Stage1Snapshot);
+        setStage1ActivateMsg(
+          `Activated · gate: ${(row as Stage1Snapshot).current_gate_status ?? "—"}`,
+        );
+      } else {
+        setStage1ActivateMsg("Activation returned no snapshot.");
+      }
+    } catch (err) {
+      console.warn("[stage1_activate] RPC threw:", err);
+      setStage1ActivateMsg("Activation threw an unexpected error.");
+    } finally {
+      setStage1Activating(false);
+    }
+  };
+
   // Load the persisted Core quote board + job ledger so Stage 1 survives refresh.
   useEffect(() => {
     let active = true;
@@ -1705,6 +1744,20 @@ export default function Stage1Dashboard() {
           {" · "}verified_evidence: {stage1Snapshot?.verified_evidence_count ?? "—"}
           {" · "}met_commitments: {stage1Snapshot?.met_commitment_count ?? "—"}
           {" · "}insights: {stage1Snapshot?.latest_operator_insight_count ?? "—"}
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={activateStage1}
+              disabled={stage1Activating || !activeRunId}
+              className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {stage1Activating ? "Activating…" : "Activate Stage 1 (debug)"}
+            </button>
+            {!activeRunId && (
+              <span className="text-amber-600">No active Autopsy run id available.</span>
+            )}
+            {stage1ActivateMsg && <span>{stage1ActivateMsg}</span>}
+          </div>
         </div>
       )}
 
