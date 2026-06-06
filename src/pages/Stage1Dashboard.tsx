@@ -2795,7 +2795,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
+      {displayEvidence.length > 0 && (
         <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
@@ -2817,7 +2817,7 @@ export default function Stage1Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...stage1Requirements]
+                  {[...displayEvidence]
                     .sort(
                       (a, b) =>
                         (a.display_order ?? 0) - (b.display_order ?? 0),
