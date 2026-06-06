@@ -327,6 +327,37 @@ type UIBoundarySummary = {
   [key: string]: any;
 };
 
+// Product surface plan summary returned by public.get_stage1_product_surface_plan_summary().
+// Debug/admin only — never exposed to normal users. Read-only.
+type ProductSurfacePlanSummary = {
+  release_status_summary?: {
+    ready_after_hardening?: number | null;
+    planned?: number | null;
+    blocked?: number | null;
+    [key: string]: any;
+  } | null;
+  public_candidates?: Array<{
+    product_surface?: string | null;
+    release_status?: string | null;
+    intended_user_purpose?: string | null;
+    allowed_data_sources?: string | null;
+    forbidden_behaviour?: string | null;
+    hardening_dependency?: string | null;
+    [key: string]: any;
+  }> | null;
+  blocked_surfaces?: Array<{
+    product_surface?: string | null;
+    intended_user_purpose?: string | null;
+    forbidden_behaviour?: string | null;
+    hardening_dependency?: string | null;
+    [key: string]: any;
+  }> | null;
+  hardening_dependencies?: any[] | null;
+  forbidden_behaviours?: any[] | null;
+  allowed_data_sources_actions?: any[] | null;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
