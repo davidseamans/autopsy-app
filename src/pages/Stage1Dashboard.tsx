@@ -3625,6 +3625,70 @@ export default function Stage1Dashboard() {
                     </p>
                   </>
                 )}
+                {constructionReadinessSummary.operator_run_ownership_model && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Ownership Resolver Contract Defined</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          true
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Release-Blocking Ownership Requirements</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.operator_run_ownership_model.release_blocking_count ?? "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2 col-span-2 md:col-span-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Missing Release-Grade Link</div>
+                        <div className="mt-1 text-[11px]">
+                          authenticated operator/session → owned autopsy_run_id
+                        </div>
+                      </div>
+                    </div>
+                    {Array.isArray(constructionReadinessSummary.operator_run_ownership_model.summary) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Ownership Model Summary</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.operator_run_ownership_model.summary.map((s, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <span className="font-semibold truncate">{s.contract_area ?? "—"}</span>
+                              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                                <span>reqs: {s.requirement_count ?? "—"}</span>
+                                <span>blockers: {s.release_blocking_count ?? "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {Array.isArray(constructionReadinessSummary.operator_run_ownership_model.requirements) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Ownership Requirements</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.operator_run_ownership_model.requirements.map((r, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${r.release_blocking === true ? "bg-amber-500" : "bg-emerald-500"}`} />
+                                <span className="truncate font-semibold">{r.contract_key ?? "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                                <span>priority: {r.priority ?? "—"}</span>
+                                <span>{r.contract_area ?? "—"}</span>
+                                <span>{r.contract_requirement ?? "—"}</span>
+                                <span>target: {r.target_state ?? "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Ownership model is defined, but not implemented. Stage 1 remains blocked for release.
+                    </p>
+                  </>
+                )}
                 {constructionReadinessSummary.rpc_security_classification && (
                   <div className="rounded-md border p-2 text-[11px] font-mono">
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">RPC Security Classification</div>
