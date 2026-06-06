@@ -216,6 +216,28 @@ type Stage1GateDecision = {
   total_required: number | null;
 };
 
+// Canonical Stage 1 commitment row, returned by the read-only RPC
+// public.get_stage1_commitments_snapshot(p_stage_progress_id uuid). Supabase
+// owns commitment state; this component only displays rows and never creates
+// or checks commitments client-side.
+type Stage1Commitment = {
+  commitment_id: string | null;
+  stage_progress_id: string | null;
+  user_id: string | null;
+  commitment_type: string | null;
+  commitment_label: string | null;
+  target_metric: string | null;
+  target_value: number | null;
+  baseline_value: number | null;
+  status: string | null;
+  due_at: string | null;
+  completion_checked_at: string | null;
+  actual_value_at_check: number | null;
+  follow_up_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
