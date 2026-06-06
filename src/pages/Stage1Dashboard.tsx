@@ -186,6 +186,24 @@ type Stage1Requirement = {
   updated_at: string | null;
 };
 
+// Canonical Stage 1 completion evaluation, returned by the read-only RPC
+// public.evaluate_stage1_completion(p_stage_progress_id uuid). Supabase owns
+// the evaluator; this component only displays the result and never computes
+// completion client-side.
+type Stage1Evaluation = {
+  stage_progress_id: string | null;
+  stage_code: string | null;
+  current_gate_status: string | null;
+  total_required: number | null;
+  valid_count: number | null;
+  submitted_count: number | null;
+  missing_count: number | null;
+  invalid_count: number | null;
+  waived_count: number | null;
+  is_complete: boolean | null;
+  recommended_gate_status: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1418,6 +1436,11 @@ export default function Stage1Dashboard() {
   const [stage1VerifyingId, setStage1VerifyingId] = useState<string | null>(null);
   const [stage1VerifyError, setStage1VerifyError] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 completion evaluation (read-only, Supabase-owned) ----
+  // Hydrated via public.evaluate_stage1_completion(p_stage_progress_id).
+  // Supabase owns the evaluator; this component only displays the result.
+  const [stage1Evaluation, setStage1Evaluation] = useState<Stage1Evaluation | null>(null);
+  const [stage1EvaluationLoaded, setStage1EvaluationLoaded] = useState(false);
 
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
@@ -1503,6 +1526,39 @@ export default function Stage1Dashboard() {
         console.warn("[stage1_requirements] RPC threw:", err);
       } finally {
         if (active) setStage1RequirementsLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Read-only hydration of canonical Stage 1 completion evaluation. Only fires
+  // when stage_progress_id exists; never mutates stage_progress or advances gates.
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1Evaluation(null);
+      setStage1EvaluationLoaded(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "evaluate_stage1_completion",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn("[stage1_evaluation] RPC failed:", error.message);
+          return;
+        }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) setStage1Evaluation(row as Stage1Evaluation);
+      } catch (err) {
+        console.warn("[stage1_evaluation] RPC threw:", err);
+      } finally {
+        if (active) setStage1EvaluationLoaded(true);
       }
     })();
     return () => {
@@ -2042,6 +2098,68 @@ export default function Stage1Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
+      {stage1Evaluation && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
+            <CardDescription>
+              Canonical evaluator result, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Valid</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.valid_count ?? 0} / {stage1Evaluation.total_required ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Submitted</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.submitted_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Missing</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.missing_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Invalid</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.invalid_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Complete</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.is_complete ? "Yes" : "No"}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Recommended Gate</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.recommended_gate_status ?? "—"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: evaluator returned no row */}
+      {isDebug() &&
+        stage1EvaluationLoaded &&
+        stageProgressId &&
+        !stage1Evaluation && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            Stage 1 evaluation returned no row for this progress id.
+          </div>
+        )}
 
       {/* Debug-only: requirements RPC returned zero rows */}
       {isDebug() &&
