@@ -134,9 +134,11 @@ type Quote = {
 // plus a handful of in-flight / rejected quotes for the conversion board.
 const SEED_QUOTES: Quote[] = [];
 
-// Canonical Stage 1 progress row shape (public.stage_progress, READ-ONLY).
-type StageProgressRow = {
-  id: string;
+// Canonical Stage 1 snapshot shape, returned by the read-only Supabase RPC
+// public.get_stage1_progress_snapshot(p_user_id text). Supabase is the source
+// of truth; this component never assembles progression tables directly.
+type Stage1Snapshot = {
+  stage_progress_id: string | null;
   user_id: string | null;
   current_stage_code: string | null;
   current_gate_status: string | null;
@@ -146,6 +148,14 @@ type StageProgressRow = {
   completed_at: string | null;
   last_activity_at: string | null;
   notes: string | null;
+  verified_evidence_count: number | null;
+  total_evidence_count: number | null;
+  open_commitment_count: number | null;
+  met_commitment_count: number | null;
+  missed_commitment_count: number | null;
+  partial_commitment_count: number | null;
+  latest_operator_insight_count: number | null;
+  latest_operator_insight_at: string | null;
 };
 
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
