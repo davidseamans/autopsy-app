@@ -1665,6 +1665,13 @@ export default function Stage1Dashboard() {
   const [productSurfacePlanSummaryLoading, setProductSurfacePlanSummaryLoading] = useState(false);
   const [productSurfacePlanSummaryError, setProductSurfacePlanSummaryError] = useState<string | null>(null);
 
+  // Product-facing next-step guidance (read-only, Supabase-owned). Hydrated via
+  // public.get_stage1_next_step_guidance(p_stage_progress_id). Supabase owns all
+  // guidance derivation; this component only renders the returned row.
+  const [stage1NextStepGuidance, setStage1NextStepGuidance] = useState<Stage1NextStepGuidance | null>(null);
+  const [stage1NextStepGuidanceLoaded, setStage1NextStepGuidanceLoaded] = useState(false);
+  const [stage1NextStepGuidanceError, setStage1NextStepGuidanceError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
