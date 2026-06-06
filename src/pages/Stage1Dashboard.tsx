@@ -204,6 +204,18 @@ type Stage1Evaluation = {
   recommended_gate_status: string | null;
 };
 
+// Gate decision result returned by public.apply_stage1_gate_decision(p_stage_progress_id).
+// Supabase owns the decision; this component only displays the returned audit row.
+type Stage1GateDecision = {
+  decision_id: string | null;
+  stage_progress_id: string | null;
+  decision_status: string | null;
+  current_gate_status: string | null;
+  is_complete: boolean | null;
+  valid_count: number | null;
+  total_required: number | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1442,6 +1454,12 @@ export default function Stage1Dashboard() {
   const [stage1Evaluation, setStage1Evaluation] = useState<Stage1Evaluation | null>(null);
   const [stage1EvaluationLoaded, setStage1EvaluationLoaded] = useState(false);
 
+  // ---- Debug/admin-only gate decision (Supabase-owned) ----
+  // Tracks the result of public.apply_stage1_gate_decision and any diagnostic error.
+  const [stage1GateDecision, setStage1GateDecision] = useState<Stage1GateDecision | null>(null);
+  const [stage1GateDecisionLoading, setStage1GateDecisionLoading] = useState(false);
+  const [stage1GateDecisionError, setStage1GateDecisionError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1639,6 +1657,62 @@ export default function Stage1Dashboard() {
       setStage1VerifyError("Verification threw an unexpected error.");
     } finally {
       setStage1VerifyingId(null);
+    }
+  };
+
+  // Debug/admin-only gate decision action. Calls public.apply_stage1_gate_decision
+  // which evaluates completion server-side, writes a stage_gate_decisions audit row,
+  // and only updates stage_progress to passed if all required evidence is valid.
+  // Supabase owns evaluation, decision recording, and progression state.
+  const applyStage1GateDecision = async () => {
+    if (!stageProgressId) {
+      setStage1GateDecisionError("No stage_progress_id available.");
+      return;
+    }
+    setStage1GateDecisionLoading(true);
+    setStage1GateDecisionError(null);
+    setStage1GateDecision(null);
+    try {
+      const { data, error } = await supabase.rpc("apply_stage1_gate_decision", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_gate_decision] RPC failed:", error.message);
+        setStage1GateDecisionError(`Gate decision failed: ${error.message}`);
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        setStage1GateDecision(row as Stage1GateDecision);
+      }
+      // Re-fetch canonical snapshot, requirements, and evaluation
+      if (activeRunId) {
+        const { data: snapData, error: snapErr } = await supabase.rpc(
+          "get_stage1_progress_snapshot_by_run",
+          { p_run_id: activeRunId },
+        );
+        if (!snapErr) {
+          const snapRow = Array.isArray(snapData) ? snapData[0] : snapData;
+          if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
+        }
+      }
+      if (stageProgressId) {
+        const reqRows = await fetchStage1Requirements(stageProgressId);
+        setStage1Requirements(reqRows);
+        const { data: evalData, error: evalErr } = await supabase.rpc(
+          "evaluate_stage1_completion",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!evalErr) {
+          const evalRow = Array.isArray(evalData) ? evalData[0] : evalData;
+          if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
+        }
+      }
+    } catch (err) {
+      console.warn("[stage1_gate_decision] RPC threw:", err);
+      setStage1GateDecisionError("Gate decision threw an unexpected error.");
+    } finally {
+      setStage1GateDecisionLoading(false);
     }
   };
 
@@ -1974,6 +2048,34 @@ export default function Stage1Dashboard() {
             )}
             {stage1ActivateMsg && <span>{stage1ActivateMsg}</span>}
           </div>
+          {stageProgressId && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={applyStage1GateDecision}
+                disabled={stage1GateDecisionLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stage1GateDecisionLoading ? "Applying…" : "Apply Gate Decision (debug)"}
+              </button>
+              {stage1GateDecisionError && (
+                <span className="text-amber-600">{stage1GateDecisionError}</span>
+              )}
+            </div>
+          )}
+          {stage1GateDecision && (
+            <div className="mt-2 space-y-0.5">
+              <div className="uppercase tracking-wide">gate_decision_result</div>
+              <div>
+                decision_id: {stage1GateDecision.decision_id ?? "—"}
+                {" · "}decision_status: {stage1GateDecision.decision_status ?? "—"}
+                {" · "}current_gate_status: {stage1GateDecision.current_gate_status ?? "—"}
+                {" · "}is_complete: {stage1GateDecision.is_complete ? "yes" : "no"}
+                {" · "}valid_count: {stage1GateDecision.valid_count ?? "—"}
+                {" / "}total_required: {stage1GateDecision.total_required ?? "—"}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
