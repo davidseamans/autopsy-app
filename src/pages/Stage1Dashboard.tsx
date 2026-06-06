@@ -204,6 +204,18 @@ type Stage1Evaluation = {
   recommended_gate_status: string | null;
 };
 
+// Gate decision result returned by public.apply_stage1_gate_decision(p_stage_progress_id).
+// Supabase owns the decision; this component only displays the returned audit row.
+type Stage1GateDecision = {
+  decision_id: string | null;
+  stage_progress_id: string | null;
+  decision_status: string | null;
+  current_gate_status: string | null;
+  is_complete: boolean | null;
+  valid_count: number | null;
+  total_required: number | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
