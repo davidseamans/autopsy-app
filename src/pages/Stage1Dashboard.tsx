@@ -327,6 +327,37 @@ type UIBoundarySummary = {
   [key: string]: any;
 };
 
+// Product surface plan summary returned by public.get_stage1_product_surface_plan_summary().
+// Debug/admin only — never exposed to normal users. Read-only.
+type ProductSurfacePlanSummary = {
+  release_status_summary?: {
+    ready_after_hardening?: number | null;
+    planned?: number | null;
+    blocked?: number | null;
+    [key: string]: any;
+  } | null;
+  public_candidates?: Array<{
+    product_surface?: string | null;
+    release_status?: string | null;
+    intended_user_purpose?: string | null;
+    allowed_data_sources?: string | null;
+    forbidden_behaviour?: string | null;
+    hardening_dependency?: string | null;
+    [key: string]: any;
+  }> | null;
+  blocked_surfaces?: Array<{
+    product_surface?: string | null;
+    intended_user_purpose?: string | null;
+    forbidden_behaviour?: string | null;
+    hardening_dependency?: string | null;
+    [key: string]: any;
+  }> | null;
+  hardening_dependencies?: any[] | null;
+  forbidden_behaviours?: any[] | null;
+  allowed_data_sources_actions?: any[] | null;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1612,6 +1643,13 @@ export default function Stage1Dashboard() {
   const [uiBoundarySummaryLoading, setUiBoundarySummaryLoading] = useState(false);
   const [uiBoundarySummaryError, setUiBoundarySummaryError] = useState<string | null>(null);
 
+  // Debug/admin-only product surface plan summary (read-only, Supabase-owned)
+  // Hydrated via public.get_stage1_product_surface_plan_summary().
+  // Debug/admin only — never exposed to normal users.
+  const [productSurfacePlanSummary, setProductSurfacePlanSummary] = useState<ProductSurfacePlanSummary | null>(null);
+  const [productSurfacePlanSummaryLoading, setProductSurfacePlanSummaryLoading] = useState(false);
+  const [productSurfacePlanSummaryError, setProductSurfacePlanSummaryError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1915,6 +1953,27 @@ export default function Stage1Dashboard() {
       setUiBoundarySummaryError("UI boundary summary threw an unexpected error.");
     } finally {
       setUiBoundarySummaryLoading(false);
+    }
+  };
+
+  // Debug/admin-only product surface plan summary fetch. Calls
+  // public.get_stage1_product_surface_plan_summary. Read-only; never mutates anything.
+  const fetchProductSurfacePlanSummary = async () => {
+    setProductSurfacePlanSummaryLoading(true);
+    setProductSurfacePlanSummaryError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_product_surface_plan_summary");
+      if (error) {
+        console.warn("[product_surface_plan_summary] RPC failed:", error.message);
+        setProductSurfacePlanSummaryError(`Product surface plan summary failed: ${error.message}`);
+        return;
+      }
+      setProductSurfacePlanSummary(data as ProductSurfacePlanSummary);
+    } catch (err) {
+      console.warn("[product_surface_plan_summary] RPC threw:", err);
+      setProductSurfacePlanSummaryError("Product surface plan summary threw an unexpected error.");
+    } finally {
+      setProductSurfacePlanSummaryLoading(false);
     }
   };
 
@@ -3177,6 +3236,109 @@ export default function Stage1Dashboard() {
                   </summary>
                   <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
                     {JSON.stringify(uiBoundarySummary, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug/admin-only product surface plan summary panel. Internal/admin only —
+          never shown to normal users. Read-only; does not mutate anything. */}
+      {isDebug() && (
+        <Card className="-mt-2 border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Product Surface Plan Summary
+            </CardTitle>
+            <CardDescription>
+              Internal/admin only. Supabase-owned product-facing UI blueprint.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchProductSurfacePlanSummary}
+                disabled={productSurfacePlanSummaryLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {productSurfacePlanSummaryLoading ? "Refreshing…" : "Refresh Product Surface Plan"}
+              </button>
+              {productSurfacePlanSummaryError && (
+                <span className="text-[11px] font-mono text-amber-600">
+                  {productSurfacePlanSummaryError}
+                </span>
+              )}
+            </div>
+            {productSurfacePlanSummary && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Ready after hardening</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {productSurfacePlanSummary.release_status_summary?.ready_after_hardening ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Planned</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {productSurfacePlanSummary.release_status_summary?.planned ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Blocked</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {productSurfacePlanSummary.release_status_summary?.blocked ?? "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {Array.isArray(productSurfacePlanSummary.public_candidates) && productSurfacePlanSummary.public_candidates.length > 0 && (
+                  <div className="rounded-md border p-2 text-[11px] font-mono">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Public candidate surfaces</div>
+                    <ul className="list-disc list-inside space-y-1">
+                      {productSurfacePlanSummary.public_candidates.map((s, i) => (
+                        <li key={i}>
+                          <span className="font-semibold">{s.product_surface ?? "—"}</span>
+                          <span className="ml-1 text-muted-foreground">({s.release_status ?? "—"})</span>
+                          <div className="ml-4 text-muted-foreground">
+                            Purpose: {s.intended_user_purpose ?? "—"}
+                            {s.allowed_data_sources && <span className="ml-1">| Sources: {s.allowed_data_sources}</span>}
+                            {s.forbidden_behaviour && <span className="ml-1">| Forbidden: {s.forbidden_behaviour}</span>}
+                            {s.hardening_dependency && <span className="ml-1">| Depends: {s.hardening_dependency}</span>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {Array.isArray(productSurfacePlanSummary.blocked_surfaces) && productSurfacePlanSummary.blocked_surfaces.length > 0 && (
+                  <div className="rounded-md border p-2 text-[11px] font-mono">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Blocked surfaces</div>
+                    <ul className="list-disc list-inside space-y-1">
+                      {productSurfacePlanSummary.blocked_surfaces.map((s, i) => (
+                        <li key={i}>
+                          <span className="font-semibold">{s.product_surface ?? "—"}</span>
+                          <div className="ml-4 text-muted-foreground">
+                            Purpose: {s.intended_user_purpose ?? "—"}
+                            {s.forbidden_behaviour && <span className="ml-1">| Forbidden: {s.forbidden_behaviour}</span>}
+                            {s.hardening_dependency && <span className="ml-1">| Depends: {s.hardening_dependency}</span>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <details className="text-[11px] font-mono">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Raw JSON
+                  </summary>
+                  <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
+                    {JSON.stringify(productSurfacePlanSummary, null, 2)}
                   </pre>
                 </details>
               </div>
