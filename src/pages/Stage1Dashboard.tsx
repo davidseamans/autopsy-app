@@ -2186,40 +2186,51 @@ export default function Stage1Dashboard() {
     }
   };
 
-  // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
-  // one requirement to evidence_status='submitted' while keeping verified=false
-  // and verified_at=null. Supabase owns evidence/verification/gate state; this
-  // never sets verified/valid, never writes stage_gate_evidence directly, and
-  // never creates commitments or operator insights. After a successful submit it
-  // re-fetches the canonical requirements snapshot to refresh displayed status.
+  // Product-facing, run-scoped submit-only evidence action. Calls the public
+  // wrapper public.submit_stage1_public_evidence_by_run which requires a
+  // completed Autopsy run, resolves Stage 1 progress server-side, confirms the
+  // evidence row belongs to that run's Stage 1 progress, and delegates to
+  // submit_stage1_evidence. The lower-level submit_stage1_evidence is never
+  // called from product-facing UI. This moves one requirement to
+  // evidence_status='submitted' while keeping verified=false (submission is not
+  // verification). Supabase owns evidence/verification/gate state; this never
+  // sets verified/valid, never writes stage_gate_evidence directly, and never
+  // creates commitments or operator insights. After a successful submit it
+  // re-fetches the canonical public wrappers to refresh displayed status.
   const submitStage1Evidence = async (req: Stage1PublicEvidence) => {
     const evidenceId = req.stage_gate_evidence_id;
-    if (!evidenceId || !stageProgressId) return;
+    if (!evidenceId || !activeRunId) return;
     setStage1SubmittingId(evidenceId);
     setStage1SubmitError(null);
     const note = (stage1SubmitNotes[evidenceId] ?? "").trim();
     try {
-      const { error } = await supabase.rpc("submit_stage1_evidence", {
-        p_stage_gate_evidence_id: evidenceId,
-        // No file-upload architecture exists yet; submit metadata-only evidence.
-        p_related_table: null,
-        p_related_record_id: null,
-        p_evidence_url: null,
-        p_evidence_value: {
-          source: "stage1_dashboard",
-          requirement_code: req.requirement_code,
-          ...(note ? { user_note: note } : {}),
+      const { error } = await supabase.rpc(
+        "submit_stage1_public_evidence_by_run",
+        {
+          p_run_id: activeRunId,
+          p_stage_gate_evidence_id: evidenceId,
+          p_evidence_url: null,
+          p_evidence_value: {
+            source: "stage1_dashboard",
+            requirement_code: req.requirement_code,
+            ...(note ? { user_note: note } : {}),
+          },
         },
-      });
+      );
       if (error) {
         console.warn("[stage1_submit] RPC failed:", error.message);
         setStage1SubmitError(`Submit failed: ${error.message}`);
         return; // preserve current UI state
       }
-      // Re-fetch canonical status; never infer 'submitted' client-side.
-      const rows = await fetchStage1Requirements(stageProgressId);
-      setStage1Requirements(rows);
+      // Re-fetch canonical public status; never infer 'submitted' client-side.
+      // refreshStage1PublicWrappers re-fetches public evidence, completion and
+      // next-step (among others) via the run-scoped wrappers.
       await refreshStage1PublicWrappers(activeRunId);
+      // Preserve debug/admin requirements snapshot refresh when available.
+      if (stageProgressId) {
+        const rows = await fetchStage1Requirements(stageProgressId);
+        setStage1Requirements(rows);
+      }
     } catch (err) {
       console.warn("[stage1_submit] RPC threw:", err);
       setStage1SubmitError("Submit threw an unexpected error.");
@@ -2858,6 +2869,13 @@ export default function Stage1Dashboard() {
                             <Badge variant={r.verified ? "default" : "secondary"}>
                               {r.evidence_status ?? "missing"}
                             </Badge>
+                            {!r.verified &&
+                              (r.evidence_status ?? "").toLowerCase() ===
+                                "submitted" && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Submitted — awaiting verification.
+                                </p>
+                              )}
                           </TableCell>
                           <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
                           <TableCell className="text-muted-foreground">
