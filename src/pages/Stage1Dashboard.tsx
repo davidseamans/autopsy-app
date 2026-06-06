@@ -327,6 +327,16 @@ type ConstructionReadinessSummary = {
     direct_policy_expected_count?: number | null;
     sensitive_rpc_only_tables?: string[] | null;
   } | null;
+  validation_milestones?: {
+    all_required_passed?: boolean | null;
+    milestones?: Array<{
+      milestone_key?: string | null;
+      milestone_label?: string | null;
+      milestone_status?: string | null;
+      validation_scope?: string | null;
+      evidence_reference?: string | null;
+    }> | null;
+  } | null;
   [key: string]: any;
 };
 
