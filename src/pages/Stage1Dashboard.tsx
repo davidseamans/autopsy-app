@@ -248,6 +248,23 @@ type Stage1CommitmentCheckResult = {
   operator_insight_id: string | null;
 };
 
+// Internal-only operator insight review row, returned by the read-only RPC
+// public.get_operator_insights_review_snapshot(p_stage_progress_id, p_review_status, p_limit).
+// Supabase owns insight generation and review state. These rows are for
+// debug/admin internal review ONLY and must never be exposed to end users or
+// surfaced with public maturity language.
+type OperatorInsightReview = {
+  operator_insight_id: string | null;
+  review_status: string | null;
+  maturity_dimension: string | null;
+  signal: string | null;
+  commitment_label: string | null;
+  actual_value_at_check: number | null;
+  verified_evidence_count: number | null;
+  insight_text: string | null;
+  created_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1504,6 +1521,14 @@ export default function Stage1Dashboard() {
   const [stage1CommitmentCheckLoading, setStage1CommitmentCheckLoading] = useState(false);
   const [stage1CommitmentCheckError, setStage1CommitmentCheckError] = useState<string | null>(null);
 
+  // Internal/admin-only operator insight review state. Hydrated via the
+  // read-only RPC get_operator_insights_review_snapshot. Debug/admin only —
+  // never exposed to normal users.
+  const [operatorInsightsReview, setOperatorInsightsReview] = useState<OperatorInsightReview[]>([]);
+  const [operatorInsightsReviewLoaded, setOperatorInsightsReviewLoaded] = useState(false);
+  const [operatorInsightsReviewError, setOperatorInsightsReviewError] = useState<string | null>(null);
+  const [operatorInsightReviewingId, setOperatorInsightReviewingId] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1660,6 +1685,86 @@ export default function Stage1Dashboard() {
       active = false;
     };
   }, [stageProgressId]);
+
+  // Internal/admin-only read of operator insights for review. Debug-only RPC
+  // get_operator_insights_review_snapshot. Never generates insights, never
+  // exposes them to normal users, and never computes maturity client-side.
+  const fetchOperatorInsightsReview = async (
+    progressId: string,
+  ): Promise<OperatorInsightReview[]> => {
+    const { data, error } = await supabase.rpc(
+      "get_operator_insights_review_snapshot",
+      {
+        p_stage_progress_id: progressId,
+        p_review_status: null,
+        p_limit: 20,
+      },
+    );
+    if (error) throw error;
+    return (Array.isArray(data) ? data : data ? [data] : []) as OperatorInsightReview[];
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setOperatorInsightsReview([]);
+      setOperatorInsightsReviewLoaded(false);
+      setOperatorInsightsReviewError(null);
+      return;
+    }
+    (async () => {
+      try {
+        const rows = await fetchOperatorInsightsReview(stageProgressId);
+        if (!active) return;
+        setOperatorInsightsReview(rows);
+        setOperatorInsightsReviewError(null);
+      } catch (err: any) {
+        if (!active) return;
+        console.warn("[operator_insights_review] RPC failed:", err?.message ?? err);
+        setOperatorInsightsReviewError(
+          `Operator insights review load failed: ${err?.message ?? "unknown error"}`,
+        );
+      } finally {
+        if (active) setOperatorInsightsReviewLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Internal/admin-only review action. Calls public.review_operator_insight to
+  // record a review status against one insight, then re-fetches the review
+  // snapshot. Never updates operator_insights directly and never generates
+  // insights from the client.
+  const reviewOperatorInsight = async (
+    insight: OperatorInsightReview,
+    reviewStatus: "useful" | "needs_followup" | "not_useful",
+  ) => {
+    if (!insight.operator_insight_id || !stageProgressId) return;
+    setOperatorInsightReviewingId(insight.operator_insight_id);
+    setOperatorInsightsReviewError(null);
+    try {
+      const { error } = await supabase.rpc("review_operator_insight", {
+        p_operator_insight_id: insight.operator_insight_id,
+        p_review_status: reviewStatus,
+        p_reviewed_by: "stage1_debug_review",
+        p_notes: "Reviewed from Stage 1 debug/admin panel.",
+      });
+      if (error) {
+        console.warn("[operator_insights_review] review RPC failed:", error.message);
+        setOperatorInsightsReviewError(`Review failed: ${error.message}`);
+        return;
+      }
+      const rows = await fetchOperatorInsightsReview(stageProgressId);
+      setOperatorInsightsReview(rows);
+    } catch (err: any) {
+      console.warn("[operator_insights_review] review RPC threw:", err);
+      setOperatorInsightsReviewError("Review threw an unexpected error.");
+    } finally {
+      setOperatorInsightReviewingId(null);
+    }
+  };
 
   // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
   // one requirement to evidence_status='submitted' while keeping verified=false
@@ -2483,6 +2588,99 @@ export default function Stage1Dashboard() {
             No Stage 1 commitments created.
           </div>
         )}
+
+      {/* Internal/admin-only operator insight review panel. Debug-only — never
+          shown to normal users. Insight text and maturity dimension are
+          internal review data and must not be surfaced publicly. */}
+      {isDebug() && stageProgressId && (
+        <Card className="-mt-2 border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Operator Insights — Internal Review
+            </CardTitle>
+            <CardDescription>
+              Internal/admin only. Not visible to end users. Review generated
+              operator insights; reviewing never generates or edits insights.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {operatorInsightsReviewError && (
+              <div className="text-[11px] font-mono text-amber-600">
+                {operatorInsightsReviewError}
+              </div>
+            )}
+            {operatorInsightsReviewLoaded &&
+              operatorInsightsReview.length === 0 &&
+              !operatorInsightsReviewError && (
+                <div className="text-[11px] font-mono text-muted-foreground">
+                  No operator insights available for review.
+                </div>
+              )}
+            {operatorInsightsReview.map((ins) => {
+              const id = ins.operator_insight_id ?? "";
+              const reviewing = operatorInsightReviewingId === id;
+              return (
+                <div
+                  key={id || Math.random()}
+                  className="rounded-md border bg-muted/20 p-3 text-[11px] font-mono space-y-1"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">
+                      {ins.review_status ?? "unreviewed"}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      maturity_dimension: {ins.maturity_dimension ?? "—"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      · signal: {ins.signal ?? "—"}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    commitment_label: {ins.commitment_label ?? "—"}
+                    {" · "}actual_value_at_check: {ins.actual_value_at_check ?? "—"}
+                    {" · "}verified_evidence_count: {ins.verified_evidence_count ?? "—"}
+                  </div>
+                  <div className="text-foreground whitespace-pre-wrap">
+                    {ins.insight_text ?? "—"}
+                  </div>
+                  <div className="text-muted-foreground">
+                    created_at: {ins.created_at ? isoToAU(ins.created_at.slice(0, 10)) : "—"}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={reviewing || !id}
+                      onClick={() => reviewOperatorInsight(ins, "useful")}
+                      className="rounded border border-border bg-background px-2 py-1 uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+                    >
+                      {reviewing && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      Mark Useful
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewing || !id}
+                      onClick={() => reviewOperatorInsight(ins, "needs_followup")}
+                      className="rounded border border-border bg-background px-2 py-1 uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+                    >
+                      {reviewing && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      Needs Follow-up
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewing || !id}
+                      onClick={() => reviewOperatorInsight(ins, "not_useful")}
+                      className="rounded border border-border bg-background px-2 py-1 uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+                    >
+                      {reviewing && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      Not Useful
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Debug-only: evaluator returned no row */}
       {isDebug() &&
