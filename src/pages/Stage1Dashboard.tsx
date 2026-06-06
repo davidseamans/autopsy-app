@@ -1744,6 +1744,20 @@ export default function Stage1Dashboard() {
           {" · "}verified_evidence: {stage1Snapshot?.verified_evidence_count ?? "—"}
           {" · "}met_commitments: {stage1Snapshot?.met_commitment_count ?? "—"}
           {" · "}insights: {stage1Snapshot?.latest_operator_insight_count ?? "—"}
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={activateStage1}
+              disabled={stage1Activating || !activeRunId}
+              className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {stage1Activating ? "Activating…" : "Activate Stage 1 (debug)"}
+            </button>
+            {!activeRunId && (
+              <span className="text-amber-600">No active Autopsy run id available.</span>
+            )}
+            {stage1ActivateMsg && <span>{stage1ActivateMsg}</span>}
+          </div>
         </div>
       )}
 
