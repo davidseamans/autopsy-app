@@ -1898,6 +1898,7 @@ export default function Stage1Dashboard() {
                     <TableHead>Status</TableHead>
                     <TableHead>Verified</TableHead>
                     <TableHead>Minimum standard</TableHead>
+                    <TableHead>Submit evidence</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1906,25 +1907,59 @@ export default function Stage1Dashboard() {
                       (a, b) =>
                         (a.display_order ?? 0) - (b.display_order ?? 0),
                     )
-                    .map((r) => (
-                      <TableRow key={r.stage_gate_evidence_id ?? r.requirement_code ?? Math.random()}>
-                        <TableCell className="font-medium">
-                          {r.evidence_label ?? r.requirement_code ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={r.verified ? "default" : "secondary"}>
-                            {r.evidence_status ?? "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {r.minimum_standard ?? "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    .map((r) => {
+                      const evidenceId = r.stage_gate_evidence_id ?? "";
+                      const submitting = stage1SubmittingId === evidenceId;
+                      return (
+                        <TableRow key={evidenceId || r.requirement_code || Math.random()}>
+                          <TableCell className="font-medium">
+                            {r.evidence_label ?? r.requirement_code ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={r.verified ? "default" : "secondary"}>
+                              {r.evidence_status ?? "missing"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {r.minimum_standard ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={stage1SubmitNotes[evidenceId] ?? ""}
+                                onChange={(e) =>
+                                  setStage1SubmitNotes((p) => ({
+                                    ...p,
+                                    [evidenceId]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Optional note"
+                                className="h-8 w-40"
+                                disabled={!evidenceId || submitting}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => submitStage1Evidence(r)}
+                                disabled={!evidenceId || submitting}
+                              >
+                                {submitting && (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                )}
+                                Submit
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </TableBody>
               </Table>
             </div>
+            {stage1SubmitError && (
+              <p className="mt-3 text-xs text-destructive">{stage1SubmitError}</p>
+            )}
           </CardContent>
         </Card>
       )}
