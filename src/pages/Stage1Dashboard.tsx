@@ -1367,40 +1367,51 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
-  // ---- Canonical Stage 1 snapshot (READ-ONLY, Supabase RPC) ----
-  // Hydrated via public.get_stage1_progress_snapshot(p_user_id). Supabase is
-  // the source of truth; used only as canonical gate-status display input and
-  // never written from this component.
+  // ---- Canonical Stage 1 snapshot (READ-ONLY, Supabase RPC by active run) ----
+  // Hydrated via public.get_stage1_progress_snapshot_by_run(p_run_id). Supabase
+  // resolves identity from the active Autopsy run and remains the source of
+  // truth; used only as canonical gate-status display input and never written
+  // from this component.
   const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
-  // Read-only hydration through the canonical RPC, guarded + isolated so it
-  // never affects the existing quotes/jobs board behaviour.
+  // Read-only hydration through the canonical RPC, keyed by the active Autopsy
+  // run id (the only identity the frontend legitimately owns). Guarded +
+  // isolated so it never affects the existing quotes/jobs board behaviour.
   useEffect(() => {
     let active = true;
     (async () => {
-      // TODO(auth): No authenticated user identifier is available in this
-      // component yet. When auth lands, pass the real user_id. Do NOT
-      // hard-code SYSTEM_ACTIVATION_TEST into production UI, and do not call
-      // the RPC without a real user id.
-      const currentUserId: string | null = null;
-      if (!currentUserId) {
+      // The frontend has no Supabase Auth / user_id. The only identity it owns
+      // is the active Autopsy run id; Supabase resolves the operator from it.
+      // Never use tester_email, user_id, or a hard-coded test identifier here.
+      let runId: string | null = null;
+      try {
+        runId =
+          getActiveRunId() ||
+          localStorage.getItem("autopsy_current_run_id");
+      } catch {
+        runId = null;
+      }
+      if (active) setActiveRunId(runId);
+      if (!runId) {
         if (active) setStage1SnapshotLoaded(true);
-        return; // no user id → no RPC call, preserve computed behaviour
+        return; // no active run → no RPC call, preserve computed behaviour
       }
       try {
-        const { data, error } = await supabase.rpc("get_stage1_progress_snapshot", {
-          p_user_id: currentUserId,
-        });
+        const { data, error } = await supabase.rpc(
+          "get_stage1_progress_snapshot_by_run",
+          { p_run_id: runId },
+        );
         if (!active) return;
         if (error) {
-          console.warn("[stage1_snapshot] RPC failed:", error.message);
+          console.warn("[stage1_snapshot] RPC by_run failed:", error.message);
           return; // preserve existing computed dashboard behaviour
         }
         const row = Array.isArray(data) ? data[0] : data;
         if (row) setStage1Snapshot(row as Stage1Snapshot);
       } catch (err) {
-        console.warn("[stage1_snapshot] RPC threw:", err);
+        console.warn("[stage1_snapshot] RPC by_run threw:", err);
       } finally {
         if (active) setStage1SnapshotLoaded(true);
       }
