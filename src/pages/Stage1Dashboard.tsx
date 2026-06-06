@@ -265,6 +265,25 @@ type OperatorInsightReview = {
   created_at: string | null;
 };
 
+// Combined debug/control snapshot returned by
+// public.get_stage1_debug_control_snapshot(p_stage_progress_id). Debug/admin
+// only — never exposed to normal users.
+type Stage1DebugControlSnapshot = {
+  stage_progress?: Record<string, any> | null;
+  evaluation?: {
+    valid_count?: number | null;
+    total_required?: number | null;
+    is_complete?: boolean | null;
+    current_gate_status?: string | null;
+  } | null;
+  evidence?: any[] | null;
+  commitments?: any[] | null;
+  gate_decisions?: any[] | null;
+  operator_insights?: any[] | null;
+  debug_validation?: any;
+  [key: string]: any;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1529,6 +1548,13 @@ export default function Stage1Dashboard() {
   const [operatorInsightsReviewError, setOperatorInsightsReviewError] = useState<string | null>(null);
   const [operatorInsightReviewingId, setOperatorInsightReviewingId] = useState<string | null>(null);
 
+  // ---- Debug/admin-only control snapshot (read-only, Supabase-owned) ----
+  // Hydrated via public.get_stage1_debug_control_snapshot(p_stage_progress_id).
+  // Debug/admin only — never exposed to normal users.
+  const [stage1DebugControlSnapshot, setStage1DebugControlSnapshot] = useState<Stage1DebugControlSnapshot | null>(null);
+  const [stage1DebugControlSnapshotLoading, setStage1DebugControlSnapshotLoading] = useState(false);
+  const [stage1DebugControlSnapshotError, setStage1DebugControlSnapshotError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1763,6 +1789,33 @@ export default function Stage1Dashboard() {
       setOperatorInsightsReviewError("Review threw an unexpected error.");
     } finally {
       setOperatorInsightReviewingId(null);
+    }
+  };
+
+  // Debug/admin-only combined control snapshot fetch. Calls
+  // public.get_stage1_debug_control_snapshot. Read-only; never mutates anything.
+  const fetchStage1DebugControlSnapshot = async () => {
+    if (!stageProgressId) {
+      setStage1DebugControlSnapshotError("No stage_progress_id available.");
+      return;
+    }
+    setStage1DebugControlSnapshotLoading(true);
+    setStage1DebugControlSnapshotError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_debug_control_snapshot", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_debug_control_snapshot] RPC failed:", error.message);
+        setStage1DebugControlSnapshotError(`Debug snapshot failed: ${error.message}`);
+        return;
+      }
+      setStage1DebugControlSnapshot(data as Stage1DebugControlSnapshot);
+    } catch (err) {
+      console.warn("[stage1_debug_control_snapshot] RPC threw:", err);
+      setStage1DebugControlSnapshotError("Debug snapshot threw an unexpected error.");
+    } finally {
+      setStage1DebugControlSnapshotLoading(false);
     }
   };
 
@@ -2678,6 +2731,100 @@ export default function Stage1Dashboard() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug/admin-only combined control snapshot panel. Internal/admin only —
+          never shown to normal users. Read-only; does not mutate anything. */}
+      {isDebug() && stageProgressId && (
+        <Card className="-mt-2 border-amber-500/40">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Debug Control Snapshot
+            </CardTitle>
+            <CardDescription>
+              Internal/admin only. Combined construction-mode snapshot from Supabase.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchStage1DebugControlSnapshot}
+                disabled={stage1DebugControlSnapshotLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stage1DebugControlSnapshotLoading ? "Refreshing…" : "Refresh Debug Snapshot"}
+              </button>
+              {stage1DebugControlSnapshotError && (
+                <span className="text-[11px] font-mono text-amber-600">
+                  {stage1DebugControlSnapshotError}
+                </span>
+              )}
+            </div>
+            {stage1DebugControlSnapshot && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Gate Status</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {stage1DebugControlSnapshot.stage_progress?.current_gate_status ?? stage1DebugControlSnapshot.evaluation?.current_gate_status ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Valid / Required</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {stage1DebugControlSnapshot.evaluation?.valid_count ?? "—"} / {stage1DebugControlSnapshot.evaluation?.total_required ?? "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Is Complete</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {stage1DebugControlSnapshot.evaluation?.is_complete ? "Yes" : "No"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Evidence Rows</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(stage1DebugControlSnapshot.evidence) ? stage1DebugControlSnapshot.evidence.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Commitments</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(stage1DebugControlSnapshot.commitments) ? stage1DebugControlSnapshot.commitments.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Gate Decisions</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(stage1DebugControlSnapshot.gate_decisions) ? stage1DebugControlSnapshot.gate_decisions.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Operator Insights</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {Array.isArray(stage1DebugControlSnapshot.operator_insights) ? stage1DebugControlSnapshot.operator_insights.length : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-2">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Debug Markers</div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {stage1DebugControlSnapshot.debug_validation ? "Present" : "None"}
+                    </div>
+                  </div>
+                </div>
+                <details className="text-[11px] font-mono">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Raw JSON
+                  </summary>
+                  <pre className="mt-2 rounded-md border bg-muted/30 p-3 overflow-x-auto">
+                    {JSON.stringify(stage1DebugControlSnapshot, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
