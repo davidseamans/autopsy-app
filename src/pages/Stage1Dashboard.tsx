@@ -2756,32 +2756,32 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1NextStepGuidance && (
+      {displayNextStep && (
         <Card className="-mt-2 border-primary/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Next step</CardTitle>
           </CardHeader>
           <CardContent>
-            {stage1NextStepGuidance.is_public_safe === true ? (
+            {displayNextStep.is_public_safe === true ? (
               <div className="space-y-3">
-                {stage1NextStepGuidance.guidance_title && (
+                {displayNextStep.guidance_title && (
                   <div className="text-lg font-semibold">
-                    {stage1NextStepGuidance.guidance_title}
+                    {displayNextStep.guidance_title}
                   </div>
                 )}
-                {stage1NextStepGuidance.guidance_body && (
+                {displayNextStep.guidance_body && (
                   <p className="text-sm text-muted-foreground">
-                    {stage1NextStepGuidance.guidance_body}
+                    {displayNextStep.guidance_body}
                   </p>
                 )}
-                {stage1NextStepGuidance.primary_action_label && (
+                {displayNextStep.primary_action_label && (
                   <Button
                     size="sm"
                     onClick={() =>
-                      handleNextStepAction(stage1NextStepGuidance.primary_action_target)
+                      handleNextStepAction(displayNextStep.primary_action_target)
                     }
                   >
-                    {stage1NextStepGuidance.primary_action_label}
+                    {displayNextStep.primary_action_label}
                   </Button>
                 )}
               </div>
