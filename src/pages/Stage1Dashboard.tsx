@@ -134,6 +134,20 @@ type Quote = {
 // plus a handful of in-flight / rejected quotes for the conversion board.
 const SEED_QUOTES: Quote[] = [];
 
+// Canonical Stage 1 progress row shape (public.stage_progress, READ-ONLY).
+type StageProgressRow = {
+  id: string;
+  user_id: string | null;
+  current_stage_code: string | null;
+  current_gate_status: string | null;
+  autopsy_run_id: string | null;
+  started_at: string | null;
+  unlocked_at: string | null;
+  completed_at: string | null;
+  last_activity_at: string | null;
+  notes: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
