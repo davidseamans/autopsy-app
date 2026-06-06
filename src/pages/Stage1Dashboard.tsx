@@ -1956,6 +1956,27 @@ export default function Stage1Dashboard() {
     }
   };
 
+  // Debug/admin-only product surface plan summary fetch. Calls
+  // public.get_stage1_product_surface_plan_summary. Read-only; never mutates anything.
+  const fetchProductSurfacePlanSummary = async () => {
+    setProductSurfacePlanSummaryLoading(true);
+    setProductSurfacePlanSummaryError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_product_surface_plan_summary");
+      if (error) {
+        console.warn("[product_surface_plan_summary] RPC failed:", error.message);
+        setProductSurfacePlanSummaryError(`Product surface plan summary failed: ${error.message}`);
+        return;
+      }
+      setProductSurfacePlanSummary(data as ProductSurfacePlanSummary);
+    } catch (err) {
+      console.warn("[product_surface_plan_summary] RPC threw:", err);
+      setProductSurfacePlanSummaryError("Product surface plan summary threw an unexpected error.");
+    } finally {
+      setProductSurfacePlanSummaryLoading(false);
+    }
+  };
+
   // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
   // one requirement to evidence_status='submitted' while keeping verified=false
   // and verified_at=null. Supabase owns evidence/verification/gate state; this
