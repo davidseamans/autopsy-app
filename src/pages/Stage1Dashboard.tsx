@@ -3526,6 +3526,89 @@ export default function Stage1Dashboard() {
                     )}
                   </>
                 )}
+                {(constructionReadinessSummary.release_safe !== undefined ||
+                  constructionReadinessSummary.auth_ownership_hardening) && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Release Safe</div>
+                        <div className={`mt-1 text-sm font-semibold ${constructionReadinessSummary.release_safe === true ? "text-emerald-600" : "text-amber-600"}`}>
+                          {constructionReadinessSummary.release_safe === true ? "true" : "false"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Public Release Blockers</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.auth_ownership_hardening?.public_release_blocker_count ??
+                            constructionReadinessSummary.auth_ownership_hardening?.public_release_blockers?.length ??
+                            "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2 col-span-2 md:col-span-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Reason</div>
+                        <div className="mt-1 text-[11px]">
+                          {constructionReadinessSummary.release_safe_reason ?? "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {Array.isArray(constructionReadinessSummary.auth_ownership_hardening?.summary) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Auth/Ownership Summary</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.auth_ownership_hardening!.summary!.map((s, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <span className="font-semibold truncate">{s.surface_type ?? "—"}</span>
+                              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                                <span>{s.release_status ?? "—"}</span>
+                                <span>count: {s.function_count ?? "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {Array.isArray(constructionReadinessSummary.auth_ownership_hardening?.public_release_blockers) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Public Release Blockers</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.auth_ownership_hardening!.public_release_blockers!.map((b, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="inline-block h-2 w-2 rounded-full shrink-0 bg-amber-500" />
+                                <span className="truncate font-semibold">{b.function_name ?? "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                                <span>{b.surface_type ?? "—"}</span>
+                                <span>{b.release_status ?? "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {constructionReadinessSummary.auth_ownership_hardening?.highest_priority_items?.[0] && (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-[11px] font-mono space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Highest Priority Blocker</div>
+                        {(() => {
+                          const h = constructionReadinessSummary.auth_ownership_hardening!.highest_priority_items![0];
+                          return (
+                            <div className="space-y-0.5">
+                              <div className="font-semibold">{h.function_name ?? "—"}</div>
+                              <div className="text-muted-foreground">surface: {h.surface_type ?? "—"}</div>
+                              <div className="text-muted-foreground">status: {h.release_status ?? "—"}</div>
+                              <div className="text-muted-foreground">gap: {h.remaining_gap ?? "—"}</div>
+                              <div className="text-muted-foreground">ownership check: {h.required_ownership_check ?? "—"}</div>
+                              <div className="text-muted-foreground">release path: {h.recommended_release_path ?? "—"}</div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Stage 1 is construction-valid, not release-safe, until auth/ownership hardening is complete.
+                    </p>
+                  </>
+                )}
                 {constructionReadinessSummary.rpc_security_classification && (
                   <div className="rounded-md border p-2 text-[11px] font-mono">
                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">RPC Security Classification</div>
