@@ -1940,6 +1940,7 @@ export default function Stage1Dashboard() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Minimum standard</TableHead>
                     <TableHead>Submit evidence</TableHead>
+                    {isDebug() && <TableHead>Debug Verify</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1951,6 +1952,11 @@ export default function Stage1Dashboard() {
                     .map((r) => {
                       const evidenceId = r.stage_gate_evidence_id ?? "";
                       const submitting = stage1SubmittingId === evidenceId;
+                      const verifying = stage1VerifyingId === evidenceId;
+                      const showDebugControls =
+                        isDebug() &&
+                        ((r.evidence_status ?? "").toLowerCase() === "submitted" ||
+                          (r.evidence_status ?? "").toLowerCase() === "invalid");
                       return (
                         <TableRow key={evidenceId || r.requirement_code || Math.random()}>
                           <TableCell className="font-medium">
@@ -1977,13 +1983,13 @@ export default function Stage1Dashboard() {
                                 }
                                 placeholder="Optional note"
                                 className="h-8 w-40"
-                                disabled={!evidenceId || submitting}
+                                disabled={!evidenceId || submitting || verifying}
                               />
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => submitStage1Evidence(r)}
-                                disabled={!evidenceId || submitting}
+                                disabled={!evidenceId || submitting || verifying}
                               >
                                 {submitting && (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1992,6 +1998,35 @@ export default function Stage1Dashboard() {
                               </Button>
                             </div>
                           </TableCell>
+                          {isDebug() && (
+                            <TableCell>
+                              {showDebugControls ? (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => verifyStage1Evidence(r, true)}
+                                    disabled={verifying}
+                                  >
+                                    {verifying && (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                    )}
+                                    Mark Valid
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => verifyStage1Evidence(r, false)}
+                                    disabled={verifying}
+                                  >
+                                    Mark Invalid
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
@@ -2000,6 +2035,9 @@ export default function Stage1Dashboard() {
             </div>
             {stage1SubmitError && (
               <p className="mt-3 text-xs text-destructive">{stage1SubmitError}</p>
+            )}
+            {isDebug() && stage1VerifyError && (
+              <p className="mt-3 text-xs text-destructive">{stage1VerifyError}</p>
             )}
           </CardContent>
         </Card>
