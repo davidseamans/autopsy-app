@@ -1551,6 +1551,41 @@ export default function Stage1Dashboard() {
     }
   };
 
+  // Debug/admin-only verification action. Calls public.verify_stage1_evidence which
+  // marks one Stage 1 evidence row valid or invalid. Supabase owns verification
+  // state; this never writes stage_gate_evidence directly and never advances
+  // stage gates or creates commitments/operator insights.
+  const verifyStage1Evidence = async (
+    req: Stage1Requirement,
+    verified: boolean,
+  ) => {
+    const evidenceId = req.stage_gate_evidence_id;
+    if (!evidenceId || !stageProgressId) return;
+    setStage1VerifyingId(evidenceId);
+    setStage1VerifyError(null);
+    try {
+      const { error } = await supabase.rpc("verify_stage1_evidence", {
+        p_stage_gate_evidence_id: evidenceId,
+        p_verified: verified,
+        p_verification_notes: verified
+          ? "Debug/admin verification from Stage 1 dashboard."
+          : "Debug/admin rejection from Stage 1 dashboard.",
+      });
+      if (error) {
+        console.warn("[stage1_verify] RPC failed:", error.message);
+        setStage1VerifyError(`Verification failed: ${error.message}`);
+        return;
+      }
+      const rows = await fetchStage1Requirements(stageProgressId);
+      setStage1Requirements(rows);
+    } catch (err) {
+      console.warn("[stage1_verify] RPC threw:", err);
+      setStage1VerifyError("Verification threw an unexpected error.");
+    } finally {
+      setStage1VerifyingId(null);
+    }
+  };
+
   const activateStage1 = async () => {
     if (!activeRunId) {
       setStage1ActivateMsg("No active Autopsy run id available.");
