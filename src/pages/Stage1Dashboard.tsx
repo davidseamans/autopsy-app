@@ -161,6 +161,31 @@ type Stage1Snapshot = {
   latest_operator_insight_at: string | null;
 };
 
+// Canonical Stage 1 evidence requirement row, returned by the read-only RPC
+// public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id uuid).
+// Supabase owns the requirement templates and instantiated evidence rows; this
+// component only displays them and never computes requirement status or creates
+// evidence rows.
+type Stage1Requirement = {
+  stage_gate_evidence_id: string | null;
+  stage_progress_id: string | null;
+  stage_code: string | null;
+  requirement_code: string | null;
+  evidence_type: string | null;
+  evidence_label: string | null;
+  evidence_status: string | null;
+  verified: boolean | null;
+  verified_at: string | null;
+  minimum_standard: string | null;
+  required_count: number | null;
+  display_order: number | null;
+  related_table: string | null;
+  related_record_id: string | null;
+  evidence_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
