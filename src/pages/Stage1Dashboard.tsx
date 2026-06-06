@@ -238,6 +238,16 @@ type Stage1Commitment = {
   updated_at: string | null;
 };
 
+// Result returned by public.check_stage1_commitments(p_stage_progress_id).
+// Supabase owns commitment checking; this component only displays the result.
+type Stage1CommitmentCheckResult = {
+  commitment_id: string | null;
+  previous_status: string | null;
+  new_status: string | null;
+  actual_value_at_check: number | null;
+  operator_insight_id: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -1488,6 +1498,12 @@ export default function Stage1Dashboard() {
   const [stage1Commitments, setStage1Commitments] = useState<Stage1Commitment[]>([]);
   const [stage1CommitmentsLoaded, setStage1CommitmentsLoaded] = useState(false);
 
+  // ---- Debug/admin-only commitment check (Supabase-owned) ----
+  // Tracks the result of public.check_stage1_commitments and any diagnostic error.
+  const [stage1CommitmentCheck, setStage1CommitmentCheck] = useState<Stage1CommitmentCheckResult | null>(null);
+  const [stage1CommitmentCheckLoading, setStage1CommitmentCheckLoading] = useState(false);
+  const [stage1CommitmentCheckError, setStage1CommitmentCheckError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1774,6 +1790,68 @@ export default function Stage1Dashboard() {
       setStage1GateDecisionError("Gate decision threw an unexpected error.");
     } finally {
       setStage1GateDecisionLoading(false);
+    }
+  };
+
+  // Debug/admin-only commitment check action. Calls public.check_stage1_commitments
+  // which checks valid evidence count against commitments, updates status, records
+  // actual_value_at_check, and may generate an operator insight. Supabase owns all
+  // commitment state and insight generation; this never updates commitments directly.
+  const checkStage1Commitments = async () => {
+    if (!stageProgressId) {
+      setStage1CommitmentCheckError("No stage_progress_id available.");
+      return;
+    }
+    setStage1CommitmentCheckLoading(true);
+    setStage1CommitmentCheckError(null);
+    setStage1CommitmentCheck(null);
+    try {
+      const { data, error } = await supabase.rpc("check_stage1_commitments", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_commitment_check] RPC failed:", error.message);
+        setStage1CommitmentCheckError(`Commitment check failed: ${error.message}`);
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        setStage1CommitmentCheck(row as Stage1CommitmentCheckResult);
+      }
+      // Re-fetch canonical commitments snapshot, evaluation, and progress snapshot
+      if (stageProgressId) {
+        const { data: commData, error: commErr } = await supabase.rpc(
+          "get_stage1_commitments_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!commErr) {
+          const commRows = (Array.isArray(commData) ? commData : commData ? [commData] : []) as Stage1Commitment[];
+          setStage1Commitments(commRows);
+        }
+        const { data: evalData, error: evalErr } = await supabase.rpc(
+          "evaluate_stage1_completion",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!evalErr) {
+          const evalRow = Array.isArray(evalData) ? evalData[0] : evalData;
+          if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
+        }
+      }
+      if (activeRunId) {
+        const { data: snapData, error: snapErr } = await supabase.rpc(
+          "get_stage1_progress_snapshot_by_run",
+          { p_run_id: activeRunId },
+        );
+        if (!snapErr) {
+          const snapRow = Array.isArray(snapData) ? snapData[0] : snapData;
+          if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
+        }
+      }
+    } catch (err) {
+      console.warn("[stage1_commitment_check] RPC threw:", err);
+      setStage1CommitmentCheckError("Commitment check threw an unexpected error.");
+    } finally {
+      setStage1CommitmentCheckLoading(false);
     }
   };
 
@@ -2134,6 +2212,33 @@ export default function Stage1Dashboard() {
                 {" · "}is_complete: {stage1GateDecision.is_complete ? "yes" : "no"}
                 {" · "}valid_count: {stage1GateDecision.valid_count ?? "—"}
                 {" / "}total_required: {stage1GateDecision.total_required ?? "—"}
+              </div>
+            </div>
+          )}
+          {stageProgressId && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={checkStage1Commitments}
+                disabled={stage1CommitmentCheckLoading}
+                className="rounded border border-border bg-background px-2 py-1 text-[11px] uppercase tracking-wide hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stage1CommitmentCheckLoading ? "Checking…" : "Check Commitments (debug)"}
+              </button>
+              {stage1CommitmentCheckError && (
+                <span className="text-amber-600">{stage1CommitmentCheckError}</span>
+              )}
+            </div>
+          )}
+          {stage1CommitmentCheck && (
+            <div className="mt-2 space-y-0.5">
+              <div className="uppercase tracking-wide">commitment_check_result</div>
+              <div>
+                commitment_id: {stage1CommitmentCheck.commitment_id ?? "—"}
+                {" · "}previous_status: {stage1CommitmentCheck.previous_status ?? "—"}
+                {" · "}new_status: {stage1CommitmentCheck.new_status ?? "—"}
+                {" · "}actual_value_at_check: {stage1CommitmentCheck.actual_value_at_check ?? "—"}
+                {" · "}operator_insight_id: {stage1CommitmentCheck.operator_insight_id ?? "—"}
               </div>
             </div>
           )}
