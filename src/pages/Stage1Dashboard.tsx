@@ -2200,6 +2200,7 @@ export default function Stage1Dashboard() {
       // Re-fetch canonical status; never infer 'submitted' client-side.
       const rows = await fetchStage1Requirements(stageProgressId);
       setStage1Requirements(rows);
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_submit] RPC threw:", err);
       setStage1SubmitError("Submit threw an unexpected error.");
