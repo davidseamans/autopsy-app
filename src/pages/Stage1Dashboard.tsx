@@ -375,6 +375,21 @@ type Stage1NextStepGuidance = {
   is_public_safe: boolean | null;
 };
 
+// Public, run-scoped product-facing wrapper RPC return shapes. Supabase resolves
+// stage_progress_id from the autopsy_run_id and returns only public-safe fields.
+// The frontend passes the run id and displays the result; it never resolves
+// identity, computes progression, or exposes operator insights from these.
+//   - get_stage1_public_progress_by_run(p_run_id)
+//   - get_stage1_public_evidence_by_run(p_run_id)
+//   - get_stage1_public_completion_by_run(p_run_id)
+//   - get_stage1_public_commitments_by_run(p_run_id)
+//   - get_stage1_public_next_step_by_run(p_run_id)
+type Stage1PublicProgress = Partial<Stage1Snapshot> & { [key: string]: any };
+type Stage1PublicEvidence = Partial<Stage1Requirement> & { [key: string]: any };
+type Stage1PublicCompletion = Partial<Stage1Evaluation> & { [key: string]: any };
+type Stage1PublicCommitment = Partial<Stage1Commitment> & { [key: string]: any };
+type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: any };
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
@@ -1672,6 +1687,19 @@ export default function Stage1Dashboard() {
   const [stage1NextStepGuidanceLoaded, setStage1NextStepGuidanceLoaded] = useState(false);
   const [stage1NextStepGuidanceError, setStage1NextStepGuidanceError] = useState<string | null>(null);
 
+  // ---- Product-facing public run-scoped wrapper data (READ-ONLY) ----
+  // Hydrated via the public wrapper RPCs keyed by the active Autopsy run id.
+  // Supabase resolves stage_progress_id internally and returns public-safe
+  // fields only. Product-facing cards prefer this data and fall back to the
+  // lower-level snapshot reads when a wrapper is unavailable, so the dashboard
+  // never breaks. These never expose raw JSON or operator insights publicly.
+  const [stage1PublicProgress, setStage1PublicProgress] = useState<Stage1PublicProgress | null>(null);
+  const [stage1PublicEvidence, setStage1PublicEvidence] = useState<Stage1PublicEvidence[]>([]);
+  const [stage1PublicCompletion, setStage1PublicCompletion] = useState<Stage1PublicCompletion | null>(null);
+  const [stage1PublicCommitments, setStage1PublicCommitments] = useState<Stage1PublicCommitment[]>([]);
+  const [stage1PublicNextStep, setStage1PublicNextStep] = useState<Stage1PublicNextStep | null>(null);
+  const [stage1PublicLoaded, setStage1PublicLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1717,6 +1745,70 @@ export default function Stage1Dashboard() {
     };
   }, []);
 
+  // Read-only hydration of the product-facing public run-scoped wrappers. The
+  // frontend passes only the active Autopsy run id; Supabase resolves identity
+  // and returns public-safe fields. Each wrapper is independent and fails
+  // gracefully — a failed/empty wrapper leaves existing display values intact.
+  const fetchStage1PublicWrappers = async (runId: string) => {
+    const [progress, evidence, completion, commitments, nextStep] =
+      await Promise.allSettled([
+        supabase.rpc("get_stage1_public_progress_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_evidence_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_completion_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_commitments_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_next_step_by_run", { p_run_id: runId }),
+      ]);
+    // Return undefined for any wrapper that did not resolve cleanly so callers
+    // never overwrite good display data with a null/empty failure result.
+    const single = (r: PromiseSettledResult<any>) => {
+      if (r.status !== "fulfilled" || r.value?.error) return undefined;
+      const d = r.value.data;
+      return (Array.isArray(d) ? d[0] ?? null : d ?? null);
+    };
+    const many = (r: PromiseSettledResult<any>) => {
+      if (r.status !== "fulfilled" || r.value?.error) return undefined;
+      const d = r.value.data;
+      return (Array.isArray(d) ? d : d ? [d] : []);
+    };
+    return {
+      progress: single(progress),
+      evidence: many(evidence),
+      completion: single(completion),
+      commitments: many(commitments),
+      nextStep: single(nextStep),
+    };
+  };
+
+  const refreshStage1PublicWrappers = async (runId: string | null) => {
+    if (!runId) return;
+    try {
+      const r = await fetchStage1PublicWrappers(runId);
+      if (r.progress !== undefined) setStage1PublicProgress(r.progress);
+      if (r.evidence !== undefined) setStage1PublicEvidence(r.evidence);
+      if (r.completion !== undefined) setStage1PublicCompletion(r.completion);
+      if (r.commitments !== undefined) setStage1PublicCommitments(r.commitments);
+      if (r.nextStep !== undefined) setStage1PublicNextStep(r.nextStep);
+    } catch (err) {
+      console.warn("[stage1_public_wrappers] refresh threw:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeRunId) {
+      setStage1PublicLoaded(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      await refreshStage1PublicWrappers(activeRunId);
+      if (active) setStage1PublicLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRunId]);
+
   // Debug/admin-only Stage 1 activation. Supabase owns ALL activation logic;
   // this only *requests* activation by the active Autopsy run id and stores the
   // returned canonical snapshot. No client-side eligibility, no direct writes.
@@ -1728,6 +1820,23 @@ export default function Stage1Dashboard() {
   // stage_progress_id exists; never reads stage_gate_evidence directly and never
   // computes requirement status client-side.
   const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+
+  // Product-facing display values. Prefer the public run-scoped wrapper data and
+  // fall back to the lower-level snapshot reads so the dashboard never breaks
+  // when a wrapper is unavailable. Debug/admin controls continue to use
+  // stageProgressId directly.
+  const displayEvidence: Stage1PublicEvidence[] =
+    stage1PublicEvidence.length > 0
+      ? stage1PublicEvidence
+      : (stage1Requirements as Stage1PublicEvidence[]);
+  const displayCompletion: Stage1PublicCompletion | null =
+    stage1PublicCompletion ?? stage1Evaluation;
+  const displayCommitments: Stage1PublicCommitment[] =
+    stage1PublicCommitments.length > 0
+      ? stage1PublicCommitments
+      : (stage1Commitments as Stage1PublicCommitment[]);
+  const displayNextStep: Stage1PublicNextStep | null =
+    stage1PublicNextStep ?? stage1NextStepGuidance;
 
   // Reusable read-only fetch for canonical Stage 1 requirements. Used by the
   // hydration effect and re-used after a submit to refresh displayed status.
@@ -2064,7 +2173,7 @@ export default function Stage1Dashboard() {
   // never sets verified/valid, never writes stage_gate_evidence directly, and
   // never creates commitments or operator insights. After a successful submit it
   // re-fetches the canonical requirements snapshot to refresh displayed status.
-  const submitStage1Evidence = async (req: Stage1Requirement) => {
+  const submitStage1Evidence = async (req: Stage1PublicEvidence) => {
     const evidenceId = req.stage_gate_evidence_id;
     if (!evidenceId || !stageProgressId) return;
     setStage1SubmittingId(evidenceId);
@@ -2091,6 +2200,7 @@ export default function Stage1Dashboard() {
       // Re-fetch canonical status; never infer 'submitted' client-side.
       const rows = await fetchStage1Requirements(stageProgressId);
       setStage1Requirements(rows);
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_submit] RPC threw:", err);
       setStage1SubmitError("Submit threw an unexpected error.");
@@ -2104,7 +2214,7 @@ export default function Stage1Dashboard() {
   // state; this never writes stage_gate_evidence directly and never advances
   // stage gates or creates commitments/operator insights.
   const verifyStage1Evidence = async (
-    req: Stage1Requirement,
+    req: Stage1PublicEvidence,
     verified: boolean,
   ) => {
     const evidenceId = req.stage_gate_evidence_id;
@@ -2126,6 +2236,7 @@ export default function Stage1Dashboard() {
       }
       const rows = await fetchStage1Requirements(stageProgressId);
       setStage1Requirements(rows);
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_verify] RPC threw:", err);
       setStage1VerifyError("Verification threw an unexpected error.");
@@ -2182,6 +2293,7 @@ export default function Stage1Dashboard() {
           if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
         }
       }
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_gate_decision] RPC threw:", err);
       setStage1GateDecisionError("Gate decision threw an unexpected error.");
@@ -2244,6 +2356,7 @@ export default function Stage1Dashboard() {
           if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
         }
       }
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_commitment_check] RPC threw:", err);
       setStage1CommitmentCheckError("Commitment check threw an unexpected error.");
@@ -2643,32 +2756,32 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1NextStepGuidance && (
+      {displayNextStep && (
         <Card className="-mt-2 border-primary/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Next step</CardTitle>
           </CardHeader>
           <CardContent>
-            {stage1NextStepGuidance.is_public_safe === true ? (
+            {displayNextStep.is_public_safe === true ? (
               <div className="space-y-3">
-                {stage1NextStepGuidance.guidance_title && (
+                {displayNextStep.guidance_title && (
                   <div className="text-lg font-semibold">
-                    {stage1NextStepGuidance.guidance_title}
+                    {displayNextStep.guidance_title}
                   </div>
                 )}
-                {stage1NextStepGuidance.guidance_body && (
+                {displayNextStep.guidance_body && (
                   <p className="text-sm text-muted-foreground">
-                    {stage1NextStepGuidance.guidance_body}
+                    {displayNextStep.guidance_body}
                   </p>
                 )}
-                {stage1NextStepGuidance.primary_action_label && (
+                {displayNextStep.primary_action_label && (
                   <Button
                     size="sm"
                     onClick={() =>
-                      handleNextStepAction(stage1NextStepGuidance.primary_action_target)
+                      handleNextStepAction(displayNextStep.primary_action_target)
                     }
                   >
-                    {stage1NextStepGuidance.primary_action_label}
+                    {displayNextStep.primary_action_label}
                   </Button>
                 )}
               </div>
@@ -2682,7 +2795,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
+      {displayEvidence.length > 0 && (
         <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
@@ -2704,7 +2817,7 @@ export default function Stage1Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...stage1Requirements]
+                  {[...displayEvidence]
                     .sort(
                       (a, b) =>
                         (a.display_order ?? 0) - (b.display_order ?? 0),
@@ -2804,7 +2917,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
-      {stage1Evaluation && (
+      {displayCompletion && (
         <Card className="-mt-2" id="stage1-completion-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
@@ -2817,37 +2930,37 @@ export default function Stage1Dashboard() {
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Valid</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.valid_count ?? 0} / {stage1Evaluation.total_required ?? 0}
+                  {displayCompletion.valid_count ?? 0} / {displayCompletion.total_required ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Submitted</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.submitted_count ?? 0}
+                  {displayCompletion.submitted_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Missing</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.missing_count ?? 0}
+                  {displayCompletion.missing_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Invalid</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.invalid_count ?? 0}
+                  {displayCompletion.invalid_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Complete</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.is_complete ? "Yes" : "No"}
+                  {displayCompletion.is_complete ? "Yes" : "No"}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Recommended Gate</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.recommended_gate_status ?? "—"}
+                  {displayCompletion.recommended_gate_status ?? "—"}
                 </div>
               </div>
             </div>
@@ -2856,7 +2969,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1Commitments.length > 0 && (
+      {displayCommitments.length > 0 && (
         <Card className="-mt-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
@@ -2878,7 +2991,7 @@ export default function Stage1Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stage1Commitments.map((c) => {
+                  {displayCommitments.map((c) => {
                     const cid = c.commitment_id ?? "";
                     return (
                       <TableRow key={cid || c.commitment_label || Math.random()}>
