@@ -1792,6 +1792,33 @@ export default function Stage1Dashboard() {
     }
   };
 
+  // Debug/admin-only combined control snapshot fetch. Calls
+  // public.get_stage1_debug_control_snapshot. Read-only; never mutates anything.
+  const fetchStage1DebugControlSnapshot = async () => {
+    if (!stageProgressId) {
+      setStage1DebugControlSnapshotError("No stage_progress_id available.");
+      return;
+    }
+    setStage1DebugControlSnapshotLoading(true);
+    setStage1DebugControlSnapshotError(null);
+    try {
+      const { data, error } = await supabase.rpc("get_stage1_debug_control_snapshot", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_debug_control_snapshot] RPC failed:", error.message);
+        setStage1DebugControlSnapshotError(`Debug snapshot failed: ${error.message}`);
+        return;
+      }
+      setStage1DebugControlSnapshot(data as Stage1DebugControlSnapshot);
+    } catch (err) {
+      console.warn("[stage1_debug_control_snapshot] RPC threw:", err);
+      setStage1DebugControlSnapshotError("Debug snapshot threw an unexpected error.");
+    } finally {
+      setStage1DebugControlSnapshotLoading(false);
+    }
+  };
+
   // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
   // one requirement to evidence_status='submitted' while keeping verified=false
   // and verified_at=null. Supabase owns evidence/verification/gate state; this
