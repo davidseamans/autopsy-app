@@ -1686,6 +1686,86 @@ export default function Stage1Dashboard() {
     };
   }, [stageProgressId]);
 
+  // Internal/admin-only read of operator insights for review. Debug-only RPC
+  // get_operator_insights_review_snapshot. Never generates insights, never
+  // exposes them to normal users, and never computes maturity client-side.
+  const fetchOperatorInsightsReview = async (
+    progressId: string,
+  ): Promise<OperatorInsightReview[]> => {
+    const { data, error } = await supabase.rpc(
+      "get_operator_insights_review_snapshot",
+      {
+        p_stage_progress_id: progressId,
+        p_review_status: null,
+        p_limit: 20,
+      },
+    );
+    if (error) throw error;
+    return (Array.isArray(data) ? data : data ? [data] : []) as OperatorInsightReview[];
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setOperatorInsightsReview([]);
+      setOperatorInsightsReviewLoaded(false);
+      setOperatorInsightsReviewError(null);
+      return;
+    }
+    (async () => {
+      try {
+        const rows = await fetchOperatorInsightsReview(stageProgressId);
+        if (!active) return;
+        setOperatorInsightsReview(rows);
+        setOperatorInsightsReviewError(null);
+      } catch (err: any) {
+        if (!active) return;
+        console.warn("[operator_insights_review] RPC failed:", err?.message ?? err);
+        setOperatorInsightsReviewError(
+          `Operator insights review load failed: ${err?.message ?? "unknown error"}`,
+        );
+      } finally {
+        if (active) setOperatorInsightsReviewLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Internal/admin-only review action. Calls public.review_operator_insight to
+  // record a review status against one insight, then re-fetches the review
+  // snapshot. Never updates operator_insights directly and never generates
+  // insights from the client.
+  const reviewOperatorInsight = async (
+    insight: OperatorInsightReview,
+    reviewStatus: "useful" | "needs_followup" | "not_useful",
+  ) => {
+    if (!insight.operator_insight_id || !stageProgressId) return;
+    setOperatorInsightReviewingId(insight.operator_insight_id);
+    setOperatorInsightsReviewError(null);
+    try {
+      const { error } = await supabase.rpc("review_operator_insight", {
+        p_operator_insight_id: insight.operator_insight_id,
+        p_review_status: reviewStatus,
+        p_reviewed_by: "stage1_debug_review",
+        p_notes: "Reviewed from Stage 1 debug/admin panel.",
+      });
+      if (error) {
+        console.warn("[operator_insights_review] review RPC failed:", error.message);
+        setOperatorInsightsReviewError(`Review failed: ${error.message}`);
+        return;
+      }
+      const rows = await fetchOperatorInsightsReview(stageProgressId);
+      setOperatorInsightsReview(rows);
+    } catch (err: any) {
+      console.warn("[operator_insights_review] review RPC threw:", err);
+      setOperatorInsightsReviewError("Review threw an unexpected error.");
+    } finally {
+      setOperatorInsightReviewingId(null);
+    }
+  };
+
   // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
   // one requirement to evidence_status='submitted' while keeping verified=false
   // and verified_at=null. Supabase owns evidence/verification/gate state; this
