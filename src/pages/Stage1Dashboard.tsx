@@ -1401,6 +1401,13 @@ export default function Stage1Dashboard() {
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
+  // ---- Canonical Stage 1 evidence requirements (READ-ONLY, Supabase RPC) ----
+  // Hydrated via public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id).
+  // Supabase owns the requirement templates + instantiated evidence rows; this
+  // component only displays them and never creates/verifies evidence.
+  const [stage1Requirements, setStage1Requirements] = useState<Stage1Requirement[]>([]);
+  const [stage1RequirementsLoaded, setStage1RequirementsLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
