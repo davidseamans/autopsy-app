@@ -375,6 +375,21 @@ type Stage1NextStepGuidance = {
   is_public_safe: boolean | null;
 };
 
+// Public, run-scoped product-facing wrapper RPC return shapes. Supabase resolves
+// stage_progress_id from the autopsy_run_id and returns only public-safe fields.
+// The frontend passes the run id and displays the result; it never resolves
+// identity, computes progression, or exposes operator insights from these.
+//   - get_stage1_public_progress_by_run(p_run_id)
+//   - get_stage1_public_evidence_by_run(p_run_id)
+//   - get_stage1_public_completion_by_run(p_run_id)
+//   - get_stage1_public_commitments_by_run(p_run_id)
+//   - get_stage1_public_next_step_by_run(p_run_id)
+type Stage1PublicProgress = Partial<Stage1Snapshot> & { [key: string]: any };
+type Stage1PublicEvidence = Partial<Stage1Requirement> & { [key: string]: any };
+type Stage1PublicCompletion = Partial<Stage1Evaluation> & { [key: string]: any };
+type Stage1PublicCommitment = Partial<Stage1Commitment> & { [key: string]: any };
+type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: any };
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
