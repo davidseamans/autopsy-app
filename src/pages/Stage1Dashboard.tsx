@@ -5,7 +5,7 @@ import {
   JobDetailSheet,
   type ProofUnit,
 } from "./Stage1";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDebug } from "@/lib/supabase";
 import {
   createQuote,
   setQuoteOutcome,
@@ -133,6 +133,20 @@ type Quote = {
 // Seed: the five accepted quotes that produced the five ledger jobs,
 // plus a handful of in-flight / rejected quotes for the conversion board.
 const SEED_QUOTES: Quote[] = [];
+
+// Canonical Stage 1 progress row shape (public.stage_progress, READ-ONLY).
+type StageProgressRow = {
+  id: string;
+  user_id: string | null;
+  current_stage_code: string | null;
+  current_gate_status: string | null;
+  autopsy_run_id: string | null;
+  started_at: string | null;
+  unlocked_at: string | null;
+  completed_at: string | null;
+  last_activity_at: string | null;
+  notes: string | null;
+};
 
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
@@ -1340,6 +1354,49 @@ export default function Stage1Dashboard() {
   const [quoteDetailNumber, setQuoteDetailNumber] = useState<string | null>(null);
   const [quoteDetailOpen, setQuoteDetailOpen] = useState(false);
 
+  // ---- Canonical Stage 1 progress (READ-ONLY) ----
+  // Hydrated from public.stage_progress in autopsy-canonical. Used only as a
+  // canonical gate-status display input; never written from this component.
+  const [stageProgress, setStageProgress] = useState<StageProgressRow | null>(null);
+  const [stageProgressLoaded, setStageProgressLoaded] = useState(false);
+
+  // Read-only hydration of canonical stage_progress, guarded + isolated so it
+  // never affects the existing quotes/jobs board behaviour.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        // TODO(auth): No authenticated user identifier is available in this
+        // component yet. When auth lands, scope this read by the real user_id.
+        // Do NOT hard-code SYSTEM_ACTIVATION_TEST into production UI.
+        const currentUserId: string | null = null;
+        let query = supabase
+          .from("stage_progress")
+          .select(
+            "id, user_id, current_stage_code, current_gate_status, autopsy_run_id, started_at, unlocked_at, completed_at, last_activity_at, notes",
+          )
+          .eq("current_stage_code", "stage_1_first_five_jobs")
+          .order("last_activity_at", { ascending: false })
+          .limit(1);
+        if (currentUserId) query = query.eq("user_id", currentUserId);
+        const { data, error } = await query.maybeSingle();
+        if (!active) return;
+        if (error) {
+          console.warn("[stage_progress] read failed:", error.message);
+          return; // preserve existing computed dashboard behaviour
+        }
+        if (data) setStageProgress(data as StageProgressRow);
+      } catch (err) {
+        console.warn("[stage_progress] read threw:", err);
+      } finally {
+        if (active) setStageProgressLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Load the persisted Core quote board + job ledger so Stage 1 survives refresh.
   useEffect(() => {
     let active = true;
@@ -1610,6 +1667,17 @@ export default function Stage1Dashboard() {
         <p className="text-xs text-muted-foreground -mt-2">
           Business Details have been verified and may be updated if required. Business Details remain available through the Business Details menu.
         </p>
+      )}
+
+      {/* Diagnostics: canonical stage_progress hydration (debug-only, read-only) */}
+      {isDebug() && stageProgressLoaded && (
+        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+          <span className="uppercase tracking-wide mr-2">stage_progress</span>
+          loaded: {stageProgress ? "yes" : "no"}
+          {" · "}stage: {stageProgress?.current_stage_code ?? "—"}
+          {" · "}gate: {stageProgress?.current_gate_status ?? "—"}
+          {" · "}id: {stageProgress?.id ?? "—"}
+        </div>
       )}
 
       {/* ---- Top half: KPI cards ---- */}
