@@ -1829,6 +1829,65 @@ export default function Stage1Dashboard() {
     };
   }, [stageProgressId]);
 
+  // Read-only hydration of product-facing next-step guidance. Only fires when
+  // stage_progress_id exists; never computes guidance, never mutates anything.
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1NextStepGuidance(null);
+      setStage1NextStepGuidanceLoaded(false);
+      setStage1NextStepGuidanceError(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_next_step_guidance",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn("[stage1_next_step_guidance] RPC failed:", error.message);
+          setStage1NextStepGuidanceError(
+            `Next step guidance load failed: ${error.message}`,
+          );
+          return;
+        }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (active) {
+          setStage1NextStepGuidance((row ?? null) as Stage1NextStepGuidance | null);
+          setStage1NextStepGuidanceError(null);
+        }
+      } catch (err: any) {
+        if (!active) return;
+        console.warn("[stage1_next_step_guidance] RPC threw:", err);
+        setStage1NextStepGuidanceError("Next step guidance threw an unexpected error.");
+      } finally {
+        if (active) setStage1NextStepGuidanceLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Product-facing primary action handler. Only scrolls/focuses a local anchor
+  // when one exists for the Supabase-provided target. Never derives guidance,
+  // never mutates, never alters routes. Unknown/absent targets are a safe no-op.
+  const handleNextStepAction = (target: string | null | undefined) => {
+    const anchorId =
+      target === "stage1_evidence"
+        ? "stage1-evidence-section"
+        : target === "stage1_completion"
+          ? "stage1-completion-section"
+          : null;
+    if (!anchorId) return;
+    const el = typeof document !== "undefined" ? document.getElementById(anchorId) : null;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   // Internal/admin-only read of operator insights for review. Debug-only RPC
   // get_operator_insights_review_snapshot. Never generates insights, never
   // exposes them to normal users, and never computes maturity client-side.
