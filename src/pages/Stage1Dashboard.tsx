@@ -1821,6 +1821,23 @@ export default function Stage1Dashboard() {
   // computes requirement status client-side.
   const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
 
+  // Product-facing display values. Prefer the public run-scoped wrapper data and
+  // fall back to the lower-level snapshot reads so the dashboard never breaks
+  // when a wrapper is unavailable. Debug/admin controls continue to use
+  // stageProgressId directly.
+  const displayEvidence: Stage1PublicEvidence[] =
+    stage1PublicEvidence.length > 0
+      ? stage1PublicEvidence
+      : (stage1Requirements as Stage1PublicEvidence[]);
+  const displayCompletion: Stage1PublicCompletion | null =
+    stage1PublicCompletion ?? stage1Evaluation;
+  const displayCommitments: Stage1PublicCommitment[] =
+    stage1PublicCommitments.length > 0
+      ? stage1PublicCommitments
+      : (stage1Commitments as Stage1PublicCommitment[]);
+  const displayNextStep: Stage1PublicNextStep | null =
+    stage1PublicNextStep ?? stage1NextStepGuidance;
+
   // Reusable read-only fetch for canonical Stage 1 requirements. Used by the
   // hydration effect and re-used after a submit to refresh displayed status.
   const fetchStage1Requirements = async (progressId: string) => {
