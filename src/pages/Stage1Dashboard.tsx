@@ -1407,6 +1407,11 @@ export default function Stage1Dashboard() {
   // component only displays them and never creates/verifies evidence.
   const [stage1Requirements, setStage1Requirements] = useState<Stage1Requirement[]>([]);
   const [stage1RequirementsLoaded, setStage1RequirementsLoaded] = useState(false);
+  // Submit-only evidence state. Supabase owns evidence/verification state; the
+  // frontend only *requests* a submit and never sets verified / valid / gate.
+  const [stage1SubmittingId, setStage1SubmittingId] = useState<string | null>(null);
+  const [stage1SubmitError, setStage1SubmitError] = useState<string | null>(null);
+  const [stage1SubmitNotes, setStage1SubmitNotes] = useState<Record<string, string>>({});
 
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
