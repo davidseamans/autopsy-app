@@ -1521,6 +1521,14 @@ export default function Stage1Dashboard() {
   const [stage1CommitmentCheckLoading, setStage1CommitmentCheckLoading] = useState(false);
   const [stage1CommitmentCheckError, setStage1CommitmentCheckError] = useState<string | null>(null);
 
+  // Internal/admin-only operator insight review state. Hydrated via the
+  // read-only RPC get_operator_insights_review_snapshot. Debug/admin only —
+  // never exposed to normal users.
+  const [operatorInsightsReview, setOperatorInsightsReview] = useState<OperatorInsightReview[]>([]);
+  const [operatorInsightsReviewLoaded, setOperatorInsightsReviewLoaded] = useState(false);
+  const [operatorInsightsReviewError, setOperatorInsightsReviewError] = useState<string | null>(null);
+  const [operatorInsightReviewingId, setOperatorInsightReviewingId] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
