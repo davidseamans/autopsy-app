@@ -12,6 +12,7 @@ import {
   convertQuoteToJob,
   loadStage1Board,
 } from "@/lib/jobProvisioning";
+import { getActiveRunId } from "@/lib/progression";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -135,10 +136,12 @@ type Quote = {
 const SEED_QUOTES: Quote[] = [];
 
 // Canonical Stage 1 snapshot shape, returned by the read-only Supabase RPC
-// public.get_stage1_progress_snapshot(p_user_id text). Supabase is the source
-// of truth; this component never assembles progression tables directly.
+// public.get_stage1_progress_snapshot_by_run(p_run_id uuid). Supabase owns
+// identity resolution and is the source of truth; this component never
+// assembles progression tables or invents identity.
 type Stage1Snapshot = {
   stage_progress_id: string | null;
+  resolved_user_id: string | null;
   user_id: string | null;
   current_stage_code: string | null;
   current_gate_status: string | null;
