@@ -360,6 +360,21 @@ type ProductSurfacePlanSummary = {
 
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
+// Product-facing next-step guidance returned by the read-only RPC
+// public.get_stage1_next_step_guidance(p_stage_progress_id uuid). Supabase owns
+// ALL guidance derivation; this component only renders the returned row and
+// never computes guidance, branches on maturity, or applies decisions client-side.
+type Stage1NextStepGuidance = {
+  stage_progress_id: string | null;
+  gate_status: string | null;
+  guidance_code: string | null;
+  guidance_title: string | null;
+  guidance_body: string | null;
+  primary_action_label: string | null;
+  primary_action_target: string | null;
+  is_public_safe: boolean | null;
+};
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
