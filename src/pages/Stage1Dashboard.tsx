@@ -1669,6 +1669,17 @@ export default function Stage1Dashboard() {
         </p>
       )}
 
+      {/* Diagnostics: canonical stage_progress hydration (debug-only, read-only) */}
+      {isDebug() && stageProgressLoaded && (
+        <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+          <span className="uppercase tracking-wide mr-2">stage_progress</span>
+          loaded: {stageProgress ? "yes" : "no"}
+          {" · "}stage: {stageProgress?.current_stage_code ?? "—"}
+          {" · "}gate: {stageProgress?.current_gate_status ?? "—"}
+          {" · "}id: {stageProgress?.id ?? "—"}
+        </div>
+      )}
+
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
