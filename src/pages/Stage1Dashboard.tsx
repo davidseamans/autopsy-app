@@ -2969,7 +2969,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
-      {stage1Snapshot?.stage_progress_id && stage1Commitments.length > 0 && (
+      {displayCommitments.length > 0 && (
         <Card className="-mt-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
@@ -2991,7 +2991,7 @@ export default function Stage1Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stage1Commitments.map((c) => {
+                  {displayCommitments.map((c) => {
                     const cid = c.commitment_id ?? "";
                     return (
                       <TableRow key={cid || c.commitment_label || Math.random()}>
