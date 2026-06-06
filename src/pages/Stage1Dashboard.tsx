@@ -1407,6 +1407,11 @@ export default function Stage1Dashboard() {
   // component only displays them and never creates/verifies evidence.
   const [stage1Requirements, setStage1Requirements] = useState<Stage1Requirement[]>([]);
   const [stage1RequirementsLoaded, setStage1RequirementsLoaded] = useState(false);
+  // Submit-only evidence state. Supabase owns evidence/verification state; the
+  // frontend only *requests* a submit and never sets verified / valid / gate.
+  const [stage1SubmittingId, setStage1SubmittingId] = useState<string | null>(null);
+  const [stage1SubmitError, setStage1SubmitError] = useState<string | null>(null);
+  const [stage1SubmitNotes, setStage1SubmitNotes] = useState<Record<string, string>>({});
 
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
@@ -1464,6 +1469,18 @@ export default function Stage1Dashboard() {
   // stage_progress_id exists; never reads stage_gate_evidence directly and never
   // computes requirement status client-side.
   const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+
+  // Reusable read-only fetch for canonical Stage 1 requirements. Used by the
+  // hydration effect and re-used after a submit to refresh displayed status.
+  const fetchStage1Requirements = async (progressId: string) => {
+    const { data, error } = await supabase.rpc(
+      "get_stage1_evidence_requirements_snapshot",
+      { p_stage_progress_id: progressId },
+    );
+    if (error) throw error;
+    return (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
+  };
+
   useEffect(() => {
     let active = true;
     if (!stageProgressId) {
@@ -1473,19 +1490,8 @@ export default function Stage1Dashboard() {
     }
     (async () => {
       try {
-        const { data, error } = await supabase.rpc(
-          "get_stage1_evidence_requirements_snapshot",
-          { p_stage_progress_id: stageProgressId },
-        );
+        const rows = await fetchStage1Requirements(stageProgressId);
         if (!active) return;
-        if (error) {
-          console.warn(
-            "[stage1_requirements] RPC failed:",
-            error.message,
-          );
-          return; // preserve existing dashboard behaviour
-        }
-        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
         setStage1Requirements(rows);
       } catch (err) {
         console.warn("[stage1_requirements] RPC threw:", err);
@@ -1497,6 +1503,47 @@ export default function Stage1Dashboard() {
       active = false;
     };
   }, [stageProgressId]);
+
+  // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
+  // one requirement to evidence_status='submitted' while keeping verified=false
+  // and verified_at=null. Supabase owns evidence/verification/gate state; this
+  // never sets verified/valid, never writes stage_gate_evidence directly, and
+  // never creates commitments or operator insights. After a successful submit it
+  // re-fetches the canonical requirements snapshot to refresh displayed status.
+  const submitStage1Evidence = async (req: Stage1Requirement) => {
+    const evidenceId = req.stage_gate_evidence_id;
+    if (!evidenceId || !stageProgressId) return;
+    setStage1SubmittingId(evidenceId);
+    setStage1SubmitError(null);
+    const note = (stage1SubmitNotes[evidenceId] ?? "").trim();
+    try {
+      const { error } = await supabase.rpc("submit_stage1_evidence", {
+        p_stage_gate_evidence_id: evidenceId,
+        // No file-upload architecture exists yet; submit metadata-only evidence.
+        p_related_table: null,
+        p_related_record_id: null,
+        p_evidence_url: null,
+        p_evidence_value: {
+          source: "stage1_dashboard",
+          requirement_code: req.requirement_code,
+          ...(note ? { user_note: note } : {}),
+        },
+      });
+      if (error) {
+        console.warn("[stage1_submit] RPC failed:", error.message);
+        setStage1SubmitError(`Submit failed: ${error.message}`);
+        return; // preserve current UI state
+      }
+      // Re-fetch canonical status; never infer 'submitted' client-side.
+      const rows = await fetchStage1Requirements(stageProgressId);
+      setStage1Requirements(rows);
+    } catch (err) {
+      console.warn("[stage1_submit] RPC threw:", err);
+      setStage1SubmitError("Submit threw an unexpected error.");
+    } finally {
+      setStage1SubmittingId(null);
+    }
+  };
 
   const activateStage1 = async () => {
     if (!activeRunId) {
@@ -1851,6 +1898,7 @@ export default function Stage1Dashboard() {
                     <TableHead>Status</TableHead>
                     <TableHead>Verified</TableHead>
                     <TableHead>Minimum standard</TableHead>
+                    <TableHead>Submit evidence</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1859,25 +1907,59 @@ export default function Stage1Dashboard() {
                       (a, b) =>
                         (a.display_order ?? 0) - (b.display_order ?? 0),
                     )
-                    .map((r) => (
-                      <TableRow key={r.stage_gate_evidence_id ?? r.requirement_code ?? Math.random()}>
-                        <TableCell className="font-medium">
-                          {r.evidence_label ?? r.requirement_code ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={r.verified ? "default" : "secondary"}>
-                            {r.evidence_status ?? "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {r.minimum_standard ?? "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    .map((r) => {
+                      const evidenceId = r.stage_gate_evidence_id ?? "";
+                      const submitting = stage1SubmittingId === evidenceId;
+                      return (
+                        <TableRow key={evidenceId || r.requirement_code || Math.random()}>
+                          <TableCell className="font-medium">
+                            {r.evidence_label ?? r.requirement_code ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={r.verified ? "default" : "secondary"}>
+                              {r.evidence_status ?? "missing"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{r.verified ? "Yes" : "No"}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {r.minimum_standard ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={stage1SubmitNotes[evidenceId] ?? ""}
+                                onChange={(e) =>
+                                  setStage1SubmitNotes((p) => ({
+                                    ...p,
+                                    [evidenceId]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Optional note"
+                                className="h-8 w-40"
+                                disabled={!evidenceId || submitting}
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => submitStage1Evidence(r)}
+                                disabled={!evidenceId || submitting}
+                              >
+                                {submitting && (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                )}
+                                Submit
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </TableBody>
               </Table>
             </div>
+            {stage1SubmitError && (
+              <p className="mt-3 text-xs text-destructive">{stage1SubmitError}</p>
+            )}
           </CardContent>
         </Card>
       )}
