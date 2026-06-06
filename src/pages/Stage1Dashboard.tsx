@@ -2099,6 +2099,68 @@ export default function Stage1Dashboard() {
         </Card>
       )}
 
+      {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
+      {stage1Evaluation && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
+            <CardDescription>
+              Canonical evaluator result, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Valid</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.valid_count ?? 0} / {stage1Evaluation.total_required ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Submitted</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.submitted_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Missing</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.missing_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Invalid</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.invalid_count ?? 0}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Complete</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.is_complete ? "Yes" : "No"}
+                </div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">Recommended Gate</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {stage1Evaluation.recommended_gate_status ?? "—"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: evaluator returned no row */}
+      {isDebug() &&
+        stage1EvaluationLoaded &&
+        stageProgressId &&
+        !stage1Evaluation && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            Stage 1 evaluation returned no row for this progress id.
+          </div>
+        )}
+
       {/* Debug-only: requirements RPC returned zero rows */}
       {isDebug() &&
         stage1RequirementsLoaded &&
