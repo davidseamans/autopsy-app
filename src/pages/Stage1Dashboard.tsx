@@ -5,7 +5,7 @@ import {
   JobDetailSheet,
   type ProofUnit,
 } from "./Stage1";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDebug } from "@/lib/supabase";
 import {
   createQuote,
   setQuoteOutcome,
