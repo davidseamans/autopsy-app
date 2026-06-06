@@ -1687,6 +1687,19 @@ export default function Stage1Dashboard() {
   const [stage1NextStepGuidanceLoaded, setStage1NextStepGuidanceLoaded] = useState(false);
   const [stage1NextStepGuidanceError, setStage1NextStepGuidanceError] = useState<string | null>(null);
 
+  // ---- Product-facing public run-scoped wrapper data (READ-ONLY) ----
+  // Hydrated via the public wrapper RPCs keyed by the active Autopsy run id.
+  // Supabase resolves stage_progress_id internally and returns public-safe
+  // fields only. Product-facing cards prefer this data and fall back to the
+  // lower-level snapshot reads when a wrapper is unavailable, so the dashboard
+  // never breaks. These never expose raw JSON or operator insights publicly.
+  const [stage1PublicProgress, setStage1PublicProgress] = useState<Stage1PublicProgress | null>(null);
+  const [stage1PublicEvidence, setStage1PublicEvidence] = useState<Stage1PublicEvidence[]>([]);
+  const [stage1PublicCompletion, setStage1PublicCompletion] = useState<Stage1PublicCompletion | null>(null);
+  const [stage1PublicCommitments, setStage1PublicCommitments] = useState<Stage1PublicCommitment[]>([]);
+  const [stage1PublicNextStep, setStage1PublicNextStep] = useState<Stage1PublicNextStep | null>(null);
+  const [stage1PublicLoaded, setStage1PublicLoaded] = useState(false);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
