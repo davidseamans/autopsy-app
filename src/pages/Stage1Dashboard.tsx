@@ -1745,6 +1745,70 @@ export default function Stage1Dashboard() {
     };
   }, []);
 
+  // Read-only hydration of the product-facing public run-scoped wrappers. The
+  // frontend passes only the active Autopsy run id; Supabase resolves identity
+  // and returns public-safe fields. Each wrapper is independent and fails
+  // gracefully — a failed/empty wrapper leaves existing display values intact.
+  const fetchStage1PublicWrappers = async (runId: string) => {
+    const [progress, evidence, completion, commitments, nextStep] =
+      await Promise.allSettled([
+        supabase.rpc("get_stage1_public_progress_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_evidence_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_completion_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_commitments_by_run", { p_run_id: runId }),
+        supabase.rpc("get_stage1_public_next_step_by_run", { p_run_id: runId }),
+      ]);
+    // Return undefined for any wrapper that did not resolve cleanly so callers
+    // never overwrite good display data with a null/empty failure result.
+    const single = (r: PromiseSettledResult<any>) => {
+      if (r.status !== "fulfilled" || r.value?.error) return undefined;
+      const d = r.value.data;
+      return (Array.isArray(d) ? d[0] ?? null : d ?? null);
+    };
+    const many = (r: PromiseSettledResult<any>) => {
+      if (r.status !== "fulfilled" || r.value?.error) return undefined;
+      const d = r.value.data;
+      return (Array.isArray(d) ? d : d ? [d] : []);
+    };
+    return {
+      progress: single(progress),
+      evidence: many(evidence),
+      completion: single(completion),
+      commitments: many(commitments),
+      nextStep: single(nextStep),
+    };
+  };
+
+  const refreshStage1PublicWrappers = async (runId: string | null) => {
+    if (!runId) return;
+    try {
+      const r = await fetchStage1PublicWrappers(runId);
+      if (r.progress !== undefined) setStage1PublicProgress(r.progress);
+      if (r.evidence !== undefined) setStage1PublicEvidence(r.evidence);
+      if (r.completion !== undefined) setStage1PublicCompletion(r.completion);
+      if (r.commitments !== undefined) setStage1PublicCommitments(r.commitments);
+      if (r.nextStep !== undefined) setStage1PublicNextStep(r.nextStep);
+    } catch (err) {
+      console.warn("[stage1_public_wrappers] refresh threw:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeRunId) {
+      setStage1PublicLoaded(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      await refreshStage1PublicWrappers(activeRunId);
+      if (active) setStage1PublicLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRunId]);
+
   // Debug/admin-only Stage 1 activation. Supabase owns ALL activation logic;
   // this only *requests* activation by the active Autopsy run id and stores the
   // returned canonical snapshot. No client-side eligibility, no direct writes.
