@@ -360,6 +360,21 @@ type ProductSurfacePlanSummary = {
 
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
+// Product-facing next-step guidance returned by the read-only RPC
+// public.get_stage1_next_step_guidance(p_stage_progress_id uuid). Supabase owns
+// ALL guidance derivation; this component only renders the returned row and
+// never computes guidance, branches on maturity, or applies decisions client-side.
+type Stage1NextStepGuidance = {
+  stage_progress_id: string | null;
+  gate_status: string | null;
+  guidance_code: string | null;
+  guidance_title: string | null;
+  guidance_body: string | null;
+  primary_action_label: string | null;
+  primary_action_target: string | null;
+  is_public_safe: boolean | null;
+};
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
@@ -1650,6 +1665,13 @@ export default function Stage1Dashboard() {
   const [productSurfacePlanSummaryLoading, setProductSurfacePlanSummaryLoading] = useState(false);
   const [productSurfacePlanSummaryError, setProductSurfacePlanSummaryError] = useState<string | null>(null);
 
+  // Product-facing next-step guidance (read-only, Supabase-owned). Hydrated via
+  // public.get_stage1_next_step_guidance(p_stage_progress_id). Supabase owns all
+  // guidance derivation; this component only renders the returned row.
+  const [stage1NextStepGuidance, setStage1NextStepGuidance] = useState<Stage1NextStepGuidance | null>(null);
+  const [stage1NextStepGuidanceLoaded, setStage1NextStepGuidanceLoaded] = useState(false);
+  const [stage1NextStepGuidanceError, setStage1NextStepGuidanceError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1806,6 +1828,65 @@ export default function Stage1Dashboard() {
       active = false;
     };
   }, [stageProgressId]);
+
+  // Read-only hydration of product-facing next-step guidance. Only fires when
+  // stage_progress_id exists; never computes guidance, never mutates anything.
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1NextStepGuidance(null);
+      setStage1NextStepGuidanceLoaded(false);
+      setStage1NextStepGuidanceError(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_next_step_guidance",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn("[stage1_next_step_guidance] RPC failed:", error.message);
+          setStage1NextStepGuidanceError(
+            `Next step guidance load failed: ${error.message}`,
+          );
+          return;
+        }
+        const row = Array.isArray(data) ? data[0] : data;
+        if (active) {
+          setStage1NextStepGuidance((row ?? null) as Stage1NextStepGuidance | null);
+          setStage1NextStepGuidanceError(null);
+        }
+      } catch (err: any) {
+        if (!active) return;
+        console.warn("[stage1_next_step_guidance] RPC threw:", err);
+        setStage1NextStepGuidanceError("Next step guidance threw an unexpected error.");
+      } finally {
+        if (active) setStage1NextStepGuidanceLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
+  // Product-facing primary action handler. Only scrolls/focuses a local anchor
+  // when one exists for the Supabase-provided target. Never derives guidance,
+  // never mutates, never alters routes. Unknown/absent targets are a safe no-op.
+  const handleNextStepAction = (target: string | null | undefined) => {
+    const anchorId =
+      target === "stage1_evidence"
+        ? "stage1-evidence-section"
+        : target === "stage1_completion"
+          ? "stage1-completion-section"
+          : null;
+    if (!anchorId) return;
+    const el = typeof document !== "undefined" ? document.getElementById(anchorId) : null;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // Internal/admin-only read of operator insights for review. Debug-only RPC
   // get_operator_insights_review_snapshot. Never generates insights, never
@@ -2561,9 +2642,48 @@ export default function Stage1Dashboard() {
         </div>
       )}
 
+      {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1NextStepGuidance && (
+        <Card className="-mt-2 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Next step</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stage1NextStepGuidance.is_public_safe === true ? (
+              <div className="space-y-3">
+                {stage1NextStepGuidance.guidance_title && (
+                  <div className="text-lg font-semibold">
+                    {stage1NextStepGuidance.guidance_title}
+                  </div>
+                )}
+                {stage1NextStepGuidance.guidance_body && (
+                  <p className="text-sm text-muted-foreground">
+                    {stage1NextStepGuidance.guidance_body}
+                  </p>
+                )}
+                {stage1NextStepGuidance.primary_action_label && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      handleNextStepAction(stage1NextStepGuidance.primary_action_target)
+                    }
+                  >
+                    {stage1NextStepGuidance.primary_action_label}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Next step is not available yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
       {stage1Snapshot?.stage_progress_id && stage1Requirements.length > 0 && (
-        <Card className="-mt-2">
+        <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
             <CardDescription>
@@ -2685,7 +2805,7 @@ export default function Stage1Dashboard() {
 
       {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
       {stage1Evaluation && (
-        <Card className="-mt-2">
+        <Card className="-mt-2" id="stage1-completion-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
             <CardDescription>
