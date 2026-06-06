@@ -1793,6 +1793,68 @@ export default function Stage1Dashboard() {
     }
   };
 
+  // Debug/admin-only commitment check action. Calls public.check_stage1_commitments
+  // which checks valid evidence count against commitments, updates status, records
+  // actual_value_at_check, and may generate an operator insight. Supabase owns all
+  // commitment state and insight generation; this never updates commitments directly.
+  const checkStage1Commitments = async () => {
+    if (!stageProgressId) {
+      setStage1CommitmentCheckError("No stage_progress_id available.");
+      return;
+    }
+    setStage1CommitmentCheckLoading(true);
+    setStage1CommitmentCheckError(null);
+    setStage1CommitmentCheck(null);
+    try {
+      const { data, error } = await supabase.rpc("check_stage1_commitments", {
+        p_stage_progress_id: stageProgressId,
+      });
+      if (error) {
+        console.warn("[stage1_commitment_check] RPC failed:", error.message);
+        setStage1CommitmentCheckError(`Commitment check failed: ${error.message}`);
+        return;
+      }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        setStage1CommitmentCheck(row as Stage1CommitmentCheckResult);
+      }
+      // Re-fetch canonical commitments snapshot, evaluation, and progress snapshot
+      if (stageProgressId) {
+        const { data: commData, error: commErr } = await supabase.rpc(
+          "get_stage1_commitments_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!commErr) {
+          const commRows = (Array.isArray(commData) ? commData : commData ? [commData] : []) as Stage1Commitment[];
+          setStage1Commitments(commRows);
+        }
+        const { data: evalData, error: evalErr } = await supabase.rpc(
+          "evaluate_stage1_completion",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!evalErr) {
+          const evalRow = Array.isArray(evalData) ? evalData[0] : evalData;
+          if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
+        }
+      }
+      if (activeRunId) {
+        const { data: snapData, error: snapErr } = await supabase.rpc(
+          "get_stage1_progress_snapshot_by_run",
+          { p_run_id: activeRunId },
+        );
+        if (!snapErr) {
+          const snapRow = Array.isArray(snapData) ? snapData[0] : snapData;
+          if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
+        }
+      }
+    } catch (err) {
+      console.warn("[stage1_commitment_check] RPC threw:", err);
+      setStage1CommitmentCheckError("Commitment check threw an unexpected error.");
+    } finally {
+      setStage1CommitmentCheckLoading(false);
+    }
+  };
+
   const activateStage1 = async () => {
     if (!activeRunId) {
       setStage1ActivateMsg("No active Autopsy run id available.");
