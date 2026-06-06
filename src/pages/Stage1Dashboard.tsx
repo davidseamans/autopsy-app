@@ -2314,6 +2314,71 @@ export default function Stage1Dashboard() {
         </Card>
       )}
 
+      {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
+      {stage1Snapshot?.stage_progress_id && stage1Commitments.length > 0 && (
+        <Card className="-mt-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
+            <CardDescription>
+              Coach commitments for First 5 Jobs, owned by the platform.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Commitment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead>Follow-up</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stage1Commitments.map((c) => {
+                    const cid = c.commitment_id ?? "";
+                    return (
+                      <TableRow key={cid || c.commitment_label || Math.random()}>
+                        <TableCell className="font-medium">
+                          {c.commitment_label ?? c.commitment_type ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{c.status ?? "—"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {c.target_metric ?? "—"}: {c.target_value ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {c.actual_value_at_check ?? 0} / {c.target_value ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {c.due_at ? isoToAU(c.due_at.slice(0, 10)) : "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {c.follow_up_message ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug-only: commitments RPC returned zero rows */}
+      {isDebug() &&
+        stage1CommitmentsLoaded &&
+        stage1Snapshot?.stage_progress_id &&
+        stage1Commitments.length === 0 && (
+          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
+            No Stage 1 commitments created.
+          </div>
+        )}
+
       {/* Debug-only: evaluator returned no row */}
       {isDebug() &&
         stage1EvaluationLoaded &&
