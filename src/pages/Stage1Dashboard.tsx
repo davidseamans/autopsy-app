@@ -1498,6 +1498,12 @@ export default function Stage1Dashboard() {
   const [stage1Commitments, setStage1Commitments] = useState<Stage1Commitment[]>([]);
   const [stage1CommitmentsLoaded, setStage1CommitmentsLoaded] = useState(false);
 
+  // ---- Debug/admin-only commitment check (Supabase-owned) ----
+  // Tracks the result of public.check_stage1_commitments and any diagnostic error.
+  const [stage1CommitmentCheck, setStage1CommitmentCheck] = useState<Stage1CommitmentCheckResult | null>(null);
+  const [stage1CommitmentCheckLoading, setStage1CommitmentCheckLoading] = useState(false);
+  const [stage1CommitmentCheckError, setStage1CommitmentCheckError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
