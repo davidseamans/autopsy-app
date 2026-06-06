@@ -1696,13 +1696,14 @@ export default function Stage1Dashboard() {
       {/* Diagnostics: canonical Stage 1 snapshot RPC hydration (debug-only, read-only) */}
       {isDebug() && stage1SnapshotLoaded && (
         <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-[11px] font-mono text-muted-foreground -mt-2">
-          <span className="uppercase tracking-wide mr-2">stage1_snapshot (rpc)</span>
-          loaded: {stage1Snapshot ? "yes" : "no"}
-          {" · "}stage: {stage1Snapshot?.current_stage_code ?? "—"}
+          <span className="uppercase tracking-wide mr-2">stage1_snapshot (rpc by_run)</span>
+          active_run_id: {activeRunId ?? "—"}
+          {" · "}identity_resolved: {stage1Snapshot?.resolved_user_id ? "yes" : "no"}
+          {" · "}resolved_user_id present: {stage1Snapshot?.resolved_user_id ? "yes" : "no"}
+          {" · "}stage_progress_found: {stage1Snapshot?.stage_progress_id ? "yes" : "no"}
           {" · "}gate: {stage1Snapshot?.current_gate_status ?? "—"}
-          {" · "}id: {stage1Snapshot?.stage_progress_id ?? "—"}
-          {" · "}evidence: {stage1Snapshot?.verified_evidence_count ?? "—"}/{stage1Snapshot?.total_evidence_count ?? "—"}
-          {" · "}commits(met/open/missed/partial): {stage1Snapshot?.met_commitment_count ?? "—"}/{stage1Snapshot?.open_commitment_count ?? "—"}/{stage1Snapshot?.missed_commitment_count ?? "—"}/{stage1Snapshot?.partial_commitment_count ?? "—"}
+          {" · "}verified_evidence: {stage1Snapshot?.verified_evidence_count ?? "—"}
+          {" · "}met_commitments: {stage1Snapshot?.met_commitment_count ?? "—"}
           {" · "}insights: {stage1Snapshot?.latest_operator_insight_count ?? "—"}
         </div>
       )}
