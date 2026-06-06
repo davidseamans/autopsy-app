@@ -1458,6 +1458,46 @@ export default function Stage1Dashboard() {
   // returned canonical snapshot. No client-side eligibility, no direct writes.
   const [stage1Activating, setStage1Activating] = useState(false);
   const [stage1ActivateMsg, setStage1ActivateMsg] = useState<string | null>(null);
+
+  // Read-only hydration of canonical Stage 1 evidence requirements, keyed by the
+  // resolved stage_progress_id from the snapshot RPC. Only fires once a
+  // stage_progress_id exists; never reads stage_gate_evidence directly and never
+  // computes requirement status client-side.
+  const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1Requirements([]);
+      setStage1RequirementsLoaded(false);
+      return; // no stage_progress_id → do not call the requirements RPC
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_evidence_requirements_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn(
+            "[stage1_requirements] RPC failed:",
+            error.message,
+          );
+          return; // preserve existing dashboard behaviour
+        }
+        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
+        setStage1Requirements(rows);
+      } catch (err) {
+        console.warn("[stage1_requirements] RPC threw:", err);
+      } finally {
+        if (active) setStage1RequirementsLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
   const activateStage1 = async () => {
     if (!activeRunId) {
       setStage1ActivateMsg("No active Autopsy run id available.");
