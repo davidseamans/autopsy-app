@@ -337,6 +337,29 @@ type ConstructionReadinessSummary = {
       evidence_reference?: string | null;
     }> | null;
   } | null;
+  release_safe?: boolean | null;
+  release_safe_reason?: string | null;
+  auth_ownership_hardening?: {
+    public_release_blocker_count?: number | null;
+    summary?: Array<{
+      surface_type?: string | null;
+      release_status?: string | null;
+      function_count?: number | null;
+    }> | null;
+    public_release_blockers?: Array<{
+      function_name?: string | null;
+      surface_type?: string | null;
+      release_status?: string | null;
+    }> | null;
+    highest_priority_items?: Array<{
+      function_name?: string | null;
+      surface_type?: string | null;
+      release_status?: string | null;
+      remaining_gap?: string | null;
+      required_ownership_check?: string | null;
+      recommended_release_path?: string | null;
+    }> | null;
+  } | null;
   [key: string]: any;
 };
 
