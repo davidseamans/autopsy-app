@@ -2236,6 +2236,7 @@ export default function Stage1Dashboard() {
       }
       const rows = await fetchStage1Requirements(stageProgressId);
       setStage1Requirements(rows);
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_verify] RPC threw:", err);
       setStage1VerifyError("Verification threw an unexpected error.");
