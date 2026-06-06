@@ -2356,6 +2356,7 @@ export default function Stage1Dashboard() {
           if (snapRow) setStage1Snapshot(snapRow as Stage1Snapshot);
         }
       }
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_commitment_check] RPC threw:", err);
       setStage1CommitmentCheckError("Commitment check threw an unexpected error.");
