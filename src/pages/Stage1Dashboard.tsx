@@ -320,6 +320,13 @@ type ConstructionReadinessSummary = {
       hardening_required?: boolean | null;
     }> | null;
   } | null;
+  rls_policy_posture?: {
+    rpc_only_count?: number | null;
+    template_read_allowed_count?: number | null;
+    public_read_candidate_count?: number | null;
+    direct_policy_expected_count?: number | null;
+    sensitive_rpc_only_tables?: string[] | null;
+  } | null;
   [key: string]: any;
 };
 
