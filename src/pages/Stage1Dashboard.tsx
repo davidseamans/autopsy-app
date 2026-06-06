@@ -1469,6 +1469,18 @@ export default function Stage1Dashboard() {
   // stage_progress_id exists; never reads stage_gate_evidence directly and never
   // computes requirement status client-side.
   const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+
+  // Reusable read-only fetch for canonical Stage 1 requirements. Used by the
+  // hydration effect and re-used after a submit to refresh displayed status.
+  const fetchStage1Requirements = async (progressId: string) => {
+    const { data, error } = await supabase.rpc(
+      "get_stage1_evidence_requirements_snapshot",
+      { p_stage_progress_id: progressId },
+    );
+    if (error) throw error;
+    return (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
+  };
+
   useEffect(() => {
     let active = true;
     if (!stageProgressId) {
@@ -1478,19 +1490,8 @@ export default function Stage1Dashboard() {
     }
     (async () => {
       try {
-        const { data, error } = await supabase.rpc(
-          "get_stage1_evidence_requirements_snapshot",
-          { p_stage_progress_id: stageProgressId },
-        );
+        const rows = await fetchStage1Requirements(stageProgressId);
         if (!active) return;
-        if (error) {
-          console.warn(
-            "[stage1_requirements] RPC failed:",
-            error.message,
-          );
-          return; // preserve existing dashboard behaviour
-        }
-        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Requirement[];
         setStage1Requirements(rows);
       } catch (err) {
         console.warn("[stage1_requirements] RPC threw:", err);
@@ -1502,6 +1503,47 @@ export default function Stage1Dashboard() {
       active = false;
     };
   }, [stageProgressId]);
+
+  // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
+  // one requirement to evidence_status='submitted' while keeping verified=false
+  // and verified_at=null. Supabase owns evidence/verification/gate state; this
+  // never sets verified/valid, never writes stage_gate_evidence directly, and
+  // never creates commitments or operator insights. After a successful submit it
+  // re-fetches the canonical requirements snapshot to refresh displayed status.
+  const submitStage1Evidence = async (req: Stage1Requirement) => {
+    const evidenceId = req.stage_gate_evidence_id;
+    if (!evidenceId || !stageProgressId) return;
+    setStage1SubmittingId(evidenceId);
+    setStage1SubmitError(null);
+    const note = (stage1SubmitNotes[evidenceId] ?? "").trim();
+    try {
+      const { error } = await supabase.rpc("submit_stage1_evidence", {
+        p_stage_gate_evidence_id: evidenceId,
+        // No file-upload architecture exists yet; submit metadata-only evidence.
+        p_related_table: null,
+        p_related_record_id: null,
+        p_evidence_url: null,
+        p_evidence_value: {
+          source: "stage1_dashboard",
+          requirement_code: req.requirement_code,
+          ...(note ? { user_note: note } : {}),
+        },
+      });
+      if (error) {
+        console.warn("[stage1_submit] RPC failed:", error.message);
+        setStage1SubmitError(`Submit failed: ${error.message}`);
+        return; // preserve current UI state
+      }
+      // Re-fetch canonical status; never infer 'submitted' client-side.
+      const rows = await fetchStage1Requirements(stageProgressId);
+      setStage1Requirements(rows);
+    } catch (err) {
+      console.warn("[stage1_submit] RPC threw:", err);
+      setStage1SubmitError("Submit threw an unexpected error.");
+    } finally {
+      setStage1SubmittingId(null);
+    }
+  };
 
   const activateStage1 = async () => {
     if (!activeRunId) {
