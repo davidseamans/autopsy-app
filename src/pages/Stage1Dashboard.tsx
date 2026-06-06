@@ -2293,6 +2293,7 @@ export default function Stage1Dashboard() {
           if (evalRow) setStage1Evaluation(evalRow as Stage1Evaluation);
         }
       }
+      await refreshStage1PublicWrappers(activeRunId);
     } catch (err) {
       console.warn("[stage1_gate_decision] RPC threw:", err);
       setStage1GateDecisionError("Gate decision threw an unexpected error.");
