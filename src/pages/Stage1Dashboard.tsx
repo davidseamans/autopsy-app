@@ -1548,6 +1548,13 @@ export default function Stage1Dashboard() {
   const [operatorInsightsReviewError, setOperatorInsightsReviewError] = useState<string | null>(null);
   const [operatorInsightReviewingId, setOperatorInsightReviewingId] = useState<string | null>(null);
 
+  // ---- Debug/admin-only control snapshot (read-only, Supabase-owned) ----
+  // Hydrated via public.get_stage1_debug_control_snapshot(p_stage_progress_id).
+  // Debug/admin only — never exposed to normal users.
+  const [stage1DebugControlSnapshot, setStage1DebugControlSnapshot] = useState<Stage1DebugControlSnapshot | null>(null);
+  const [stage1DebugControlSnapshotLoading, setStage1DebugControlSnapshotLoading] = useState(false);
+  const [stage1DebugControlSnapshotError, setStage1DebugControlSnapshotError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
