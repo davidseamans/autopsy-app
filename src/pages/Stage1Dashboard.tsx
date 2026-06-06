@@ -360,6 +360,22 @@ type ConstructionReadinessSummary = {
       recommended_release_path?: string | null;
     }> | null;
   } | null;
+  operator_run_ownership_model?: {
+    release_blocking_count?: number | null;
+    summary?: Array<{
+      contract_area?: string | null;
+      requirement_count?: number | null;
+      release_blocking_count?: number | null;
+    }> | null;
+    requirements?: Array<{
+      priority?: number | null;
+      contract_key?: string | null;
+      contract_area?: string | null;
+      release_blocking?: boolean | null;
+      contract_requirement?: string | null;
+      target_state?: string | null;
+    }> | null;
+  } | null;
   [key: string]: any;
 };
 
