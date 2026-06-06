@@ -1454,6 +1454,12 @@ export default function Stage1Dashboard() {
   const [stage1Evaluation, setStage1Evaluation] = useState<Stage1Evaluation | null>(null);
   const [stage1EvaluationLoaded, setStage1EvaluationLoaded] = useState(false);
 
+  // ---- Debug/admin-only gate decision (Supabase-owned) ----
+  // Tracks the result of public.apply_stage1_gate_decision and any diagnostic error.
+  const [stage1GateDecision, setStage1GateDecision] = useState<Stage1GateDecision | null>(null);
+  const [stage1GateDecisionLoading, setStage1GateDecisionLoading] = useState(false);
+  const [stage1GateDecisionError, setStage1GateDecisionError] = useState<string | null>(null);
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
