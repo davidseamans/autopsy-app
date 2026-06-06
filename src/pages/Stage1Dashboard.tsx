@@ -238,6 +238,16 @@ type Stage1Commitment = {
   updated_at: string | null;
 };
 
+// Result returned by public.check_stage1_commitments(p_stage_progress_id).
+// Supabase owns commitment checking; this component only displays the result.
+type Stage1CommitmentCheckResult = {
+  commitment_id: string | null;
+  previous_status: string | null;
+  new_status: string | null;
+  actual_value_at_check: number | null;
+  operator_insight_id: string | null;
+};
+
 const JOB_ROWS: { job: string; client: string; site: string; status: string; start: string; income: number; costs: number; gm: number; evidence: string }[] = [];
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
