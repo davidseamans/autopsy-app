@@ -1612,6 +1612,39 @@ export default function Stage1Dashboard() {
     };
   }, [stageProgressId]);
 
+  // Read-only hydration of canonical Stage 1 commitments. Only fires when
+  // stage_progress_id exists; never creates or checks commitments client-side.
+  useEffect(() => {
+    let active = true;
+    if (!stageProgressId) {
+      setStage1Commitments([]);
+      setStage1CommitmentsLoaded(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          "get_stage1_commitments_snapshot",
+          { p_stage_progress_id: stageProgressId },
+        );
+        if (!active) return;
+        if (error) {
+          console.warn("[stage1_commitments] RPC failed:", error.message);
+          return;
+        }
+        const rows = (Array.isArray(data) ? data : data ? [data] : []) as Stage1Commitment[];
+        if (active) setStage1Commitments(rows);
+      } catch (err) {
+        console.warn("[stage1_commitments] RPC threw:", err);
+      } finally {
+        if (active) setStage1CommitmentsLoaded(true);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [stageProgressId]);
+
   // Submit-only evidence action. Calls public.submit_stage1_evidence which moves
   // one requirement to evidence_status='submitted' while keeping verified=false
   // and verified_at=null. Supabase owns evidence/verification/gate state; this
