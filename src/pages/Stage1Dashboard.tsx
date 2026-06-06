@@ -308,6 +308,18 @@ type ConstructionReadinessSummary = {
     phase_number?: number | null;
     status?: string | null;
   }> | null;
+  public_wrapper_set?: {
+    required_count?: number | null;
+    classified_count?: number | null;
+    complete?: boolean | null;
+    wrappers?: Array<{
+      function_name?: string | null;
+      registered?: boolean | null;
+      classification?: string | null;
+      production_target?: string | null;
+      hardening_required?: boolean | null;
+    }> | null;
+  } | null;
   [key: string]: any;
 };
 
