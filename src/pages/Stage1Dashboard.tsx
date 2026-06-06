@@ -2917,7 +2917,7 @@ export default function Stage1Dashboard() {
       )}
 
       {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
-      {stage1Evaluation && (
+      {displayCompletion && (
         <Card className="-mt-2" id="stage1-completion-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
@@ -2930,37 +2930,37 @@ export default function Stage1Dashboard() {
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Valid</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.valid_count ?? 0} / {stage1Evaluation.total_required ?? 0}
+                  {displayCompletion.valid_count ?? 0} / {displayCompletion.total_required ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Submitted</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.submitted_count ?? 0}
+                  {displayCompletion.submitted_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Missing</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.missing_count ?? 0}
+                  {displayCompletion.missing_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Invalid</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.invalid_count ?? 0}
+                  {displayCompletion.invalid_count ?? 0}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Complete</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.is_complete ? "Yes" : "No"}
+                  {displayCompletion.is_complete ? "Yes" : "No"}
                 </div>
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide">Recommended Gate</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {stage1Evaluation.recommended_gate_status ?? "—"}
+                  {displayCompletion.recommended_gate_status ?? "—"}
                 </div>
               </div>
             </div>
