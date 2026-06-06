@@ -327,6 +327,16 @@ type ConstructionReadinessSummary = {
     direct_policy_expected_count?: number | null;
     sensitive_rpc_only_tables?: string[] | null;
   } | null;
+  validation_milestones?: {
+    all_required_passed?: boolean | null;
+    milestones?: Array<{
+      milestone_key?: string | null;
+      milestone_label?: string | null;
+      milestone_status?: string | null;
+      validation_scope?: string | null;
+      evidence_reference?: string | null;
+    }> | null;
+  } | null;
   [key: string]: any;
 };
 
@@ -3440,6 +3450,54 @@ export default function Stage1Dashboard() {
                         </div>
                         <p className="text-[11px] text-muted-foreground">
                           Sensitive Stage 1 tables are RPC-only by design. Do not add broad direct table policies.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+                {constructionReadinessSummary.validation_milestones && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] font-mono">
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">All Required Passed</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.validation_milestones.all_required_passed === true ? "true" : "false"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Passed Milestones</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.validation_milestones.milestones?.filter(m => m.milestone_status === "passed").length ?? "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Milestones</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {constructionReadinessSummary.validation_milestones.milestones?.length ?? "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {Array.isArray(constructionReadinessSummary.validation_milestones.milestones) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Validation Milestones</div>
+                        <div className="divide-y divide-border rounded-md border text-[11px] font-mono">
+                          {constructionReadinessSummary.validation_milestones.milestones.map((m, idx) => (
+                            <div key={idx} className="flex items-center justify-between gap-2 px-2 py-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${m.milestone_status === "passed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="truncate font-semibold">{m.milestone_key ?? "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                                <span>{m.milestone_label ?? "—"}</span>
+                                <span>status: {m.milestone_status ?? "—"}</span>
+                                <span>scope: {m.validation_scope ?? "—"}</span>
+                                <span>ref: {m.evidence_reference ?? "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Validation milestones show proven flows, not just built objects.
                         </p>
                       </div>
                     )}
