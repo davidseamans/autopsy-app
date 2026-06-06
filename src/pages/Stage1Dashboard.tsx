@@ -1413,6 +1413,12 @@ export default function Stage1Dashboard() {
   const [stage1SubmitError, setStage1SubmitError] = useState<string | null>(null);
   const [stage1SubmitNotes, setStage1SubmitNotes] = useState<Record<string, string>>({});
 
+  // Debug/admin-only verification state. Supabase owns verification; this tracks
+  // pending RPC calls and any diagnostic error messages.
+  const [stage1VerifyingId, setStage1VerifyingId] = useState<string | null>(null);
+  const [stage1VerifyError, setStage1VerifyError] = useState<string | null>(null);
+
+
   // Read-only hydration through the canonical RPC, keyed by the active Autopsy
   // run id (the only identity the frontend legitimately owns). Guarded +
   // isolated so it never affects the existing quotes/jobs board behaviour.
@@ -1542,6 +1548,41 @@ export default function Stage1Dashboard() {
       setStage1SubmitError("Submit threw an unexpected error.");
     } finally {
       setStage1SubmittingId(null);
+    }
+  };
+
+  // Debug/admin-only verification action. Calls public.verify_stage1_evidence which
+  // marks one Stage 1 evidence row valid or invalid. Supabase owns verification
+  // state; this never writes stage_gate_evidence directly and never advances
+  // stage gates or creates commitments/operator insights.
+  const verifyStage1Evidence = async (
+    req: Stage1Requirement,
+    verified: boolean,
+  ) => {
+    const evidenceId = req.stage_gate_evidence_id;
+    if (!evidenceId || !stageProgressId) return;
+    setStage1VerifyingId(evidenceId);
+    setStage1VerifyError(null);
+    try {
+      const { error } = await supabase.rpc("verify_stage1_evidence", {
+        p_stage_gate_evidence_id: evidenceId,
+        p_verified: verified,
+        p_verification_notes: verified
+          ? "Debug/admin verification from Stage 1 dashboard."
+          : "Debug/admin rejection from Stage 1 dashboard.",
+      });
+      if (error) {
+        console.warn("[stage1_verify] RPC failed:", error.message);
+        setStage1VerifyError(`Verification failed: ${error.message}`);
+        return;
+      }
+      const rows = await fetchStage1Requirements(stageProgressId);
+      setStage1Requirements(rows);
+    } catch (err) {
+      console.warn("[stage1_verify] RPC threw:", err);
+      setStage1VerifyError("Verification threw an unexpected error.");
+    } finally {
+      setStage1VerifyingId(null);
     }
   };
 
@@ -1899,6 +1940,7 @@ export default function Stage1Dashboard() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Minimum standard</TableHead>
                     <TableHead>Submit evidence</TableHead>
+                    {isDebug() && <TableHead>Debug Verify</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1910,6 +1952,11 @@ export default function Stage1Dashboard() {
                     .map((r) => {
                       const evidenceId = r.stage_gate_evidence_id ?? "";
                       const submitting = stage1SubmittingId === evidenceId;
+                      const verifying = stage1VerifyingId === evidenceId;
+                      const showDebugControls =
+                        isDebug() &&
+                        ((r.evidence_status ?? "").toLowerCase() === "submitted" ||
+                          (r.evidence_status ?? "").toLowerCase() === "invalid");
                       return (
                         <TableRow key={evidenceId || r.requirement_code || Math.random()}>
                           <TableCell className="font-medium">
@@ -1936,13 +1983,13 @@ export default function Stage1Dashboard() {
                                 }
                                 placeholder="Optional note"
                                 className="h-8 w-40"
-                                disabled={!evidenceId || submitting}
+                                disabled={!evidenceId || submitting || verifying}
                               />
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => submitStage1Evidence(r)}
-                                disabled={!evidenceId || submitting}
+                                disabled={!evidenceId || submitting || verifying}
                               >
                                 {submitting && (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1951,6 +1998,35 @@ export default function Stage1Dashboard() {
                               </Button>
                             </div>
                           </TableCell>
+                          {isDebug() && (
+                            <TableCell>
+                              {showDebugControls ? (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => verifyStage1Evidence(r, true)}
+                                    disabled={verifying}
+                                  >
+                                    {verifying && (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                    )}
+                                    Mark Valid
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => verifyStage1Evidence(r, false)}
+                                    disabled={verifying}
+                                  >
+                                    Mark Invalid
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })}
@@ -1959,6 +2035,9 @@ export default function Stage1Dashboard() {
             </div>
             {stage1SubmitError && (
               <p className="mt-3 text-xs text-destructive">{stage1SubmitError}</p>
+            )}
+            {isDebug() && stage1VerifyError && (
+              <p className="mt-3 text-xs text-destructive">{stage1VerifyError}</p>
             )}
           </CardContent>
         </Card>
