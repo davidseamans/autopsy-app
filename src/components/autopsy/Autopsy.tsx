@@ -1109,20 +1109,22 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         )}
 
         {view === "start" && (
-          <StartView
-            industry={industry}
-            scenario={scenario}
-            operatorClass={operatorClass}
-            runName={runName}
-            testerEmail={testerEmail}
-            setIndustry={setIndustry}
-            setScenario={setScenario}
-            setOperatorClass={setOperatorClass}
-            setRunName={setRunName}
-            setTesterEmail={setTesterEmail}
-            onSubmit={handleStart}
-            loading={startMutation.isPending}
-          />
+          <AuthGate>
+            <StartView
+              industry={industry}
+              scenario={scenario}
+              operatorClass={operatorClass}
+              runName={runName}
+              testerEmail={testerEmail}
+              setIndustry={setIndustry}
+              setScenario={setScenario}
+              setOperatorClass={setOperatorClass}
+              setRunName={setRunName}
+              setTesterEmail={setTesterEmail}
+              onSubmit={handleStart}
+              loading={startMutation.isPending}
+            />
+          </AuthGate>
         )}
 
         {view === "question" && (
