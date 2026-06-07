@@ -4142,11 +4142,22 @@ function Stage1DashboardInner() {
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
             { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
-            { k: "Status", v: gmStatus.label },
+            { k: "Stage 2 Ready", v: dashboardStage2ReadyText },
           ]}
           onClick={() => setDrill("margin")}
         />
       </section>
+
+      {/* Maturity-oriented commercial guidance from the run-scoped dashboard RPC. */}
+      {stage1DashboardDisplay && (dashboardMarginHelper || dashboardNextAction) && (
+        <p className="text-xs text-muted-foreground">
+          {dashboardMarginHelper && <span>{dashboardMarginHelper}</span>}
+          {dashboardMarginHelper && dashboardNextAction && <span> </span>}
+          {dashboardNextAction && (
+            <span className="text-foreground">Next action: {dashboardNextAction}</span>
+          )}
+        </p>
+      )}
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
