@@ -4172,8 +4172,8 @@ function Stage1DashboardInner() {
           primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
-            { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
-            { k: "Stage 2 Ready", v: dashboardStage2ReadyText },
+            { k: "Direct cost", v: directCostKpiText },
+            { k: "Stage 2 Ready", v: stage2ReadyText },
           ]}
           onClick={() => setDrill("margin")}
         />
