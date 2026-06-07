@@ -507,6 +507,15 @@ function renderDirectCost(
   return "Not Yet Recorded";
 }
 
+// Governance: direct costs are "recorded" only when a positive cost exists.
+// Zero recorded cost is NOT the same as proven zero cost, so margin must stay
+// "Not Yet Proven" until real cost data is captured. Never compute
+// (income - 0) / income.
+function directCostsRecorded(costs: number | null | undefined): boolean {
+  const n = typeof costs === "number" ? costs : Number(costs);
+  return Number.isFinite(n) && n > 0;
+}
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
