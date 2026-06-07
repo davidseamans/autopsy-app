@@ -5065,15 +5065,25 @@ export default function Stage1() {
           editingJobIds: nextUnits.map((u) => u.stage1JobId ?? `n:${u.n}`),
         });
       }
+      // Cache-only path: without an authenticated session there is nowhere
+      // canonical to write, so keep the optimistic paint and report failure so
+      // callers never claim a save succeeded.
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) return null;
       const synced = await syncStage1Units(runId, nextUnits);
-      if (!synced) return null; // not authed / write failed → cache only
+      // Reconcile the display to canonical truth REGARDLESS of write outcome —
+      // the dashboard/ledger must always reflect Supabase, never optimistic or
+      // cached commercial values. If a write failed, the refetch will show the
+      // canonical (possibly unchanged) state rather than pretend it landed.
       const canonical = await fetchStage1Units(runId);
-      if (canonical == null) return null;
-      const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
-      unitsRef.current = merged;
-      setUnits(merged);
-      saveStage1UnitsCache(runId, merged);
-      return merged;
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(runId, merged);
+      }
+      // `synced` is null when any canonical write errored → treat as not saved.
+      return synced ? (canonical != null ? mergeUnits(canonical, loadStage1UnitsCache(runId)) : synced) : null;
     },
     [runId],
   );
