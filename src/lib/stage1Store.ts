@@ -164,6 +164,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       (c.stage1JobId && cache.find((u) => u.stage1JobId === c.stage1JobId)) ||
       cache.find((u) => u.n === c.n);
     if (!cached) return c;
+    // Canonical wins for commercial truth, BUT never let an empty canonical
+    // payload silently wipe values the operator already entered (e.g. a cost
+    // line that has not finished syncing yet). Fall back to the cache only when
+    // canonical has nothing for that field.
+    const canonicalHasCost = (c.costLines?.length ?? 0) > 0;
+    const canonicalHasInvoice = (c.invoiceAmount ?? 0) > 0;
     return {
       // Rich detail from cache as the base...
       ...cached,
@@ -176,11 +182,11 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       // canonical status; otherwise take canonical.
       status: toCanonicalStatus(cached.status) === toCanonicalStatus(c.status) ? cached.status : c.status,
       notes: c.notes ?? cached.notes,
-      invoiceAmount: c.invoiceAmount,
-      invoiceGstTreatment: c.invoiceGstTreatment,
-      invoiceGstAmount: c.invoiceGstAmount,
-      invoiceGstOverridden: c.invoiceGstOverridden,
-      costLines: c.costLines,
+      invoiceAmount: canonicalHasInvoice ? c.invoiceAmount : cached.invoiceAmount,
+      invoiceGstTreatment: canonicalHasInvoice ? c.invoiceGstTreatment : cached.invoiceGstTreatment,
+      invoiceGstAmount: canonicalHasInvoice ? c.invoiceGstAmount : cached.invoiceGstAmount,
+      invoiceGstOverridden: canonicalHasInvoice ? c.invoiceGstOverridden : cached.invoiceGstOverridden,
+      costLines: canonicalHasCost ? c.costLines : (cached.costLines ?? c.costLines),
       gm: c.gm || cached.gm,
     };
   });

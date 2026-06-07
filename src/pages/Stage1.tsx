@@ -1979,15 +1979,32 @@ function Stage1SummaryDialog({
 
           <section className="rounded-md border p-3">
             <div className="font-medium text-sm mb-1">3. Job Costs</div>
-            {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
-            {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
-            {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
-            {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
-            {row("Total Direct Costs", `$${totalCosts.toLocaleString()}`)}
-            {row("Gross Profit", `$${grossProfit.toLocaleString()}`)}
+            {(unit.costLines && unit.costLines.length > 0) ? (
+              (unit.costLines).map((l) => {
+                const split = computeGstSplit({
+                  inclusive: l.amount ?? 0,
+                  treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+                  gstOverride: l.gstAmount,
+                  overridden: l.gstOverridden,
+                });
+                return row(
+                  l.description || "Direct cost",
+                  `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                );
+              })
+            ) : (
+              <>
+                {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
+                {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
+                {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
+                {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
+              </>
+            )}
+            {row("Job Costs (ex-GST)", totalCosts > 0 ? `$${totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
+            {row("Gross Profit", computedGm != null && totalCosts > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
             {row("GM %", computedGm != null
               ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
-              : `${unit.gm}%`)}
+              : "Not Yet Proven")}
           </section>
 
           <section className="rounded-md border p-3">
@@ -3238,9 +3255,10 @@ export function JobDetailSheet({
                   setDraft({ ...draft, costLines: next });
                 };
                 return (
-                  <div key={line.id} className="rounded border p-2 space-y-2">
-                    <div className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 sm:col-span-7 space-y-1">
+                  <div key={line.id} className="rounded-md border p-3 space-y-3">
+                    {/* Cost calculation — simple stacked form */}
+                    <div className="space-y-3">
+                      <div className="space-y-1">
                         <Label className="text-xs">Description</Label>
                         <Input
                           value={line.description}
@@ -3248,15 +3266,60 @@ export function JobDetailSheet({
                           onChange={(e) => updateLine({ description: e.target.value })}
                         />
                       </div>
-                      <div className="col-span-9 sm:col-span-4 space-y-1">
-                        <Label className="text-xs">Total incl. GST</Label>
-                        <Input
-                          type="number"
-                          value={line.amount ?? ""}
-                          onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Total incl. GST</Label>
+                          <Input
+                            type="number"
+                            value={line.amount ?? ""}
+                            onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">GST treatment</Label>
+                          <Select
+                            value={treatment}
+                            onValueChange={(v) =>
+                              updateLine({
+                                gstTreatment: v as GstTreatment,
+                                gstIncluded: v === "gst_included",
+                                gstOverridden: v === "manual" ? line.gstOverridden : false,
+                              })
+                            }
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div className="col-span-3 sm:col-span-1 flex justify-end">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">GST</Label>
+                          <Input
+                            type="number"
+                            value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
+                            onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Ex-GST (for margin)</Label>
+                          <div className="h-10 flex items-center font-medium tabular-nums">
+                            {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          </div>
+                        </div>
+                      </div>
+                      {line.gstOverridden && (
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline"
+                          onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
+                        >
+                          Reset GST to auto (1/11)
+                        </button>
+                      )}
+                      <div className="flex justify-end">
                         <Button
                           type="button"
                           variant="ghost"
@@ -3270,58 +3333,19 @@ export function JobDetailSheet({
                         </Button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-xs">GST treatment</Label>
-                        <Select
-                          value={treatment}
-                          onValueChange={(v) =>
-                            updateLine({
-                              gstTreatment: v as GstTreatment,
-                              gstIncluded: v === "gst_included",
-                              gstOverridden: v === "manual" ? line.gstOverridden : false,
-                            })
-                          }
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">GST</Label>
-                        <Input
-                          type="number"
-                          value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
-                          onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Ex-GST (for margin)</Label>
-                        <div className="h-10 flex items-center font-medium tabular-nums">
-                          {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                        </div>
-                      </div>
+                    {/* Supporting paperwork — separated from the cost calculation */}
+                    <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+                      <p className="text-xs font-medium">Supporting paperwork recommended</p>
+                      <Stage1EvidenceAttachments
+                        runId={evidenceRunId}
+                        linkType="cost"
+                        linkRef={`cost-${line.id}`}
+                        linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
+                        defaultEvidenceType="Supplier Receipt"
+                        title="Supplier receipt / cost paperwork"
+                        readOnly={readOnly}
+                      />
                     </div>
-                    {line.gstOverridden && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground underline"
-                        onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
-                      >
-                        Reset GST to auto (1/11)
-                      </button>
-                    )}
-                    <Stage1EvidenceAttachments
-                      runId={evidenceRunId}
-                      linkType="cost"
-                      linkRef={`cost-${line.id}`}
-                      linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
-                      defaultEvidenceType="Supplier Receipt"
-                      title="Supplier receipt / cost paperwork"
-                      readOnly={readOnly}
-                    />
                   </div>
                 );
               })}
@@ -3347,10 +3371,10 @@ export function JobDetailSheet({
               </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
-              {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString()}` : "—")}
-              {fieldRow("Direct cost ex-GST (for margin)", costs > 0 ? `$${costs.toLocaleString()}` : "Not Yet Recorded")}
-              {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString()}` : "—")}
-              {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString()}` : "Not Yet Proven")}
+              {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+              {fieldRow("Job Costs (ex-GST, for margin)", costs > 0 ? `$${costs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
+              {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+              {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
               {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
             <div className="space-y-1">
