@@ -94,6 +94,10 @@ function fromCanonicalStatus(status: string | null): string {
 // ---------------------------------------------------------------------------
 // Canonical READ — hydrate ProofUnit[] from the canonical tables
 // ---------------------------------------------------------------------------
+type CanonicalStage1JobRow = Record<string, unknown> & { id: string; job_sequence_number?: number | null };
+type CanonicalStage1RevenueRow = Record<string, unknown> & { stage1_job_id?: string | null };
+type CanonicalStage1CostRow = Record<string, unknown> & { stage1_job_id?: string | null };
+
 /**
  * Fetch the run's commercial records from Supabase (canonical truth).
  * Returns null on failure so the caller can fall back to the cache.
@@ -124,15 +128,15 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     });
   }
 
-  return jobs.map((j: Record<string, any>, i: number) => {
-    const rev = (revenue ?? []).find((r: any) => r.stage1_job_id === j.id);
-    const jobCosts = (costs ?? []).filter((c: any) => c.stage1_job_id === j.id);
+  return (jobs as CanonicalStage1JobRow[]).map((j, i: number) => {
+    const rev = ((revenue ?? []) as CanonicalStage1RevenueRow[]).find((r) => r.stage1_job_id === j.id);
+    const jobCosts = ((costs ?? []) as CanonicalStage1CostRow[]).filter((c) => c.stage1_job_id === j.id);
 
     const revExGst = rev ? Number(rev.invoice_ex_gst_amount) || 0 : 0;
-    const costExGst = jobCosts.reduce((s: number, c: any) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
+    const costExGst = jobCosts.reduce((s: number, c) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
     const gm = revExGst > 0 && costExGst > 0 ? Math.round(((revExGst - costExGst) / revExGst) * 100) : 0;
 
-    const costLines: CostLine[] = jobCosts.map((c: any) => ({
+    const costLines: CostLine[] = jobCosts.map((c) => ({
       id: String(c.id),
       description: c.description ?? "",
       amount: Number(c.cost_total_gst_inclusive) || 0,
