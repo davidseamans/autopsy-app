@@ -319,7 +319,7 @@ export function DetailedJobCostReport({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">GM %</div>
-                <div className={`font-medium ${gmTone}`}>{gmPct.toFixed(1)}%</div>
+                <div className={`font-medium ${gmTone}`}>{gmPctText}</div>
               </div>
             </div>
           </section>
