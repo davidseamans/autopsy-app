@@ -2071,12 +2071,12 @@ export function JobDetailSheet({
                     (draft.costLines && draft.costLines.length > 0)
                       ? draft.costLines
                       : [
-                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true }] : []),
-                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false }] : []),
-                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true }] : []),
-                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true }] : []),
+                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
+                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false, gstTreatment: "no_gst" as GstTreatment }] : []),
+                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
+                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
                         ];
-                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true }];
+                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true, gstTreatment: "gst_included" }];
                   setDraft({ ...draft, costLines: next });
                 }}
               >
