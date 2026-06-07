@@ -459,6 +459,27 @@ type Stage1PublicCompletion = Partial<Stage1Evaluation> & { [key: string]: any }
 type Stage1PublicCommitment = Partial<Stage1Commitment> & { [key: string]: any };
 type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: any };
 
+// Consolidated, run-scoped, READ-ONLY display RPCs. Supabase resolves identity
+// from the active Autopsy run id and returns display-ready, public-safe fields.
+// The dashboard reads ONLY through these RPCs and never reads broad Stage 1
+// views (or base tables) directly.
+//   - get_stage1_dashboard_display_by_run(p_run_id)
+//   - get_stage1_job_detail_display_by_run(p_run_id)
+// Supabase owns ALL derivation, including gross-margin. Margin is rendered
+// exactly as returned; a null margin is shown as an em dash and never computed
+// or fabricated client-side.
+type Stage1DashboardDisplay = { [key: string]: any };
+type Stage1JobDetailDisplay = { [key: string]: any };
+
+// Render a Supabase-derived gross-margin value. Never compute or fabricate a
+// margin client-side: a null/undefined/non-numeric margin renders as "—".
+function renderMarginPct(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined) return "—";
+  const n = typeof pct === "number" ? pct : Number(pct);
+  if (!Number.isFinite(n)) return "—";
+  return `${Math.round(n)}%`;
+}
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
