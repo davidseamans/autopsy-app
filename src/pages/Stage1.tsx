@@ -14,7 +14,9 @@ import {
   saveStage1UnitsCache,
   fetchStage1Units,
   syncStage1Units,
+  syncStage1UnitsWithDiagnostics,
   mergeUnits,
+  type Stage1CanonicalWriteDiagnostics,
 } from "@/lib/stage1Store";
 import {
   loadStage1ReflectionCache,
@@ -2726,7 +2728,7 @@ export function JobDetailSheet({
   unit: ProofUnit | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onSave: (u: ProofUnit) => Promise<boolean> | void;
+  onSave: (u: ProofUnit) => Promise<Stage1CanonicalWriteDiagnostics>;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
   onVoid: (n: number, reason: string) => void;
@@ -2744,6 +2746,7 @@ export function JobDetailSheet({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editGateOpen, setEditGateOpen] = useState(false);
+  const [saveDiagnostics, setSaveDiagnostics] = useState<Stage1CanonicalWriteDiagnostics | null>(null);
   const [payEvents, setPayEvents] = useState<RevenueEventRow[]>([]);
   const [payControl, setPayControl] = useState<RevenueControlRow | null>(null);
   const [handoverOpen, setHandoverOpen] = useState(false);
@@ -2751,6 +2754,7 @@ export function JobDetailSheet({
     setDraft(unit);
     setMode("edit");
     setCorrectionReason("");
+    setSaveDiagnostics(null);
   }, [unit]);
   const jobId = unit?.jobId;
   const loadPayments = useCallback(async () => {
