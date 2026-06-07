@@ -91,7 +91,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDebug } from "@/lib/supabase";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   loadAdjustments,
