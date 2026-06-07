@@ -4184,3 +4184,13 @@ function Stage1DashboardInner() {
     </div>
   );
 }
+
+// Stage 1 RPCs run only while authenticated: the inner component (which fires
+// all Stage 1 Supabase RPCs in its effects) is mounted only behind AuthGate.
+export default function Stage1Dashboard() {
+  return (
+    <AuthGate>
+      <Stage1DashboardInner />
+    </AuthGate>
+  );
+}
