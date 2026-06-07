@@ -2681,13 +2681,36 @@ function useLocalForm<T extends Record<string, string>>(key: string, initial: T)
   return [val, setVal] as const;
 }
 
-function AddJobForm() {
+function AddJobForm({ onCreate }: { onCreate?: (u: ProofUnit) => void }) {
   const [form, setForm] = useLocalForm("addJob", {
     client: "",
     location: "",
     quote: "",
     scheduled: "",
   });
+  function saveJob() {
+    const client = form.client.trim();
+    if (!client) {
+      toast({ title: "Client required", description: "Enter a client name to add a job." });
+      return;
+    }
+    const quoteNum = parseFloat(form.quote);
+    onCreate?.({
+      n: Date.now(),
+      client,
+      jobSite: form.location.trim() || undefined,
+      proofType: "Completed Job",
+      status: "Scheduled",
+      gm: 0,
+      evidence: false,
+      quoteValue: !isNaN(quoteNum) ? quoteNum : undefined,
+      scheduledDate: form.scheduled || undefined,
+      lifecycle: "active",
+      audit: [{ ts: new Date().toISOString(), action: "created" }],
+    });
+    toast({ title: "Job saved", description: `${client} added to tracker.` });
+    setForm({ client: "", location: "", quote: "", scheduled: "" });
+  }
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -2712,7 +2735,7 @@ function AddJobForm() {
           <Input type="date" value={form.scheduled} onChange={(e) => setForm({ ...form, scheduled: e.target.value })} />
         </div>
         <div className="sm:col-span-2 flex justify-end">
-          <Button onClick={() => toast({ title: "Job saved", description: `${form.client || "Untitled"} added to tracker.` })}>
+          <Button onClick={saveJob}>
             Save Job
           </Button>
         </div>
