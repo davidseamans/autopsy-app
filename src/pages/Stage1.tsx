@@ -2093,6 +2093,15 @@ export function JobDetailSheet({
                         Reset GST to auto (1/11)
                       </button>
                     )}
+                    <Stage1EvidenceAttachments
+                      runId={evidenceRunId}
+                      linkType="cost"
+                      linkRef={`cost-${line.id}`}
+                      linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
+                      defaultEvidenceType="Supplier Receipt"
+                      title="Supplier receipt / cost paperwork"
+                      readOnly={readOnly}
+                    />
                   </div>
                 );
               })}
