@@ -4137,7 +4137,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
-          tone={gmStatus.tone}
+          tone={displayMarginText === "Not Yet Proven" ? "text-muted-foreground" : gmStatus.tone}
           primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
