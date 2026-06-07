@@ -10,6 +10,7 @@ import {
 } from "@/lib/progression";
 import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
 import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
+import { Stage1EvidenceAttachments } from "@/components/Stage1EvidenceAttachments";
 import {
   Card,
   CardContent,
@@ -90,7 +91,6 @@ import {
   type HandoverRow,
   type ReferralRow,
   type ReferralInput,
-  BACKEND_BLOCKERS,
 } from "@/lib/jobWorkspace";
 import {
   AlertTriangle,
@@ -1496,6 +1496,7 @@ export function JobDetailSheet({
   onDelete: (n: number) => void;
   onOpenDetailedReport?: (n: number) => void;
 }) {
+  const evidenceRunId = getActiveRunId();
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
   const [mode, setMode] = useState<"view" | "edit">("edit");
   const [correctionReason, setCorrectionReason] = useState<string>("");
@@ -1776,6 +1777,21 @@ export function JobDetailSheet({
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
+          {/* Supporting paperwork — maturity-oriented guidance */}
+          <div className="rounded-md border-l-4 border-emerald-500 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-2">
+            <p className="font-semibold">Supporting paperwork recommended</p>
+            <p>
+              Supporting paperwork is strongly recommended for all transactions. Maintaining relevant
+              documents such as accepted quotes, invoices, receipts, work orders, and job records assists
+              with financial reporting, operational continuity, and dispute resolution if questions arise
+              in the future.
+            </p>
+            <p>
+              Accepted and dated quotes should be retained wherever possible. While not generally required
+              for taxation purposes, they provide important evidence of customer approval, agreed scope,
+              pricing, and terms in the event of a dispute.
+            </p>
+          </div>
           {/* 1. Job / Site Summary */}
           <div className="rounded-md border bg-muted/30 p-3 space-y-1">
             {sectionTitle(1, "Job / Site Summary")}
@@ -1810,6 +1826,17 @@ export function JobDetailSheet({
               ),
             )}
           </div>
+
+          {/* Job record + accepted quote / customer approval paperwork */}
+          <Stage1EvidenceAttachments
+            runId={evidenceRunId}
+            linkType="quote"
+            linkRef={`unit-${draft.n}`}
+            linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — quote / approval`}
+            defaultEvidenceType="Accepted Quote"
+            title="Accepted quote / customer approval"
+            readOnly={readOnly}
+          />
 
           {/* Blockers / warnings */}
           <div className="space-y-2">
@@ -1872,11 +1899,6 @@ export function JobDetailSheet({
           {/* 2. Customer Invoice / Contract */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
-            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-              <span className="font-semibold">Attachment not yet persisted.</span> Invoice / contract
-              fields and amounts save with this job, but the uploaded file is held in this session only.
-              Document storage is blocked until backend SQL/RLS is completed — {BACKEND_BLOCKERS.documents}
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Quote / Contract Amount</Label>
@@ -1967,16 +1989,20 @@ export function JobDetailSheet({
               </Select>
             </div>
             {fileInput("Attach Invoice / Contract", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
+            <Stage1EvidenceAttachments
+              runId={evidenceRunId}
+              linkType="invoice"
+              linkRef={`unit-${draft.n}`}
+              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — revenue line`}
+              defaultEvidenceType="Invoice"
+              title="Invoice paperwork (revenue line)"
+              readOnly={readOnly}
+            />
           </div>
 
           {/* 3. Job Costs */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
-            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-              <span className="font-semibold">Job costs not yet persisted to the backend.</span> Cost
-              lines are held in this session and inform GM here, but the job_costs table blocks writes
-              until backend SQL/RLS is completed — {BACKEND_BLOCKERS.job_costs}
-            </div>
             <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
             <p className="text-xs text-muted-foreground">
               Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
@@ -2066,6 +2092,15 @@ export function JobDetailSheet({
                         Reset GST to auto (1/11)
                       </button>
                     )}
+                    <Stage1EvidenceAttachments
+                      runId={evidenceRunId}
+                      linkType="cost"
+                      linkRef={`cost-${line.id}`}
+                      linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
+                      defaultEvidenceType="Supplier Receipt"
+                      title="Supplier receipt / cost paperwork"
+                      readOnly={readOnly}
+                    />
                   </div>
                 );
               })}
@@ -2107,6 +2142,15 @@ export function JobDetailSheet({
               </Select>
             </div>
             {fileInput("Attach Cost Proof", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
+            <Stage1EvidenceAttachments
+              runId={evidenceRunId}
+              linkType="cost"
+              linkRef={`unit-${draft.n}-general`}
+              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — general cost proof`}
+              defaultEvidenceType="Supplier Receipt"
+              title="Other cost paperwork"
+              readOnly={readOnly}
+            />
           </div>
 
           {/* 4. Payment Proof */}
