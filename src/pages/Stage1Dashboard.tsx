@@ -2637,6 +2637,48 @@ function Stage1DashboardInner() {
     return () => { active = false; };
   }, []);
 
+  const persistUnitsWithDiagnostics = useCallback(
+    async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits);
+      saveStage1UnitsCache(activeRunId, nextUnits);
+
+      if (!activeRunId || !user?.id) {
+        return {
+          status: "failed",
+          runId: activeRunId,
+          authUserId: user?.id ?? null,
+          authUserIdPresent: !!user?.id,
+          autopsyRunIdWrittenMatchesActiveRun: false,
+          createdByMatchesAuthUser: false,
+          counts: { jobs: null, revenueLines: null, costLines: null },
+          rows: { jobs: [], revenueLines: [], costLines: [] },
+          writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+          errors: [{ table: "stage1_canonical", operation: "preflight", message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached." }],
+          writeSucceeded: false,
+          success: false,
+          message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.",
+        };
+      }
+
+      const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(activeRunId, nextUnits);
+      const canonical = await fetchStage1Units(activeRunId);
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(activeRunId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(activeRunId, merged);
+      } else if (syncedUnits) {
+        unitsRef.current = syncedUnits;
+        setUnits(syncedUnits);
+        saveStage1UnitsCache(activeRunId, syncedUnits);
+      }
+      return diagnostics;
+    },
+    [activeRunId, user?.id],
+  );
+
   const methodRows = useMemo(() => {
     const methods = new Set<string>();
     METHOD_BASELINE.forEach((b) => methods.add(b.method));
