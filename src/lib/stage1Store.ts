@@ -275,6 +275,7 @@ async function doSyncStage1Units(
         .select("id")
         .single();
       if (insErr || !ins) {
+        ok = false;
         result.push(u);
         continue;
       }
