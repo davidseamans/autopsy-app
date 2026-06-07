@@ -306,6 +306,10 @@ function toProbe(row: any): Stage1CanonicalRowProbe {
   };
 }
 
+function newCanonicalId(): string {
+  return crypto.randomUUID();
+}
+
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
   const runId = diagnostics.runId;
   if (!runId) return;
@@ -469,15 +473,14 @@ async function doSyncStage1Units(
         diagnostics.writtenRows.jobs.push(toProbe(upd));
       }
     } else {
-      const insertJobRow = { ...jobRow, created_by: userId };
-      const { data: ins, error: insErr } = await supabase
+      const newJobId = newCanonicalId();
+      const insertJobRow = { id: newJobId, ...jobRow, created_by: userId };
+      const { error: insErr } = await supabase
         .from("stage1_jobs")
-        .insert(insertJobRow)
-        .select("id,autopsy_run_id,created_by")
-        .single();
-      if (insErr || !ins) {
+        .insert(insertJobRow);
+      if (insErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_jobs", "insert", insErr ?? new Error("No row returned from stage1_jobs insert."), insertJobRow);
+        addWriteError(diagnostics, "stage1_jobs", "insert", insErr, insertJobRow);
         console.error("[stage1] job insert failed (canonical write blocked)", {
           runId,
           createdBy: userId,
@@ -486,8 +489,8 @@ async function doSyncStage1Units(
         result.push(u);
         continue;
       }
-      diagnostics.writtenRows.jobs.push(toProbe(ins));
-      jobId = String(ins.id);
+      diagnostics.writtenRows.jobs.push(toProbe(insertJobRow));
+      jobId = newJobId;
     }
     if (!jobId) {
       result.push(u);
@@ -510,6 +513,7 @@ async function doSyncStage1Units(
         overridden: u.invoiceGstOverridden,
       });
       const revenueRow = {
+        id: newCanonicalId(),
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         invoice_total_gst_inclusive: split.inclusive,
@@ -519,17 +523,15 @@ async function doSyncStage1Units(
         gst_treatment: u.invoiceGstTreatment ?? "gst_included",
         created_by: userId,
       };
-      const { data: revIns, error: revErr } = await supabase
+      const { error: revErr } = await supabase
         .from("stage1_revenue_lines")
-        .insert(revenueRow)
-        .select("id,autopsy_run_id,created_by,stage1_job_id")
-        .single();
+        .insert(revenueRow);
       if (revErr) {
         ok = false;
         addWriteError(diagnostics, "stage1_revenue_lines", "insert", revErr, revenueRow);
         console.error("[stage1] revenue insert failed", { jobId, error: revErr.message });
-      } else if (revIns) {
-        diagnostics.writtenRows.revenueLines.push(toProbe(revIns));
+      } else {
+        diagnostics.writtenRows.revenueLines.push(toProbe(revenueRow));
       }
     }
 
@@ -552,6 +554,7 @@ async function doSyncStage1Units(
             overridden: l.gstOverridden,
           });
           return {
+            id: newCanonicalId(),
             autopsy_run_id: runId,
             stage1_job_id: jobId,
             cost_category: "other",
@@ -565,10 +568,9 @@ async function doSyncStage1Units(
           };
         });
       if (rows.length > 0) {
-        const { data: insCosts, error: costErr } = await supabase
+        const { error: costErr } = await supabase
           .from("stage1_cost_lines")
-          .insert(rows)
-          .select("id,autopsy_run_id,created_by,stage1_job_id");
+          .insert(rows);
         if (costErr) {
           ok = false;
           addWriteError(diagnostics, "stage1_cost_lines", "insert", costErr, rows);
@@ -587,11 +589,11 @@ async function doSyncStage1Units(
             error: costErr.message,
           });
         } else {
-          diagnostics.writtenRows.costLines.push(...(insCosts ?? []).map(toProbe));
+          diagnostics.writtenRows.costLines.push(...rows.map(toProbe));
           if (isDebug()) console.info("[stage1] cost lines written", {
             jobId,
             requested: rows.length,
-            savedIds: (insCosts ?? []).map((r: any) => r.id),
+            savedIds: rows.map((r) => r.id),
           });
         }
       }
