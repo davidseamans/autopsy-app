@@ -1596,7 +1596,6 @@ export function JobDetailSheet({
     : legacyTotal;
   const grossProfit = revenueExGst - costs;
   const computedGm = revenueExGst > 0 ? Math.round((grossProfit / revenueExGst) * 100) : null;
-  const displayGm = computedGm ?? draft.gm;
 
   const invoiceProofOk = !!(draft.invoiceDocName || fin || draft.evidence);
   const costsEntered = invAmt > 0 || costs > 0;
