@@ -1801,7 +1801,14 @@ export function JobDetailSheet({
                 {collectionStatusLabel(collectionStatus).label}
               </span>,
             )}
-            {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
+            {fieldRow(
+              "GM %",
+              revenueExGst > 0 && costs > 0 && computedGm != null ? (
+                <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
+              ) : (
+                <span className="text-muted-foreground">Not Yet Proven</span>
+              ),
+            )}
           </div>
 
           {/* Blockers / warnings */}
