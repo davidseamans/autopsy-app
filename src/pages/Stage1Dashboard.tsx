@@ -994,7 +994,7 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                  const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
                   const m = marginStatus(gmPctValue ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
@@ -1055,7 +1055,7 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+              const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
               const m = marginStatus(gmPctValue ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
@@ -1105,7 +1105,7 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const pct = income > 0 ? (gp / income) * 100 : null;
+                  const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
                   const m = marginStatus(pct ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
@@ -1132,7 +1132,7 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const pct = income > 0 ? (gp / income) * 100 : null;
+              const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
               const m = marginStatus(pct ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
@@ -4231,7 +4231,7 @@ function Stage1DashboardInner() {
                     const gp = income - costs;
                     // Margin is only meaningful with real income. Never fabricate
                     // a margin client-side: a null margin renders as "—".
-                    const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                    const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
                     const gmTone =
                       gmPctValue === null
                         ? "text-muted-foreground"
