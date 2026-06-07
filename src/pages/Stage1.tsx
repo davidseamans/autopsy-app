@@ -950,6 +950,7 @@ function FirstFiveJobsPanel({ ff }: { ff: FirstFive }) {
     `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const NYP = "Not Yet Proven";
   void NYP;
+  void 0;
   return (
     <Card>
       <CardHeader className="pb-3">
