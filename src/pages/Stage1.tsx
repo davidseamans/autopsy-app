@@ -3238,9 +3238,10 @@ export function JobDetailSheet({
                   setDraft({ ...draft, costLines: next });
                 };
                 return (
-                  <div key={line.id} className="rounded border p-2 space-y-2">
-                    <div className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 sm:col-span-7 space-y-1">
+                  <div key={line.id} className="rounded-md border p-3 space-y-3">
+                    {/* Cost calculation — simple stacked form */}
+                    <div className="space-y-3">
+                      <div className="space-y-1">
                         <Label className="text-xs">Description</Label>
                         <Input
                           value={line.description}
@@ -3248,15 +3249,60 @@ export function JobDetailSheet({
                           onChange={(e) => updateLine({ description: e.target.value })}
                         />
                       </div>
-                      <div className="col-span-9 sm:col-span-4 space-y-1">
-                        <Label className="text-xs">Total incl. GST</Label>
-                        <Input
-                          type="number"
-                          value={line.amount ?? ""}
-                          onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Total incl. GST</Label>
+                          <Input
+                            type="number"
+                            value={line.amount ?? ""}
+                            onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">GST treatment</Label>
+                          <Select
+                            value={treatment}
+                            onValueChange={(v) =>
+                              updateLine({
+                                gstTreatment: v as GstTreatment,
+                                gstIncluded: v === "gst_included",
+                                gstOverridden: v === "manual" ? line.gstOverridden : false,
+                              })
+                            }
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div className="col-span-3 sm:col-span-1 flex justify-end">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">GST</Label>
+                          <Input
+                            type="number"
+                            value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
+                            onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Ex-GST (for margin)</Label>
+                          <div className="h-10 flex items-center font-medium tabular-nums">
+                            {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                          </div>
+                        </div>
+                      </div>
+                      {line.gstOverridden && (
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline"
+                          onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
+                        >
+                          Reset GST to auto (1/11)
+                        </button>
+                      )}
+                      <div className="flex justify-end">
                         <Button
                           type="button"
                           variant="ghost"
@@ -3270,58 +3316,19 @@ export function JobDetailSheet({
                         </Button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                      <div className="space-y-1">
-                        <Label className="text-xs">GST treatment</Label>
-                        <Select
-                          value={treatment}
-                          onValueChange={(v) =>
-                            updateLine({
-                              gstTreatment: v as GstTreatment,
-                              gstIncluded: v === "gst_included",
-                              gstOverridden: v === "manual" ? line.gstOverridden : false,
-                            })
-                          }
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">GST</Label>
-                        <Input
-                          type="number"
-                          value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
-                          onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Ex-GST (for margin)</Label>
-                        <div className="h-10 flex items-center font-medium tabular-nums">
-                          {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                        </div>
-                      </div>
+                    {/* Supporting paperwork — separated from the cost calculation */}
+                    <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+                      <p className="text-xs font-medium">Supporting paperwork recommended</p>
+                      <Stage1EvidenceAttachments
+                        runId={evidenceRunId}
+                        linkType="cost"
+                        linkRef={`cost-${line.id}`}
+                        linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
+                        defaultEvidenceType="Supplier Receipt"
+                        title="Supplier receipt / cost paperwork"
+                        readOnly={readOnly}
+                      />
                     </div>
-                    {line.gstOverridden && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground underline"
-                        onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
-                      >
-                        Reset GST to auto (1/11)
-                      </button>
-                    )}
-                    <Stage1EvidenceAttachments
-                      runId={evidenceRunId}
-                      linkType="cost"
-                      linkRef={`cost-${line.id}`}
-                      linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
-                      defaultEvidenceType="Supplier Receipt"
-                      title="Supplier receipt / cost paperwork"
-                      readOnly={readOnly}
-                    />
                   </div>
                 );
               })}
