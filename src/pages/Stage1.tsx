@@ -5180,7 +5180,7 @@ export default function Stage1() {
             <TabsContent value="job" className="mt-4">
               <AddJobForm
                 onCreate={(u) => {
-                  setUnits((prev) => [...prev, u]);
+                  void persistUnits((prev) => [...prev, u]);
                   setOpenUnitN(u.n);
                 }}
               />
@@ -5204,11 +5204,16 @@ export default function Stage1() {
         unit={openUnit}
         open={openUnitN != null}
         onOpenChange={(o) => !o && setOpenUnitN(null)}
-        onSave={(u) => setUnits(units.map((x) => (x.n === u.n ? u : x)))}
+        onSave={async (u) => {
+          const res = await persistUnits((prev) =>
+            prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
+          );
+          return res != null;
+        }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
         onVoid={(n, reason) => {
-          setUnits((prev) => prev.map((x) => x.n === n ? {
+          void persistUnits((prev) => prev.map((x) => x.n === n ? {
             ...x,
             lifecycle: "voided",
             voidReason: reason,
@@ -5218,7 +5223,7 @@ export default function Stage1() {
           toast({ title: "Record voided", description: "Kept in history, removed from your Stage 1 score." });
         }}
         onArchive={(n) => {
-          setUnits((prev) => prev.map((x) => x.n === n ? {
+          void persistUnits((prev) => prev.map((x) => x.n === n ? {
             ...x,
             lifecycle: "archived",
             archivedAt: new Date().toISOString(),
@@ -5227,7 +5232,7 @@ export default function Stage1() {
           toast({ title: "Record archived" });
         }}
         onDelete={(n) => {
-          setUnits((prev) => prev.filter((x) => x.n !== n));
+          void persistUnits((prev) => prev.filter((x) => x.n !== n));
           toast({ title: "Draft deleted" });
         }}
       />
