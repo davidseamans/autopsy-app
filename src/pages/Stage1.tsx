@@ -1979,15 +1979,32 @@ function Stage1SummaryDialog({
 
           <section className="rounded-md border p-3">
             <div className="font-medium text-sm mb-1">3. Job Costs</div>
-            {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
-            {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
-            {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
-            {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
-            {row("Total Direct Costs", `$${totalCosts.toLocaleString()}`)}
-            {row("Gross Profit", `$${grossProfit.toLocaleString()}`)}
+            {(unit.costLines && unit.costLines.length > 0) ? (
+              (unit.costLines).map((l) => {
+                const split = computeGstSplit({
+                  inclusive: l.amount ?? 0,
+                  treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+                  gstOverride: l.gstAmount,
+                  overridden: l.gstOverridden,
+                });
+                return row(
+                  l.description || "Direct cost",
+                  `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                );
+              })
+            ) : (
+              <>
+                {row("Materials", `$${(unit.costMaterials ?? 0).toLocaleString()}`)}
+                {row("Labour", `$${(unit.costLabour ?? 0).toLocaleString()}`)}
+                {row("Subcontractors", `$${(unit.costSubcontractors ?? 0).toLocaleString()}`)}
+                {row("Other Direct Job Costs", `$${(unit.costOther ?? 0).toLocaleString()}`)}
+              </>
+            )}
+            {row("Job Costs (ex-GST)", totalCosts > 0 ? `$${totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
+            {row("Gross Profit", computedGm != null && totalCosts > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
             {row("GM %", computedGm != null
               ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
-              : `${unit.gm}%`)}
+              : "Not Yet Proven")}
           </section>
 
           <section className="rounded-md border p-3">
