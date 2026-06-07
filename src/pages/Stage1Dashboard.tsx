@@ -4093,7 +4093,7 @@ function Stage1DashboardInner() {
           label="Gross Margin"
           icon={TrendingUp}
           tone={gmStatus.tone}
-          primary={`${gmPct}%`}
+          primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
             { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
