@@ -36,6 +36,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { isDebug } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
 import {
   GatewayPayload,
