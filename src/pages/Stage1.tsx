@@ -2143,6 +2143,15 @@ export function JobDetailSheet({
               </Select>
             </div>
             {fileInput("Attach Cost Proof", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
+            <Stage1EvidenceAttachments
+              runId={evidenceRunId}
+              linkType="cost"
+              linkRef={`unit-${draft.n}-general`}
+              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — general cost proof`}
+              defaultEvidenceType="Supplier Receipt"
+              title="Other cost paperwork"
+              readOnly={readOnly}
+            />
           </div>
 
           {/* 4. Payment Proof */}
