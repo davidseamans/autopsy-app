@@ -2726,7 +2726,7 @@ export function JobDetailSheet({
   unit: ProofUnit | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onSave: (u: ProofUnit) => void;
+  onSave: (u: ProofUnit) => Promise<boolean> | void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
   onVoid: (n: number, reason: string) => void;
