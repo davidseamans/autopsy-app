@@ -5112,6 +5112,31 @@ export default function Stage1() {
     },
     [runId],
   );
+  const persistUnitsWithDiagnostics = useCallback(
+    async (
+      compute: (prev: ProofUnit[]) => ProofUnit[],
+    ): Promise<Stage1CanonicalWriteDiagnostics> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits);
+      saveStage1UnitsCache(runId, nextUnits);
+
+      const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(runId, nextUnits);
+      const canonical = await fetchStage1Units(runId);
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(runId, merged);
+      } else if (syncedUnits) {
+        unitsRef.current = syncedUnits;
+        setUnits(syncedUnits);
+        saveStage1UnitsCache(runId, syncedUnits);
+      }
+      return diagnostics;
+    },
+    [runId],
+  );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const firstFive = useMemo(
@@ -5258,10 +5283,9 @@ export default function Stage1() {
         open={openUnitN != null}
         onOpenChange={(o) => !o && setOpenUnitN(null)}
         onSave={async (u) => {
-          const res = await persistUnits((prev) =>
+          return persistUnitsWithDiagnostics((prev) =>
             prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
           );
-          return res != null;
         }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
