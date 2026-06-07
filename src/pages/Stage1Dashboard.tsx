@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   SEED_UNITS,
   computeScorecard,
@@ -7,13 +8,22 @@ import {
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
 import { AuthGate } from "@/components/AuthGate";
+import { useAuth } from "@/lib/auth";
 import {
   createQuote,
   setQuoteOutcome,
   convertQuoteToJob,
   loadStage1Board,
 } from "@/lib/jobProvisioning";
-import { getActiveRunId } from "@/lib/progression";
+import { getActiveRunId, getStage1RunId, setStage1RunId } from "@/lib/progression";
+import {
+  fetchStage1Units,
+  loadStage1UnitsCache,
+  mergeUnits,
+  saveStage1UnitsCache,
+  syncStage1UnitsWithDiagnostics,
+  type Stage1CanonicalWriteDiagnostics,
+} from "@/lib/stage1Store";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1703,6 +1713,8 @@ function QuoteDetailDialog({
 }
 
 function Stage1DashboardInner() {
+  const [searchParams] = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
@@ -1727,7 +1739,19 @@ function Stage1DashboardInner() {
   // from this component.
   const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  const unitsRef = useRef<ProofUnit[]>(units);
+  useEffect(() => {
+    unitsRef.current = units;
+  }, [units]);
+  useEffect(() => {
+    const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
+    if (!nextRunId) return;
+    setStage1RunId(nextRunId);
+    setActiveRunId(nextRunId);
+  }, [searchParams]);
 
   // ---- Canonical Stage 1 evidence requirements (READ-ONLY, Supabase RPC) ----
   // Hydrated via public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id).
