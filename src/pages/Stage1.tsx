@@ -1876,7 +1876,7 @@ export function JobDetailSheet({
                 <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Invoice Amount</Label>
+                <Label className="text-xs">Invoice Total incl. GST</Label>
                 <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
@@ -1900,6 +1900,55 @@ export function JobDetailSheet({
                 <Label className="text-xs">Contract End</Label>
                 <Input type="date" value={draft.contractEnd ?? ""} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} />
               </div>
+            </div>
+            {/* GST treatment for revenue. Margin uses ex-GST revenue only. */}
+            <div className="rounded border bg-muted/30 p-2 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs">GST treatment</Label>
+                  <Select
+                    value={draft.invoiceGstTreatment ?? "gst_included"}
+                    onValueChange={(v) =>
+                      setDraft({ ...draft, invoiceGstTreatment: v as GstTreatment, invoiceGstOverridden: v === "manual" ? draft.invoiceGstOverridden : false })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">GST</Label>
+                  <Input
+                    type="number"
+                    value={draft.invoiceGstOverridden || (draft.invoiceGstTreatment ?? "gst_included") === "manual" ? (draft.invoiceGstAmount ?? "") : invoiceSplit.gst}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        invoiceGstOverridden: true,
+                        invoiceGstAmount: e.target.value === "" ? undefined : Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Ex-GST revenue (for margin)</Label>
+                  <div className="h-10 flex items-center font-medium tabular-nums">
+                    {invAmt > 0 ? `$${revenueExGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                  </div>
+                </div>
+              </div>
+              {draft.invoiceGstOverridden && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline"
+                  onClick={() => setDraft({ ...draft, invoiceGstOverridden: false, invoiceGstAmount: undefined })}
+                >
+                  Reset GST to auto (1/11)
+                </button>
+              )}
+              <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Attachment Type</Label>
