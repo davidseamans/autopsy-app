@@ -9,6 +9,7 @@ import {
   useProgression,
 } from "@/lib/progression";
 import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
+import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
 import {
   Card,
   CardContent,
