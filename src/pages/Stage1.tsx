@@ -3970,6 +3970,10 @@ export default function Stage1() {
   }, [runId, units]);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
+  const firstFive = useMemo(
+    () => computeFirstFive(activeUnits, sc.gate === "Unlocked"),
+    [activeUnits, sc.gate],
+  );
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -4014,6 +4018,8 @@ export default function Stage1() {
 
       <Stage1GoalBanner />
       <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
+
+      <FirstFiveJobsPanel ff={firstFive} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
