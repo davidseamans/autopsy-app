@@ -267,7 +267,10 @@ async function doSyncStage1Units(
     let jobId = u.stage1JobId;
     if (jobId && existingIds.has(jobId)) {
       const { error: updErr } = await supabase.from("stage1_jobs").update(jobRow).eq("id", jobId);
-      if (updErr) ok = false;
+      if (updErr) {
+        ok = false;
+        console.error("[stage1] job update failed", { jobId, error: updErr.message });
+      }
     } else {
       const { data: ins, error: insErr } = await supabase
         .from("stage1_jobs")
@@ -276,6 +279,11 @@ async function doSyncStage1Units(
         .single();
       if (insErr || !ins) {
         ok = false;
+        console.error("[stage1] job insert failed (canonical write blocked)", {
+          runId,
+          createdBy: userId,
+          error: insErr?.message,
+        });
         result.push(u);
         continue;
       }
@@ -307,7 +315,10 @@ async function doSyncStage1Units(
         gst_treatment: u.invoiceGstTreatment ?? "gst_included",
         created_by: userId,
       });
-      if (revErr) ok = false;
+      if (revErr) {
+        ok = false;
+        console.error("[stage1] revenue insert failed", { jobId, error: revErr.message });
+      }
     }
 
     // Cost lines — replace the full set for this job.
@@ -342,13 +353,27 @@ async function doSyncStage1Units(
           .from("stage1_cost_lines")
           .insert(rows)
           .select("id");
-        if (costErr) ok = false;
-        if (isDebug()) {
+        if (costErr) {
+          ok = false;
+          // Always surface cost write failures — a silent failure here is what
+          // produced "Job Costs = Not Yet Recorded" despite a saved cost line.
+          console.error("[stage1] cost line insert failed", {
+            jobId,
+            runId,
+            createdBy: userId,
+            requested: rows.map((r) => ({
+              description: r.description,
+              cost_total_gst_inclusive: r.cost_total_gst_inclusive,
+              cost_gst_amount: r.cost_gst_amount,
+              cost_ex_gst_amount: r.cost_ex_gst_amount,
+            })),
+            error: costErr.message,
+          });
+        } else if (isDebug()) {
           console.info("[stage1] cost lines written", {
             jobId,
             requested: rows.length,
             savedIds: (insCosts ?? []).map((r: any) => r.id),
-            error: costErr?.message,
           });
         }
       }
