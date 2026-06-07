@@ -331,6 +331,19 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     () => localStorage.getItem("autopsy_intake_email") || "",
   );
 
+  // Authorization is based solely on the Supabase Auth session — never on
+  // tester_email or a client-supplied user_id.
+  const { session, user, signOut } = useAuth();
+
+  // Prefill the (tracking-only) email from the authenticated account when the
+  // user has not typed one. This is for display/tracking, not authorization.
+  useEffect(() => {
+    if (user?.email && !testerEmail) {
+      setTesterEmail(user.email);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email]);
+
   useEffect(() => {
     localStorage.setItem("autopsy_intake_industry", industry);
   }, [industry]);
