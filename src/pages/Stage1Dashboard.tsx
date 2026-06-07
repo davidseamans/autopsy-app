@@ -459,6 +459,27 @@ type Stage1PublicCompletion = Partial<Stage1Evaluation> & { [key: string]: any }
 type Stage1PublicCommitment = Partial<Stage1Commitment> & { [key: string]: any };
 type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: any };
 
+// Consolidated, run-scoped, READ-ONLY display RPCs. Supabase resolves identity
+// from the active Autopsy run id and returns display-ready, public-safe fields.
+// The dashboard reads ONLY through these RPCs and never reads broad Stage 1
+// views (or base tables) directly.
+//   - get_stage1_dashboard_display_by_run(p_run_id)
+//   - get_stage1_job_detail_display_by_run(p_run_id)
+// Supabase owns ALL derivation, including gross-margin. Margin is rendered
+// exactly as returned; a null margin is shown as an em dash and never computed
+// or fabricated client-side.
+type Stage1DashboardDisplay = { [key: string]: any };
+type Stage1JobDetailDisplay = { [key: string]: any };
+
+// Render a Supabase-derived gross-margin value. Never compute or fabricate a
+// margin client-side: a null/undefined/non-numeric margin renders as "—".
+function renderMarginPct(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined) return "—";
+  const n = typeof pct === "number" ? pct : Number(pct);
+  if (!Number.isFinite(n)) return "—";
+  return `${Math.round(n)}%`;
+}
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
@@ -937,8 +958,8 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
-                  const m = marginStatus(gmPct);
+                  const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                  const m = marginStatus(gmPctValue ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow
@@ -974,7 +995,7 @@ function DrillBody({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -998,8 +1019,8 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
-              const m = marginStatus(gmPct);
+              const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+              const m = marginStatus(gmPctValue ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <button
@@ -1019,7 +1040,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
                 </button>
               );
             })}
@@ -1048,8 +1069,8 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const pct = income > 0 ? (gp / income) * 100 : 0;
-                  const m = marginStatus(pct);
+                  const pct = income > 0 ? (gp / income) * 100 : null;
+                  const m = marginStatus(pct ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow key={u.n}>
@@ -1061,8 +1082,8 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{pct.toFixed(1)}%</TableCell>
-                      <TableCell className={m.tone}>{m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "—" : m.label}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -1075,21 +1096,21 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const pct = income > 0 ? (gp / income) * 100 : 0;
-              const m = marginStatus(pct);
+              const pct = income > 0 ? (gp / income) * 100 : null;
+              const m = marginStatus(pct ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : m.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{pct.toFixed(1)}%</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</span></div>
                 </div>
               );
             })}
@@ -1878,6 +1899,58 @@ function Stage1DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRunId]);
 
+  // ---- Consolidated, run-scoped, READ-ONLY dashboard + job-detail display ----
+  // Hydrated via the authenticated, run-scoped RPCs
+  //   public.get_stage1_dashboard_display_by_run(p_run_id)
+  //   public.get_stage1_job_detail_display_by_run(p_run_id)
+  // Supabase resolves identity from the active Autopsy run and returns
+  // display-ready, public-safe rows. The dashboard NEVER reads broad Stage 1
+  // views or base tables directly, and never recomputes margin client-side.
+  const [stage1DashboardDisplay, setStage1DashboardDisplay] =
+    useState<Stage1DashboardDisplay | null>(null);
+  const [stage1JobDetailDisplay, setStage1JobDetailDisplay] = useState<
+    Stage1JobDetailDisplay[]
+  >([]);
+  const [stage1DisplayLoaded, setStage1DisplayLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!activeRunId) {
+      setStage1DashboardDisplay(null);
+      setStage1JobDetailDisplay([]);
+      setStage1DisplayLoaded(false);
+      return; // no active run → no RPC call
+    }
+    let active = true;
+    (async () => {
+      const [dash, jobs] = await Promise.allSettled([
+        supabase.rpc("get_stage1_dashboard_display_by_run", {
+          p_run_id: activeRunId,
+        }),
+        supabase.rpc("get_stage1_job_detail_display_by_run", {
+          p_run_id: activeRunId,
+        }),
+      ]);
+      if (!active) return;
+      if (dash.status === "fulfilled" && !dash.value?.error) {
+        const d = dash.value.data;
+        setStage1DashboardDisplay((Array.isArray(d) ? d[0] ?? null : d ?? null) as Stage1DashboardDisplay | null);
+      } else if (dash.status === "fulfilled" && dash.value?.error) {
+        console.warn("[stage1_dashboard_display] RPC failed:", dash.value.error.message);
+      }
+      if (jobs.status === "fulfilled" && !jobs.value?.error) {
+        const j = jobs.value.data;
+        setStage1JobDetailDisplay((Array.isArray(j) ? j : j ? [j] : []) as Stage1JobDetailDisplay[]);
+      } else if (jobs.status === "fulfilled" && jobs.value?.error) {
+        console.warn("[stage1_job_detail_display] RPC failed:", jobs.value.error.message);
+      }
+      setStage1DisplayLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRunId]);
+
   // Debug/admin-only Stage 1 activation. Supabase owns ALL activation logic;
   // this only *requests* activation by the active Autopsy run id and stores the
   // returned canonical snapshot. No client-side eligibility, no direct writes.
@@ -2585,6 +2658,20 @@ function Stage1DashboardInner() {
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
+
+  // Supabase-derived gross-margin for the active run (display-ready). When the
+  // consolidated dashboard display RPC supplies a margin we render it verbatim;
+  // a null margin is shown as "—" and is never recomputed client-side.
+  const dashboardMarginRaw =
+    stage1DashboardDisplay?.gross_margin_pct ??
+    stage1DashboardDisplay?.gross_margin_percent ??
+    stage1DashboardDisplay?.margin_pct ??
+    null;
+  const hasDashboardMargin =
+    stage1DashboardDisplay !== null && dashboardMarginRaw !== undefined;
+  const displayMarginText = hasDashboardMargin
+    ? renderMarginPct(dashboardMarginRaw as number | null)
+    : `${gmPct}%`;
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4006,7 +4093,7 @@ function Stage1DashboardInner() {
           label="Gross Margin"
           icon={TrendingUp}
           tone={gmStatus.tone}
-          primary={`${gmPct}%`}
+          primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
             { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
@@ -4055,9 +4142,17 @@ function Stage1DashboardInner() {
                       (u.costSubcontractors ?? 0) +
                       (u.costOther ?? 0);
                     const gp = income - costs;
-                    const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+                    // Margin is only meaningful with real income. Never fabricate
+                    // a margin client-side: a null margin renders as "—".
+                    const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
                     const gmTone =
-                      gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600";
+                      gmPctValue === null
+                        ? "text-muted-foreground"
+                        : gmPctValue >= 30
+                          ? "text-emerald-600"
+                          : gmPctValue >= 20
+                            ? "text-amber-600"
+                            : "text-red-600";
                     return (
                       <TableRow
                         key={u.n}
@@ -4093,7 +4188,7 @@ function Stage1DashboardInner() {
                           {income > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
-                          {gmPct}%
+                          {renderMarginPct(gmPctValue)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
