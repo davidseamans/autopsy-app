@@ -3769,7 +3769,14 @@ export default function Stage1() {
               <TabsTrigger value="financials">Financials</TabsTrigger>
               <TabsTrigger value="evidence">Evidence</TabsTrigger>
             </TabsList>
-            <TabsContent value="job" className="mt-4"><AddJobForm /></TabsContent>
+            <TabsContent value="job" className="mt-4">
+              <AddJobForm
+                onCreate={(u) => {
+                  setUnits((prev) => [...prev, u]);
+                  setOpenUnitN(u.n);
+                }}
+              />
+            </TabsContent>
             <TabsContent value="activity" className="mt-4"><LogActivityForm /></TabsContent>
             <TabsContent value="financials" className="mt-4"><FinancialsForm /></TabsContent>
             <TabsContent value="evidence" className="mt-4"><EvidenceForm /></TabsContent>
