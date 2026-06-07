@@ -1778,6 +1778,21 @@ export function JobDetailSheet({
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
+          {/* Supporting paperwork — maturity-oriented guidance */}
+          <div className="rounded-md border-l-4 border-emerald-500 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-2">
+            <p className="font-semibold">Supporting paperwork recommended</p>
+            <p>
+              Supporting paperwork is strongly recommended for all transactions. Maintaining relevant
+              documents such as accepted quotes, invoices, receipts, work orders, and job records assists
+              with financial reporting, operational continuity, and dispute resolution if questions arise
+              in the future.
+            </p>
+            <p>
+              Accepted and dated quotes should be retained wherever possible. While not generally required
+              for taxation purposes, they provide important evidence of customer approval, agreed scope,
+              pricing, and terms in the event of a dispute.
+            </p>
+          </div>
           {/* 1. Job / Site Summary */}
           <div className="rounded-md border bg-muted/30 p-3 space-y-1">
             {sectionTitle(1, "Job / Site Summary")}
@@ -1812,6 +1827,17 @@ export function JobDetailSheet({
               ),
             )}
           </div>
+
+          {/* Job record + accepted quote / customer approval paperwork */}
+          <Stage1EvidenceAttachments
+            runId={evidenceRunId}
+            linkType="quote"
+            linkRef={`unit-${draft.n}`}
+            linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — quote / approval`}
+            defaultEvidenceType="Accepted Quote"
+            title="Accepted quote / customer approval"
+            readOnly={readOnly}
+          />
 
           {/* Blockers / warnings */}
           <div className="space-y-2">
