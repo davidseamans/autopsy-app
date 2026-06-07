@@ -2884,11 +2884,12 @@ export function JobDetailSheet({
       changes,
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
-    const ok = await onSave(next);
-    if (ok === false) {
+    const diagnostics = await onSave(next);
+    setSaveDiagnostics(diagnostics);
+    if (!diagnostics.success) {
       toast({
         title: "Not saved",
-        description: "Could not write to your secure records. Sign in and try again.",
+        description: diagnostics.message,
         variant: "destructive",
       });
       return;
@@ -2931,11 +2932,12 @@ export function JobDetailSheet({
     setDraft(next);
     // Commercial truth (invoice, costs, GST) is written to the canonical
     // Supabase tables here. Only claim "saved" when that write succeeds.
-    const commercialOk = await onSave(next);
-    if (commercialOk === false) {
+    const diagnostics = await onSave(next);
+    setSaveDiagnostics(diagnostics);
+    if (!diagnostics.success) {
       toast({
         title: "Not saved",
-        description: "Could not write your commercial records. Sign in and try again.",
+        description: diagnostics.message,
         variant: "destructive",
       });
       return;
@@ -2952,7 +2954,7 @@ export function JobDetailSheet({
       if (res.ok) {
         toast({ title: "Progress Saved", description: "Saved to this job record." });
       } else {
-        toast({ title: "Progress Saved locally", description: `Job record not updated: ${res.error}` });
+        toast({ title: "Canonical write confirmed", description: `Job side record not updated: ${res.error}` });
       }
     } else {
       toast({
