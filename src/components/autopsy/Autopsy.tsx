@@ -1098,6 +1098,33 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           )}
         </div>
 
+        {session && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <span>
+              Signed in as{" "}
+              <span className="font-medium text-foreground">
+                {user?.email ?? user?.id}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+
+        {runId && (
+          <div className="rounded-lg border border-[hsl(var(--autopsy-accent-soft))] bg-[hsl(var(--autopsy-accent-soft))]/40 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">Run ID: </span>
+            <span className="font-mono font-medium text-foreground break-all">
+              {runId}
+            </span>
+          </div>
+        )}
+
         {error && <ErrorPanel error={error} />}
 
         {staleAnswerWarning && view === "question" && (
