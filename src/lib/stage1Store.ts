@@ -283,26 +283,27 @@ function addWriteError(
   diagnostics: Stage1CanonicalWriteDiagnostics,
   table: Stage1CanonicalWriteError["table"],
   operation: string,
-  error: any,
+  error: unknown,
   payload?: unknown,
 ) {
+  const err = error as { message?: string; code?: string; details?: string; hint?: string } | null | undefined;
   diagnostics.errors.push({
     table,
     operation,
-    message: error?.message ?? String(error ?? "Unknown Supabase error"),
-    code: error?.code,
-    details: error?.details,
-    hint: error?.hint,
+    message: err?.message ?? String(error ?? "Unknown Supabase error"),
+    code: err?.code,
+    details: err?.details,
+    hint: err?.hint,
     payload,
   });
 }
 
-function toProbe(row: any): Stage1CanonicalRowProbe {
+function toProbe(row: Record<string, unknown>): Stage1CanonicalRowProbe {
   return {
     id: String(row.id),
-    autopsy_run_id: row.autopsy_run_id ?? null,
-    created_by: row.created_by ?? null,
-    stage1_job_id: row.stage1_job_id ?? undefined,
+    autopsy_run_id: typeof row.autopsy_run_id === "string" ? row.autopsy_run_id : null,
+    created_by: typeof row.created_by === "string" ? row.created_by : null,
+    stage1_job_id: typeof row.stage1_job_id === "string" ? row.stage1_job_id : undefined,
   };
 }
 
@@ -440,7 +441,7 @@ async function doSyncStage1Units(
     finalizeDiagnostics(diagnostics, false);
     return { units: null, diagnostics };
   }
-  const existingIds = new Set((existing ?? []).map((j: any) => String(j.id)));
+  const existingIds = new Set((existing ?? []).map((j: { id: unknown }) => String(j.id)));
   const keptIds = new Set<string>();
 
   const result: ProofUnit[] = [];
@@ -449,7 +450,7 @@ async function doSyncStage1Units(
   for (const u of units) {
     const nowIso = new Date().toISOString();
     const canonicalStatus = toCanonicalStatus(u.status, u.lifecycle);
-    const jobRow: Record<string, any> = {
+    const jobRow: Record<string, unknown> = {
       autopsy_run_id: runId,
       client_name: u.client || null,
       job_title: u.jobSite || null,
