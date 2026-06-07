@@ -734,6 +734,204 @@ export function computeFirstFive(units: ProofUnit[], gateUnlocked: boolean) {
 
 type FirstFive = ReturnType<typeof computeFirstFive>;
 
+// ============================================================================
+// Stage 1 Review Gate
+// ----------------------------------------------------------------------------
+// Answers: "Has this operator demonstrated enough commercial and operational
+// maturity to progress beyond Stage 1?" — using existing Stage 1 data only.
+//
+// Stage 1 does NOT prove business success. It proves early operator discipline
+// and basic commercial reality: can the operator win, complete, record, cost,
+// and understand five real jobs.
+//
+// Evidence doctrine: supporting paperwork is used to assess business maturity
+// and record discipline. It is NOT collected for surveillance. Missing
+// paperwork is a warning only — never an automatic failure. This gate never
+// changes GST, margin, evidence storage, auth, run-scoped access, or the base
+// Stage 2 readiness logic.
+// ============================================================================
+
+export type ReviewOutcome =
+  | "Stage 1 Passed"
+  | "Stage 1 Passed With Warnings"
+  | "Stage 1 Not Yet Demonstrated";
+
+export type MaturityBand = "Emerging" | "Developing" | "Competent";
+
+export const EVIDENCE_DOCTRINE =
+  "Supporting paperwork is used to assess business maturity and record discipline. It is not collected for surveillance.";
+
+export function computeReviewGate(ff: FirstFive) {
+  const requirementMet = ff.requirementMet;
+  const marginProven = ff.marginProven && ff.grossMargin != null;
+  const marginPositive = marginProven && ff.grossProfit > 0 && (ff.grossMargin ?? 0) > 0;
+  const stage2Ready = ff.stage2Ready;
+
+  // Warning conditions (qualifying jobs only) — all non-blocking.
+  const warnings: string[] = [];
+  if (marginProven && (ff.grossMargin ?? 0) < 30) {
+    warnings.push("Low gross margin (under 30%).");
+  }
+  if (
+    ff.revenueExGstTotal > 0 &&
+    ff.directCostsExGstTotal / ff.revenueExGstTotal > 0.7
+  ) {
+    warnings.push("Direct costs are unusually high relative to revenue.");
+  }
+
+  const qualifyingMissingEvidence = ff.qualifying.filter((j) => !j.hasEvidence).length;
+  const qualifyingWithEvidence = ff.qualifying.filter((j) => j.hasEvidence).length;
+  if (qualifyingMissingEvidence > 0) {
+    warnings.push("Recommended supporting paperwork is missing on one or more jobs.");
+  }
+  if (qualifyingMissingEvidence > 0 && qualifyingWithEvidence > 0) {
+    warnings.push("Evidence attachment is inconsistent across jobs.");
+  }
+
+  const provenGms = ff.qualifying
+    .filter((j) => j.gm != null)
+    .map((j) => j.gm as number);
+  if (provenGms.length > 1) {
+    const spread = Math.max(...provenGms) - Math.min(...provenGms);
+    if (spread > 40) warnings.push("Job profitability is uneven across the first five jobs.");
+  }
+
+  const overrideCount = ff.qualifying.reduce((s, j) => {
+    const u = j.unit;
+    let c = u.invoiceGstOverridden ? 1 : 0;
+    c += (u.costLines ?? []).filter((l) => l.gstOverridden).length;
+    return s + c;
+  }, 0);
+  if (overrideCount >= 3) {
+    warnings.push("A high number of manual GST overrides were used.");
+  }
+
+  // Outcome
+  let outcome: ReviewOutcome;
+  if (requirementMet && marginProven && marginPositive && stage2Ready) {
+    outcome = warnings.length === 0 ? "Stage 1 Passed" : "Stage 1 Passed With Warnings";
+  } else if (requirementMet && marginProven && stage2Ready) {
+    // 5 qualifying + margin calculable + Stage 2 Ready, but not cleanly positive.
+    outcome = "Stage 1 Passed With Warnings";
+  } else {
+    outcome = "Stage 1 Not Yet Demonstrated";
+  }
+
+  const passed = outcome === "Stage 1 Passed";
+  const passedWithWarnings = outcome === "Stage 1 Passed With Warnings";
+
+  const outcomeText = passed
+    ? "Stage 1 Passed — First Five Jobs requirement demonstrated."
+    : passedWithWarnings
+      ? "Stage 1 Passed With Warnings — execution demonstrated, but operating discipline requires review."
+      : "Stage 1 Not Yet Demonstrated — complete and record the required jobs before review.";
+
+  // Maturity band
+  let maturity: MaturityBand;
+  if (!requirementMet || !marginProven) {
+    maturity = "Emerging";
+  } else if (marginPositive && warnings.length === 0) {
+    maturity = "Competent";
+  } else {
+    maturity = "Developing";
+  }
+
+  const evidenceProves = passed
+    ? "This evidence shows the operator can complete paid work, record revenue, record direct costs, calculate commercial margin, and maintain supporting transaction records."
+    : passedWithWarnings
+      ? "This evidence shows the operator can complete and record work, but commercial discipline or documentation habits require review before progression."
+      : "This evidence is not yet sufficient. The operator must complete and record more qualifying jobs before Stage 1 maturity can be assessed.";
+
+  const nextAction =
+    outcome === "Stage 1 Not Yet Demonstrated"
+      ? ff.nextAction
+      : passedWithWarnings
+        ? "Review the flagged commercial or documentation warnings, then proceed to Stage 2 setup."
+        : "Proceed to Stage 2 setup.";
+
+  return {
+    outcome,
+    outcomeText,
+    maturity,
+    evidenceProves,
+    warnings,
+    nextAction,
+    doctrine: EVIDENCE_DOCTRINE,
+  };
+}
+
+type ReviewGate = ReturnType<typeof computeReviewGate>;
+
+function Stage1ReviewGate({ gate }: { gate: ReviewGate }) {
+  const tone =
+    gate.outcome === "Stage 1 Passed"
+      ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+      : gate.outcome === "Stage 1 Passed With Warnings"
+        ? "border-amber-400 text-amber-700 bg-amber-50"
+        : "border-red-400 text-red-700 bg-red-50";
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Stage 1 Review Gate</CardTitle>
+            <CardDescription>
+              Has this operator demonstrated enough commercial and operational maturity to progress beyond Stage 1?
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className={tone}>
+            {gate.outcome}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Outcome</div>
+          <p className="mt-1 font-medium">{gate.outcomeText}</p>
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Operator Maturity Demonstrated
+          </div>
+          <p className="mt-1 font-medium">{gate.maturity}</p>
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            What this evidence proves
+          </div>
+          <p className="mt-1">{gate.evidenceProves}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{gate.doctrine}</p>
+        </div>
+
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Warnings</div>
+          {gate.warnings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No warnings flagged.</p>
+          ) : (
+            <ul className="space-y-1">
+              {gate.warnings.map((w) => (
+                <li
+                  key={w}
+                  className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
+                >
+                  {w}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <span className="text-muted-foreground">Next action: </span>
+          <span className="font-medium">{gate.nextAction}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function FirstFiveJobsPanel({ ff }: { ff: FirstFive }) {
   const money = (n: number) =>
     `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
