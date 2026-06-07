@@ -2759,9 +2759,8 @@ export function JobDetailSheet({
   const jobId = unit?.jobId;
   const normalizeSaveResult = (value: Stage1CanonicalWriteDiagnostics | boolean | void): Stage1CanonicalWriteDiagnostics => {
     if (value && typeof value === "object" && "counts" in value && "success" in value) return value;
-    const ok = value !== false;
     return {
-      status: ok ? "success" : "failed",
+      status: "failed",
       runId: evidenceRunId,
       authUserId: null,
       authUserIdPresent: false,
@@ -2770,10 +2769,10 @@ export function JobDetailSheet({
       counts: { jobs: null, revenueLines: null, costLines: null },
       rows: { jobs: [], revenueLines: [], costLines: [] },
       writtenRows: { jobs: [], revenueLines: [], costLines: [] },
-      errors: ok ? [] : [{ table: "stage1_canonical", operation: "save", message: "No canonical Supabase diagnostics were returned." }],
-      writeSucceeded: ok,
-      success: ok,
-      message: ok ? "Saved." : "Canonical Supabase write did not return diagnostics.",
+      errors: [{ table: "stage1_canonical", operation: "save", message: "No canonical Supabase diagnostics were returned." }],
+      writeSucceeded: false,
+      success: false,
+      message: "Canonical Supabase write did not return diagnostics.",
     };
   };
   const loadPayments = useCallback(async () => {
@@ -3790,7 +3789,7 @@ export function JobDetailSheet({
           {saveDiagnostics && (
             <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">Canonical Supabase write: {saveDiagnostics.success ? "Succeeded" : "Failed"}</span>
+                <span className="font-semibold">Developer/debug panel — Canonical Supabase write: {saveDiagnostics.success ? "Succeeded" : "Failed"}</span>
                 <span className="text-muted-foreground">Active run: {saveDiagnostics.runId ?? "missing"}</span>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -3808,6 +3807,9 @@ export function JobDetailSheet({
                   {JSON.stringify(saveDiagnostics.errors, null, 2)}
                 </pre>
               )}
+              <pre className="mt-2 max-h-36 overflow-auto rounded border bg-background p-2 whitespace-pre-wrap text-[11px]">
+                {JSON.stringify(saveDiagnostics.rows, null, 2)}
+              </pre>
             </div>
           )}
         </div>
