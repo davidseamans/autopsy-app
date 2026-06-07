@@ -6,6 +6,7 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
+import { AuthGate } from "@/components/AuthGate";
 import {
   createQuote,
   setQuoteOutcome,
@@ -1644,7 +1645,7 @@ function QuoteDetailDialog({
   );
 }
 
-export default function Stage1Dashboard() {
+function Stage1DashboardInner() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
@@ -4182,5 +4183,15 @@ export default function Stage1Dashboard() {
         onOpenChange={setReportOpen}
       />
     </div>
+  );
+}
+
+// Stage 1 RPCs run only while authenticated: the inner component (which fires
+// all Stage 1 Supabase RPCs in its effects) is mounted only behind AuthGate.
+export default function Stage1Dashboard() {
+  return (
+    <AuthGate>
+      <Stage1DashboardInner />
+    </AuthGate>
   );
 }

@@ -36,6 +36,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { isDebug } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
 import {
   GatewayPayload,
@@ -328,6 +330,19 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [testerEmail, setTesterEmail] = useState(
     () => localStorage.getItem("autopsy_intake_email") || "",
   );
+
+  // Authorization is based solely on the Supabase Auth session — never on
+  // tester_email or a client-supplied user_id.
+  const { session, user, signOut } = useAuth();
+
+  // Prefill the (tracking-only) email from the authenticated account when the
+  // user has not typed one. This is for display/tracking, not authorization.
+  useEffect(() => {
+    if (user?.email && !testerEmail) {
+      setTesterEmail(user.email);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email]);
 
   useEffect(() => {
     localStorage.setItem("autopsy_intake_industry", industry);
@@ -759,6 +774,18 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Hard requirement: a valid Supabase Auth session must exist before we
+    // call create_autopsy_run. Without a session, do not call the RPC — the
+    // AuthGate around StartView shows sign in / sign up instead.
+    if (!session) {
+      setError({
+        rpc: "create_autopsy_run",
+        message: "You must be signed in to start an Autopsy run.",
+        step: "start",
+        runId: null,
+      });
+      return;
+    }
     startMutation.mutate({
       industry,
       scenario,
@@ -1071,6 +1098,33 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           )}
         </div>
 
+        {session && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <span>
+              Signed in as{" "}
+              <span className="font-medium text-foreground">
+                {user?.email ?? user?.id}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+
+        {runId && (
+          <div className="rounded-lg border border-[hsl(var(--autopsy-accent-soft))] bg-[hsl(var(--autopsy-accent-soft))]/40 px-3 py-2 text-xs">
+            <span className="text-muted-foreground">Run ID: </span>
+            <span className="font-mono font-medium text-foreground break-all">
+              {runId}
+            </span>
+          </div>
+        )}
+
         {error && <ErrorPanel error={error} />}
 
         {staleAnswerWarning && view === "question" && (
@@ -1082,20 +1136,22 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         )}
 
         {view === "start" && (
-          <StartView
-            industry={industry}
-            scenario={scenario}
-            operatorClass={operatorClass}
-            runName={runName}
-            testerEmail={testerEmail}
-            setIndustry={setIndustry}
-            setScenario={setScenario}
-            setOperatorClass={setOperatorClass}
-            setRunName={setRunName}
-            setTesterEmail={setTesterEmail}
-            onSubmit={handleStart}
-            loading={startMutation.isPending}
-          />
+          <AuthGate>
+            <StartView
+              industry={industry}
+              scenario={scenario}
+              operatorClass={operatorClass}
+              runName={runName}
+              testerEmail={testerEmail}
+              setIndustry={setIndustry}
+              setScenario={setScenario}
+              setOperatorClass={setOperatorClass}
+              setRunName={setRunName}
+              setTesterEmail={setTesterEmail}
+              onSubmit={handleStart}
+              loading={startMutation.isPending}
+            />
+          </AuthGate>
         )}
 
         {view === "question" && (
