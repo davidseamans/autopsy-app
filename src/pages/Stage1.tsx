@@ -4063,7 +4063,7 @@ function AddJobForm({ onCreate }: { onCreate?: (u: ProofUnit) => void }) {
       lifecycle: "active",
       audit: [{ ts: new Date().toISOString(), action: "created" }],
     });
-    toast({ title: "Job saved", description: `${client} added to tracker.` });
+    toast({ title: "Job added", description: `${client} added to the Stage 1 workspace.` });
     setForm({ client: "", location: "", quote: "", scheduled: "" });
   }
   return (
