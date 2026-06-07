@@ -4948,19 +4948,57 @@ export default function Stage1() {
   const runId = getActiveRunId();
   const { state: progression, update: updateProgression } = useProgression(runId);
   // Proof units (invoices, costs, GST treatments) are a persistent commercial
-  // record scoped to this Autopsy run — not in-memory calculator state. Load the
-  // run's records on mount so invoice/cost/GST/ex-GST values survive a refresh.
+  // record scoped to this Autopsy run. Supabase is the canonical source of
+  // truth; localStorage is a cache only. Paint instantly from the cache, then
+  // hydrate from Supabase so invoice/cost/GST/ex-GST values survive refresh,
+  // logout/login and device changes.
   const [units, setUnits] = useState<ProofUnit[]>(() => {
-    const persisted = loadStage1Units(runId);
-    return persisted.length > 0 ? persisted : SEED_UNITS;
+    const cached = loadStage1UnitsCache(runId);
+    return cached.length > 0 ? cached : SEED_UNITS;
   });
+  const hydratedRef = useRef(false);
   // Re-hydrate when the active run changes (e.g. switching runs without remount).
   useEffect(() => {
-    setUnits(loadStage1Units(runId));
+    hydratedRef.current = false;
+    setUnits(loadStage1UnitsCache(runId));
+    let cancelled = false;
+    (async () => {
+      const canonical = await fetchStage1Units(runId);
+      if (cancelled || canonical == null) return; // failure → keep cache
+      const cache = loadStage1UnitsCache(runId);
+      const merged = mergeUnits(canonical, cache);
+      setUnits(merged);
+      saveStage1UnitsCache(runId, merged);
+      hydratedRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [runId]);
-  // Persist every change against the active run so records are durable.
+  // Persist every change: cache immediately, sync canonical to Supabase.
   useEffect(() => {
-    saveStage1Units(runId, units);
+    saveStage1UnitsCache(runId, units);
+    let cancelled = false;
+    (async () => {
+      const updated = await syncStage1Units(runId, units);
+      if (cancelled || !updated) return;
+      // Apply any newly-assigned canonical ids without clobbering newer edits.
+      setUnits((prev) => {
+        let changed = false;
+        const next = prev.map((p) => {
+          const m = updated.find((u) => u.n === p.n);
+          if (m && m.stage1JobId && p.stage1JobId !== m.stage1JobId) {
+            changed = true;
+            return { ...p, stage1JobId: m.stage1JobId };
+          }
+          return p;
+        });
+        return changed ? next : prev;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [runId, units]);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
@@ -4969,15 +5007,27 @@ export default function Stage1() {
     [activeUnits, sc.gate],
   );
   const reviewGate = useMemo(() => computeReviewGate(firstFive), [firstFive]);
-  // Run-scoped reflection / exit gate persistence.
+  // Run-scoped reflection / exit gate persistence. Supabase is canonical;
+  // localStorage is cache only.
   const [reflection, setReflection] = useState<Stage1Reflection>(() =>
-    loadStage1Reflection(runId),
+    loadStage1ReflectionCache(runId),
   );
   useEffect(() => {
-    setReflection(loadStage1Reflection(runId));
+    setReflection(loadStage1ReflectionCache(runId));
+    let cancelled = false;
+    (async () => {
+      const canonical = await fetchStage1Reflection(runId);
+      if (cancelled || canonical == null) return; // failure → keep cache
+      setReflection(canonical);
+      saveStage1ReflectionCache(runId, canonical);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [runId]);
   useEffect(() => {
-    saveStage1Reflection(runId, reflection);
+    saveStage1ReflectionCache(runId, reflection);
+    void syncStage1Reflection(runId, reflection);
   }, [runId, reflection]);
   const parityAudit = useMemo(
     () => computeParityAudit(firstFive, reviewGate, reflection, units.length),
