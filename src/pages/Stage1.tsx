@@ -1497,6 +1497,7 @@ export function JobDetailSheet({
   onDelete: (n: number) => void;
   onOpenDetailedReport?: (n: number) => void;
 }) {
+  const evidenceRunId = getActiveRunId();
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
   const [mode, setMode] = useState<"view" | "edit">("edit");
   const [correctionReason, setCorrectionReason] = useState<string>("");
