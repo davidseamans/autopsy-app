@@ -152,12 +152,30 @@ const CURRENT_RUN_KEY = "autopsy_current_run_id";
 const STAGE1_RUN_KEY = "autopsy_stage1_run_id";
 const storageKey = (runId: string) => `progression.${runId}`;
 
+function getLatestProgressionRunId(): string | null {
+  try {
+    const rows: Array<{ runId: string; updatedAt: string }> = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith("progression.")) continue;
+      const runId = key.slice("progression.".length);
+      const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+      rows.push({ runId, updatedAt: parsed.updatedAt ?? "" });
+    }
+    rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return rows[0]?.runId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function getActiveRunId(): string | null {
   try {
     return (
       localStorage.getItem(ACTIVE_RUN_KEY) ||
       localStorage.getItem(STAGE1_RUN_KEY) ||
-      localStorage.getItem(CURRENT_RUN_KEY)
+      localStorage.getItem(CURRENT_RUN_KEY) ||
+      getLatestProgressionRunId()
     );
   } catch {
     return null;
@@ -175,7 +193,7 @@ export function setStage1RunId(runId: string | null): void {
 
 export function getStage1RunId(): string | null {
   try {
-    return localStorage.getItem(STAGE1_RUN_KEY);
+    return localStorage.getItem(STAGE1_RUN_KEY) || getLatestProgressionRunId();
   } catch {
     return null;
   }
