@@ -6,6 +6,7 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
+import { AuthGate } from "@/components/AuthGate";
 import {
   createQuote,
   setQuoteOutcome,
