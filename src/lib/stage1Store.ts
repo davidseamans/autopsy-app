@@ -334,7 +334,18 @@ async function doSyncStage1Units(
           };
         });
       if (rows.length > 0) {
-        await supabase.from("stage1_cost_lines").insert(rows);
+        const { data: insCosts, error: costErr } = await supabase
+          .from("stage1_cost_lines")
+          .insert(rows)
+          .select("id");
+        if (isDebug()) {
+          console.info("[stage1] cost lines written", {
+            jobId,
+            requested: rows.length,
+            savedIds: (insCosts ?? []).map((r: any) => r.id),
+            error: costErr?.message,
+          });
+        }
       }
     }
   }
