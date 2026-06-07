@@ -307,7 +307,10 @@ function toProbe(row: any): Stage1CanonicalRowProbe {
 }
 
 function newCanonicalId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (Number(c) ^ (Math.random() * 16) >> (Number(c) / 4)).toString(16),
+  );
 }
 
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
