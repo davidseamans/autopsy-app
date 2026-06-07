@@ -148,11 +148,34 @@ export function recomputePermission(s: ProgressionState): StagePermission {
 /* ----------------------------- storage --------------------------------- */
 
 const ACTIVE_RUN_KEY = "autopsy_active_run_id";
+const CURRENT_RUN_KEY = "autopsy_current_run_id";
+const STAGE1_RUN_KEY = "autopsy_stage1_run_id";
 const storageKey = (runId: string) => `progression.${runId}`;
 
 export function getActiveRunId(): string | null {
   try {
-    return localStorage.getItem(ACTIVE_RUN_KEY);
+    return (
+      localStorage.getItem(ACTIVE_RUN_KEY) ||
+      localStorage.getItem(STAGE1_RUN_KEY) ||
+      localStorage.getItem(CURRENT_RUN_KEY)
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function setStage1RunId(runId: string | null): void {
+  try {
+    if (runId) localStorage.setItem(STAGE1_RUN_KEY, runId);
+    else localStorage.removeItem(STAGE1_RUN_KEY);
+  } catch {
+    /* noop */
+  }
+}
+
+export function getStage1RunId(): string | null {
+  try {
+    return localStorage.getItem(STAGE1_RUN_KEY);
   } catch {
     return null;
   }
@@ -353,7 +376,7 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
       "This has enough structure to enter Stage 1 — the commercial proof cockpit. The next test is whether real customers, real costs, and real evidence confirm it.",
     primaryCta: {
       label: "Open Stage 1 Dashboard",
-      to: () => `/stage-1`,
+      to: (id) => `/stage-1?runId=${id}`,
     },
     secondaryCta: {
       label: "Confirm Readiness Checklist",
