@@ -91,7 +91,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDebug } from "@/lib/supabase";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   loadAdjustments,
@@ -2726,7 +2726,7 @@ export function JobDetailSheet({
   unit: ProofUnit | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onSave: (u: ProofUnit) => void;
+  onSave: (u: ProofUnit) => Promise<boolean> | void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
   onVoid: (n: number, reason: string) => void;
@@ -2862,7 +2862,7 @@ export function JobDetailSheet({
     draft.paymentStatus === "Paid" && paymentReceived === 0;
   const paymentExceedsQuote = approvedValue > 0 && paymentReceived > approvedValue;
 
-  function save() {
+  async function save() {
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
     (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
@@ -2880,7 +2880,15 @@ export function JobDetailSheet({
       changes,
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
-    onSave(next);
+    const ok = await onSave(next);
+    if (ok === false) {
+      toast({
+        title: "Not saved",
+        description: "Could not write to your secure records. Sign in and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     toast({ title: isReviewed ? "Correction logged" : "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
     setMode("view");
     setCorrectionReason("");
@@ -2917,7 +2925,17 @@ export function JobDetailSheet({
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
     setDraft(next);
-    onSave(next);
+    // Commercial truth (invoice, costs, GST) is written to the canonical
+    // Supabase tables here. Only claim "saved" when that write succeeds.
+    const commercialOk = await onSave(next);
+    if (commercialOk === false) {
+      toast({
+        title: "Not saved",
+        description: "Could not write your commercial records. Sign in and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     // Persist against the real job row when this workspace is backed by one.
     if (draft.jobId) {
       const res = await persistJobProgress({
@@ -2935,7 +2953,7 @@ export function JobDetailSheet({
     } else {
       toast({
         title: "Progress Saved",
-        description: "Held in this session — convert a quote to create a job record.",
+        description: "Saved to your secure Stage 1 records.",
       });
     }
   }
@@ -4974,49 +4992,101 @@ export default function Stage1() {
     return cached.length > 0 ? cached : SEED_UNITS;
   });
   const hydratedRef = useRef(false);
+  // Always-current snapshot of units for awaited persistence (avoids stale
+  // closures and an effect that re-syncs on every render).
+  const unitsRef = useRef<ProofUnit[]>(units);
+  useEffect(() => {
+    unitsRef.current = units;
+  }, [units]);
+
   // Re-hydrate when the active run changes (e.g. switching runs without remount).
+  //
+  // CANONICAL SUPABASE IS THE SINGLE SOURCE OF TRUTH. We paint the cache first
+  // for instant feedback, then replace it with canonical records. The cache may
+  // only contribute non-commercial presentation detail (see mergeUnits) and can
+  // never mask or revive commercial records. If the cache holds records that
+  // were never written to Supabase (e.g. pre-migration), we push them up once so
+  // canonical becomes complete — then canonical wins.
   useEffect(() => {
     hydratedRef.current = false;
-    setUnits(loadStage1UnitsCache(runId));
+    const cacheNow = loadStage1UnitsCache(runId);
+    setUnits(cacheNow.length > 0 ? cacheNow : SEED_UNITS);
     let cancelled = false;
     (async () => {
-      const canonical = await fetchStage1Units(runId);
+      let canonical = await fetchStage1Units(runId);
       if (cancelled || canonical == null) return; // failure → keep cache
       const cache = loadStage1UnitsCache(runId);
+      // Migration: canonical empty but cache has real records → push up once.
+      if (canonical.length === 0 && cache.length > 0) {
+        const synced = await syncStage1Units(runId, cache);
+        if (cancelled) return;
+        if (synced) {
+          const refetched = await fetchStage1Units(runId);
+          if (cancelled) return;
+          if (refetched && refetched.length > 0) canonical = refetched;
+        }
+      }
       const merged = mergeUnits(canonical, cache);
+      hydratedRef.current = true;
       setUnits(merged);
       saveStage1UnitsCache(runId, merged);
-      hydratedRef.current = true;
+      if (isDebug()) {
+        console.info("[stage1] hydrated from canonical", {
+          runId,
+          canonicalJobs: canonical.length,
+          displayedUnits: merged.length,
+        });
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [runId]);
-  // Persist every change: cache immediately, sync canonical to Supabase.
-  useEffect(() => {
-    saveStage1UnitsCache(runId, units);
-    let cancelled = false;
-    (async () => {
-      const updated = await syncStage1Units(runId, units);
-      if (cancelled || !updated) return;
-      // Apply any newly-assigned canonical ids without clobbering newer edits.
-      setUnits((prev) => {
-        let changed = false;
-        const next = prev.map((p) => {
-          const m = updated.find((u) => u.n === p.n);
-          if (m && m.stage1JobId && p.stage1JobId !== m.stage1JobId) {
-            changed = true;
-            return { ...p, stage1JobId: m.stage1JobId };
-          }
-          return p;
+
+  // Single, explicit persistence path. Every mutation goes through this:
+  //   1. paint optimistically + cache,
+  //   2. write canonical (INSERT/UPDATE/DELETE under RLS),
+  //   3. re-fetch canonical truth and re-render from it.
+  // Returns the canonical-merged units on success, or null when the write did
+  // not reach Supabase (e.g. not authenticated) so callers can avoid claiming
+  // a save succeeded.
+  const persistUnits = useCallback(
+    async (
+      compute: (prev: ProofUnit[]) => ProofUnit[],
+    ): Promise<ProofUnit[] | null> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits); // optimistic paint
+      saveStage1UnitsCache(runId, nextUnits);
+      if (isDebug()) {
+        console.info("[stage1] persisting units", {
+          runId,
+          units: nextUnits.length,
+          editingJobIds: nextUnits.map((u) => u.stage1JobId ?? `n:${u.n}`),
         });
-        return changed ? next : prev;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, units]);
+      }
+      // Cache-only path: without an authenticated session there is nowhere
+      // canonical to write, so keep the optimistic paint and report failure so
+      // callers never claim a save succeeded.
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) return null;
+      const synced = await syncStage1Units(runId, nextUnits);
+      // Reconcile the display to canonical truth REGARDLESS of write outcome —
+      // the dashboard/ledger must always reflect Supabase, never optimistic or
+      // cached commercial values. If a write failed, the refetch will show the
+      // canonical (possibly unchanged) state rather than pretend it landed.
+      const canonical = await fetchStage1Units(runId);
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(runId, merged);
+      }
+      // `synced` is null when any canonical write errored → treat as not saved.
+      return synced ? (canonical != null ? mergeUnits(canonical, loadStage1UnitsCache(runId)) : synced) : null;
+    },
+    [runId],
+  );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const firstFive = useMemo(
@@ -5138,7 +5208,7 @@ export default function Stage1() {
             <TabsContent value="job" className="mt-4">
               <AddJobForm
                 onCreate={(u) => {
-                  setUnits((prev) => [...prev, u]);
+                  void persistUnits((prev) => [...prev, u]);
                   setOpenUnitN(u.n);
                 }}
               />
@@ -5162,11 +5232,16 @@ export default function Stage1() {
         unit={openUnit}
         open={openUnitN != null}
         onOpenChange={(o) => !o && setOpenUnitN(null)}
-        onSave={(u) => setUnits(units.map((x) => (x.n === u.n ? u : x)))}
+        onSave={async (u) => {
+          const res = await persistUnits((prev) =>
+            prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
+          );
+          return res != null;
+        }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
         onVoid={(n, reason) => {
-          setUnits((prev) => prev.map((x) => x.n === n ? {
+          void persistUnits((prev) => prev.map((x) => x.n === n ? {
             ...x,
             lifecycle: "voided",
             voidReason: reason,
@@ -5176,7 +5251,7 @@ export default function Stage1() {
           toast({ title: "Record voided", description: "Kept in history, removed from your Stage 1 score." });
         }}
         onArchive={(n) => {
-          setUnits((prev) => prev.map((x) => x.n === n ? {
+          void persistUnits((prev) => prev.map((x) => x.n === n ? {
             ...x,
             lifecycle: "archived",
             archivedAt: new Date().toISOString(),
@@ -5185,7 +5260,7 @@ export default function Stage1() {
           toast({ title: "Record archived" });
         }}
         onDelete={(n) => {
-          setUnits((prev) => prev.filter((x) => x.n !== n));
+          void persistUnits((prev) => prev.filter((x) => x.n !== n));
           toast({ title: "Draft deleted" });
         }}
       />
