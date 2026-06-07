@@ -1560,17 +1560,42 @@ export function JobDetailSheet({
   const fin = matchedJob ? fpFin.find((f) => f.job_id === matchedJob.id) : null;
   const docs = matchedJob ? fpDocs.filter((d) => d.job_id === matchedJob.id) : [];
 
-  // Computed GM from invoice + direct costs (falls back to legacy GM on unit)
-  const invAmt = draft.invoiceAmount ?? 0;
-  const linesTotal = (draft.costLines ?? []).reduce((s, l) => s + (l.amount ?? 0), 0);
+  // GST-aware GM. Margin is calculated from ex-GST revenue and ex-GST direct
+  // costs only — GST is a tax/reporting component, never business margin.
+  const invAmt = draft.invoiceAmount ?? 0; // GST-inclusive invoice total
+  const invoiceSplit = computeGstSplit({
+    inclusive: invAmt,
+    treatment: draft.invoiceGstTreatment ?? "gst_included",
+    gstOverride: draft.invoiceGstAmount,
+    overridden: draft.invoiceGstOverridden,
+  });
+  const revenueExGst = invoiceSplit.exGst;
+
+  // Each cost line stores a GST-inclusive amount; reduce to ex-GST for margin.
+  const lineSplits = (draft.costLines ?? []).map((l) =>
+    computeGstSplit({
+      inclusive: l.amount ?? 0,
+      treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+      gstOverride: l.gstAmount,
+      overridden: l.gstOverridden,
+    })
+  );
+  const linesTotalExGst = lineSplits.reduce((s, x) => s + x.exGst, 0);
+  // Legacy cost fields carry no GST split; treat them as ex-GST as-is.
   const legacyTotal =
     (draft.costMaterials ?? 0) +
     (draft.costLabour ?? 0) +
     (draft.costSubcontractors ?? 0) +
     (draft.costOther ?? 0);
-  const costs = draft.costLines && draft.costLines.length > 0 ? linesTotal : legacyTotal;
-  const grossProfit = invAmt - costs;
-  const computedGm = invAmt > 0 ? Math.round((grossProfit / invAmt) * 100) : null;
+  const hasCostLines = !!(draft.costLines && draft.costLines.length > 0);
+  // Ex-GST direct cost total used for margin.
+  const costs = hasCostLines ? linesTotalExGst : legacyTotal;
+  // GST-inclusive cost total (display only).
+  const costsInclGst = hasCostLines
+    ? lineSplits.reduce((s, x) => s + x.inclusive, 0)
+    : legacyTotal;
+  const grossProfit = revenueExGst - costs;
+  const computedGm = revenueExGst > 0 ? Math.round((grossProfit / revenueExGst) * 100) : null;
   const displayGm = computedGm ?? draft.gm;
 
   const invoiceProofOk = !!(draft.invoiceDocName || fin || draft.evidence);
