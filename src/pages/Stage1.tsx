@@ -371,6 +371,11 @@ export interface ProofUnit {
   dbQuoteNumber?: string;
   // Customer Invoice / Contract
   invoiceAmount?: number;
+  // GST-aware revenue treatment for the customer invoice.
+  // invoiceAmount is treated as the GST-inclusive total.
+  invoiceGstTreatment?: GstTreatment;
+  invoiceGstAmount?: number;
+  invoiceGstOverridden?: boolean;
   invoiceDate?: string;
   invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
   contractStart?: string;
