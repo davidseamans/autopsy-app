@@ -1,4 +1,49 @@
 import { supabase } from "@/lib/supabase";
+import { getOwnerUserId } from "@/lib/auth";
+
+/**
+ * Canonical Stage 1 evidence storage path. The owner segment is ALWAYS the
+ * authenticated user's id (auth.uid()) — never tester_email or a
+ * client-supplied user_id. Layout:
+ *   stage1/{owner_user_id}/{autopsy_run_id}/{stage_gate_evidence_id}/{filename}
+ */
+export function buildStage1EvidencePath(params: {
+  ownerUserId: string;
+  autopsyRunId: string;
+  stageGateEvidenceId: string;
+  filename: string;
+}): string {
+  const safeName = params.filename.replace(/[^\w.\-]+/g, "_");
+  return `stage1/${params.ownerUserId}/${params.autopsyRunId}/${params.stageGateEvidenceId}/${safeName}`;
+}
+
+/**
+ * Upload a Stage 1 evidence file via the authenticated Supabase client. The
+ * owner segment is resolved from the auth session, so an upload is impossible
+ * without a valid session. Returns the stored object path.
+ */
+export async function uploadStage1Evidence(params: {
+  autopsyRunId: string;
+  stageGateEvidenceId: string;
+  file: File;
+  bucket?: string;
+}): Promise<string> {
+  const ownerUserId = await getOwnerUserId();
+  if (!ownerUserId) {
+    throw new Error("A valid session is required to upload Stage 1 evidence.");
+  }
+  const path = buildStage1EvidencePath({
+    ownerUserId,
+    autopsyRunId: params.autopsyRunId,
+    stageGateEvidenceId: params.stageGateEvidenceId,
+    filename: params.file.name,
+  });
+  const { error } = await supabase.storage
+    .from(params.bucket ?? "stage1-evidence")
+    .upload(path, params.file, { upsert: true });
+  if (error) throw error;
+  return path;
+}
 
 export interface GatewayQuestion {
   question_id: string | number;
