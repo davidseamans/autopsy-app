@@ -4172,6 +4172,7 @@ export default function Stage1() {
     () => computeFirstFive(activeUnits, sc.gate === "Unlocked"),
     [activeUnits, sc.gate],
   );
+  const reviewGate = useMemo(() => computeReviewGate(firstFive), [firstFive]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -4218,6 +4219,8 @@ export default function Stage1() {
       <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
 
       <FirstFiveJobsPanel ff={firstFive} />
+
+      <Stage1ReviewGate gate={reviewGate} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
