@@ -14,7 +14,9 @@ import {
   saveStage1UnitsCache,
   fetchStage1Units,
   syncStage1Units,
+  syncStage1UnitsWithDiagnostics,
   mergeUnits,
+  type Stage1CanonicalWriteDiagnostics,
 } from "@/lib/stage1Store";
 import {
   loadStage1ReflectionCache,
@@ -2726,7 +2728,7 @@ export function JobDetailSheet({
   unit: ProofUnit | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onSave: (u: ProofUnit) => Promise<boolean> | void;
+  onSave: (u: ProofUnit) => Promise<Stage1CanonicalWriteDiagnostics | boolean | void> | Stage1CanonicalWriteDiagnostics | boolean | void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
   onVoid: (n: number, reason: string) => void;
@@ -2744,6 +2746,7 @@ export function JobDetailSheet({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editGateOpen, setEditGateOpen] = useState(false);
+  const [saveDiagnostics, setSaveDiagnostics] = useState<Stage1CanonicalWriteDiagnostics | null>(null);
   const [payEvents, setPayEvents] = useState<RevenueEventRow[]>([]);
   const [payControl, setPayControl] = useState<RevenueControlRow | null>(null);
   const [handoverOpen, setHandoverOpen] = useState(false);
@@ -2751,8 +2754,27 @@ export function JobDetailSheet({
     setDraft(unit);
     setMode("edit");
     setCorrectionReason("");
+    setSaveDiagnostics(null);
   }, [unit]);
   const jobId = unit?.jobId;
+  const normalizeSaveResult = (value: Stage1CanonicalWriteDiagnostics | boolean | void): Stage1CanonicalWriteDiagnostics => {
+    if (value && typeof value === "object" && "counts" in value && "success" in value) return value;
+    return {
+      status: "failed",
+      runId: evidenceRunId,
+      authUserId: null,
+      authUserIdPresent: false,
+      autopsyRunIdWrittenMatchesActiveRun: null,
+      createdByMatchesAuthUser: null,
+      counts: { jobs: null, revenueLines: null, costLines: null },
+      rows: { jobs: [], revenueLines: [], costLines: [] },
+      writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+      errors: [{ table: "stage1_canonical", operation: "save", message: "No canonical Supabase diagnostics were returned." }],
+      writeSucceeded: false,
+      success: false,
+      message: "Canonical Supabase write did not return diagnostics.",
+    };
+  };
   const loadPayments = useCallback(async () => {
     if (!jobId) {
       setPayEvents([]);
@@ -2880,11 +2902,12 @@ export function JobDetailSheet({
       changes,
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
-    const ok = await onSave(next);
-    if (ok === false) {
+    const diagnostics = normalizeSaveResult(await onSave(next));
+    setSaveDiagnostics(diagnostics);
+    if (!diagnostics.success) {
       toast({
         title: "Not saved",
-        description: "Could not write to your secure records. Sign in and try again.",
+        description: diagnostics.message,
         variant: "destructive",
       });
       return;
@@ -2927,11 +2950,12 @@ export function JobDetailSheet({
     setDraft(next);
     // Commercial truth (invoice, costs, GST) is written to the canonical
     // Supabase tables here. Only claim "saved" when that write succeeds.
-    const commercialOk = await onSave(next);
-    if (commercialOk === false) {
+    const diagnostics = normalizeSaveResult(await onSave(next));
+    setSaveDiagnostics(diagnostics);
+    if (!diagnostics.success) {
       toast({
         title: "Not saved",
-        description: "Could not write your commercial records. Sign in and try again.",
+        description: diagnostics.message,
         variant: "destructive",
       });
       return;
@@ -2948,7 +2972,7 @@ export function JobDetailSheet({
       if (res.ok) {
         toast({ title: "Progress Saved", description: "Saved to this job record." });
       } else {
-        toast({ title: "Progress Saved locally", description: `Job record not updated: ${res.error}` });
+        toast({ title: "Canonical write confirmed", description: `Job side record not updated: ${res.error}` });
       }
     } else {
       toast({
@@ -3762,6 +3786,32 @@ export function JobDetailSheet({
               Add a correction reason above to save changes to this reviewed record.
             </p>
           )}
+          {saveDiagnostics && (
+            <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold">Developer/debug panel — Canonical Supabase write: {saveDiagnostics.success ? "Succeeded" : "Failed"}</span>
+                <span className="text-muted-foreground">Active run: {saveDiagnostics.runId ?? "missing"}</span>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div>stage1_jobs: <span className="font-mono font-semibold">{saveDiagnostics.counts.jobs ?? "error"}</span></div>
+                <div>stage1_revenue_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
+                <div>stage1_cost_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3 text-muted-foreground">
+                <div>Auth user id: {saveDiagnostics.authUserIdPresent ? saveDiagnostics.authUserId : "missing"}</div>
+                <div>created_by matches auth: {String(saveDiagnostics.createdByMatchesAuthUser)}</div>
+                <div>autopsy_run_id matches active: {String(saveDiagnostics.autopsyRunIdWrittenMatchesActiveRun)}</div>
+              </div>
+              {saveDiagnostics.errors.length > 0 && (
+                <pre className="mt-2 max-h-36 overflow-auto rounded border bg-background p-2 whitespace-pre-wrap text-[11px]">
+                  {JSON.stringify(saveDiagnostics.errors, null, 2)}
+                </pre>
+              )}
+              <pre className="mt-2 max-h-36 overflow-auto rounded border bg-background p-2 whitespace-pre-wrap text-[11px]">
+                {JSON.stringify(saveDiagnostics.rows, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -4015,7 +4065,7 @@ function AddJobForm({ onCreate }: { onCreate?: (u: ProofUnit) => void }) {
       lifecycle: "active",
       audit: [{ ts: new Date().toISOString(), action: "created" }],
     });
-    toast({ title: "Job saved", description: `${client} added to tracker.` });
+    toast({ title: "Job added", description: `${client} added to the Stage 1 workspace.` });
     setForm({ client: "", location: "", quote: "", scheduled: "" });
   }
   return (
@@ -5087,6 +5137,31 @@ export default function Stage1() {
     },
     [runId],
   );
+  const persistUnitsWithDiagnostics = useCallback(
+    async (
+      compute: (prev: ProofUnit[]) => ProofUnit[],
+    ): Promise<Stage1CanonicalWriteDiagnostics> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits);
+      saveStage1UnitsCache(runId, nextUnits);
+
+      const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(runId, nextUnits);
+      const canonical = await fetchStage1Units(runId);
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(runId, merged);
+      } else if (syncedUnits) {
+        unitsRef.current = syncedUnits;
+        setUnits(syncedUnits);
+        saveStage1UnitsCache(runId, syncedUnits);
+      }
+      return diagnostics;
+    },
+    [runId],
+  );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const firstFive = useMemo(
@@ -5233,10 +5308,9 @@ export default function Stage1() {
         open={openUnitN != null}
         onOpenChange={(o) => !o && setOpenUnitN(null)}
         onSave={async (u) => {
-          const res = await persistUnits((prev) =>
+          return persistUnitsWithDiagnostics((prev) =>
             prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
           );
-          return res != null;
         }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}

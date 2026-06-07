@@ -94,6 +94,10 @@ function fromCanonicalStatus(status: string | null): string {
 // ---------------------------------------------------------------------------
 // Canonical READ — hydrate ProofUnit[] from the canonical tables
 // ---------------------------------------------------------------------------
+type CanonicalStage1JobRow = Record<string, unknown> & { id: string; job_sequence_number?: number | null };
+type CanonicalStage1RevenueRow = Record<string, unknown> & { stage1_job_id?: string | null };
+type CanonicalStage1CostRow = Record<string, unknown> & { stage1_job_id?: string | null };
+
 /**
  * Fetch the run's commercial records from Supabase (canonical truth).
  * Returns null on failure so the caller can fall back to the cache.
@@ -124,17 +128,17 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     });
   }
 
-  return jobs.map((j: Record<string, any>, i: number) => {
-    const rev = (revenue ?? []).find((r: any) => r.stage1_job_id === j.id);
-    const jobCosts = (costs ?? []).filter((c: any) => c.stage1_job_id === j.id);
+  return (jobs as CanonicalStage1JobRow[]).map((j, i: number) => {
+    const rev = ((revenue ?? []) as CanonicalStage1RevenueRow[]).find((r) => r.stage1_job_id === j.id);
+    const jobCosts = ((costs ?? []) as CanonicalStage1CostRow[]).filter((c) => c.stage1_job_id === j.id);
 
     const revExGst = rev ? Number(rev.invoice_ex_gst_amount) || 0 : 0;
-    const costExGst = jobCosts.reduce((s: number, c: any) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
+    const costExGst = jobCosts.reduce((s: number, c) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
     const gm = revExGst > 0 && costExGst > 0 ? Math.round(((revExGst - costExGst) / revExGst) * 100) : 0;
 
-    const costLines: CostLine[] = jobCosts.map((c: any) => ({
+    const costLines: CostLine[] = jobCosts.map((c) => ({
       id: String(c.id),
-      description: c.description ?? "",
+      description: typeof c.description === "string" ? c.description : "",
       amount: Number(c.cost_total_gst_inclusive) || 0,
       gstIncluded: (c.gst_treatment ?? "gst_included") === "gst_included",
       gstTreatment: (c.gst_treatment ?? "gst_included") as GstTreatment,
@@ -145,13 +149,13 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     const unit: ProofUnit = {
       n: j.job_sequence_number ?? i + 1,
       stage1JobId: String(j.id),
-      client: j.client_name ?? "",
-      jobSite: j.job_title ?? undefined,
+      client: typeof j.client_name === "string" ? j.client_name : "",
+      jobSite: typeof j.job_title === "string" ? j.job_title : undefined,
       proofType: "Completed Job",
-      status: fromCanonicalStatus(j.job_status),
+      status: fromCanonicalStatus(typeof j.job_status === "string" ? j.job_status : null),
       gm,
       evidence: false,
-      notes: j.notes ?? undefined,
+      notes: typeof j.notes === "string" ? j.notes : undefined,
       lifecycle: j.job_status === "cancelled" ? "voided" : "active",
       invoiceAmount: rev ? Number(rev.invoice_total_gst_inclusive) || 0 : undefined,
       invoiceGstTreatment: rev ? ((rev.gst_treatment ?? "gst_included") as GstTreatment) : undefined,
@@ -211,6 +215,170 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
 // ---------------------------------------------------------------------------
 let syncChain: Promise<unknown> = Promise.resolve();
 
+export interface Stage1CanonicalWriteError {
+  table: "stage1_jobs" | "stage1_revenue_lines" | "stage1_cost_lines" | "auth" | "stage1_canonical";
+  operation: string;
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  payload?: unknown;
+}
+
+export interface Stage1CanonicalRowProbe {
+  id: string;
+  autopsy_run_id: string | null;
+  created_by: string | null;
+  stage1_job_id?: string | null;
+}
+
+export interface Stage1CanonicalWriteDiagnostics {
+  status: "success" | "failed";
+  runId: string | null;
+  authUserId: string | null;
+  authUserIdPresent: boolean;
+  autopsyRunIdWrittenMatchesActiveRun: boolean | null;
+  createdByMatchesAuthUser: boolean | null;
+  counts: {
+    jobs: number | null;
+    revenueLines: number | null;
+    costLines: number | null;
+  };
+  rows: {
+    jobs: Stage1CanonicalRowProbe[];
+    revenueLines: Stage1CanonicalRowProbe[];
+    costLines: Stage1CanonicalRowProbe[];
+  };
+  writtenRows: {
+    jobs: Stage1CanonicalRowProbe[];
+    revenueLines: Stage1CanonicalRowProbe[];
+    costLines: Stage1CanonicalRowProbe[];
+  };
+  errors: Stage1CanonicalWriteError[];
+  writeSucceeded: boolean;
+  success: boolean;
+  message: string;
+}
+
+export interface Stage1CanonicalSyncResult {
+  units: ProofUnit[] | null;
+  diagnostics: Stage1CanonicalWriteDiagnostics;
+}
+
+function emptyDiagnostics(runId: string | null): Stage1CanonicalWriteDiagnostics {
+  return {
+    status: "failed",
+    runId,
+    authUserId: null,
+    authUserIdPresent: false,
+    autopsyRunIdWrittenMatchesActiveRun: null,
+    createdByMatchesAuthUser: null,
+    counts: { jobs: null, revenueLines: null, costLines: null },
+    rows: { jobs: [], revenueLines: [], costLines: [] },
+    writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+    errors: [],
+    writeSucceeded: false,
+    success: false,
+    message: "Canonical write has not completed.",
+  };
+}
+
+function addWriteError(
+  diagnostics: Stage1CanonicalWriteDiagnostics,
+  table: Stage1CanonicalWriteError["table"],
+  operation: string,
+  error: unknown,
+  payload?: unknown,
+) {
+  const err = error as { message?: string; code?: string; details?: string; hint?: string } | null | undefined;
+  diagnostics.errors.push({
+    table,
+    operation,
+    message: err?.message ?? String(error ?? "Unknown Supabase error"),
+    code: err?.code,
+    details: err?.details,
+    hint: err?.hint,
+    payload,
+  });
+}
+
+function toProbe(row: Record<string, unknown>): Stage1CanonicalRowProbe {
+  return {
+    id: String(row.id),
+    autopsy_run_id: typeof row.autopsy_run_id === "string" ? row.autopsy_run_id : null,
+    created_by: typeof row.created_by === "string" ? row.created_by : null,
+    stage1_job_id: typeof row.stage1_job_id === "string" ? row.stage1_job_id : undefined,
+  };
+}
+
+function newCanonicalId(): string {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (Number(c) ^ (Math.random() * 16) >> (Number(c) / 4)).toString(16),
+  );
+}
+
+async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
+  const runId = diagnostics.runId;
+  if (!runId) return;
+  const [jobsRes, revenueRes, costsRes] = await Promise.all([
+    supabase
+      .from("stage1_jobs")
+      .select("id,autopsy_run_id,created_by", { count: "exact" })
+      .eq("autopsy_run_id", runId),
+    supabase
+      .from("stage1_revenue_lines")
+      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
+      .eq("autopsy_run_id", runId),
+    supabase
+      .from("stage1_cost_lines")
+      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
+      .eq("autopsy_run_id", runId),
+  ]);
+
+  if (jobsRes.error) addWriteError(diagnostics, "stage1_jobs", "post-save count", jobsRes.error);
+  if (revenueRes.error) addWriteError(diagnostics, "stage1_revenue_lines", "post-save count", revenueRes.error);
+  if (costsRes.error) addWriteError(diagnostics, "stage1_cost_lines", "post-save count", costsRes.error);
+
+  diagnostics.rows.jobs = (jobsRes.data ?? []).map(toProbe);
+  diagnostics.rows.revenueLines = (revenueRes.data ?? []).map(toProbe);
+  diagnostics.rows.costLines = (costsRes.data ?? []).map(toProbe);
+  diagnostics.counts.jobs = jobsRes.error ? null : jobsRes.count ?? diagnostics.rows.jobs.length;
+  diagnostics.counts.revenueLines = revenueRes.error ? null : revenueRes.count ?? diagnostics.rows.revenueLines.length;
+  diagnostics.counts.costLines = costsRes.error ? null : costsRes.count ?? diagnostics.rows.costLines.length;
+}
+
+function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, writeSucceeded: boolean) {
+  const allRows = [
+    ...diagnostics.rows.jobs,
+    ...diagnostics.rows.revenueLines,
+    ...diagnostics.rows.costLines,
+  ];
+  diagnostics.writeSucceeded = writeSucceeded && diagnostics.errors.length === 0;
+  diagnostics.authUserIdPresent = !!diagnostics.authUserId;
+  diagnostics.autopsyRunIdWrittenMatchesActiveRun = allRows.length > 0
+    ? allRows.every((r) => r.autopsy_run_id === diagnostics.runId)
+    : false;
+  diagnostics.createdByMatchesAuthUser = diagnostics.authUserId && allRows.length > 0
+    ? allRows.every((r) => r.created_by === diagnostics.authUserId)
+    : false;
+  const requiredCountsPresent =
+    (diagnostics.counts.jobs ?? 0) > 0 &&
+    (diagnostics.counts.revenueLines ?? 0) > 0 &&
+    (diagnostics.counts.costLines ?? 0) > 0;
+  diagnostics.success =
+    diagnostics.writeSucceeded &&
+    requiredCountsPresent &&
+    diagnostics.authUserIdPresent &&
+    diagnostics.autopsyRunIdWrittenMatchesActiveRun === true &&
+    diagnostics.createdByMatchesAuthUser === true;
+  diagnostics.status = diagnostics.success ? "success" : "failed";
+  diagnostics.message = diagnostics.success
+    ? "Canonical Supabase write confirmed: job, revenue, and cost rows exist for the active run."
+    : diagnostics.errors[0]?.message ??
+      "Canonical Supabase write is not confirmed until stage1_jobs, stage1_revenue_lines, and stage1_cost_lines are all non-zero for the active run.";
+}
+
 /**
  * Persist the run's commercial records to Supabase (canonical truth).
  * Returns the units with any newly-assigned canonical row ids, or null when no
@@ -221,6 +389,22 @@ export function syncStage1Units(
   runId: string | null,
   units: ProofUnit[],
 ): Promise<ProofUnit[] | null> {
+  const run = async () => {
+    const result = await doSyncStage1Units(runId, units);
+    return result.diagnostics.writeSucceeded ? result.units : null;
+  };
+  const p = syncChain.then(run, run);
+  syncChain = p.then(
+    () => undefined,
+    () => undefined,
+  );
+  return p;
+}
+
+export function syncStage1UnitsWithDiagnostics(
+  runId: string | null,
+  units: ProofUnit[],
+): Promise<Stage1CanonicalSyncResult> {
   const run = () => doSyncStage1Units(runId, units);
   const p = syncChain.then(run, run);
   syncChain = p.then(
@@ -233,18 +417,35 @@ export function syncStage1Units(
 async function doSyncStage1Units(
   runId: string | null,
   units: ProofUnit[],
-): Promise<ProofUnit[] | null> {
-  if (!runId) return null;
-  const { data: userRes } = await supabase.auth.getUser();
+): Promise<Stage1CanonicalSyncResult> {
+  const diagnostics = emptyDiagnostics(runId);
+  if (!runId) {
+    addWriteError(diagnostics, "stage1_canonical", "preflight", new Error("No active autopsy_run_id was available for the write."));
+    finalizeDiagnostics(diagnostics, false);
+    return { units: null, diagnostics };
+  }
+  const { data: userRes, error: authErr } = await supabase.auth.getUser();
+  if (authErr) addWriteError(diagnostics, "auth", "get authenticated user", authErr);
   const userId = userRes?.user?.id;
-  if (!userId) return null; // not authenticated → cache only
+  diagnostics.authUserId = userId ?? null;
+  if (!userId) {
+    addWriteError(diagnostics, "auth", "preflight", new Error("No authenticated user id was present for the canonical write."));
+    await populatePostWriteCounts(diagnostics);
+    finalizeDiagnostics(diagnostics, false);
+    return { units: null, diagnostics };
+  }
 
   const { data: existing, error: exErr } = await supabase
     .from("stage1_jobs")
     .select("id")
     .eq("autopsy_run_id", runId);
-  if (exErr) return null;
-  const existingIds = new Set((existing ?? []).map((j: any) => String(j.id)));
+  if (exErr) {
+    addWriteError(diagnostics, "stage1_jobs", "select existing jobs", exErr);
+    await populatePostWriteCounts(diagnostics);
+    finalizeDiagnostics(diagnostics, false);
+    return { units: null, diagnostics };
+  }
+  const existingIds = new Set((existing ?? []).map((j: { id: unknown }) => String(j.id)));
   const keptIds = new Set<string>();
 
   const result: ProofUnit[] = [];
@@ -253,7 +454,7 @@ async function doSyncStage1Units(
   for (const u of units) {
     const nowIso = new Date().toISOString();
     const canonicalStatus = toCanonicalStatus(u.status, u.lifecycle);
-    const jobRow: Record<string, any> = {
+    const jobRow: Record<string, unknown> = {
       autopsy_run_id: runId,
       client_name: u.client || null,
       job_title: u.jobSite || null,
@@ -266,19 +467,28 @@ async function doSyncStage1Units(
 
     let jobId = u.stage1JobId;
     if (jobId && existingIds.has(jobId)) {
-      const { error: updErr } = await supabase.from("stage1_jobs").update(jobRow).eq("id", jobId);
+      const { data: upd, error: updErr } = await supabase
+        .from("stage1_jobs")
+        .update(jobRow)
+        .eq("id", jobId)
+        .select("id,autopsy_run_id,created_by")
+        .maybeSingle();
       if (updErr) {
         ok = false;
+        addWriteError(diagnostics, "stage1_jobs", "update", updErr, { id: jobId, ...jobRow });
         console.error("[stage1] job update failed", { jobId, error: updErr.message });
+      } else if (upd) {
+        diagnostics.writtenRows.jobs.push(toProbe(upd));
       }
     } else {
-      const { data: ins, error: insErr } = await supabase
+      const newJobId = newCanonicalId();
+      const insertJobRow = { id: newJobId, ...jobRow, created_by: userId };
+      const { error: insErr } = await supabase
         .from("stage1_jobs")
-        .insert({ ...jobRow, created_by: userId })
-        .select("id")
-        .single();
-      if (insErr || !ins) {
+        .insert(insertJobRow);
+      if (insErr) {
         ok = false;
+        addWriteError(diagnostics, "stage1_jobs", "insert", insErr, insertJobRow);
         console.error("[stage1] job insert failed (canonical write blocked)", {
           runId,
           createdBy: userId,
@@ -287,7 +497,8 @@ async function doSyncStage1Units(
         result.push(u);
         continue;
       }
-      jobId = String(ins.id);
+      diagnostics.writtenRows.jobs.push(toProbe(insertJobRow));
+      jobId = newJobId;
     }
     if (!jobId) {
       result.push(u);
@@ -297,7 +508,11 @@ async function doSyncStage1Units(
     result.push({ ...u, stage1JobId: jobId });
 
     // Revenue line — single line per job. Replace to keep canonical in lockstep.
-    await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", jobId);
+    const { error: revDelErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", jobId);
+    if (revDelErr) {
+      ok = false;
+      addWriteError(diagnostics, "stage1_revenue_lines", "delete existing for job", revDelErr, { stage1_job_id: jobId });
+    }
     if ((u.invoiceAmount ?? 0) > 0) {
       const split = computeGstSplit({
         inclusive: u.invoiceAmount,
@@ -305,7 +520,8 @@ async function doSyncStage1Units(
         gstOverride: u.invoiceGstAmount,
         overridden: u.invoiceGstOverridden,
       });
-      const { error: revErr } = await supabase.from("stage1_revenue_lines").insert({
+      const revenueRow = {
+        id: newCanonicalId(),
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         invoice_total_gst_inclusive: split.inclusive,
@@ -314,15 +530,25 @@ async function doSyncStage1Units(
         gst_overridden: split.overridden,
         gst_treatment: u.invoiceGstTreatment ?? "gst_included",
         created_by: userId,
-      });
+      };
+      const { error: revErr } = await supabase
+        .from("stage1_revenue_lines")
+        .insert(revenueRow);
       if (revErr) {
         ok = false;
+        addWriteError(diagnostics, "stage1_revenue_lines", "insert", revErr, revenueRow);
         console.error("[stage1] revenue insert failed", { jobId, error: revErr.message });
+      } else {
+        diagnostics.writtenRows.revenueLines.push(toProbe(revenueRow));
       }
     }
 
     // Cost lines — replace the full set for this job.
-    await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", jobId);
+    const { error: costDelErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", jobId);
+    if (costDelErr) {
+      ok = false;
+      addWriteError(diagnostics, "stage1_cost_lines", "delete existing for job", costDelErr, { stage1_job_id: jobId });
+    }
     const lines = u.costLines ?? [];
     if (lines.length > 0) {
       const rows = lines
@@ -336,6 +562,7 @@ async function doSyncStage1Units(
             overridden: l.gstOverridden,
           });
           return {
+            id: newCanonicalId(),
             autopsy_run_id: runId,
             stage1_job_id: jobId,
             cost_category: "other",
@@ -349,12 +576,12 @@ async function doSyncStage1Units(
           };
         });
       if (rows.length > 0) {
-        const { data: insCosts, error: costErr } = await supabase
+        const { error: costErr } = await supabase
           .from("stage1_cost_lines")
-          .insert(rows)
-          .select("id");
+          .insert(rows);
         if (costErr) {
           ok = false;
+          addWriteError(diagnostics, "stage1_cost_lines", "insert", costErr, rows);
           // Always surface cost write failures — a silent failure here is what
           // produced "Job Costs = Not Yet Recorded" despite a saved cost line.
           console.error("[stage1] cost line insert failed", {
@@ -369,11 +596,12 @@ async function doSyncStage1Units(
             })),
             error: costErr.message,
           });
-        } else if (isDebug()) {
-          console.info("[stage1] cost lines written", {
+        } else {
+          diagnostics.writtenRows.costLines.push(...rows.map(toProbe));
+          if (isDebug()) console.info("[stage1] cost lines written", {
             jobId,
             requested: rows.length,
-            savedIds: (insCosts ?? []).map((r: any) => r.id),
+            savedIds: rows.map((r) => r.id),
           });
         }
       }
@@ -383,13 +611,27 @@ async function doSyncStage1Units(
   // Delete jobs (and their lines) that were removed locally.
   for (const id of existingIds) {
     if (!keptIds.has(id)) {
-      await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", id);
-      await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", id);
-      await supabase.from("stage1_jobs").delete().eq("id", id);
+      const { error: staleCostErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", id);
+      const { error: staleRevErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", id);
+      const { error: staleJobErr } = await supabase.from("stage1_jobs").delete().eq("id", id);
+      if (staleCostErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_cost_lines", "delete stale job costs", staleCostErr, { stage1_job_id: id });
+      }
+      if (staleRevErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_revenue_lines", "delete stale job revenue", staleRevErr, { stage1_job_id: id });
+      }
+      if (staleJobErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_jobs", "delete stale job", staleJobErr, { id });
+      }
     }
   }
 
-  return ok ? result : null;
+  await populatePostWriteCounts(diagnostics);
+  finalizeDiagnostics(diagnostics, ok);
+  return { units: ok ? result : null, diagnostics };
 }
 
 // ---------------------------------------------------------------------------
