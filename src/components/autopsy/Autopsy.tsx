@@ -986,6 +986,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       const hasVerdict = !!(fresh as any)?.run?.verdict_name;
       if (status === "completed" || hasVerdict) {
         try {
+          setStage1RunId(runId);
           localStorage.removeItem("autopsy_active_run_id");
           localStorage.removeItem("autopsy_current_run_id");
         } catch { /* noop */ }
