@@ -13,7 +13,6 @@ import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
 import {
   loadStage1Reflection,
   saveStage1Reflection,
-  emptyReflection,
   type Stage1Reflection,
   type ConfidenceSelection,
   type WorkDifficultySelection,
