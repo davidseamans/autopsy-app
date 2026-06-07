@@ -9,6 +9,7 @@ import {
   useProgression,
 } from "@/lib/progression";
 import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
+import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
 import {
   Card,
   CardContent,
@@ -2680,13 +2681,36 @@ function useLocalForm<T extends Record<string, string>>(key: string, initial: T)
   return [val, setVal] as const;
 }
 
-function AddJobForm() {
+function AddJobForm({ onCreate }: { onCreate?: (u: ProofUnit) => void }) {
   const [form, setForm] = useLocalForm("addJob", {
     client: "",
     location: "",
     quote: "",
     scheduled: "",
   });
+  function saveJob() {
+    const client = form.client.trim();
+    if (!client) {
+      toast({ title: "Client required", description: "Enter a client name to add a job." });
+      return;
+    }
+    const quoteNum = parseFloat(form.quote);
+    onCreate?.({
+      n: Date.now(),
+      client,
+      jobSite: form.location.trim() || undefined,
+      proofType: "Completed Job",
+      status: "Scheduled",
+      gm: 0,
+      evidence: false,
+      quoteValue: !isNaN(quoteNum) ? quoteNum : undefined,
+      scheduledDate: form.scheduled || undefined,
+      lifecycle: "active",
+      audit: [{ ts: new Date().toISOString(), action: "created" }],
+    });
+    toast({ title: "Job saved", description: `${client} added to tracker.` });
+    setForm({ client: "", location: "", quote: "", scheduled: "" });
+  }
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -2711,7 +2735,7 @@ function AddJobForm() {
           <Input type="date" value={form.scheduled} onChange={(e) => setForm({ ...form, scheduled: e.target.value })} />
         </div>
         <div className="sm:col-span-2 flex justify-end">
-          <Button onClick={() => toast({ title: "Job saved", description: `${form.client || "Untitled"} added to tracker.` })}>
+          <Button onClick={saveJob}>
             Save Job
           </Button>
         </div>
@@ -3651,7 +3675,21 @@ function HeaderField({ label, value, multiline }: { label: string; value: string
 export default function Stage1() {
   const runId = getActiveRunId();
   const { state: progression, update: updateProgression } = useProgression(runId);
-  const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
+  // Proof units (invoices, costs, GST treatments) are a persistent commercial
+  // record scoped to this Autopsy run — not in-memory calculator state. Load the
+  // run's records on mount so invoice/cost/GST/ex-GST values survive a refresh.
+  const [units, setUnits] = useState<ProofUnit[]>(() => {
+    const persisted = loadStage1Units(runId);
+    return persisted.length > 0 ? persisted : SEED_UNITS;
+  });
+  // Re-hydrate when the active run changes (e.g. switching runs without remount).
+  useEffect(() => {
+    setUnits(loadStage1Units(runId));
+  }, [runId]);
+  // Persist every change against the active run so records are durable.
+  useEffect(() => {
+    saveStage1Units(runId, units);
+  }, [runId, units]);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
@@ -3731,7 +3769,14 @@ export default function Stage1() {
               <TabsTrigger value="financials">Financials</TabsTrigger>
               <TabsTrigger value="evidence">Evidence</TabsTrigger>
             </TabsList>
-            <TabsContent value="job" className="mt-4"><AddJobForm /></TabsContent>
+            <TabsContent value="job" className="mt-4">
+              <AddJobForm
+                onCreate={(u) => {
+                  setUnits((prev) => [...prev, u]);
+                  setOpenUnitN(u.n);
+                }}
+              />
+            </TabsContent>
             <TabsContent value="activity" className="mt-4"><LogActivityForm /></TabsContent>
             <TabsContent value="financials" className="mt-4"><FinancialsForm /></TabsContent>
             <TabsContent value="evidence" className="mt-4"><EvidenceForm /></TabsContent>
