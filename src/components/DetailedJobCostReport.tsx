@@ -199,11 +199,33 @@ export function DetailedJobCostReport({
 
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
+  // Governance: zero recorded cost is NOT the same as proven zero cost.
+  // Only calculate gross profit / margin when direct costs are actually recorded.
+  const directCostStatus = (unit as { directCostStatus?: string }).directCostStatus;
+  const directCostDisplay = (unit as { directCostDisplay?: string }).directCostDisplay;
+  const directCostsRecorded =
+    costT.gross > 0 &&
+    directCostStatus !== "not_yet_recorded" &&
+    directCostDisplay !== "Not Yet Recorded";
   // Match the front-page Simple Job Cost Ledger exactly: use gross (incl. GST)
   // values so the GM % reconciles across every surface.
-  const grossProfit = incomeT.gross - costT.gross;
-  const gmPct = incomeT.gross > 0 ? (grossProfit / incomeT.gross) * 100 : 0;
-  const gmTone = gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600";
+  const grossProfit = directCostsRecorded ? incomeT.gross - costT.gross : null;
+  const gmPct =
+    directCostsRecorded && incomeT.gross > 0
+      ? ((incomeT.gross - costT.gross) / incomeT.gross) * 100
+      : null;
+  const gmTone =
+    gmPct === null
+      ? "text-muted-foreground"
+      : gmPct >= 30
+        ? "text-emerald-600"
+        : gmPct >= 20
+          ? "text-amber-600"
+          : "text-red-600";
+  const NOT_YET_PROVEN = "Not Yet Proven";
+  const gmPctText = gmPct === null ? NOT_YET_PROVEN : `${gmPct.toFixed(1)}%`;
+  const grossProfitText = grossProfit === null ? NOT_YET_PROVEN : `$${fmt(grossProfit)}`;
+  const jobCostsText = directCostsRecorded ? `$${fmt(costT.gross)}` : "Not Yet Recorded";
 
   // Global GB expenses across all units
   const gbLines: Line[] = [];
