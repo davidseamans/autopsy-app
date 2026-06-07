@@ -3354,10 +3354,10 @@ export function JobDetailSheet({
               </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
-              {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString()}` : "—")}
-              {fieldRow("Direct cost ex-GST (for margin)", costs > 0 ? `$${costs.toLocaleString()}` : "Not Yet Recorded")}
-              {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString()}` : "—")}
-              {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString()}` : "Not Yet Proven")}
+              {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+              {fieldRow("Job Costs (ex-GST, for margin)", costs > 0 ? `$${costs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
+              {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+              {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
               {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
             <div className="space-y-1">
