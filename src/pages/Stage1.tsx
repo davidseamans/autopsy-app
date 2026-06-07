@@ -4528,6 +4528,16 @@ export default function Stage1() {
     [activeUnits, sc.gate],
   );
   const reviewGate = useMemo(() => computeReviewGate(firstFive), [firstFive]);
+  // Run-scoped reflection / exit gate persistence.
+  const [reflection, setReflection] = useState<Stage1Reflection>(() =>
+    loadStage1Reflection(runId),
+  );
+  useEffect(() => {
+    setReflection(loadStage1Reflection(runId));
+  }, [runId]);
+  useEffect(() => {
+    saveStage1Reflection(runId, reflection);
+  }, [runId, reflection]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -4576,6 +4586,8 @@ export default function Stage1() {
       <FirstFiveJobsPanel ff={firstFive} />
 
       <Stage1ReviewGate gate={reviewGate} />
+
+      <Stage1ReflectionGate reflection={reflection} onChange={setReflection} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
