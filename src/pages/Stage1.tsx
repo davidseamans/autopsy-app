@@ -5361,6 +5361,7 @@ export default function Stage1() {
             prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
           );
         }}
+        savePrerequisites={{ runId, authUserId: user?.id ?? null, loading: authLoading }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
         onVoid={(n, reason) => {
