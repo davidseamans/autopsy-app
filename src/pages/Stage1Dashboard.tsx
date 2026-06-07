@@ -471,13 +471,40 @@ type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: a
 type Stage1DashboardDisplay = { [key: string]: any };
 type Stage1JobDetailDisplay = { [key: string]: any };
 
-// Render a Supabase-derived gross-margin value. Never compute or fabricate a
-// margin client-side: a null/undefined/non-numeric margin renders as "—".
-function renderMarginPct(pct: number | null | undefined): string {
-  if (pct === null || pct === undefined) return "—";
-  const n = typeof pct === "number" ? pct : Number(pct);
-  if (!Number.isFinite(n)) return "—";
-  return `${Math.round(n)}%`;
+// Render a Supabase-derived gross-margin value using maturity-oriented wording.
+// Never compute or fabricate a margin client-side. Order of precedence:
+//   1. an explicit display string from Supabase (gross_margin_display)
+//   2. a "not_yet_proven" status → "Not Yet Proven"
+//   3. a finite numeric margin → rounded percentage
+//   4. otherwise → "Not Yet Proven" (never a dash / 0% / NaN / blank)
+function renderMarginPct(
+  pct: number | null | undefined,
+  opts?: { display?: string | null; status?: string | null },
+): string {
+  const display = opts?.display;
+  if (typeof display === "string" && display.trim() !== "") return display.trim();
+  if (opts?.status === "not_yet_proven") return "Not Yet Proven";
+  if (pct !== null && pct !== undefined) {
+    const n = typeof pct === "number" ? pct : Number(pct);
+    if (Number.isFinite(n)) return `${Math.round(n)}%`;
+  }
+  return "Not Yet Proven";
+}
+
+// Render a Supabase-derived direct-cost value using maturity-oriented wording.
+// Prefers an explicit display string (direct_cost_display); a missing/zero cost
+// renders as "Not Yet Recorded" rather than a dash.
+function renderDirectCost(
+  value: number | null | undefined,
+  opts?: { display?: string | null },
+): string {
+  const display = opts?.display;
+  if (typeof display === "string" && display.trim() !== "") return display.trim();
+  if (value !== null && value !== undefined) {
+    const n = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(n) && n > 0) return `$${fmtMoney(n)}`;
+  }
+  return "Not Yet Recorded";
 }
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
@@ -993,7 +1020,7 @@ function DrillBody({
                       <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
                         {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
                       <TableCell className="text-right">
@@ -1038,7 +1065,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
                 </button>
@@ -1080,10 +1107,10 @@ function DrillBody({
                         {u.jobSite && <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
-                      <TableCell className="text-right tabular-nums">${fmtMoney(costs)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</TableCell>
-                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "—" : m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "Not Yet Proven" : m.label}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -1103,14 +1130,14 @@ function DrillBody({
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : m.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(costs)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</span></div>
                 </div>
               );
             })}
@@ -2659,19 +2686,37 @@ function Stage1DashboardInner() {
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
 
-  // Supabase-derived gross-margin for the active run (display-ready). When the
-  // consolidated dashboard display RPC supplies a margin we render it verbatim;
-  // a null margin is shown as "—" and is never recomputed client-side.
+  // Supabase-derived gross-margin for the active run (display-ready). The
+  // consolidated dashboard display RPC owns the wording: we render
+  // gross_margin_display / gross_margin_helper_text / ready_for_stage_2_review /
+  // next_action verbatim. Unknown margin is "Not Yet Proven" — never a dash,
+  // 0%, 100%, NaN, or blank — and is never recomputed client-side.
   const dashboardMarginRaw =
     stage1DashboardDisplay?.gross_margin_pct ??
     stage1DashboardDisplay?.gross_margin_percent ??
     stage1DashboardDisplay?.margin_pct ??
     null;
-  const hasDashboardMargin =
-    stage1DashboardDisplay !== null && dashboardMarginRaw !== undefined;
-  const displayMarginText = hasDashboardMargin
-    ? renderMarginPct(dashboardMarginRaw as number | null)
-    : `${gmPct}%`;
+  const dashboardMarginDisplay =
+    (stage1DashboardDisplay?.gross_margin_display as string | null | undefined) ?? null;
+  const dashboardMarginStatus =
+    (stage1DashboardDisplay?.gross_margin_status as string | null | undefined) ?? null;
+  const dashboardMarginHelper =
+    (stage1DashboardDisplay?.gross_margin_helper_text as string | null | undefined) ?? null;
+  const dashboardNextAction =
+    (stage1DashboardDisplay?.next_action as string | null | undefined) ?? null;
+  const dashboardStage2Ready = stage1DashboardDisplay?.ready_for_stage_2_review;
+  const dashboardStage2ReadyText =
+    dashboardStage2Ready === true
+      ? "Yes"
+      : dashboardStage2Ready === false || dashboardStage2Ready === undefined
+        ? "No"
+        : String(dashboardStage2Ready);
+  const displayMarginText = stage1DashboardDisplay
+    ? renderMarginPct(dashboardMarginRaw as number | null, {
+        display: dashboardMarginDisplay,
+        status: dashboardMarginStatus,
+      })
+    : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4092,16 +4137,27 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
-          tone={gmStatus.tone}
+          tone={displayMarginText === "Not Yet Proven" ? "text-muted-foreground" : gmStatus.tone}
           primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
             { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
-            { k: "Status", v: gmStatus.label },
+            { k: "Stage 2 Ready", v: dashboardStage2ReadyText },
           ]}
           onClick={() => setDrill("margin")}
         />
       </section>
+
+      {/* Maturity-oriented commercial guidance from the run-scoped dashboard RPC. */}
+      {stage1DashboardDisplay && (dashboardMarginHelper || dashboardNextAction) && (
+        <p className="text-xs text-muted-foreground">
+          {dashboardMarginHelper && <span>{dashboardMarginHelper}</span>}
+          {dashboardMarginHelper && dashboardNextAction && <span> </span>}
+          {dashboardNextAction && (
+            <span className="text-foreground">Next action: {dashboardNextAction}</span>
+          )}
+        </p>
+      )}
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
@@ -4182,7 +4238,7 @@ function Stage1DashboardInner() {
                           {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {costs > 0 ? `$${fmtMoney(costs)}` : "—"}
+                          {renderDirectCost(costs)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {income > 0 ? `$${fmtMoney(gp)}` : "—"}
