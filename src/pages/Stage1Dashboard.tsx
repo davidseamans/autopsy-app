@@ -4142,9 +4142,17 @@ function Stage1DashboardInner() {
                       (u.costSubcontractors ?? 0) +
                       (u.costOther ?? 0);
                     const gp = income - costs;
-                    const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
+                    // Margin is only meaningful with real income. Never fabricate
+                    // a margin client-side: a null margin renders as "—".
+                    const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
                     const gmTone =
-                      gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600";
+                      gmPctValue === null
+                        ? "text-muted-foreground"
+                        : gmPctValue >= 30
+                          ? "text-emerald-600"
+                          : gmPctValue >= 20
+                            ? "text-amber-600"
+                            : "text-red-600";
                     return (
                       <TableRow
                         key={u.n}
@@ -4180,7 +4188,7 @@ function Stage1DashboardInner() {
                           {income > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
-                          {gmPct}%
+                          {renderMarginPct(gmPctValue)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
