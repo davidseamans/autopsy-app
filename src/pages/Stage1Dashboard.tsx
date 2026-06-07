@@ -471,13 +471,40 @@ type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: a
 type Stage1DashboardDisplay = { [key: string]: any };
 type Stage1JobDetailDisplay = { [key: string]: any };
 
-// Render a Supabase-derived gross-margin value. Never compute or fabricate a
-// margin client-side: a null/undefined/non-numeric margin renders as "—".
-function renderMarginPct(pct: number | null | undefined): string {
-  if (pct === null || pct === undefined) return "—";
-  const n = typeof pct === "number" ? pct : Number(pct);
-  if (!Number.isFinite(n)) return "—";
-  return `${Math.round(n)}%`;
+// Render a Supabase-derived gross-margin value using maturity-oriented wording.
+// Never compute or fabricate a margin client-side. Order of precedence:
+//   1. an explicit display string from Supabase (gross_margin_display)
+//   2. a "not_yet_proven" status → "Not Yet Proven"
+//   3. a finite numeric margin → rounded percentage
+//   4. otherwise → "Not Yet Proven" (never a dash / 0% / NaN / blank)
+function renderMarginPct(
+  pct: number | null | undefined,
+  opts?: { display?: string | null; status?: string | null },
+): string {
+  const display = opts?.display;
+  if (typeof display === "string" && display.trim() !== "") return display.trim();
+  if (opts?.status === "not_yet_proven") return "Not Yet Proven";
+  if (pct !== null && pct !== undefined) {
+    const n = typeof pct === "number" ? pct : Number(pct);
+    if (Number.isFinite(n)) return `${Math.round(n)}%`;
+  }
+  return "Not Yet Proven";
+}
+
+// Render a Supabase-derived direct-cost value using maturity-oriented wording.
+// Prefers an explicit display string (direct_cost_display); a missing/zero cost
+// renders as "Not Yet Recorded" rather than a dash.
+function renderDirectCost(
+  value: number | null | undefined,
+  opts?: { display?: string | null },
+): string {
+  const display = opts?.display;
+  if (typeof display === "string" && display.trim() !== "") return display.trim();
+  if (value !== null && value !== undefined) {
+    const n = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(n) && n > 0) return `$${fmtMoney(n)}`;
+  }
+  return "Not Yet Recorded";
 }
 
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
