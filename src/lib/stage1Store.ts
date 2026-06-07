@@ -248,6 +248,7 @@ async function doSyncStage1Units(
   const keptIds = new Set<string>();
 
   const result: ProofUnit[] = [];
+  let ok = true; // becomes false if any canonical write errors
 
   for (const u of units) {
     const nowIso = new Date().toISOString();
@@ -265,7 +266,8 @@ async function doSyncStage1Units(
 
     let jobId = u.stage1JobId;
     if (jobId && existingIds.has(jobId)) {
-      await supabase.from("stage1_jobs").update(jobRow).eq("id", jobId);
+      const { error: updErr } = await supabase.from("stage1_jobs").update(jobRow).eq("id", jobId);
+      if (updErr) ok = false;
     } else {
       const { data: ins, error: insErr } = await supabase
         .from("stage1_jobs")
@@ -294,7 +296,7 @@ async function doSyncStage1Units(
         gstOverride: u.invoiceGstAmount,
         overridden: u.invoiceGstOverridden,
       });
-      await supabase.from("stage1_revenue_lines").insert({
+      const { error: revErr } = await supabase.from("stage1_revenue_lines").insert({
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         invoice_total_gst_inclusive: split.inclusive,
@@ -304,6 +306,7 @@ async function doSyncStage1Units(
         gst_treatment: u.invoiceGstTreatment ?? "gst_included",
         created_by: userId,
       });
+      if (revErr) ok = false;
     }
 
     // Cost lines — replace the full set for this job.
@@ -338,6 +341,7 @@ async function doSyncStage1Units(
           .from("stage1_cost_lines")
           .insert(rows)
           .select("id");
+        if (costErr) ok = false;
         if (isDebug()) {
           console.info("[stage1] cost lines written", {
             jobId,
@@ -359,7 +363,7 @@ async function doSyncStage1Units(
     }
   }
 
-  return result;
+  return ok ? result : null;
 }
 
 // ---------------------------------------------------------------------------
