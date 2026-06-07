@@ -2720,12 +2720,34 @@ function Stage1DashboardInner() {
       : dashboardStage2Ready === false || dashboardStage2Ready === undefined
         ? "No"
         : String(dashboardStage2Ready);
-  const displayMarginText = stage1DashboardDisplay
-    ? renderMarginPct(dashboardMarginRaw as number | null, {
-        display: dashboardMarginDisplay,
-        status: dashboardMarginStatus,
-      })
-    : renderMarginPct(totalIncome > 0 ? gmPct : null);
+
+  // Direct-cost maturity from the run-scoped dashboard RPC.
+  const dashboardDirectCostStatus =
+    (stage1DashboardDisplay?.direct_cost_status as string | null | undefined) ?? null;
+  const dashboardDirectCostDisplay =
+    (stage1DashboardDisplay?.direct_cost_display as string | null | undefined) ?? null;
+
+  // Governance gate: margin cannot be calculated from missing cost data.
+  // When direct costs are not recorded, gross margin is "Not Yet Proven" and
+  // Stage 2 is not ready — no 0%, 100%, or any calculated value is shown.
+  const directCostsNotRecorded =
+    dashboardDirectCostStatus === "not_yet_recorded" ||
+    (dashboardDirectCostDisplay ?? "").trim().toLowerCase() === "not yet recorded" ||
+    !directCostsRecorded(totalCosts);
+
+  const displayMarginText = directCostsNotRecorded
+    ? "Not Yet Proven"
+    : stage1DashboardDisplay
+      ? renderMarginPct(dashboardMarginRaw as number | null, {
+          display: dashboardMarginDisplay,
+          status: dashboardMarginStatus,
+        })
+      : renderMarginPct(totalIncome > 0 ? gmPct : null);
+
+  const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
+  const directCostKpiText = renderDirectCost(totalCosts, {
+    display: dashboardDirectCostDisplay,
+  });
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
