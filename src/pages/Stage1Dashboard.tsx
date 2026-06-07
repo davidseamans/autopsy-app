@@ -1644,7 +1644,7 @@ function QuoteDetailDialog({
   );
 }
 
-export default function Stage1Dashboard() {
+function Stage1DashboardInner() {
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
