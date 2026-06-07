@@ -1456,18 +1456,19 @@ export function computeParityAudit(
   };
 
   // --- Section 6: What product support exists? ------------------------
-  // Records (revenue/cost/GST/reflection) persist in browser-local storage;
-  // evidence persists in canonical cloud storage. Canonical storage is therefore
-  // only partially achieved across the full record set.
+  // Records (jobs/revenue/cost/GST/reflection) and evidence now persist in
+  // canonical Supabase storage (tables + storage bucket). Local storage is a
+  // cache only, so canonical storage is fully achieved across the record set.
   const s6items: ParityItem[] = [
-    { label: "Revenue persistence", status: "Complete", note: "Run-scoped local persistence." },
-    { label: "Cost persistence", status: "Complete", note: "Run-scoped local persistence." },
-    { label: "GST persistence", status: "Complete", note: "Run-scoped local persistence." },
+    { label: "Revenue persistence", status: "Complete", note: "Canonical Supabase storage (stage1_revenue_lines)." },
+    { label: "Cost persistence", status: "Complete", note: "Canonical Supabase storage (stage1_cost_lines)." },
+    { label: "GST persistence", status: "Complete", note: "Canonical Supabase storage (GST split persisted per line)." },
+    { label: "Reflection persistence", status: "Complete", note: "Canonical Supabase storage (stage1_reflections)." },
     { label: "Evidence persistence", status: "Complete", note: "Canonical cloud storage." },
     {
       label: "Canonical storage",
-      status: "Partial",
-      note: "Evidence is canonical (cloud); revenue, cost, GST and reflection records remain browser-local.",
+      status: "Complete",
+      note: "Jobs, revenue, cost, GST, reflection and evidence are canonical in Supabase; local storage is cache only.",
     },
     { label: "Review Gate", status: "Complete" },
     { label: "Reflection Gate", status: "Complete" },
@@ -1494,12 +1495,6 @@ export function computeParityAudit(
 
   // --- Section 8: What remains prototype-only? ------------------------
   const prototypeItems: string[] = [];
-  prototypeItems.push(
-    "Temporary storage: revenue, cost and GST records persist in browser local storage, not canonical cloud storage.",
-  );
-  prototypeItems.push(
-    "Temporary storage: reflection answers persist in browser local storage, not canonical cloud storage.",
-  );
   if (unitsCount === 0) {
     prototypeItems.push("No commercial records captured yet — Stage 1 has not been exercised with real data.");
   }
@@ -1516,9 +1511,7 @@ export function computeParityAudit(
     .filter((i) => i.status !== "Complete")
     .map((i) => i.label);
 
-  const unresolvedPersistence: string[] = [
-    "Revenue, cost, GST and reflection records are not yet on canonical cloud storage.",
-  ];
+  const unresolvedPersistence: string[] = [];
 
   const unresolvedGovernance: string[] = [];
   if (!reviewDone) unresolvedGovernance.push("Review Gate not yet satisfied (fewer than five qualifying jobs).");
@@ -1537,7 +1530,7 @@ export function computeParityAudit(
     { label: "Review Gate satisfied", status: reviewDone ? "Complete" : anyJobs ? "Partial" : "Missing" },
     { label: "Reflection Gate completed", status: reflectionDone ? "Complete" : decisionMade ? "Partial" : "Missing" },
     { label: "Progression decision recorded", status: decisionMade ? "Complete" : "Missing" },
-    { label: "Canonical persistence of all records", status: "Partial" },
+    { label: "Canonical persistence of all records", status: "Complete" },
   ];
 
   // --- Final verdict --------------------------------------------------
