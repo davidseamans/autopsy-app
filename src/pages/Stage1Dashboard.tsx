@@ -958,8 +958,8 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
-                  const m = marginStatus(gmPct);
+                  const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                  const m = marginStatus(gmPctValue ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow
@@ -995,7 +995,7 @@ function DrillBody({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{gmPct}%</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -1019,8 +1019,8 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const gmPct = income > 0 ? Math.round((gp / income) * 100) : u.gm;
-              const m = marginStatus(gmPct);
+              const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+              const m = marginStatus(gmPctValue ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <button
@@ -1040,7 +1040,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{gmPct}%</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
                 </button>
               );
             })}
