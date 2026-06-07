@@ -2004,11 +2004,6 @@ export function JobDetailSheet({
           {/* 3. Job Costs */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
-            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-              <span className="font-semibold">Job costs not yet persisted to the backend.</span> Cost
-              lines are held in this session and inform GM here, but the job_costs table blocks writes
-              until backend SQL/RLS is completed — {BACKEND_BLOCKERS.job_costs}
-            </div>
             <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
             <p className="text-xs text-muted-foreground">
               Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
