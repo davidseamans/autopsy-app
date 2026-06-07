@@ -8,6 +8,7 @@ import {
   STAGE_1_GOAL,
   useProgression,
 } from "@/lib/progression";
+import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
 import {
   Card,
   CardContent,
