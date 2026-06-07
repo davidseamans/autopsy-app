@@ -10,6 +10,18 @@ import {
 } from "@/lib/progression";
 import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
 import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
+import {
+  loadStage1Reflection,
+  saveStage1Reflection,
+  emptyReflection,
+  type Stage1Reflection,
+  type ConfidenceSelection,
+  type WorkDifficultySelection,
+  type IncomeSelection,
+  type ProfitabilitySelection,
+  type RecordKeepingSelection,
+  type ContinuationDecision,
+} from "@/lib/stage1Reflection";
 import { Stage1EvidenceAttachments } from "@/components/Stage1EvidenceAttachments";
 import {
   Card,
