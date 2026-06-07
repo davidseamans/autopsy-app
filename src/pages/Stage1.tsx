@@ -945,6 +945,348 @@ function Stage1ReviewGate({ gate }: { gate: ReviewGate }) {
   );
 }
 
+// ====================================================================
+// Stage 1 Reflection / Exit Gate
+//
+// Structured selections only — measures recognition, judgement and
+// decision-making, not writing ability. Autopsy generates the
+// interpretation; the operator does not write it.
+//
+// Doctrine: Reflection is recognition. Stopping is not failure. Ignoring
+// evidence is failure. Continue, Repeat, Stop and Unsure are all valid.
+// ====================================================================
+
+type ReflectionQuestion<T extends string> = {
+  key: keyof Stage1Reflection;
+  title: string;
+  question: string;
+  options: { value: T; label: string }[];
+};
+
+const CONFIDENCE_QUESTION: ReflectionQuestion<ConfidenceSelection> = {
+  key: "confidence_selection",
+  title: "Confidence",
+  question: "After completing your first jobs, how do you feel about this business?",
+  options: [
+    { value: "more_confident", label: "More confident than when I started" },
+    { value: "about_the_same", label: "About the same" },
+    { value: "less_confident", label: "Less confident than when I started" },
+    { value: "unsure", label: "Unsure" },
+  ],
+};
+
+const WORK_DIFFICULTY_QUESTION: ReflectionQuestion<WorkDifficultySelection> = {
+  key: "work_difficulty_selection",
+  title: "Work Difficulty",
+  question: "How difficult was the work compared to what you expected?",
+  options: [
+    { value: "easier", label: "Easier than expected" },
+    { value: "as_expected", label: "About what I expected" },
+    { value: "harder", label: "Harder than expected" },
+    { value: "much_harder", label: "Much harder than expected" },
+  ],
+};
+
+const INCOME_QUESTION: ReflectionQuestion<IncomeSelection> = {
+  key: "income_selection",
+  title: "Income Produced",
+  question: "Looking at the numbers, how do you feel about the income produced?",
+  options: [
+    { value: "better", label: "Better than expected" },
+    { value: "as_expected", label: "About what I expected" },
+    { value: "worse", label: "Worse than expected" },
+    { value: "unsure", label: "Unsure" },
+  ],
+};
+
+const PROFITABILITY_QUESTION: ReflectionQuestion<ProfitabilitySelection> = {
+  key: "profitability_selection",
+  title: "Profitability",
+  question: "Looking at the profitability of the jobs completed, how do you feel about the results?",
+  options: [
+    { value: "better", label: "Better than expected" },
+    { value: "as_expected", label: "About what I expected" },
+    { value: "worse", label: "Worse than expected" },
+    { value: "unsure", label: "Unsure" },
+  ],
+};
+
+const RECORDKEEPING_QUESTION: ReflectionQuestion<RecordKeepingSelection> = {
+  key: "recordkeeping_selection",
+  title: "Record Keeping",
+  question: "How comfortable are you recording jobs, revenue, costs, and supporting paperwork?",
+  options: [
+    { value: "comfortable", label: "Comfortable" },
+    { value: "mostly_comfortable", label: "Mostly comfortable" },
+    { value: "need_practice", label: "Need more practice" },
+    { value: "not_comfortable", label: "Not comfortable" },
+  ],
+};
+
+const DECISION_QUESTION: ReflectionQuestion<ContinuationDecision> = {
+  key: "continuation_decision",
+  title: "Decision",
+  question: "Based on your first completed jobs, what would you like to do next?",
+  options: [
+    { value: "continue", label: "Continue to Stage 2" },
+    { value: "repeat", label: "Complete another five jobs first" },
+    { value: "stop", label: "Stop here" },
+    { value: "unsure", label: "Unsure" },
+  ],
+};
+
+const REFLECTION_QUESTIONS = [
+  CONFIDENCE_QUESTION,
+  WORK_DIFFICULTY_QUESTION,
+  INCOME_QUESTION,
+  PROFITABILITY_QUESTION,
+  RECORDKEEPING_QUESTION,
+  DECISION_QUESTION,
+] as const;
+
+export const MATURITY_DOCTRINE = [
+  "A mature decision is not always progression.",
+  "Autopsy exists to help operators make informed decisions before time, money, confidence, staff, customers, or capital are damaged.",
+  "Stopping or repeating a stage may be the correct decision.",
+];
+
+function decisionInterpretation(decision: ContinuationDecision | null): {
+  heading: string;
+  body: string;
+  maturityPositive: boolean;
+} | null {
+  switch (decision) {
+    case "continue":
+      return {
+        heading: "Continue to Stage 2",
+        body: "The operator believes sufficient evidence exists to continue progression.",
+        maturityPositive: false,
+      };
+    case "repeat":
+      return {
+        heading: "Complete Another Five Jobs",
+        body: "The operator believes additional practical experience would be beneficial before progression. This is considered a maturity-positive decision.",
+        maturityPositive: true,
+      };
+    case "stop":
+      return {
+        heading: "Stop Here",
+        body: "The operator has chosen not to continue. Stopping may be a mature decision when the evidence suggests the business, lifestyle, economics, or work itself is not aligned with personal goals.",
+        maturityPositive: true,
+      };
+    case "unsure":
+      return {
+        heading: "Unsure",
+        body: "The operator is uncertain and should review the evidence before making a progression decision.",
+        maturityPositive: false,
+      };
+    default:
+      return null;
+  }
+}
+
+function joinClauses(parts: string[]): string {
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+// Autopsy generates the reflection summary from the structured selections.
+function buildReflectionSummary(r: Stage1Reflection): string[] {
+  const lines: string[] = [];
+
+  const expFragments: string[] = [];
+  if (r.work_difficulty_selection === "much_harder") {
+    expFragments.push("the work was much harder than expected");
+  } else if (r.work_difficulty_selection === "harder") {
+    expFragments.push("the work was harder than expected");
+  } else if (r.work_difficulty_selection === "easier") {
+    expFragments.push("the work was easier than expected");
+  } else if (r.work_difficulty_selection === "as_expected") {
+    expFragments.push("the work was about as expected");
+  }
+  if (r.income_selection === "worse") {
+    expFragments.push("the income produced was below expectations");
+  } else if (r.income_selection === "better") {
+    expFragments.push("the income produced was above expectations");
+  } else if (r.income_selection === "as_expected") {
+    expFragments.push("the income produced was about as expected");
+  }
+  if (r.profitability_selection === "worse") {
+    expFragments.push("profitability was below expectations");
+  } else if (r.profitability_selection === "better") {
+    expFragments.push("profitability was above expectations");
+  } else if (r.profitability_selection === "as_expected") {
+    expFragments.push("profitability was about as expected");
+  }
+  if (expFragments.length > 0) {
+    lines.push(`The operator reports that ${joinClauses(expFragments)}.`);
+  }
+
+  const standingFragments: string[] = [];
+  if (r.confidence_selection === "more_confident") {
+    standingFragments.push("feels more confident about the business than at the start");
+  } else if (r.confidence_selection === "less_confident") {
+    standingFragments.push("feels less confident about the business than at the start");
+  } else if (r.confidence_selection === "about_the_same") {
+    standingFragments.push("feels about the same level of confidence as at the start");
+  } else if (r.confidence_selection === "unsure") {
+    standingFragments.push("is unsure how they feel about the business");
+  }
+  if (r.recordkeeping_selection === "comfortable") {
+    standingFragments.push("is comfortable recording jobs, revenue, costs and paperwork");
+  } else if (r.recordkeeping_selection === "mostly_comfortable") {
+    standingFragments.push("is mostly comfortable with record keeping");
+  } else if (r.recordkeeping_selection === "need_practice") {
+    standingFragments.push("feels more practice with record keeping would help");
+  } else if (r.recordkeeping_selection === "not_comfortable") {
+    standingFragments.push("is not yet comfortable with record keeping");
+  }
+  if (standingFragments.length > 0) {
+    lines.push(`The operator ${joinClauses(standingFragments)}.`);
+  }
+
+  const di = decisionInterpretation(r.continuation_decision);
+  if (di) {
+    if (di.maturityPositive && r.continuation_decision === "repeat") {
+      lines.push(
+        "The decision to repeat Stage 1 is considered a maturity-positive decision because it reflects recognition of current capability limits rather than progression without sufficient evidence.",
+      );
+    } else if (di.maturityPositive && r.continuation_decision === "stop") {
+      lines.push(
+        "The decision to stop is considered a maturity-positive decision because it reflects recognition that continuing may not be aligned with the operator's goals or the available evidence.",
+      );
+    } else {
+      lines.push(di.body);
+    }
+  }
+
+  return lines;
+}
+
+function Stage1ReflectionGate({
+  reflection,
+  onChange,
+}: {
+  reflection: Stage1Reflection;
+  onChange: (next: Stage1Reflection) => void;
+}) {
+  const answeredCount = REFLECTION_QUESTIONS.filter(
+    (q) => reflection[q.key] != null,
+  ).length;
+  const completed = answeredCount === REFLECTION_QUESTIONS.length;
+
+  const setAnswer = (key: keyof Stage1Reflection, value: string) => {
+    const now = new Date().toISOString();
+    const next: Stage1Reflection = {
+      ...reflection,
+      [key]: value,
+      reflection_created_at: reflection.reflection_created_at ?? now,
+      reflection_updated_at: now,
+    };
+    next.reflection_completed =
+      REFLECTION_QUESTIONS.filter((q) => next[q.key] != null).length ===
+      REFLECTION_QUESTIONS.length;
+    onChange(next);
+  };
+
+  const di = decisionInterpretation(reflection.continuation_decision);
+  const summary = buildReflectionSummary(reflection);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Stage 1 Reflection / Exit Gate</CardTitle>
+            <CardDescription>
+              Reflection is recognition. Stopping is not failure. Ignoring evidence is failure.
+            </CardDescription>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              completed
+                ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+                : "border-amber-400 text-amber-700 bg-amber-50"
+            }
+          >
+            {completed
+              ? "Reflection complete"
+              : `${answeredCount} / ${REFLECTION_QUESTIONS.length} answered`}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {REFLECTION_QUESTIONS.map((q) => (
+          <div key={q.key} className="rounded-md border bg-muted/20 p-3">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              {q.title}
+            </div>
+            <p className="mt-1 text-sm font-medium">{q.question}</p>
+            <RadioGroup
+              className="mt-3 space-y-2"
+              value={(reflection[q.key] as string | null) ?? undefined}
+              onValueChange={(v) => setAnswer(q.key, v)}
+            >
+              {q.options.map((opt) => {
+                const id = `${q.key}-${opt.value}`;
+                return (
+                  <div key={opt.value} className="flex items-center gap-2">
+                    <RadioGroupItem value={opt.value} id={id} />
+                    <Label htmlFor={id} className="text-sm font-normal cursor-pointer">
+                      {opt.label}
+                    </Label>
+                  </div>
+                );
+              })}
+            </RadioGroup>
+          </div>
+        ))}
+
+        {summary.length > 0 && (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Stage 1 Reflection Summary
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Generated by Autopsy from your selections.
+            </p>
+            <div className="mt-2 space-y-2">
+              {summary.map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {di && (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Decision: {di.heading}
+            </div>
+            <p className="mt-1">{di.body}</p>
+            {di.maturityPositive && (
+              <Badge
+                variant="outline"
+                className="mt-2 border-emerald-400 text-emerald-700 bg-emerald-50"
+              >
+                Maturity-positive decision
+              </Badge>
+            )}
+          </div>
+        )}
+
+        <div className="rounded-md border border-dashed bg-muted/10 p-3 text-xs text-muted-foreground space-y-1">
+          {MATURITY_DOCTRINE.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function FirstFiveJobsPanel({ ff }: { ff: FirstFive }) {
   const money = (n: number) =>
     `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
