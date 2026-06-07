@@ -4238,7 +4238,7 @@ function Stage1DashboardInner() {
                           {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {costs > 0 ? `$${fmtMoney(costs)}` : "—"}
+                          {renderDirectCost(costs)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {income > 0 ? `$${fmtMoney(gp)}` : "—"}
