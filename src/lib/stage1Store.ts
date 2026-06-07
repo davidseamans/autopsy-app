@@ -307,7 +307,7 @@ function toProbe(row: any): Stage1CanonicalRowProbe {
 }
 
 function newCanonicalId(): string {
-  return crypto.randomUUID();
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
