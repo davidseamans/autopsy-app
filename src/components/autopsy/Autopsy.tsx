@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ROUTING_COPY,
+  setStage1RunId,
   upsertFromVerdict,
   useProgression,
   deriveBand,
@@ -415,6 +416,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     const hasVerdict = !!(payloadQuery.data as any)?.run?.verdict_name;
     if (status === "completed" || hasVerdict) {
       try {
+        setStage1RunId(runId);
         const current = localStorage.getItem("autopsy_active_run_id");
         if (current === runId) localStorage.removeItem("autopsy_active_run_id");
         localStorage.removeItem("autopsy_current_run_id");
@@ -549,6 +551,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       const hasVerdict = !!(fresh as any)?.run?.verdict_name;
       if (runId && (status === "completed" || hasVerdict)) {
         try {
+          setStage1RunId(runId);
           localStorage.removeItem("autopsy_active_run_id");
           localStorage.removeItem("autopsy_current_run_id");
         } catch { /* noop */ }
@@ -573,6 +576,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           const hasVerdict = !!(fresh as any)?.run?.verdict_name;
           if (status === "completed" || hasVerdict) {
             try {
+              setStage1RunId(runId);
               localStorage.removeItem("autopsy_active_run_id");
               localStorage.removeItem("autopsy_current_run_id");
             } catch { /* noop */ }
@@ -982,6 +986,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       const hasVerdict = !!(fresh as any)?.run?.verdict_name;
       if (status === "completed" || hasVerdict) {
         try {
+          setStage1RunId(runId);
           localStorage.removeItem("autopsy_active_run_id");
           localStorage.removeItem("autopsy_current_run_id");
         } catch { /* noop */ }

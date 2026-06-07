@@ -31,6 +31,7 @@ import {
   WorksheetStatus,
   getWorksheetGuidance,
   isStage1Reachable,
+  setStage1RunId,
   upsertFromVerdict,
   useProgression,
 } from "@/lib/progression";
@@ -319,11 +320,12 @@ export default function ReadinessWorksheet() {
             <Button
               disabled={!stage1Unlocked}
               onClick={() => {
+                setStage1RunId(runId);
                 toast({
                   title: "Stage 1 opened",
                   description: `Permission: ${state?.stagePermission}`,
                 });
-                navigate("/stage-1");
+                navigate(`/stage-1?runId=${runId}`);
               }}
             >
               Open Stage 1 Dashboard

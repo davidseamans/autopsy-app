@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
+  getStage1RunId,
   getActiveRunId,
   isStage1Reachable,
   ROUTING_COPY,
+  setStage1RunId,
   STAGE_1_GOAL,
   useProgression,
 } from "@/lib/progression";
@@ -94,6 +96,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { supabase, isDebug } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   loadAdjustments,
@@ -2724,6 +2727,7 @@ export function JobDetailSheet({
   onArchive,
   onDelete,
   onOpenDetailedReport,
+  savePrerequisites,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -2735,6 +2739,7 @@ export function JobDetailSheet({
   onArchive: (n: number) => void;
   onDelete: (n: number) => void;
   onOpenDetailedReport?: (n: number) => void;
+  savePrerequisites?: { runId: string | null; authUserId: string | null; loading?: boolean };
 }) {
   const evidenceRunId = getActiveRunId();
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
@@ -2803,6 +2808,12 @@ export function JobDetailSheet({
   const isLocked = lifecycle !== "active";
   const isReviewed = !!draft.reviewed;
   const readOnly = mode === "view" || isLocked;
+  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
+  const canonicalPrerequisitesLoading = !!savePrerequisites?.loading;
+  const canonicalSaveMissingBinding = !!savePrerequisites && (!savePrerequisites.runId || !savePrerequisites.authUserId);
+  const canonicalSaveBlockedMessage =
+    "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.";
+  const saveDisabled = isLocked || reviewedNeedsReason || canonicalPrerequisitesLoading || canonicalSaveMissingBinding;
 
   // Best-effort lookup into the Financial Proof local store (read-only)
   const fpClients = readLS<FPClient[]>(LS.clients, []);
@@ -2885,6 +2896,7 @@ export function JobDetailSheet({
   const paymentExceedsQuote = approvedValue > 0 && paymentReceived > approvedValue;
 
   async function save() {
+    if (saveDisabled) return;
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
     (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
@@ -2926,8 +2938,6 @@ export function JobDetailSheet({
   // Save Progress — the primary, always-visible save action for this workspace.
   // Persists the current form values into the dashboard's job record and keeps
   // the panel open so the operator can carry on working.
-  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
-  const saveDisabled = isLocked || reviewedNeedsReason;
   async function saveProgress() {
     if (saveDisabled) return;
     const original = unit!;
@@ -3786,6 +3796,21 @@ export function JobDetailSheet({
               Add a correction reason above to save changes to this reviewed record.
             </p>
           )}
+          <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold">Developer/debug panel — Stage 1 save prerequisites</span>
+              <span className="text-muted-foreground">Active run: {savePrerequisites?.runId ?? evidenceRunId ?? "missing"}</span>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 text-muted-foreground">
+              <div>Auth user id: {canonicalPrerequisitesLoading ? "checking" : savePrerequisites?.authUserId ?? "missing"}</div>
+              <div>Save Progress: {saveDisabled ? "disabled" : "enabled"}</div>
+            </div>
+            {canonicalSaveMissingBinding && (
+              <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                {canonicalSaveBlockedMessage}
+              </p>
+            )}
+          </div>
           {saveDiagnostics && (
             <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -5030,7 +5055,17 @@ function HeaderField({ label, value, multiline }: { label: string; value: string
 }
 
 export default function Stage1() {
-  const runId = getActiveRunId();
+  const [searchParams] = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
+  const [runId, setRunIdState] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  useEffect(() => {
+    const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
+    if (!nextRunId) return;
+    setStage1RunId(nextRunId);
+    setRunIdState(nextRunId);
+  }, [searchParams]);
   const { state: progression, update: updateProgression } = useProgression(runId);
   // Proof units (invoices, costs, GST treatments) are a persistent commercial
   // record scoped to this Autopsy run. Supabase is the canonical source of
@@ -5115,11 +5150,7 @@ export default function Stage1() {
           editingJobIds: nextUnits.map((u) => u.stage1JobId ?? `n:${u.n}`),
         });
       }
-      // Cache-only path: without an authenticated session there is nowhere
-      // canonical to write, so keep the optimistic paint and report failure so
-      // callers never claim a save succeeded.
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return null;
+      if (!runId || !user?.id) return null;
       const synced = await syncStage1Units(runId, nextUnits);
       // Reconcile the display to canonical truth REGARDLESS of write outcome —
       // the dashboard/ledger must always reflect Supabase, never optimistic or
@@ -5135,7 +5166,7 @@ export default function Stage1() {
       // `synced` is null when any canonical write errored → treat as not saved.
       return synced ? (canonical != null ? mergeUnits(canonical, loadStage1UnitsCache(runId)) : synced) : null;
     },
-    [runId],
+    [runId, user?.id],
   );
   const persistUnitsWithDiagnostics = useCallback(
     async (
@@ -5145,6 +5176,24 @@ export default function Stage1() {
       unitsRef.current = nextUnits;
       setUnits(nextUnits);
       saveStage1UnitsCache(runId, nextUnits);
+
+      if (!runId || !user?.id) {
+        return {
+          status: "failed",
+          runId,
+          authUserId: user?.id ?? null,
+          authUserIdPresent: !!user?.id,
+          autopsyRunIdWrittenMatchesActiveRun: false,
+          createdByMatchesAuthUser: false,
+          counts: { jobs: null, revenueLines: null, costLines: null },
+          rows: { jobs: [], revenueLines: [], costLines: [] },
+          writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+          errors: [{ table: "stage1_canonical", operation: "preflight", message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached." }],
+          writeSucceeded: false,
+          success: false,
+          message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.",
+        };
+      }
 
       const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(runId, nextUnits);
       const canonical = await fetchStage1Units(runId);
@@ -5160,7 +5209,7 @@ export default function Stage1() {
       }
       return diagnostics;
     },
-    [runId],
+    [runId, user?.id],
   );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
@@ -5312,6 +5361,7 @@ export default function Stage1() {
             prev.map((x) => (x.n === u.n ? { ...u, stage1JobId: x.stage1JobId ?? u.stage1JobId } : x)),
           );
         }}
+        savePrerequisites={{ runId, authUserId: user?.id ?? null, loading: authLoading }}
         onJumpToFinancials={() => { setOpenUnitN(null); focusFinancials(); }}
         concentrationClient={sc.concentrationClient}
         onVoid={(n, reason) => {

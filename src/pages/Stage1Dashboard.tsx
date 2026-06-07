@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   SEED_UNITS,
   computeScorecard,
@@ -7,13 +8,22 @@ import {
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
 import { AuthGate } from "@/components/AuthGate";
+import { useAuth } from "@/lib/auth";
 import {
   createQuote,
   setQuoteOutcome,
   convertQuoteToJob,
   loadStage1Board,
 } from "@/lib/jobProvisioning";
-import { getActiveRunId } from "@/lib/progression";
+import { getActiveRunId, getStage1RunId, setStage1RunId } from "@/lib/progression";
+import {
+  fetchStage1Units,
+  loadStage1UnitsCache,
+  mergeUnits,
+  saveStage1UnitsCache,
+  syncStage1UnitsWithDiagnostics,
+  type Stage1CanonicalWriteDiagnostics,
+} from "@/lib/stage1Store";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1703,6 +1713,8 @@ function QuoteDetailDialog({
 }
 
 function Stage1DashboardInner() {
+  const [searchParams] = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
@@ -1727,7 +1739,39 @@ function Stage1DashboardInner() {
   // from this component.
   const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  const unitsRef = useRef<ProofUnit[]>(units);
+  useEffect(() => {
+    unitsRef.current = units;
+  }, [units]);
+  useEffect(() => {
+    const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
+    if (!nextRunId) return;
+    setStage1RunId(nextRunId);
+    setActiveRunId(nextRunId);
+  }, [searchParams]);
+  useEffect(() => {
+    if (activeRunId || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("autopsy_runs")
+        .select("id")
+        .not("verdict_name", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const recoveredRunId = typeof data?.id === "string" ? data.id : null;
+      if (cancelled || !recoveredRunId) return;
+      setStage1RunId(recoveredRunId);
+      setActiveRunId(recoveredRunId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, user?.id]);
 
   // ---- Canonical Stage 1 evidence requirements (READ-ONLY, Supabase RPC) ----
   // Hydrated via public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id).
@@ -1826,32 +1870,18 @@ function Stage1DashboardInner() {
   const [stage1PublicNextStep, setStage1PublicNextStep] = useState<Stage1PublicNextStep | null>(null);
   const [stage1PublicLoaded, setStage1PublicLoaded] = useState(false);
 
-  // Read-only hydration through the canonical RPC, keyed by the active Autopsy
-  // run id (the only identity the frontend legitimately owns). Guarded +
-  // isolated so it never affects the existing quotes/jobs board behaviour.
+  // Read-only hydration through the canonical RPC, keyed by the Stage 1 run id.
   useEffect(() => {
     let active = true;
     (async () => {
-      // The frontend has no Supabase Auth / user_id. The only identity it owns
-      // is the active Autopsy run id; Supabase resolves the operator from it.
-      // Never use tester_email, user_id, or a hard-coded test identifier here.
-      let runId: string | null = null;
-      try {
-        runId =
-          getActiveRunId() ||
-          localStorage.getItem("autopsy_current_run_id");
-      } catch {
-        runId = null;
-      }
-      if (active) setActiveRunId(runId);
-      if (!runId) {
+      if (!activeRunId) {
         if (active) setStage1SnapshotLoaded(true);
-        return; // no active run → no RPC call, preserve computed behaviour
+        return;
       }
       try {
         const { data, error } = await supabase.rpc(
           "get_stage1_progress_snapshot_by_run",
-          { p_run_id: runId },
+          { p_run_id: activeRunId },
         );
         if (!active) return;
         if (error) {
@@ -1869,7 +1899,7 @@ function Stage1DashboardInner() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeRunId]);
 
   // Read-only hydration of the product-facing public run-scoped wrappers. The
   // frontend passes only the active Autopsy run id; Supabase resolves identity
@@ -2626,6 +2656,48 @@ function Stage1DashboardInner() {
     })();
     return () => { active = false; };
   }, []);
+
+  const persistUnitsWithDiagnostics = useCallback(
+    async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits);
+      saveStage1UnitsCache(activeRunId, nextUnits);
+
+      if (!activeRunId || !user?.id) {
+        return {
+          status: "failed",
+          runId: activeRunId,
+          authUserId: user?.id ?? null,
+          authUserIdPresent: !!user?.id,
+          autopsyRunIdWrittenMatchesActiveRun: false,
+          createdByMatchesAuthUser: false,
+          counts: { jobs: null, revenueLines: null, costLines: null },
+          rows: { jobs: [], revenueLines: [], costLines: [] },
+          writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+          errors: [{ table: "stage1_canonical", operation: "preflight", message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached." }],
+          writeSucceeded: false,
+          success: false,
+          message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.",
+        };
+      }
+
+      const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(activeRunId, nextUnits);
+      const canonical = await fetchStage1Units(activeRunId);
+      if (canonical != null) {
+        const merged = mergeUnits(canonical, loadStage1UnitsCache(activeRunId));
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(activeRunId, merged);
+      } else if (syncedUnits) {
+        unitsRef.current = syncedUnits;
+        setUnits(syncedUnits);
+        saveStage1UnitsCache(activeRunId, syncedUnits);
+      }
+      return diagnostics;
+    },
+    [activeRunId, user?.id],
+  );
 
   const methodRows = useMemo(() => {
     const methods = new Set<string>();
@@ -4299,7 +4371,12 @@ function Stage1DashboardInner() {
         unit={selectedUnit}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onSave={(u) => setUnits((prev) => prev.map((p) => (p.n === u.n ? u : p)))}
+        onSave={async (u) =>
+          persistUnitsWithDiagnostics((prev) =>
+            prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
+          )
+        }
+        savePrerequisites={{ runId: activeRunId, authUserId: user?.id ?? null, loading: authLoading }}
         onJumpToFinancials={() => { /* no-op on dashboard */ }}
         concentrationClient={scorecard.concentrationClient}
         onVoid={() => { /* no-op */ }}
