@@ -138,7 +138,7 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
 
     const costLines: CostLine[] = jobCosts.map((c) => ({
       id: String(c.id),
-      description: c.description ?? "",
+      description: typeof c.description === "string" ? c.description : "",
       amount: Number(c.cost_total_gst_inclusive) || 0,
       gstIncluded: (c.gst_treatment ?? "gst_included") === "gst_included",
       gstTreatment: (c.gst_treatment ?? "gst_included") as GstTreatment,
@@ -149,13 +149,13 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     const unit: ProofUnit = {
       n: j.job_sequence_number ?? i + 1,
       stage1JobId: String(j.id),
-      client: j.client_name ?? "",
-      jobSite: j.job_title ?? undefined,
+      client: typeof j.client_name === "string" ? j.client_name : "",
+      jobSite: typeof j.job_title === "string" ? j.job_title : undefined,
       proofType: "Completed Job",
-      status: fromCanonicalStatus(j.job_status),
+      status: fromCanonicalStatus(typeof j.job_status === "string" ? j.job_status : null),
       gm,
       evidence: false,
-      notes: j.notes ?? undefined,
+      notes: typeof j.notes === "string" ? j.notes : undefined,
       lifecycle: j.job_status === "cancelled" ? "voided" : "active",
       invoiceAmount: rev ? Number(rev.invoice_total_gst_inclusive) || 0 : undefined,
       invoiceGstTreatment: rev ? ((rev.gst_treatment ?? "gst_included") as GstTreatment) : undefined,
