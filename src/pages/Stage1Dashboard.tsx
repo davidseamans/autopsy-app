@@ -1899,6 +1899,58 @@ function Stage1DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRunId]);
 
+  // ---- Consolidated, run-scoped, READ-ONLY dashboard + job-detail display ----
+  // Hydrated via the authenticated, run-scoped RPCs
+  //   public.get_stage1_dashboard_display_by_run(p_run_id)
+  //   public.get_stage1_job_detail_display_by_run(p_run_id)
+  // Supabase resolves identity from the active Autopsy run and returns
+  // display-ready, public-safe rows. The dashboard NEVER reads broad Stage 1
+  // views or base tables directly, and never recomputes margin client-side.
+  const [stage1DashboardDisplay, setStage1DashboardDisplay] =
+    useState<Stage1DashboardDisplay | null>(null);
+  const [stage1JobDetailDisplay, setStage1JobDetailDisplay] = useState<
+    Stage1JobDetailDisplay[]
+  >([]);
+  const [stage1DisplayLoaded, setStage1DisplayLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!activeRunId) {
+      setStage1DashboardDisplay(null);
+      setStage1JobDetailDisplay([]);
+      setStage1DisplayLoaded(false);
+      return; // no active run → no RPC call
+    }
+    let active = true;
+    (async () => {
+      const [dash, jobs] = await Promise.allSettled([
+        supabase.rpc("get_stage1_dashboard_display_by_run", {
+          p_run_id: activeRunId,
+        }),
+        supabase.rpc("get_stage1_job_detail_display_by_run", {
+          p_run_id: activeRunId,
+        }),
+      ]);
+      if (!active) return;
+      if (dash.status === "fulfilled" && !dash.value?.error) {
+        const d = dash.value.data;
+        setStage1DashboardDisplay((Array.isArray(d) ? d[0] ?? null : d ?? null) as Stage1DashboardDisplay | null);
+      } else if (dash.status === "fulfilled" && dash.value?.error) {
+        console.warn("[stage1_dashboard_display] RPC failed:", dash.value.error.message);
+      }
+      if (jobs.status === "fulfilled" && !jobs.value?.error) {
+        const j = jobs.value.data;
+        setStage1JobDetailDisplay((Array.isArray(j) ? j : j ? [j] : []) as Stage1JobDetailDisplay[]);
+      } else if (jobs.status === "fulfilled" && jobs.value?.error) {
+        console.warn("[stage1_job_detail_display] RPC failed:", jobs.value.error.message);
+      }
+      setStage1DisplayLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRunId]);
+
   // Debug/admin-only Stage 1 activation. Supabase owns ALL activation logic;
   // this only *requests* activation by the active Autopsy run id and stores the
   // returned canonical snapshot. No client-side eligibility, no direct writes.
