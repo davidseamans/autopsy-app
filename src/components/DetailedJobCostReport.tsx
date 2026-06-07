@@ -362,15 +362,15 @@ export function DetailedJobCostReport({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Job Costs</div>
-                <div className="font-semibold tabular-nums">${fmt(costT.gross)}</div>
+                <div className="font-semibold tabular-nums">{jobCostsText}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Gross Profit</div>
-                <div className="font-semibold tabular-nums">${fmt(grossProfit)}</div>
+                <div className="font-semibold tabular-nums">{grossProfitText}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Gross Margin %</div>
-                <div className={`font-semibold ${gmTone}`}>{gmPct.toFixed(1)}%</div>
+                <div className={`font-semibold ${gmTone}`}>{gmPctText}</div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
