@@ -4969,6 +4969,10 @@ export default function Stage1() {
   useEffect(() => {
     saveStage1Reflection(runId, reflection);
   }, [runId, reflection]);
+  const parityAudit = useMemo(
+    () => computeParityAudit(firstFive, reviewGate, reflection, units.length),
+    [firstFive, reviewGate, reflection, units.length],
+  );
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -5019,6 +5023,8 @@ export default function Stage1() {
       <Stage1ReviewGate gate={reviewGate} />
 
       <Stage1ReflectionGate reflection={reflection} onChange={setReflection} />
+
+      <Stage1ParityAudit audit={parityAudit} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
