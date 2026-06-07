@@ -8,6 +8,7 @@ import {
   STAGE_1_GOAL,
   useProgression,
 } from "@/lib/progression";
+import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
 import {
   Card,
   CardContent,
@@ -331,8 +332,16 @@ type GateStatus = "Locked" | "Conditional" | "Unlocked";
 export interface CostLine {
   id: string;
   description: string;
+  /** GST-inclusive purchase amount as entered. */
   amount?: number;
+  /** Legacy flag, kept in sync with gstTreatment. */
   gstIncluded: boolean;
+  /** How GST is treated for this purchase. */
+  gstTreatment?: GstTreatment;
+  /** Current GST amount (auto from 1/11 or manually overridden). */
+  gstAmount?: number;
+  /** True when the operator overwrote the auto GST amount. */
+  gstOverridden?: boolean;
 }
 
 export interface ProofUnit {
@@ -362,6 +371,11 @@ export interface ProofUnit {
   dbQuoteNumber?: string;
   // Customer Invoice / Contract
   invoiceAmount?: number;
+  // GST-aware revenue treatment for the customer invoice.
+  // invoiceAmount is treated as the GST-inclusive total.
+  invoiceGstTreatment?: GstTreatment;
+  invoiceGstAmount?: number;
+  invoiceGstOverridden?: boolean;
   invoiceDate?: string;
   invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
   contractStart?: string;
@@ -1546,18 +1560,42 @@ export function JobDetailSheet({
   const fin = matchedJob ? fpFin.find((f) => f.job_id === matchedJob.id) : null;
   const docs = matchedJob ? fpDocs.filter((d) => d.job_id === matchedJob.id) : [];
 
-  // Computed GM from invoice + direct costs (falls back to legacy GM on unit)
-  const invAmt = draft.invoiceAmount ?? 0;
-  const linesTotal = (draft.costLines ?? []).reduce((s, l) => s + (l.amount ?? 0), 0);
+  // GST-aware GM. Margin is calculated from ex-GST revenue and ex-GST direct
+  // costs only — GST is a tax/reporting component, never business margin.
+  const invAmt = draft.invoiceAmount ?? 0; // GST-inclusive invoice total
+  const invoiceSplit = computeGstSplit({
+    inclusive: invAmt,
+    treatment: draft.invoiceGstTreatment ?? "gst_included",
+    gstOverride: draft.invoiceGstAmount,
+    overridden: draft.invoiceGstOverridden,
+  });
+  const revenueExGst = invoiceSplit.exGst;
+
+  // Each cost line stores a GST-inclusive amount; reduce to ex-GST for margin.
+  const lineSplits = (draft.costLines ?? []).map((l) =>
+    computeGstSplit({
+      inclusive: l.amount ?? 0,
+      treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+      gstOverride: l.gstAmount,
+      overridden: l.gstOverridden,
+    })
+  );
+  const linesTotalExGst = lineSplits.reduce((s, x) => s + x.exGst, 0);
+  // Legacy cost fields carry no GST split; treat them as ex-GST as-is.
   const legacyTotal =
     (draft.costMaterials ?? 0) +
     (draft.costLabour ?? 0) +
     (draft.costSubcontractors ?? 0) +
     (draft.costOther ?? 0);
-  const costs = draft.costLines && draft.costLines.length > 0 ? linesTotal : legacyTotal;
-  const grossProfit = invAmt - costs;
-  const computedGm = invAmt > 0 ? Math.round((grossProfit / invAmt) * 100) : null;
-  const displayGm = computedGm ?? draft.gm;
+  const hasCostLines = !!(draft.costLines && draft.costLines.length > 0);
+  // Ex-GST direct cost total used for margin.
+  const costs = hasCostLines ? linesTotalExGst : legacyTotal;
+  // GST-inclusive cost total (display only).
+  const costsInclGst = hasCostLines
+    ? lineSplits.reduce((s, x) => s + x.inclusive, 0)
+    : legacyTotal;
+  const grossProfit = revenueExGst - costs;
+  const computedGm = revenueExGst > 0 ? Math.round((grossProfit / revenueExGst) * 100) : null;
 
   const invoiceProofOk = !!(draft.invoiceDocName || fin || draft.evidence);
   const costsEntered = invAmt > 0 || costs > 0;
@@ -1762,7 +1800,14 @@ export function JobDetailSheet({
                 {collectionStatusLabel(collectionStatus).label}
               </span>,
             )}
-            {fieldRow("GM %", <span className={displayGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{displayGm}%</span>)}
+            {fieldRow(
+              "GM %",
+              revenueExGst > 0 && costs > 0 && computedGm != null ? (
+                <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
+              ) : (
+                <span className="text-muted-foreground">Not Yet Proven</span>
+              ),
+            )}
           </div>
 
           {/* Blockers / warnings */}
@@ -1837,7 +1882,7 @@ export function JobDetailSheet({
                 <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Invoice Amount</Label>
+                <Label className="text-xs">Invoice Total incl. GST</Label>
                 <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
@@ -1861,6 +1906,55 @@ export function JobDetailSheet({
                 <Label className="text-xs">Contract End</Label>
                 <Input type="date" value={draft.contractEnd ?? ""} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} />
               </div>
+            </div>
+            {/* GST treatment for revenue. Margin uses ex-GST revenue only. */}
+            <div className="rounded border bg-muted/30 p-2 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs">GST treatment</Label>
+                  <Select
+                    value={draft.invoiceGstTreatment ?? "gst_included"}
+                    onValueChange={(v) =>
+                      setDraft({ ...draft, invoiceGstTreatment: v as GstTreatment, invoiceGstOverridden: v === "manual" ? draft.invoiceGstOverridden : false })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">GST</Label>
+                  <Input
+                    type="number"
+                    value={draft.invoiceGstOverridden || (draft.invoiceGstTreatment ?? "gst_included") === "manual" ? (draft.invoiceGstAmount ?? "") : invoiceSplit.gst}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        invoiceGstOverridden: true,
+                        invoiceGstAmount: e.target.value === "" ? undefined : Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Ex-GST revenue (for margin)</Label>
+                  <div className="h-10 flex items-center font-medium tabular-nums">
+                    {invAmt > 0 ? `$${revenueExGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                  </div>
+                </div>
+              </div>
+              {draft.invoiceGstOverridden && (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline"
+                  onClick={() => setDraft({ ...draft, invoiceGstOverridden: false, invoiceGstAmount: undefined })}
+                >
+                  Reset GST to auto (1/11)
+                </button>
+              )}
+              <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Attachment Type</Label>
@@ -1888,53 +1982,33 @@ export function JobDetailSheet({
             </p>
             <div className="space-y-2">
               {(draft.costLines ?? []).map((line, idx) => {
-                const gstAmt = line.gstIncluded && line.amount ? +(line.amount / 11).toFixed(2) : 0;
+                const split = lineSplits[idx] ?? computeGstSplit({ inclusive: line.amount ?? 0 });
+                const treatment = line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst");
+                const updateLine = (patch: Partial<CostLine>) => {
+                  const next = [...(draft.costLines ?? [])];
+                  next[idx] = { ...line, ...patch };
+                  setDraft({ ...draft, costLines: next });
+                };
                 return (
                   <div key={line.id} className="rounded border p-2 space-y-2">
                     <div className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 sm:col-span-6 space-y-1">
+                      <div className="col-span-12 sm:col-span-7 space-y-1">
                         <Label className="text-xs">Description</Label>
                         <Input
                           value={line.description}
                           placeholder="e.g. Materials, Subcontractor help"
-                          onChange={(e) => {
-                            const next = [...(draft.costLines ?? [])];
-                            next[idx] = { ...line, description: e.target.value };
-                            setDraft({ ...draft, costLines: next });
-                          }}
+                          onChange={(e) => updateLine({ description: e.target.value })}
                         />
                       </div>
-                      <div className="col-span-6 sm:col-span-3 space-y-1">
-                        <Label className="text-xs">Amount</Label>
+                      <div className="col-span-9 sm:col-span-4 space-y-1">
+                        <Label className="text-xs">Total incl. GST</Label>
                         <Input
                           type="number"
                           value={line.amount ?? ""}
-                          onChange={(e) => {
-                            const next = [...(draft.costLines ?? [])];
-                            next[idx] = { ...line, amount: e.target.value === "" ? undefined : Number(e.target.value) };
-                            setDraft({ ...draft, costLines: next });
-                          }}
+                          onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
                         />
                       </div>
-                      <div className="col-span-4 sm:col-span-2 space-y-1">
-                        <Label className="text-xs">GST incl.</Label>
-                        <div className="h-10 flex items-center">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={line.gstIncluded}
-                            onChange={(e) => {
-                              const next = [...(draft.costLines ?? [])];
-                              next[idx] = { ...line, gstIncluded: e.target.checked };
-                              setDraft({ ...draft, costLines: next });
-                            }}
-                          />
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {line.gstIncluded && gstAmt > 0 ? `GST $${gstAmt.toFixed(2)}` : "No GST"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1 flex justify-end">
+                      <div className="col-span-3 sm:col-span-1 flex justify-end">
                         <Button
                           type="button"
                           variant="ghost"
@@ -1948,6 +2022,49 @@ export function JobDetailSheet({
                         </Button>
                       </div>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                      <div className="space-y-1">
+                        <Label className="text-xs">GST treatment</Label>
+                        <Select
+                          value={treatment}
+                          onValueChange={(v) =>
+                            updateLine({
+                              gstTreatment: v as GstTreatment,
+                              gstIncluded: v === "gst_included",
+                              gstOverridden: v === "manual" ? line.gstOverridden : false,
+                            })
+                          }
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">GST</Label>
+                        <Input
+                          type="number"
+                          value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
+                          onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Ex-GST (for margin)</Label>
+                        <div className="h-10 flex items-center font-medium tabular-nums">
+                          {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {line.gstOverridden && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline"
+                        onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
+                      >
+                        Reset GST to auto (1/11)
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1960,12 +2077,12 @@ export function JobDetailSheet({
                     (draft.costLines && draft.costLines.length > 0)
                       ? draft.costLines
                       : [
-                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true }] : []),
-                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false }] : []),
-                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true }] : []),
-                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true }] : []),
+                          ...(draft.costMaterials ? [{ id: crypto.randomUUID(), description: "Materials", amount: draft.costMaterials, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
+                          ...(draft.costLabour ? [{ id: crypto.randomUUID(), description: "Labour", amount: draft.costLabour, gstIncluded: false, gstTreatment: "no_gst" as GstTreatment }] : []),
+                          ...(draft.costSubcontractors ? [{ id: crypto.randomUUID(), description: "Subcontractor help", amount: draft.costSubcontractors, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
+                          ...(draft.costOther ? [{ id: crypto.randomUUID(), description: "Other direct cost", amount: draft.costOther, gstIncluded: true, gstTreatment: "gst_included" as GstTreatment }] : []),
                         ];
-                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true }];
+                  const next: CostLine[] = [...seed, { id: crypto.randomUUID(), description: "", amount: undefined, gstIncluded: true, gstTreatment: "gst_included" }];
                   setDraft({ ...draft, costLines: next });
                 }}
               >
@@ -1973,9 +2090,11 @@ export function JobDetailSheet({
               </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
-              {fieldRow("Total Job Costs", costs > 0 ? `$${costs.toLocaleString()}` : "—")}
-              {fieldRow("Gross Profit", invAmt > 0 ? `$${grossProfit.toLocaleString()}` : "—")}
-              {fieldRow("GM %", computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "—")}
+              {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString()}` : "—")}
+              {fieldRow("Direct cost ex-GST (for margin)", costs > 0 ? `$${costs.toLocaleString()}` : "Not Yet Recorded")}
+              {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString()}` : "—")}
+              {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString()}` : "Not Yet Proven")}
+              {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Attachment Type</Label>

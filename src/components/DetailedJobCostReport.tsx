@@ -207,12 +207,12 @@ export function DetailedJobCostReport({
     costT.gross > 0 &&
     directCostStatus !== "not_yet_recorded" &&
     directCostDisplay !== "Not Yet Recorded";
-  // Match the front-page Simple Job Cost Ledger exactly: use gross (incl. GST)
-  // values so the GM % reconciles across every surface.
-  const grossProfit = directCostsRecorded ? incomeT.gross - costT.gross : null;
+  // GST is excluded from gross margin. Gross profit and GM % are calculated
+  // from ex-GST (net) revenue and ex-GST direct costs only.
+  const grossProfit = directCostsRecorded ? incomeT.net - costT.net : null;
   const gmPct =
-    directCostsRecorded && incomeT.gross > 0
-      ? ((incomeT.gross - costT.gross) / incomeT.gross) * 100
+    directCostsRecorded && incomeT.net > 0
+      ? ((incomeT.net - costT.net) / incomeT.net) * 100
       : null;
   const gmTone =
     gmPct === null
@@ -225,7 +225,7 @@ export function DetailedJobCostReport({
   const NOT_YET_PROVEN = "Not Yet Proven";
   const gmPctText = gmPct === null ? NOT_YET_PROVEN : `${gmPct.toFixed(1)}%`;
   const grossProfitText = grossProfit === null ? NOT_YET_PROVEN : `$${fmt(grossProfit)}`;
-  const jobCostsText = directCostsRecorded ? `$${fmt(costT.gross)}` : "Not Yet Recorded";
+  const jobCostsText = directCostsRecorded ? `$${fmt(costT.net)}` : "Not Yet Recorded";
 
   // Global GB expenses across all units
   const gbLines: Line[] = [];
