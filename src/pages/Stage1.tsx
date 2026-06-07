@@ -2862,7 +2862,7 @@ export function JobDetailSheet({
     draft.paymentStatus === "Paid" && paymentReceived === 0;
   const paymentExceedsQuote = approvedValue > 0 && paymentReceived > approvedValue;
 
-  function save() {
+  async function save() {
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
     (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
@@ -2880,7 +2880,15 @@ export function JobDetailSheet({
       changes,
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
-    onSave(next);
+    const ok = await onSave(next);
+    if (ok === false) {
+      toast({
+        title: "Not saved",
+        description: "Could not write to your secure records. Sign in and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     toast({ title: isReviewed ? "Correction logged" : "Job updated", description: `${draft.client} — ${draft.jobSite ?? "site"}` });
     setMode("view");
     setCorrectionReason("");
