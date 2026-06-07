@@ -4351,7 +4351,12 @@ function Stage1DashboardInner() {
         unit={selectedUnit}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onSave={(u) => setUnits((prev) => prev.map((p) => (p.n === u.n ? u : p)))}
+        onSave={async (u) =>
+          persistUnitsWithDiagnostics((prev) =>
+            prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
+          )
+        }
+        savePrerequisites={{ runId: activeRunId, authUserId: user?.id ?? null, loading: authLoading }}
         onJumpToFinancials={() => { /* no-op on dashboard */ }}
         concentrationClient={scorecard.concentrationClient}
         onVoid={() => { /* no-op */ }}
