@@ -774,6 +774,18 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   function handleStart(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Hard requirement: a valid Supabase Auth session must exist before we
+    // call create_autopsy_run. Without a session, do not call the RPC — the
+    // AuthGate around StartView shows sign in / sign up instead.
+    if (!session) {
+      setError({
+        rpc: "create_autopsy_run",
+        message: "You must be signed in to start an Autopsy run.",
+        step: "start",
+        runId: null,
+      });
+      return;
+    }
     startMutation.mutate({
       industry,
       scenario,
