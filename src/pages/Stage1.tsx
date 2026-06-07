@@ -5150,11 +5150,7 @@ export default function Stage1() {
           editingJobIds: nextUnits.map((u) => u.stage1JobId ?? `n:${u.n}`),
         });
       }
-      // Cache-only path: without an authenticated session there is nowhere
-      // canonical to write, so keep the optimistic paint and report failure so
-      // callers never claim a save succeeded.
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return null;
+      if (!runId || !user?.id) return null;
       const synced = await syncStage1Units(runId, nextUnits);
       // Reconcile the display to canonical truth REGARDLESS of write outcome —
       // the dashboard/ledger must always reflect Supabase, never optimistic or
@@ -5170,7 +5166,7 @@ export default function Stage1() {
       // `synced` is null when any canonical write errored → treat as not saved.
       return synced ? (canonical != null ? mergeUnits(canonical, loadStage1UnitsCache(runId)) : synced) : null;
     },
-    [runId],
+    [runId, user?.id],
   );
   const persistUnitsWithDiagnostics = useCallback(
     async (
@@ -5180,6 +5176,24 @@ export default function Stage1() {
       unitsRef.current = nextUnits;
       setUnits(nextUnits);
       saveStage1UnitsCache(runId, nextUnits);
+
+      if (!runId || !user?.id) {
+        return {
+          status: "failed",
+          runId,
+          authUserId: user?.id ?? null,
+          authUserIdPresent: !!user?.id,
+          autopsyRunIdWrittenMatchesActiveRun: false,
+          createdByMatchesAuthUser: false,
+          counts: { jobs: null, revenueLines: null, costLines: null },
+          rows: { jobs: [], revenueLines: [], costLines: [] },
+          writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+          errors: [{ table: "stage1_canonical", operation: "preflight", message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached." }],
+          writeSucceeded: false,
+          success: false,
+          message: "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.",
+        };
+      }
 
       const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(runId, nextUnits);
       const canonical = await fetchStage1Units(runId);
@@ -5195,7 +5209,7 @@ export default function Stage1() {
       }
       return diagnostics;
     },
-    [runId],
+    [runId, user?.id],
   );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
