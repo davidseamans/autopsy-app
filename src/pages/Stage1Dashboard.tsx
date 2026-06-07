@@ -1850,32 +1850,18 @@ function Stage1DashboardInner() {
   const [stage1PublicNextStep, setStage1PublicNextStep] = useState<Stage1PublicNextStep | null>(null);
   const [stage1PublicLoaded, setStage1PublicLoaded] = useState(false);
 
-  // Read-only hydration through the canonical RPC, keyed by the active Autopsy
-  // run id (the only identity the frontend legitimately owns). Guarded +
-  // isolated so it never affects the existing quotes/jobs board behaviour.
+  // Read-only hydration through the canonical RPC, keyed by the Stage 1 run id.
   useEffect(() => {
     let active = true;
     (async () => {
-      // The frontend has no Supabase Auth / user_id. The only identity it owns
-      // is the active Autopsy run id; Supabase resolves the operator from it.
-      // Never use tester_email, user_id, or a hard-coded test identifier here.
-      let runId: string | null = null;
-      try {
-        runId =
-          getActiveRunId() ||
-          localStorage.getItem("autopsy_current_run_id");
-      } catch {
-        runId = null;
-      }
-      if (active) setActiveRunId(runId);
-      if (!runId) {
+      if (!activeRunId) {
         if (active) setStage1SnapshotLoaded(true);
-        return; // no active run → no RPC call, preserve computed behaviour
+        return;
       }
       try {
         const { data, error } = await supabase.rpc(
           "get_stage1_progress_snapshot_by_run",
-          { p_run_id: runId },
+          { p_run_id: activeRunId },
         );
         if (!active) return;
         if (error) {
@@ -1893,7 +1879,7 @@ function Stage1DashboardInner() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeRunId]);
 
   // Read-only hydration of the product-facing public run-scoped wrappers. The
   // frontend passes only the active Autopsy run id; Supabase resolves identity
