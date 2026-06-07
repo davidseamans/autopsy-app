@@ -2686,19 +2686,37 @@ function Stage1DashboardInner() {
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
 
-  // Supabase-derived gross-margin for the active run (display-ready). When the
-  // consolidated dashboard display RPC supplies a margin we render it verbatim;
-  // a null margin is shown as "—" and is never recomputed client-side.
+  // Supabase-derived gross-margin for the active run (display-ready). The
+  // consolidated dashboard display RPC owns the wording: we render
+  // gross_margin_display / gross_margin_helper_text / ready_for_stage_2_review /
+  // next_action verbatim. Unknown margin is "Not Yet Proven" — never a dash,
+  // 0%, 100%, NaN, or blank — and is never recomputed client-side.
   const dashboardMarginRaw =
     stage1DashboardDisplay?.gross_margin_pct ??
     stage1DashboardDisplay?.gross_margin_percent ??
     stage1DashboardDisplay?.margin_pct ??
     null;
-  const hasDashboardMargin =
-    stage1DashboardDisplay !== null && dashboardMarginRaw !== undefined;
-  const displayMarginText = hasDashboardMargin
-    ? renderMarginPct(dashboardMarginRaw as number | null)
-    : `${gmPct}%`;
+  const dashboardMarginDisplay =
+    (stage1DashboardDisplay?.gross_margin_display as string | null | undefined) ?? null;
+  const dashboardMarginStatus =
+    (stage1DashboardDisplay?.gross_margin_status as string | null | undefined) ?? null;
+  const dashboardMarginHelper =
+    (stage1DashboardDisplay?.gross_margin_helper_text as string | null | undefined) ?? null;
+  const dashboardNextAction =
+    (stage1DashboardDisplay?.next_action as string | null | undefined) ?? null;
+  const dashboardStage2Ready = stage1DashboardDisplay?.ready_for_stage_2_review;
+  const dashboardStage2ReadyText =
+    dashboardStage2Ready === true
+      ? "Yes"
+      : dashboardStage2Ready === false || dashboardStage2Ready === undefined
+        ? "No"
+        : String(dashboardStage2Ready);
+  const displayMarginText = stage1DashboardDisplay
+    ? renderMarginPct(dashboardMarginRaw as number | null, {
+        display: dashboardMarginDisplay,
+        status: dashboardMarginStatus,
+      })
+    : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
