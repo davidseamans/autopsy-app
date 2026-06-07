@@ -1069,8 +1069,8 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const pct = income > 0 ? (gp / income) * 100 : 0;
-                  const m = marginStatus(pct);
+                  const pct = income > 0 ? (gp / income) * 100 : null;
+                  const m = marginStatus(pct ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow key={u.n}>
@@ -1082,8 +1082,8 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${m.tone}`}>{pct.toFixed(1)}%</TableCell>
-                      <TableCell className={m.tone}>{m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "—" : m.label}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -1096,21 +1096,21 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const pct = income > 0 ? (gp / income) * 100 : 0;
-              const m = marginStatus(pct);
+              const pct = income > 0 ? (gp / income) * 100 : null;
+              const m = marginStatus(pct ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${m.tone}`}>{m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : m.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${m.tone}`}>{pct.toFixed(1)}%</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</span></div>
                 </div>
               );
             })}
