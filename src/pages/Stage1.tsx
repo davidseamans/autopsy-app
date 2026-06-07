@@ -3787,6 +3787,29 @@ export function JobDetailSheet({
               Add a correction reason above to save changes to this reviewed record.
             </p>
           )}
+          {saveDiagnostics && (
+            <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold">Canonical Supabase write: {saveDiagnostics.success ? "Succeeded" : "Failed"}</span>
+                <span className="text-muted-foreground">Active run: {saveDiagnostics.runId ?? "missing"}</span>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div>stage1_jobs: <span className="font-mono font-semibold">{saveDiagnostics.counts.jobs ?? "error"}</span></div>
+                <div>stage1_revenue_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
+                <div>stage1_cost_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3 text-muted-foreground">
+                <div>Auth user id: {saveDiagnostics.authUserIdPresent ? saveDiagnostics.authUserId : "missing"}</div>
+                <div>created_by matches auth: {String(saveDiagnostics.createdByMatchesAuthUser)}</div>
+                <div>autopsy_run_id matches active: {String(saveDiagnostics.autopsyRunIdWrittenMatchesActiveRun)}</div>
+              </div>
+              {saveDiagnostics.errors.length > 0 && (
+                <pre className="mt-2 max-h-36 overflow-auto rounded border bg-background p-2 whitespace-pre-wrap text-[11px]">
+                  {JSON.stringify(saveDiagnostics.errors, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
