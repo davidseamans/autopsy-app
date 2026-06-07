@@ -4974,49 +4974,91 @@ export default function Stage1() {
     return cached.length > 0 ? cached : SEED_UNITS;
   });
   const hydratedRef = useRef(false);
+  // Always-current snapshot of units for awaited persistence (avoids stale
+  // closures and an effect that re-syncs on every render).
+  const unitsRef = useRef<ProofUnit[]>(units);
+  useEffect(() => {
+    unitsRef.current = units;
+  }, [units]);
+
   // Re-hydrate when the active run changes (e.g. switching runs without remount).
+  //
+  // CANONICAL SUPABASE IS THE SINGLE SOURCE OF TRUTH. We paint the cache first
+  // for instant feedback, then replace it with canonical records. The cache may
+  // only contribute non-commercial presentation detail (see mergeUnits) and can
+  // never mask or revive commercial records. If the cache holds records that
+  // were never written to Supabase (e.g. pre-migration), we push them up once so
+  // canonical becomes complete — then canonical wins.
   useEffect(() => {
     hydratedRef.current = false;
-    setUnits(loadStage1UnitsCache(runId));
+    const cacheNow = loadStage1UnitsCache(runId);
+    setUnits(cacheNow.length > 0 ? cacheNow : SEED_UNITS);
     let cancelled = false;
     (async () => {
-      const canonical = await fetchStage1Units(runId);
+      let canonical = await fetchStage1Units(runId);
       if (cancelled || canonical == null) return; // failure → keep cache
       const cache = loadStage1UnitsCache(runId);
+      // Migration: canonical empty but cache has real records → push up once.
+      if (canonical.length === 0 && cache.length > 0) {
+        const synced = await syncStage1Units(runId, cache);
+        if (cancelled) return;
+        if (synced) {
+          const refetched = await fetchStage1Units(runId);
+          if (cancelled) return;
+          if (refetched && refetched.length > 0) canonical = refetched;
+        }
+      }
       const merged = mergeUnits(canonical, cache);
+      hydratedRef.current = true;
       setUnits(merged);
       saveStage1UnitsCache(runId, merged);
-      hydratedRef.current = true;
+      if (isDebug()) {
+        console.info("[stage1] hydrated from canonical", {
+          runId,
+          canonicalJobs: canonical.length,
+          displayedUnits: merged.length,
+        });
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [runId]);
-  // Persist every change: cache immediately, sync canonical to Supabase.
-  useEffect(() => {
-    saveStage1UnitsCache(runId, units);
-    let cancelled = false;
-    (async () => {
-      const updated = await syncStage1Units(runId, units);
-      if (cancelled || !updated) return;
-      // Apply any newly-assigned canonical ids without clobbering newer edits.
-      setUnits((prev) => {
-        let changed = false;
-        const next = prev.map((p) => {
-          const m = updated.find((u) => u.n === p.n);
-          if (m && m.stage1JobId && p.stage1JobId !== m.stage1JobId) {
-            changed = true;
-            return { ...p, stage1JobId: m.stage1JobId };
-          }
-          return p;
+
+  // Single, explicit persistence path. Every mutation goes through this:
+  //   1. paint optimistically + cache,
+  //   2. write canonical (INSERT/UPDATE/DELETE under RLS),
+  //   3. re-fetch canonical truth and re-render from it.
+  // Returns the canonical-merged units on success, or null when the write did
+  // not reach Supabase (e.g. not authenticated) so callers can avoid claiming
+  // a save succeeded.
+  const persistUnits = useCallback(
+    async (
+      compute: (prev: ProofUnit[]) => ProofUnit[],
+    ): Promise<ProofUnit[] | null> => {
+      const nextUnits = compute(unitsRef.current);
+      unitsRef.current = nextUnits;
+      setUnits(nextUnits); // optimistic paint
+      saveStage1UnitsCache(runId, nextUnits);
+      if (isDebug()) {
+        console.info("[stage1] persisting units", {
+          runId,
+          units: nextUnits.length,
+          editingJobIds: nextUnits.map((u) => u.stage1JobId ?? `n:${u.n}`),
         });
-        return changed ? next : prev;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, units]);
+      }
+      const synced = await syncStage1Units(runId, nextUnits);
+      if (!synced) return null; // not authed / write failed → cache only
+      const canonical = await fetchStage1Units(runId);
+      if (canonical == null) return null;
+      const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
+      unitsRef.current = merged;
+      setUnits(merged);
+      saveStage1UnitsCache(runId, merged);
+      return merged;
+    },
+    [runId],
+  );
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const firstFive = useMemo(
