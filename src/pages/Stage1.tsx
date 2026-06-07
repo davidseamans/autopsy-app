@@ -1990,6 +1990,15 @@ export function JobDetailSheet({
               </Select>
             </div>
             {fileInput("Attach Invoice / Contract", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
+            <Stage1EvidenceAttachments
+              runId={evidenceRunId}
+              linkType="invoice"
+              linkRef={`unit-${draft.n}`}
+              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — revenue line`}
+              defaultEvidenceType="Invoice"
+              title="Invoice paperwork (revenue line)"
+              readOnly={readOnly}
+            />
           </div>
 
           {/* 3. Job Costs */}
