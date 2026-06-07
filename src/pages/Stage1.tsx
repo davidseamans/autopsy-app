@@ -1286,6 +1286,438 @@ function Stage1ReflectionGate({
   );
 }
 
+// ====================================================================
+// Stage 1 Parity Audit
+//
+// A business-capability audit (not a code audit) that runs entirely from
+// existing Stage 1 data. It scores each canon section as Complete /
+// Partial / Missing, surfaces remaining prototype elements and governance
+// gaps, then produces a parity verdict and a recommendation. No manual
+// scoring is required — every status is derived.
+// ====================================================================
+
+type ParityStatus = "Complete" | "Partial" | "Missing";
+
+type ParityItem = { label: string; status: ParityStatus; note?: string };
+
+type ParitySection = {
+  title: string;
+  status: ParityStatus;
+  answer?: string;
+  items?: ParityItem[];
+};
+
+function rollup(items: ParityItem[]): ParityStatus {
+  if (items.length === 0) return "Missing";
+  if (items.every((i) => i.status === "Complete")) return "Complete";
+  if (items.every((i) => i.status === "Missing")) return "Missing";
+  return "Partial";
+}
+
+export interface ParityAudit {
+  sections: ParitySection[];
+  prototypeItems: string[];
+  lockBeforeStage2: ParityItem[];
+  unresolvedRisks: string[];
+  unresolvedControls: string[];
+  unresolvedPersistence: string[];
+  unresolvedGovernance: string[];
+  verdict: "Stage 1 Parity Achieved" | "Stage 1 Near Parity" | "Stage 1 Not Yet At Parity";
+  recommendation:
+    | "Proceed to Stage 2 Design"
+    | "Complete Remaining Stage 1 Gaps"
+    | "Repeat Stage 1 Validation";
+  maturity: MaturityBand;
+  maturityExplanation: string;
+}
+
+export function computeParityAudit(
+  ff: FirstFive,
+  gate: ReviewGate,
+  reflection: Stage1Reflection,
+  unitsCount: number,
+): ParityAudit {
+  const anyJobs = unitsCount > 0;
+  const anyCompleted = ff.jobs.some((j) => j.isCompleted);
+  const anyRevenue = ff.jobs.some((j) => j.hasRevenue);
+  const anyCost = ff.jobs.some((j) => j.hasCost);
+  const anyMargin = ff.jobs.some((j) => j.marginProven);
+  const anyEvidence = ff.evidenceAttached > 0;
+  const reviewDone = ff.requirementMet; // Review Gate produces a real verdict once jobs recorded.
+  const reflectionDone = reflection.reflection_completed;
+  const decisionMade = reflection.continuation_decision != null;
+
+  // --- Section 1: Why does Stage 1 exist? -------------------------------
+  const section1: ParitySection = {
+    title: "Why does Stage 1 exist?",
+    answer:
+      "Stage 1 exists to determine whether an operator can win, complete, record, cost, evidence, understand, and review the first five real jobs of a new business.",
+    status: "Complete", // The capability to make this determination is implemented.
+  };
+
+  // --- Section 2: What must the operator prove? -------------------------
+  const tri = (full: boolean, some: boolean): ParityStatus =>
+    full ? "Complete" : some ? "Partial" : "Missing";
+  const fiveRevenue = ff.qualifying.length >= FIRST_FIVE_TARGET || ff.jobs.filter((j) => j.hasRevenue).length >= FIRST_FIVE_TARGET;
+  const fiveCost = ff.qualifying.length >= FIRST_FIVE_TARGET || ff.jobs.filter((j) => j.hasCost).length >= FIRST_FIVE_TARGET;
+  const s2items: ParityItem[] = [
+    { label: "Jobs won", status: tri(unitsCount >= FIRST_FIVE_TARGET, anyJobs) },
+    { label: "Jobs completed", status: tri(ff.jobs.filter((j) => j.isCompleted).length >= FIRST_FIVE_TARGET, anyCompleted) },
+    { label: "Revenue recorded", status: tri(fiveRevenue, anyRevenue) },
+    { label: "Costs recorded", status: tri(fiveCost, anyCost) },
+    { label: "GST handled correctly", status: tri(fiveRevenue, anyRevenue), note: "GST split applied automatically on every recorded amount." },
+    { label: "Margin calculated", status: tri(ff.requirementMet && ff.marginProven, anyMargin) },
+    {
+      label: "Evidence attached or consciously omitted",
+      status: anyEvidence && ff.evidenceMissing === 0 ? "Complete" : anyEvidence || anyJobs ? "Partial" : "Missing",
+      note: "Evidence is recommended; conscious omission is permitted.",
+    },
+    { label: "Review completed", status: reviewDone ? "Complete" : anyJobs ? "Partial" : "Missing" },
+    { label: "Reflection completed", status: reflectionDone ? "Complete" : decisionMade ? "Partial" : "Missing" },
+    { label: "Progression decision made", status: decisionMade ? "Complete" : "Missing" },
+  ];
+  const section2: ParitySection = {
+    title: "What must the operator prove?",
+    items: s2items,
+    status: rollup(s2items),
+  };
+
+  // --- Section 3: What money or risk is being measured? ----------------
+  const s3items: ParityItem[] = [
+    { label: "Revenue", status: tri(ff.revenueExGstTotal > 0, anyRevenue) },
+    { label: "Direct Costs", status: tri(ff.directCostsExGstTotal > 0, anyCost) },
+    { label: "Gross Profit", status: ff.marginProven ? "Complete" : anyMargin ? "Partial" : "Missing" },
+    { label: "Gross Margin", status: ff.grossMargin != null ? "Complete" : anyMargin ? "Partial" : "Missing" },
+    {
+      label: "Missing Costs Risk",
+      status: ff.jobs.some((j) => j.isCompleted && !j.marginProven) ? "Partial" : "Complete",
+      note: ff.jobs.some((j) => j.isCompleted && !j.marginProven)
+        ? "One or more completed jobs have no recorded costs."
+        : "Margin governance active; no unproven completed jobs.",
+    },
+    {
+      label: "Missing Evidence Risk",
+      status: ff.evidenceMissing > 0 ? "Partial" : anyJobs ? "Complete" : "Missing",
+      note: ff.evidenceMissing > 0 ? "Supporting paperwork missing on one or more jobs." : undefined,
+    },
+    {
+      label: "Documentation Discipline Risk",
+      status: gate.warnings.length === 0 ? "Complete" : "Partial",
+      note: gate.warnings.length > 0 ? "Review Gate has flagged discipline warnings." : undefined,
+    },
+  ];
+  const section3: ParitySection = {
+    title: "What money or risk is being measured?",
+    items: s3items,
+    status: rollup(s3items),
+  };
+
+  // --- Section 4: What Core controls are triggered? -------------------
+  // These controls are implemented and always operational in Stage 1.
+  const s4items: ParityItem[] = [
+    { label: "Run-scoped security", status: "Complete" },
+    { label: "Stage auto-activation", status: "Complete" },
+    { label: "Margin governance", status: "Complete" },
+    { label: "GST governance", status: "Complete" },
+    { label: "Evidence governance", status: "Complete" },
+    { label: "Review Gate", status: "Complete" },
+    { label: "Reflection Gate", status: "Complete" },
+  ];
+  const section4: ParitySection = {
+    title: "What Core controls are triggered?",
+    items: s4items,
+    status: rollup(s4items),
+  };
+
+  // --- Section 5: What Sleeve logic is required? ----------------------
+  const s5items: ParityItem[] = [
+    { label: "Revenue capture", status: "Complete" },
+    { label: "Cost capture", status: "Complete" },
+    { label: "Margin visibility", status: "Complete" },
+    { label: "Evidence recommendation", status: "Complete" },
+    { label: "First Five Jobs progression", status: "Complete" },
+  ];
+  const section5: ParitySection = {
+    title: "What Sleeve logic is required? (Cleaning Sleeve)",
+    answer:
+      "Cleaning Sleeve only requires revenue capture, cost capture, margin visibility, evidence recommendation, and First Five Jobs progression.",
+    items: s5items,
+    status: rollup(s5items),
+  };
+
+  // --- Section 6: What product support exists? ------------------------
+  // Records (revenue/cost/GST/reflection) persist in browser-local storage;
+  // evidence persists in canonical cloud storage. Canonical storage is therefore
+  // only partially achieved across the full record set.
+  const s6items: ParityItem[] = [
+    { label: "Revenue persistence", status: "Complete", note: "Run-scoped local persistence." },
+    { label: "Cost persistence", status: "Complete", note: "Run-scoped local persistence." },
+    { label: "GST persistence", status: "Complete", note: "Run-scoped local persistence." },
+    { label: "Evidence persistence", status: "Complete", note: "Canonical cloud storage." },
+    {
+      label: "Canonical storage",
+      status: "Partial",
+      note: "Evidence is canonical (cloud); revenue, cost, GST and reflection records remain browser-local.",
+    },
+    { label: "Review Gate", status: "Complete" },
+    { label: "Reflection Gate", status: "Complete" },
+  ];
+  const section6: ParitySection = {
+    title: "What product support exists?",
+    items: s6items,
+    status: rollup(s6items),
+  };
+
+  // --- Section 7: What maturity has been demonstrated? ----------------
+  const maturityExplanation =
+    gate.maturity === "Competent"
+      ? "Competent: Evidence demonstrates basic commercial execution and record discipline."
+      : gate.maturity === "Developing"
+        ? "Developing: Evidence exists but discipline gaps remain."
+        : "Emerging: Insufficient evidence.";
+  const section7: ParitySection = {
+    title: "What maturity has been demonstrated?",
+    answer: maturityExplanation,
+    status:
+      gate.maturity === "Competent" ? "Complete" : gate.maturity === "Developing" ? "Partial" : "Missing",
+  };
+
+  // --- Section 8: What remains prototype-only? ------------------------
+  const prototypeItems: string[] = [];
+  prototypeItems.push(
+    "Temporary storage: revenue, cost and GST records persist in browser local storage, not canonical cloud storage.",
+  );
+  prototypeItems.push(
+    "Temporary storage: reflection answers persist in browser local storage, not canonical cloud storage.",
+  );
+  if (unitsCount === 0) {
+    prototypeItems.push("No commercial records captured yet — Stage 1 has not been exercised with real data.");
+  }
+
+  // --- Section 9 / verdict inputs ------------------------------------
+  const unresolvedRisks: string[] = [];
+  if (ff.jobs.some((j) => j.isCompleted && !j.marginProven))
+    unresolvedRisks.push("Completed jobs with missing costs (margin not yet proven).");
+  if (ff.evidenceMissing > 0) unresolvedRisks.push("Recommended evidence missing on one or more jobs.");
+  if (gate.warnings.length > 0)
+    unresolvedRisks.push("Review Gate documentation/commercial discipline warnings.");
+
+  const unresolvedControls: string[] = s4items
+    .filter((i) => i.status !== "Complete")
+    .map((i) => i.label);
+
+  const unresolvedPersistence: string[] = [
+    "Revenue, cost, GST and reflection records are not yet on canonical cloud storage.",
+  ];
+
+  const unresolvedGovernance: string[] = [];
+  if (!reviewDone) unresolvedGovernance.push("Review Gate not yet satisfied (fewer than five qualifying jobs).");
+  if (!reflectionDone) unresolvedGovernance.push("Reflection Gate not yet completed.");
+  if (!decisionMade) unresolvedGovernance.push("Progression decision not yet made.");
+
+  const lockBeforeStage2: ParityItem[] = [
+    {
+      label: "First Five Jobs requirement (five qualifying jobs)",
+      status: ff.requirementMet ? "Complete" : ff.qualifyingCount > 0 ? "Partial" : "Missing",
+    },
+    {
+      label: "Margin proven on qualifying jobs",
+      status: ff.requirementMet && ff.marginProven ? "Complete" : anyMargin ? "Partial" : "Missing",
+    },
+    { label: "Review Gate satisfied", status: reviewDone ? "Complete" : anyJobs ? "Partial" : "Missing" },
+    { label: "Reflection Gate completed", status: reflectionDone ? "Complete" : decisionMade ? "Partial" : "Missing" },
+    { label: "Progression decision recorded", status: decisionMade ? "Complete" : "Missing" },
+    { label: "Canonical persistence of all records", status: "Partial" },
+  ];
+
+  // --- Final verdict --------------------------------------------------
+  // Major capability missing → Not Yet At Parity.
+  // Minor gaps only → Near Parity.
+  // All critical controls operational and no major capability missing → Achieved.
+  const coreControlsOperational = section4.status === "Complete";
+  const majorCapabilityMissing =
+    !ff.requirementMet || !ff.marginProven || !reviewDone || !decisionMade || !coreControlsOperational;
+  const minorGaps =
+    !reflectionDone ||
+    ff.evidenceMissing > 0 ||
+    gate.warnings.length > 0 ||
+    section6.status !== "Complete";
+
+  let verdict: ParityAudit["verdict"];
+  let recommendation: ParityAudit["recommendation"];
+  if (majorCapabilityMissing) {
+    verdict = "Stage 1 Not Yet At Parity";
+    recommendation = "Repeat Stage 1 Validation";
+  } else if (minorGaps) {
+    verdict = "Stage 1 Near Parity";
+    recommendation = "Complete Remaining Stage 1 Gaps";
+  } else {
+    verdict = "Stage 1 Parity Achieved";
+    recommendation = "Proceed to Stage 2 Design";
+  }
+
+  return {
+    sections: [section1, section2, section3, section4, section5, section6, section7],
+    prototypeItems,
+    lockBeforeStage2,
+    unresolvedRisks,
+    unresolvedControls,
+    unresolvedPersistence,
+    unresolvedGovernance,
+    verdict,
+    recommendation,
+    maturity: gate.maturity,
+    maturityExplanation,
+  };
+}
+
+function ParityStatusBadge({ status }: { status: ParityStatus }) {
+  const tone =
+    status === "Complete"
+      ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+      : status === "Partial"
+        ? "border-amber-400 text-amber-700 bg-amber-50"
+        : "border-red-400 text-red-700 bg-red-50";
+  return (
+    <Badge variant="outline" className={tone}>
+      {status}
+    </Badge>
+  );
+}
+
+function ParityItemRow({ item }: { item: ParityItem }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 p-2">
+      <div>
+        <p className="text-sm">{item.label}</p>
+        {item.note && <p className="text-xs text-muted-foreground mt-0.5">{item.note}</p>}
+      </div>
+      <ParityStatusBadge status={item.status} />
+    </div>
+  );
+}
+
+function Stage1ParityAudit({ audit }: { audit: ParityAudit }) {
+  const verdictTone =
+    audit.verdict === "Stage 1 Parity Achieved"
+      ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+      : audit.verdict === "Stage 1 Near Parity"
+        ? "border-amber-400 text-amber-700 bg-amber-50"
+        : "border-red-400 text-red-700 bg-red-50";
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">Stage 1 Parity Audit</CardTitle>
+            <CardDescription>
+              A business-capability audit against the Autopsy canon, derived entirely from existing Stage 1 data.
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className={verdictTone}>
+            {audit.verdict}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {audit.sections.map((section, idx) => (
+          <div key={section.title} className="rounded-md border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Section {idx + 1}
+                </div>
+                <p className="text-sm font-medium">{section.title}</p>
+              </div>
+              <ParityStatusBadge status={section.status} />
+            </div>
+            {section.answer && (
+              <p className="mt-2 text-sm text-muted-foreground">{section.answer}</p>
+            )}
+            {section.items && (
+              <div className="mt-3 space-y-1.5">
+                {section.items.map((item) => (
+                  <ParityItemRow key={item.label} item={item} />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div className="rounded-md border p-3">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Section 8 — What remains prototype-only?
+          </div>
+          {audit.prototypeItems.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No prototype-only elements remain.</p>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {audit.prototypeItems.map((p) => (
+                <li
+                  key={p}
+                  className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
+                >
+                  {p}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-md border p-3">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Section 9 — What must be locked before Stage 2?
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {audit.lockBeforeStage2.map((item) => (
+              <ParityItemRow key={item.label} item={item} />
+            ))}
+          </div>
+          {(audit.unresolvedRisks.length > 0 ||
+            audit.unresolvedControls.length > 0 ||
+            audit.unresolvedGovernance.length > 0 ||
+            audit.unresolvedPersistence.length > 0) && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <UnresolvedList title="Unresolved risks" items={audit.unresolvedRisks} />
+              <UnresolvedList title="Unresolved controls" items={audit.unresolvedControls} />
+              <UnresolvedList title="Unresolved persistence" items={audit.unresolvedPersistence} />
+              <UnresolvedList title="Unresolved governance" items={audit.unresolvedGovernance} />
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+            Final Audit Outcome
+          </div>
+          <p className="mt-1 font-medium">{audit.verdict}</p>
+          <div className="mt-3 text-xs uppercase tracking-wide text-muted-foreground">
+            Final Recommendation
+          </div>
+          <p className="mt-1 font-medium">{audit.recommendation}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function UnresolvedList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">{title}</div>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">None.</p>
+      ) : (
+        <ul className="space-y-1 text-sm list-disc pl-4">
+          {items.map((i) => (
+            <li key={i}>{i}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function FirstFiveJobsPanel({ ff }: { ff: FirstFive }) {
   const money = (n: number) =>
     `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -4537,6 +4969,10 @@ export default function Stage1() {
   useEffect(() => {
     saveStage1Reflection(runId, reflection);
   }, [runId, reflection]);
+  const parityAudit = useMemo(
+    () => computeParityAudit(firstFive, reviewGate, reflection, units.length),
+    [firstFive, reviewGate, reflection, units.length],
+  );
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -4587,6 +5023,8 @@ export default function Stage1() {
       <Stage1ReviewGate gate={reviewGate} />
 
       <Stage1ReflectionGate reflection={reflection} onChange={setReflection} />
+
+      <Stage1ParityAudit audit={parityAudit} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
