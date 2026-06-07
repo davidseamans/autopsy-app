@@ -26,7 +26,7 @@
 import type { ProofUnit, CostLine } from "@/pages/Stage1";
 import type { GstTreatment } from "@/lib/gst";
 import { computeGstSplit } from "@/lib/gst";
-import { supabase } from "@/lib/supabase";
+import { supabase, isDebug } from "@/lib/supabase";
 
 // ---------------------------------------------------------------------------
 // localStorage cache (NOT canonical — Supabase is canonical)
@@ -114,6 +114,16 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     supabase.from("stage1_cost_lines").select("*").eq("autopsy_run_id", runId),
   ]);
 
+  if (isDebug()) {
+    // Diagnostic: canonical row counts loaded for this run.
+    console.info("[stage1] canonical fetch", {
+      runId,
+      jobs: jobs.length,
+      revenueLines: (revenue ?? []).length,
+      costLines: (costs ?? []).length,
+    });
+  }
+
   return jobs.map((j: Record<string, any>, i: number) => {
     const rev = (revenue ?? []).find((r: any) => r.stage1_job_id === j.id);
     const jobCosts = (costs ?? []).filter((c: any) => c.stage1_job_id === j.id);
@@ -154,9 +164,14 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
 }
 
 /**
- * Merge canonical units (from Supabase) with cached units, recovering the rich
- * ProofUnit detail that does not live in the canonical commercial tables.
- * Canonical always wins for the commercial values.
+ * Merge canonical units (from Supabase) with cached units.
+ *
+ * CANONICAL IS AUTHORITATIVE. The cache may only supply rich, NON-commercial
+ * presentation detail (proof type, evidence flags, payment metadata, dates).
+ * It is NEVER allowed to override, mask, or revive commercial values — invoice,
+ * cost lines, GST splits and margin come strictly from the canonical Supabase
+ * tables. Legacy per-category cost fields are explicitly cleared so they can
+ * never stand in for canonical cost lines.
  */
 export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUnit[] {
   return canonical.map((c) => {
@@ -164,16 +179,10 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       (c.stage1JobId && cache.find((u) => u.stage1JobId === c.stage1JobId)) ||
       cache.find((u) => u.n === c.n);
     if (!cached) return c;
-    // Canonical wins for commercial truth, BUT never let an empty canonical
-    // payload silently wipe values the operator already entered (e.g. a cost
-    // line that has not finished syncing yet). Fall back to the cache only when
-    // canonical has nothing for that field.
-    const canonicalHasCost = (c.costLines?.length ?? 0) > 0;
-    const canonicalHasInvoice = (c.invoiceAmount ?? 0) > 0;
     return {
-      // Rich detail from cache as the base...
+      // Rich, non-commercial detail from cache as the base...
       ...cached,
-      // ...then canonical commercial truth overrides it.
+      // ...then canonical commercial truth ALWAYS overrides it (no fallback).
       stage1JobId: c.stage1JobId,
       n: c.n,
       client: c.client || cached.client,
@@ -182,12 +191,17 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       // canonical status; otherwise take canonical.
       status: toCanonicalStatus(cached.status) === toCanonicalStatus(c.status) ? cached.status : c.status,
       notes: c.notes ?? cached.notes,
-      invoiceAmount: canonicalHasInvoice ? c.invoiceAmount : cached.invoiceAmount,
-      invoiceGstTreatment: canonicalHasInvoice ? c.invoiceGstTreatment : cached.invoiceGstTreatment,
-      invoiceGstAmount: canonicalHasInvoice ? c.invoiceGstAmount : cached.invoiceGstAmount,
-      invoiceGstOverridden: canonicalHasInvoice ? c.invoiceGstOverridden : cached.invoiceGstOverridden,
-      costLines: canonicalHasCost ? c.costLines : (cached.costLines ?? c.costLines),
-      gm: c.gm || cached.gm,
+      invoiceAmount: c.invoiceAmount,
+      invoiceGstTreatment: c.invoiceGstTreatment,
+      invoiceGstAmount: c.invoiceGstAmount,
+      invoiceGstOverridden: c.invoiceGstOverridden,
+      costLines: c.costLines,
+      gm: c.gm,
+      // Drop legacy per-category cost fields — canonical cost lines are truth.
+      costMaterials: undefined,
+      costLabour: undefined,
+      costSubcontractors: undefined,
+      costOther: undefined,
     };
   });
 }
