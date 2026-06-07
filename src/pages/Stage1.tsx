@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
+  getStage1RunId,
   getActiveRunId,
   isStage1Reachable,
   ROUTING_COPY,
+  setStage1RunId,
   STAGE_1_GOAL,
   useProgression,
 } from "@/lib/progression";
@@ -94,6 +96,7 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { supabase, isDebug } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   loadAdjustments,
@@ -5052,7 +5055,17 @@ function HeaderField({ label, value, multiline }: { label: string; value: string
 }
 
 export default function Stage1() {
-  const runId = getActiveRunId();
+  const [searchParams] = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
+  const [runId, setRunIdState] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  useEffect(() => {
+    const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
+    if (!nextRunId) return;
+    setStage1RunId(nextRunId);
+    setRunIdState(nextRunId);
+  }, [searchParams]);
   const { state: progression, update: updateProgression } = useProgression(runId);
   // Proof units (invoices, costs, GST treatments) are a persistent commercial
   // record scoped to this Autopsy run. Supabase is the canonical source of
