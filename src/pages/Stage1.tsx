@@ -91,7 +91,6 @@ import {
   type HandoverRow,
   type ReferralRow,
   type ReferralInput,
-  BACKEND_BLOCKERS,
 } from "@/lib/jobWorkspace";
 import {
   AlertTriangle,
