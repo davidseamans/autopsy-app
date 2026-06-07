@@ -1752,6 +1752,26 @@ function Stage1DashboardInner() {
     setStage1RunId(nextRunId);
     setActiveRunId(nextRunId);
   }, [searchParams]);
+  useEffect(() => {
+    if (activeRunId || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("autopsy_runs")
+        .select("id")
+        .not("verdict_name", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const recoveredRunId = typeof data?.id === "string" ? data.id : null;
+      if (cancelled || !recoveredRunId) return;
+      setStage1RunId(recoveredRunId);
+      setActiveRunId(recoveredRunId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, user?.id]);
 
   // ---- Canonical Stage 1 evidence requirements (READ-ONLY, Supabase RPC) ----
   // Hydrated via public.get_stage1_evidence_requirements_snapshot(p_stage_progress_id).
