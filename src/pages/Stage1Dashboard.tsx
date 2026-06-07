@@ -1020,7 +1020,7 @@ function DrillBody({
                       <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
                         {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
                       <TableCell className="text-right">
@@ -1065,7 +1065,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{costs > 0 ? `$${fmtMoney(costs)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
                 </button>
@@ -1107,10 +1107,10 @@ function DrillBody({
                         {u.jobSite && <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
-                      <TableCell className="text-right tabular-nums">${fmtMoney(costs)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</TableCell>
-                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "—" : m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "Not Yet Proven" : m.label}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -1130,14 +1130,14 @@ function DrillBody({
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : m.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>${fmtMoney(costs)}</span></div>
+                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "—" : `${pct.toFixed(1)}%`}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</span></div>
                 </div>
               );
             })}
