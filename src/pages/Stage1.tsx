@@ -331,8 +331,16 @@ type GateStatus = "Locked" | "Conditional" | "Unlocked";
 export interface CostLine {
   id: string;
   description: string;
+  /** GST-inclusive purchase amount as entered. */
   amount?: number;
+  /** Legacy flag, kept in sync with gstTreatment. */
   gstIncluded: boolean;
+  /** How GST is treated for this purchase. */
+  gstTreatment?: GstTreatment;
+  /** Current GST amount (auto from 1/11 or manually overridden). */
+  gstAmount?: number;
+  /** True when the operator overwrote the auto GST amount. */
+  gstOverridden?: boolean;
 }
 
 export interface ProofUnit {
