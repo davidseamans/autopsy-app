@@ -9,10 +9,18 @@ import {
   useProgression,
 } from "@/lib/progression";
 import { computeGstSplit, GST_TREATMENTS, type GstTreatment } from "@/lib/gst";
-import { loadStage1Units, saveStage1Units } from "@/lib/stage1Store";
 import {
-  loadStage1Reflection,
-  saveStage1Reflection,
+  loadStage1UnitsCache,
+  saveStage1UnitsCache,
+  fetchStage1Units,
+  syncStage1Units,
+  mergeUnits,
+} from "@/lib/stage1Store";
+import {
+  loadStage1ReflectionCache,
+  saveStage1ReflectionCache,
+  fetchStage1Reflection,
+  syncStage1Reflection,
   type Stage1Reflection,
   type ConfidenceSelection,
   type WorkDifficultySelection,
