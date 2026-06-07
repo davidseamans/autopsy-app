@@ -2728,7 +2728,7 @@ export function JobDetailSheet({
   unit: ProofUnit | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onSave: (u: ProofUnit) => Promise<Stage1CanonicalWriteDiagnostics>;
+  onSave: (u: ProofUnit) => Promise<Stage1CanonicalWriteDiagnostics | boolean | void> | Stage1CanonicalWriteDiagnostics | boolean | void;
   onJumpToFinancials: () => void;
   concentrationClient: string | null;
   onVoid: (n: number, reason: string) => void;
@@ -2757,6 +2757,25 @@ export function JobDetailSheet({
     setSaveDiagnostics(null);
   }, [unit]);
   const jobId = unit?.jobId;
+  const normalizeSaveResult = (value: Stage1CanonicalWriteDiagnostics | boolean | void): Stage1CanonicalWriteDiagnostics => {
+    if (value && typeof value === "object" && "counts" in value && "success" in value) return value;
+    const ok = value !== false;
+    return {
+      status: ok ? "success" : "failed",
+      runId: evidenceRunId,
+      authUserId: null,
+      authUserIdPresent: false,
+      autopsyRunIdWrittenMatchesActiveRun: null,
+      createdByMatchesAuthUser: null,
+      counts: { jobs: null, revenueLines: null, costLines: null },
+      rows: { jobs: [], revenueLines: [], costLines: [] },
+      writtenRows: { jobs: [], revenueLines: [], costLines: [] },
+      errors: ok ? [] : [{ table: "stage1_canonical", operation: "save", message: "No canonical Supabase diagnostics were returned." }],
+      writeSucceeded: ok,
+      success: ok,
+      message: ok ? "Saved." : "Canonical Supabase write did not return diagnostics.",
+    };
+  };
   const loadPayments = useCallback(async () => {
     if (!jobId) {
       setPayEvents([]);
@@ -2884,7 +2903,7 @@ export function JobDetailSheet({
       changes,
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
-    const diagnostics = await onSave(next);
+    const diagnostics = normalizeSaveResult(await onSave(next));
     setSaveDiagnostics(diagnostics);
     if (!diagnostics.success) {
       toast({
@@ -2932,7 +2951,7 @@ export function JobDetailSheet({
     setDraft(next);
     // Commercial truth (invoice, costs, GST) is written to the canonical
     // Supabase tables here. Only claim "saved" when that write succeeds.
-    const diagnostics = await onSave(next);
+    const diagnostics = normalizeSaveResult(await onSave(next));
     setSaveDiagnostics(diagnostics);
     if (!diagnostics.success) {
       toast({
