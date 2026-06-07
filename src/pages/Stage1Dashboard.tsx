@@ -2659,6 +2659,20 @@ function Stage1DashboardInner() {
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
 
+  // Supabase-derived gross-margin for the active run (display-ready). When the
+  // consolidated dashboard display RPC supplies a margin we render it verbatim;
+  // a null margin is shown as "—" and is never recomputed client-side.
+  const dashboardMarginRaw =
+    stage1DashboardDisplay?.gross_margin_pct ??
+    stage1DashboardDisplay?.gross_margin_percent ??
+    stage1DashboardDisplay?.margin_pct ??
+    null;
+  const hasDashboardMargin =
+    stage1DashboardDisplay !== null && dashboardMarginRaw !== undefined;
+  const displayMarginText = hasDashboardMargin
+    ? renderMarginPct(dashboardMarginRaw as number | null)
+    : `${gmPct}%`;
+
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
       .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
