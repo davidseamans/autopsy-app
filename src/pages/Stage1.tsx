@@ -3652,7 +3652,21 @@ function HeaderField({ label, value, multiline }: { label: string; value: string
 export default function Stage1() {
   const runId = getActiveRunId();
   const { state: progression, update: updateProgression } = useProgression(runId);
-  const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
+  // Proof units (invoices, costs, GST treatments) are a persistent commercial
+  // record scoped to this Autopsy run — not in-memory calculator state. Load the
+  // run's records on mount so invoice/cost/GST/ex-GST values survive a refresh.
+  const [units, setUnits] = useState<ProofUnit[]>(() => {
+    const persisted = loadStage1Units(runId);
+    return persisted.length > 0 ? persisted : SEED_UNITS;
+  });
+  // Re-hydrate when the active run changes (e.g. switching runs without remount).
+  useEffect(() => {
+    setUnits(loadStage1Units(runId));
+  }, [runId]);
+  // Persist every change against the active run so records are durable.
+  useEffect(() => {
+    saveStage1Units(runId, units);
+  }, [runId, units]);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
