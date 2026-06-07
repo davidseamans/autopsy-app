@@ -378,6 +378,8 @@ export interface ProofUnit {
   nextAction?: string;
   // Real Supabase linkage — this unit is a workspace over an existing job row.
   jobId?: string;
+  // Canonical Stage 1 commercial record id (stage1_jobs.id) in Supabase.
+  stage1JobId?: string;
   accountId?: string;
   siteId?: string;
   dbQuoteId?: string;
