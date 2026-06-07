@@ -507,6 +507,15 @@ function renderDirectCost(
   return "Not Yet Recorded";
 }
 
+// Governance: direct costs are "recorded" only when a positive cost exists.
+// Zero recorded cost is NOT the same as proven zero cost, so margin must stay
+// "Not Yet Proven" until real cost data is captured. Never compute
+// (income - 0) / income.
+function directCostsRecorded(costs: number | null | undefined): boolean {
+  const n = typeof costs === "number" ? costs : Number(costs);
+  return Number.isFinite(n) && n > 0;
+}
+
 function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
   if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
   if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
@@ -985,7 +994,7 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                  const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
                   const m = marginStatus(gmPctValue ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
@@ -1046,7 +1055,7 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+              const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
               const m = marginStatus(gmPctValue ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
@@ -1096,7 +1105,7 @@ function DrillBody({
                   const costs =
                     (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
                   const gp = income - costs;
-                  const pct = income > 0 ? (gp / income) * 100 : null;
+                  const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
                   const m = marginStatus(pct ?? 0);
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
@@ -1123,7 +1132,7 @@ function DrillBody({
               const costs =
                 (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
               const gp = income - costs;
-              const pct = income > 0 ? (gp / income) * 100 : null;
+              const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
               const m = marginStatus(pct ?? 0);
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
@@ -2711,12 +2720,34 @@ function Stage1DashboardInner() {
       : dashboardStage2Ready === false || dashboardStage2Ready === undefined
         ? "No"
         : String(dashboardStage2Ready);
-  const displayMarginText = stage1DashboardDisplay
-    ? renderMarginPct(dashboardMarginRaw as number | null, {
-        display: dashboardMarginDisplay,
-        status: dashboardMarginStatus,
-      })
-    : renderMarginPct(totalIncome > 0 ? gmPct : null);
+
+  // Direct-cost maturity from the run-scoped dashboard RPC.
+  const dashboardDirectCostStatus =
+    (stage1DashboardDisplay?.direct_cost_status as string | null | undefined) ?? null;
+  const dashboardDirectCostDisplay =
+    (stage1DashboardDisplay?.direct_cost_display as string | null | undefined) ?? null;
+
+  // Governance gate: margin cannot be calculated from missing cost data.
+  // When direct costs are not recorded, gross margin is "Not Yet Proven" and
+  // Stage 2 is not ready — no 0%, 100%, or any calculated value is shown.
+  const directCostsNotRecorded =
+    dashboardDirectCostStatus === "not_yet_recorded" ||
+    (dashboardDirectCostDisplay ?? "").trim().toLowerCase() === "not yet recorded" ||
+    !directCostsRecorded(totalCosts);
+
+  const displayMarginText = directCostsNotRecorded
+    ? "Not Yet Proven"
+    : stage1DashboardDisplay
+      ? renderMarginPct(dashboardMarginRaw as number | null, {
+          display: dashboardMarginDisplay,
+          status: dashboardMarginStatus,
+        })
+      : renderMarginPct(totalIncome > 0 ? gmPct : null);
+
+  const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
+  const directCostKpiText = renderDirectCost(totalCosts, {
+    display: dashboardDirectCostDisplay,
+  });
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4141,8 +4172,8 @@ function Stage1DashboardInner() {
           primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
-            { k: "Total job costs", v: `$${fmtMoney(totalCosts)}` },
-            { k: "Stage 2 Ready", v: dashboardStage2ReadyText },
+            { k: "Direct cost", v: directCostKpiText },
+            { k: "Stage 2 Ready", v: stage2ReadyText },
           ]}
           onClick={() => setDrill("margin")}
         />
@@ -4200,7 +4231,7 @@ function Stage1DashboardInner() {
                     const gp = income - costs;
                     // Margin is only meaningful with real income. Never fabricate
                     // a margin client-side: a null margin renders as "—".
-                    const gmPctValue = income > 0 ? Math.round((gp / income) * 100) : null;
+                    const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
                     const gmTone =
                       gmPctValue === null
                         ? "text-muted-foreground"
