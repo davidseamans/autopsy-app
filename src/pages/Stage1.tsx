@@ -2925,7 +2925,17 @@ export function JobDetailSheet({
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
     setDraft(next);
-    onSave(next);
+    // Commercial truth (invoice, costs, GST) is written to the canonical
+    // Supabase tables here. Only claim "saved" when that write succeeds.
+    const commercialOk = await onSave(next);
+    if (commercialOk === false) {
+      toast({
+        title: "Not saved",
+        description: "Could not write your commercial records. Sign in and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     // Persist against the real job row when this workspace is backed by one.
     if (draft.jobId) {
       const res = await persistJobProgress({
@@ -2943,7 +2953,7 @@ export function JobDetailSheet({
     } else {
       toast({
         title: "Progress Saved",
-        description: "Held in this session — convert a quote to create a job record.",
+        description: "Saved to your secure Stage 1 records.",
       });
     }
   }
