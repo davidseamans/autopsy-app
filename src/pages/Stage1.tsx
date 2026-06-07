@@ -2724,6 +2724,7 @@ export function JobDetailSheet({
   onArchive,
   onDelete,
   onOpenDetailedReport,
+  savePrerequisites,
 }: {
   unit: ProofUnit | null;
   open: boolean;
@@ -2735,6 +2736,7 @@ export function JobDetailSheet({
   onArchive: (n: number) => void;
   onDelete: (n: number) => void;
   onOpenDetailedReport?: (n: number) => void;
+  savePrerequisites?: { runId: string | null; authUserId: string | null; loading?: boolean };
 }) {
   const evidenceRunId = getActiveRunId();
   const [draft, setDraft] = useState<ProofUnit | null>(unit);
@@ -2803,6 +2805,12 @@ export function JobDetailSheet({
   const isLocked = lifecycle !== "active";
   const isReviewed = !!draft.reviewed;
   const readOnly = mode === "view" || isLocked;
+  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
+  const canonicalPrerequisitesLoading = !!savePrerequisites?.loading;
+  const canonicalSaveMissingBinding = !!savePrerequisites && (!savePrerequisites.runId || !savePrerequisites.authUserId);
+  const canonicalSaveBlockedMessage =
+    "Stage 1 cannot save because no signed-in user or active Autopsy run is attached.";
+  const saveDisabled = isLocked || reviewedNeedsReason || canonicalPrerequisitesLoading || canonicalSaveMissingBinding;
 
   // Best-effort lookup into the Financial Proof local store (read-only)
   const fpClients = readLS<FPClient[]>(LS.clients, []);
@@ -2885,6 +2893,7 @@ export function JobDetailSheet({
   const paymentExceedsQuote = approvedValue > 0 && paymentReceived > approvedValue;
 
   async function save() {
+    if (saveDisabled) return;
     const original = unit!;
     const changes: { field: string; from: unknown; to: unknown }[] = [];
     (Object.keys(draft) as (keyof ProofUnit)[]).forEach((k) => {
@@ -2926,8 +2935,6 @@ export function JobDetailSheet({
   // Save Progress — the primary, always-visible save action for this workspace.
   // Persists the current form values into the dashboard's job record and keeps
   // the panel open so the operator can carry on working.
-  const reviewedNeedsReason = isReviewed && mode === "edit" && !correctionReason.trim();
-  const saveDisabled = isLocked || reviewedNeedsReason;
   async function saveProgress() {
     if (saveDisabled) return;
     const original = unit!;
@@ -3786,6 +3793,21 @@ export function JobDetailSheet({
               Add a correction reason above to save changes to this reviewed record.
             </p>
           )}
+          <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold">Developer/debug panel — Stage 1 save prerequisites</span>
+              <span className="text-muted-foreground">Active run: {savePrerequisites?.runId ?? evidenceRunId ?? "missing"}</span>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 text-muted-foreground">
+              <div>Auth user id: {canonicalPrerequisitesLoading ? "checking" : savePrerequisites?.authUserId ?? "missing"}</div>
+              <div>Save Progress: {saveDisabled ? "disabled" : "enabled"}</div>
+            </div>
+            {canonicalSaveMissingBinding && (
+              <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                {canonicalSaveBlockedMessage}
+              </p>
+            )}
+          </div>
           {saveDiagnostics && (
             <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
