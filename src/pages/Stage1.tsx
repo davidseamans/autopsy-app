@@ -577,6 +577,240 @@ function GateBadge({ gate }: { gate: GateStatus }) {
   return <Badge variant="outline" className={cls}>Gate: {gate}</Badge>;
 }
 
+// ============================================================================
+// First Five Jobs progression engine
+// ----------------------------------------------------------------------------
+// Stage 1 counts COMPLETED, RECORDED job records — not vague activity.
+//
+// A job counts toward the First Five only when ALL of these hold:
+//   1. Job created
+//   2. Revenue / invoice recorded (ex-GST revenue exists)
+//   3. Direct costs recorded (ex-GST cost exists)
+//   4. GST split calculated (handled by computeGstSplit on revenue + costs)
+//   5. Ex-GST margin calculable (revenue > 0 and cost > 0 → not "Not Yet Proven")
+//   6. Status marked completed
+//
+// A job does NOT count if: no revenue, no cost, margin Not Yet Proven, or the
+// job is still a draft / in progress.
+//
+// Evidence is recommended, never mandatory: missing paperwork never blocks a
+// job from counting. This engine never changes GST, margin, storage, auth, or
+// run-scoped access logic — it only reads existing ex-GST values.
+// ============================================================================
+
+export const FIRST_FIVE_TARGET = 5;
+const FF_COMPLETED_STATUSES = new Set(["Completed", "Paid"]);
+
+export interface FirstFiveJob {
+  unit: ProofUnit;
+  revenueExGst: number;
+  directCostExGst: number;
+  grossProfit: number;
+  marginProven: boolean;
+  gm: number | null;
+  isCompleted: boolean;
+  hasRevenue: boolean;
+  hasCost: boolean;
+  hasEvidence: boolean;
+  qualifies: boolean;
+}
+
+/** Ex-GST revenue + ex-GST direct cost for one unit (mirrors the drill-down). */
+function unitExGstTotals(u: ProofUnit): { revenueExGst: number; directCostExGst: number } {
+  const revenueExGst = computeGstSplit({
+    inclusive: u.invoiceAmount ?? 0,
+    treatment: u.invoiceGstTreatment ?? "gst_included",
+    gstOverride: u.invoiceGstAmount,
+    overridden: u.invoiceGstOverridden,
+  }).exGst;
+
+  const hasCostLines = !!(u.costLines && u.costLines.length > 0);
+  const linesTotalExGst = (u.costLines ?? []).reduce(
+    (s, l) =>
+      s +
+      computeGstSplit({
+        inclusive: l.amount ?? 0,
+        treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+        gstOverride: l.gstAmount,
+        overridden: l.gstOverridden,
+      }).exGst,
+    0,
+  );
+  const legacyTotal =
+    (u.costMaterials ?? 0) +
+    (u.costLabour ?? 0) +
+    (u.costSubcontractors ?? 0) +
+    (u.costOther ?? 0);
+  const directCostExGst = hasCostLines ? linesTotalExGst : legacyTotal;
+  return { revenueExGst, directCostExGst };
+}
+
+/** Evaluate a single unit against the First Five counting rule. */
+export function evaluateFirstFiveJob(u: ProofUnit): FirstFiveJob {
+  const { revenueExGst, directCostExGst } = unitExGstTotals(u);
+  const isCompleted = FF_COMPLETED_STATUSES.has(u.status);
+  const hasRevenue = revenueExGst > 0;
+  const hasCost = directCostExGst > 0;
+  const marginProven = hasRevenue && hasCost;
+  const grossProfit = marginProven ? revenueExGst - directCostExGst : 0;
+  const gm = marginProven ? Math.round((grossProfit / revenueExGst) * 100) : null;
+  const hasEvidence = !!(u.evidence || u.invoiceDocName || u.costDocName);
+  const qualifies = isCompleted && hasRevenue && hasCost && marginProven;
+  return {
+    unit: u,
+    revenueExGst,
+    directCostExGst,
+    grossProfit,
+    marginProven,
+    gm,
+    isCompleted,
+    hasRevenue,
+    hasCost,
+    hasEvidence,
+    qualifies,
+  };
+}
+
+export function computeFirstFive(units: ProofUnit[], gateUnlocked: boolean) {
+  const jobs = units.map(evaluateFirstFiveJob);
+  const qualifying = jobs.filter((j) => j.qualifies);
+  const qualifyingCount = qualifying.length;
+  const completedCount = Math.min(qualifyingCount, FIRST_FIVE_TARGET);
+  const remaining = Math.max(0, FIRST_FIVE_TARGET - qualifyingCount);
+
+  // Aggregates are derived from qualifying jobs only — never from unproven ones.
+  const revenueExGstTotal = qualifying.reduce((s, j) => s + j.revenueExGst, 0);
+  const directCostsExGstTotal = qualifying.reduce((s, j) => s + j.directCostExGst, 0);
+  const grossProfit = revenueExGstTotal - directCostsExGstTotal;
+  const marginProven = revenueExGstTotal > 0 && directCostsExGstTotal > 0;
+  const grossMargin = marginProven
+    ? Math.round((grossProfit / revenueExGstTotal) * 100)
+    : null;
+
+  const evidenceAttached = jobs.filter((j) => j.hasEvidence).length;
+  const evidenceMissing = jobs.filter((j) => !j.hasEvidence).length;
+
+  const requirementMet = qualifyingCount >= FIRST_FIVE_TARGET;
+  // Stage 2 only turns yes when five qualifying jobs exist AND existing gate
+  // logic (margin/evidence/score) already passes.
+  const stage2Ready = requirementMet && gateUnlocked;
+
+  const progressionState = requirementMet
+    ? "Stage 1 ready for review"
+    : `Job ${Math.min(qualifyingCount + 1, FIRST_FIVE_TARGET)} of ${FIRST_FIVE_TARGET}`;
+
+  const nextAction = requirementMet
+    ? "Stage 1 job requirement met. Review commercial results before Stage 2."
+    : `Complete and record ${remaining} more job${remaining === 1 ? "" : "s"} before Stage 1 review.`;
+
+  const notes: string[] = [];
+  if (jobs.some((j) => j.isCompleted && !j.marginProven)) {
+    notes.push("Record direct costs before margin can be judged.");
+  }
+  if (evidenceMissing > 0) {
+    notes.push("Supporting paperwork recommended.");
+  }
+
+  return {
+    jobs,
+    qualifying,
+    qualifyingCount,
+    completedCount,
+    remaining,
+    revenueExGstTotal,
+    directCostsExGstTotal,
+    grossProfit,
+    grossMargin,
+    marginProven,
+    evidenceAttached,
+    evidenceMissing,
+    requirementMet,
+    stage2Ready,
+    progressionState,
+    nextAction,
+    notes,
+  };
+}
+
+type FirstFive = ReturnType<typeof computeFirstFive>;
+
+function FirstFiveJobsPanel({ ff }: { ff: FirstFive }) {
+  const money = (n: number) =>
+    `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const NYP = "Not Yet Proven";
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">First Five Jobs</CardTitle>
+            <CardDescription>
+              Can this operator win, complete, record, and understand five real jobs?
+            </CardDescription>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              ff.requirementMet
+                ? "border-emerald-400 text-emerald-700 bg-emerald-50"
+                : "border-amber-400 text-amber-700 bg-amber-50"
+            }
+          >
+            {ff.progressionState}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatTile
+            label="Completed jobs"
+            value={`${ff.completedCount} / ${FIRST_FIVE_TARGET}`}
+            tone={ff.requirementMet ? "good" : "warn"}
+          />
+          <StatTile label="Remaining jobs" value={ff.remaining} />
+          <StatTile label="Revenue ex GST" value={money(ff.revenueExGstTotal)} />
+          <StatTile label="Direct costs ex GST" value={money(ff.directCostsExGstTotal)} />
+          <StatTile
+            label="Gross profit"
+            value={ff.marginProven ? money(ff.grossProfit) : NYP}
+            tone={ff.marginProven ? "default" : "warn"}
+          />
+          <StatTile
+            label="Gross margin"
+            value={ff.grossMargin == null ? NYP : `${ff.grossMargin}%`}
+            tone={ff.grossMargin == null ? "warn" : ff.grossMargin >= 30 ? "good" : "warn"}
+          />
+          <StatTile label="Evidence attached" value={ff.evidenceAttached} />
+          <StatTile
+            label="Evidence recommended"
+            value={ff.evidenceMissing}
+            hint={ff.evidenceMissing > 0 ? "Supporting paperwork recommended" : undefined}
+          />
+          <StatTile
+            label="Stage 2 Ready"
+            value={ff.stage2Ready ? "Yes" : "No"}
+            tone={ff.stage2Ready ? "good" : "warn"}
+          />
+        </div>
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <span className="text-muted-foreground">Next action: </span>
+          <span className="font-medium">{ff.nextAction}</span>
+        </div>
+
+        {ff.notes.map((n) => (
+          <div
+            key={n}
+            className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            {n}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 type Scorecard = ReturnType<typeof computeScorecard>;
 
 function plainGateLabel(sc: Scorecard, unitsCount: number): string {
@@ -3736,6 +3970,10 @@ export default function Stage1() {
   }, [runId, units]);
   const activeUnits = useMemo(() => units.filter((u) => (u.lifecycle ?? "active") === "active"), [units]);
   const sc = useMemo(() => computeScorecard(activeUnits), [activeUnits]);
+  const firstFive = useMemo(
+    () => computeFirstFive(activeUnits, sc.gate === "Unlocked"),
+    [activeUnits, sc.gate],
+  );
   const [openUnitN, setOpenUnitN] = useState<number | null>(null);
   const openUnit = units.find((u) => u.n === openUnitN) ?? null;
 
@@ -3780,6 +4018,8 @@ export default function Stage1() {
 
       <Stage1GoalBanner />
       <WhatToDoNextCard sc={sc} unitsCount={units.length} onAddFirst={focusAddJob} />
+
+      <FirstFiveJobsPanel ff={firstFive} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2"><CurrentStageCard /></div>
