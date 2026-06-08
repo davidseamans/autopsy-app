@@ -2870,9 +2870,7 @@ function Stage1DashboardInner() {
     : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
-  const directCostKpiText = renderDirectCost(totalCosts, {
-    display: dashboardDirectCostDisplay,
-  });
+  const directCostKpiText = renderDirectCost(totalCosts);
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
