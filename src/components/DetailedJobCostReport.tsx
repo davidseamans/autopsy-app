@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ProofUnit, GBExpense } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
@@ -188,11 +189,13 @@ export function DetailedJobCostReport({
   allUnits,
   open,
   onOpenChange,
+  onEditInDetail,
 }: {
   unit: ProofUnit | null;
   allUnits: ProofUnit[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onEditInDetail?: (n: number) => void;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
@@ -267,7 +270,7 @@ export function DetailedJobCostReport({
     .map((l, i) => {
       const treatment = l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst");
       return {
-        date: dateOnly(costRows[i]?.created_at),
+        date: l.date ? dateOnly(l.date) : dateOnly(costRows[i]?.created_at),
         ref: l.docName ?? costRows[i]?.notes ?? undefined,
         supplier: costRows[i]?.notes ?? "Supplier",
         description: l.description || "Job cost",
@@ -353,10 +356,24 @@ export function DetailedJobCostReport({
       >
         <div className="p-6 space-y-6">
           <SheetHeader>
-            <SheetTitle>Detailed Job Cost Report</SheetTitle>
-            <SheetDescription>
-              Income, job costs, gross profit, and general business expenses for the selected job.
-            </SheetDescription>
+            <div className="flex items-start justify-between gap-3 pr-10">
+              <div className="min-w-0">
+                <SheetTitle>Detailed Job Cost Report</SheetTitle>
+                <SheetDescription>
+                  Read-only report. Income, job costs, gross profit, and general business expenses for the selected job.
+                </SheetDescription>
+              </div>
+              {onEditInDetail && unit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => onEditInDetail(unit.n)}
+                >
+                  Edit in Job / Contract Site Detail
+                </Button>
+              )}
+            </div>
           </SheetHeader>
 
           {/* Section 1 — Job Summary */}

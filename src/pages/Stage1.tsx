@@ -370,6 +370,8 @@ export interface CostLine {
   gstOverridden?: boolean;
   /** File name for the simple per-line upload (local cache only). */
   docName?: string;
+  /** Job Cost Date for this line (persisted to stage1_job_costs.lines). */
+  date?: string;
 }
 
 export interface ProofUnit {
@@ -3007,6 +3009,9 @@ export function JobDetailSheet({
     </div>
   );
 
+  // Single, shared confirmation for every destructive Stage 1 action.
+  const confirmDelete = () => window.confirm("Delete this item? This cannot be undone.");
+
   const sectionTitle = (n: number, label: string, Icon?: React.ComponentType<{ className?: string }>) => (
     <div className="font-medium text-sm flex items-center gap-2">
       <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">{n}</span>
@@ -3108,8 +3113,24 @@ export function JobDetailSheet({
               <Label className="text-xs">Optional comment</Label>
               <Input value={draft.quoteComment ?? ""} onChange={(e) => setDraft({ ...draft, quoteComment: e.target.value })} placeholder="e.g. scope change agreed by phone" />
             </div>
-            {fieldRow("Client", draft.client)}
-            {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <Label className="text-xs">Client Name</Label>
+                <Input
+                  value={draft.client ?? ""}
+                  onChange={(e) => setDraft({ ...draft, client: e.target.value })}
+                  placeholder="Client name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Client Address / Job Site / Location</Label>
+                <Input
+                  value={draft.jobSite ?? ""}
+                  onChange={(e) => setDraft({ ...draft, jobSite: e.target.value })}
+                  placeholder="Job site / location"
+                />
+              </div>
+            </div>
           </div>
 
 
@@ -3198,8 +3219,51 @@ export function JobDetailSheet({
               )}
               <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
-            {fileInput("Upload file or take picture", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
-
+            <div className="space-y-2">
+              {fileInput(
+                draft.invoiceDocName ? "Replace invoice proof" : "Upload file or take picture",
+                draft.invoiceDocName,
+                (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }),
+              )}
+              {draft.invoiceDocName && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() => {
+                    if (!confirmDelete()) return;
+                    setDraft({ ...draft, invoiceDocName: undefined });
+                  }}
+                >
+                  Delete invoice proof
+                </Button>
+              )}
+            </div>
+            {(draft.invoiceAmount ?? 0) > 0 && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() => {
+                    if (!confirmDelete()) return;
+                    setDraft({
+                      ...draft,
+                      invoiceAmount: undefined,
+                      invoiceRef: undefined,
+                      invoiceDate: undefined,
+                      invoiceDocName: undefined,
+                      invoiceGstAmount: undefined,
+                      invoiceGstOverridden: false,
+                    });
+                  }}
+                >
+                  Delete invoice
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* 3. Job Costs */}
@@ -3219,13 +3283,23 @@ export function JobDetailSheet({
                 };
                 return (
                   <div key={line.id} className="rounded-md border p-3 space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Description</Label>
-                      <Input
-                        value={line.description}
-                        placeholder="e.g. Materials, Subcontractor help"
-                        onChange={(e) => updateLine({ description: e.target.value })}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          value={line.description}
+                          placeholder="e.g. Materials, Subcontractor help"
+                          onChange={(e) => updateLine({ description: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Job Cost Date</Label>
+                        <Input
+                          type="date"
+                          value={line.date ?? ""}
+                          onChange={(e) => updateLine({ date: e.target.value || undefined })}
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="space-y-1">
@@ -3278,18 +3352,40 @@ export function JobDetailSheet({
                         Reset GST to auto (1/11)
                       </button>
                     )}
-                    {fileInput("Upload file or take picture", line.docName, (name) => updateLine({ docName: name }))}
+                    <div className="space-y-2">
+                      {fileInput(
+                        line.docName ? "Replace cost proof" : "Upload file or take picture",
+                        line.docName,
+                        (name) => updateLine({ docName: name }),
+                      )}
+                      {line.docName && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (!confirmDelete()) return;
+                            updateLine({ docName: undefined });
+                          }}
+                        >
+                          Delete cost proof
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex justify-end">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="text-destructive"
                         onClick={() => {
+                          if (!confirmDelete()) return;
                           const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
                           setDraft({ ...draft, costLines: next });
                         }}
                       >
-                        Remove
+                        Delete cost line
                       </Button>
                     </div>
                   </div>
@@ -3399,33 +3495,76 @@ export function JobDetailSheet({
             </div>
 
             {(draft.gbExpenses ?? []).length > 0 && (
-              <ul className="space-y-1 text-sm">
-                {(draft.gbExpenses ?? []).map((e, idx) => (
-                  <li key={e.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate">
-                        {e.description || e.supplier || "Expense"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
-                        {e.receiptName
-                          ? <span className="text-emerald-700">Receipt uploaded</span>
-                          : <span className="text-amber-700">Receipt missing</span>}
-                      </span>
+              <div className="space-y-2">
+                {(draft.gbExpenses ?? []).map((e, idx) => {
+                  const updateExp = (patch: Partial<GBExpense>) => {
+                    const next = [...(draft.gbExpenses ?? [])];
+                    next[idx] = { ...e, ...patch };
+                    setDraft({ ...draft, gbExpenses: next });
+                  };
+                  return (
+                    <div key={e.id} className="rounded-md border p-3 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Expense Date</Label>
+                          <Input type="date" value={e.expenseDate ?? ""} onChange={(ev) => updateExp({ expenseDate: ev.target.value || undefined })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Supplier</Label>
+                          <Input value={e.supplier ?? ""} onChange={(ev) => updateExp({ supplier: ev.target.value })} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Description</Label>
+                          <Input value={e.description ?? ""} onChange={(ev) => updateExp({ description: ev.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Amount inc GST</Label>
+                          <Input type="number" value={e.amount ?? ""} onChange={(ev) => updateExp({ amount: ev.target.value === "" ? undefined : Number(ev.target.value) })} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Notes</Label>
+                          <Textarea rows={2} value={e.notes ?? ""} onChange={(ev) => updateExp({ notes: ev.target.value })} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {fileInput(
+                          e.receiptName ? "Replace receipt" : "Upload file or take picture",
+                          e.receiptName,
+                          (name) => updateExp({ receiptName: name }),
+                        )}
+                        {e.receiptName && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => {
+                              if (!confirmDelete()) return;
+                              updateExp({ receiptName: undefined });
+                            }}
+                          >
+                            Delete receipt
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (!confirmDelete()) return;
+                            setDraft({ ...draft, gbExpenses: (draft.gbExpenses ?? []).filter((_, i) => i !== idx) });
+                          }}
+                        >
+                          Delete expense
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          gbExpenses: (draft.gbExpenses ?? []).filter((_, i) => i !== idx),
-                        })
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                  );
+                })}
+              </div>
             )}
 
             <GBExpenseForm
@@ -3453,7 +3592,25 @@ export function JobDetailSheet({
                 placeholder="Observations, exceptions, anything to remember"
               />
             </div>
-            {fileInput("Upload file or take picture", draft.miscAttachmentName, (name) => setDraft({ ...draft, miscAttachmentName: name }))}
+            {fileInput(
+              draft.miscAttachmentName ? "Replace attachment" : "Upload file or take picture",
+              draft.miscAttachmentName,
+              (name) => setDraft({ ...draft, miscAttachmentName: name }),
+            )}
+            {draft.miscAttachmentName && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => {
+                  if (!confirmDelete()) return;
+                  setDraft({ ...draft, miscAttachmentName: undefined });
+                }}
+              >
+                Delete attachment
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
             </p>

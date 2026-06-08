@@ -29,7 +29,7 @@
 // always recalculates from ex-GST values only. Margin governance ("Not Yet
 // Proven" when costs are missing) is preserved because no fabricated values are
 // stored — only what the operator actually entered.
-import type { ProofUnit, CostLine } from "@/pages/Stage1";
+import type { ProofUnit, CostLine, GBExpense } from "@/pages/Stage1";
 import type { GstTreatment } from "@/lib/gst";
 import { computeGstSplit } from "@/lib/gst";
 import { supabase, isDebug } from "@/lib/supabase";
@@ -159,6 +159,68 @@ export async function fetchStage1Units(
     jobNotes.set(String(j.id), typeof j.notes === "string" ? j.notes : undefined);
   });
 
+  // Per-line cost detail (display-only) from stage1_job_costs.lines, plus the
+  // proof name carried on the cost row's notes. These restore description /
+  // Job Cost Date / GST treatment / proof that the category buckets cannot hold.
+  const jobIds = summaries
+    .map((s) => String(s.stage1_job_id ?? ""))
+    .filter((id) => id.length > 0);
+  const costLinesByJob = new Map<string, CostLine[]>();
+  if (jobIds.length > 0) {
+    const { data: costRows, error: costRowsErr } = await supabase
+      .from("stage1_job_costs")
+      .select("stage1_job_id,lines")
+      .in("stage1_job_id", jobIds);
+    if (!costRowsErr) {
+      (costRows ?? []).forEach((r: Record<string, unknown>) => {
+        const raw = r.lines;
+        const parsed = Array.isArray(raw) ? raw : [];
+        const lines: CostLine[] = parsed
+          .map((l) => l as Partial<CostLine>)
+          .filter((l) => l && (l.description || l.amount != null))
+          .map((l) => ({
+            id: typeof l.id === "string" && l.id ? l.id : `${String(r.stage1_job_id)}:${Math.random().toString(36).slice(2)}`,
+            description: typeof l.description === "string" ? l.description : "",
+            amount: l.amount != null ? Number(l.amount) : undefined,
+            gstIncluded: l.gstIncluded ?? (l.gstTreatment ?? "gst_included") === "gst_included",
+            gstTreatment: (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment,
+            gstAmount: l.gstAmount != null ? Number(l.gstAmount) : undefined,
+            gstOverridden: l.gstOverridden ?? false,
+            docName: typeof l.docName === "string" ? l.docName : undefined,
+            date: typeof l.date === "string" ? l.date : undefined,
+          }));
+        if (lines.length > 0) costLinesByJob.set(String(r.stage1_job_id), lines);
+      });
+    }
+  }
+
+  // General Business Expenses (NOT part of gross margin) from the sandbox table.
+  const gbByJob = new Map<string, GBExpense[]>();
+  {
+    const { data: gbRows, error: gbErr } = await supabase
+      .from("stage1_business_expenses")
+      .select("id,stage1_job_id,expense_date,supplier,description,amount_inc_gst,gst_included,notes,proof_name")
+      .eq("autopsy_run_id", runId);
+    if (!gbErr) {
+      (gbRows ?? []).forEach((r: Record<string, unknown>) => {
+        const jobId = String(r.stage1_job_id ?? "");
+        if (!jobId) return;
+        const list = gbByJob.get(jobId) ?? [];
+        list.push({
+          id: String(r.id),
+          expenseDate: typeof r.expense_date === "string" ? r.expense_date : undefined,
+          supplier: typeof r.supplier === "string" ? r.supplier : undefined,
+          description: typeof r.description === "string" ? r.description : undefined,
+          amount: r.amount_inc_gst != null ? Number(r.amount_inc_gst) : undefined,
+          gstIncluded: typeof r.gst_included === "boolean" ? r.gst_included : true,
+          notes: typeof r.notes === "string" ? r.notes : undefined,
+          receiptName: typeof r.proof_name === "string" ? r.proof_name : undefined,
+        });
+        gbByJob.set(jobId, list);
+      });
+    }
+  }
+
   return summaries.map((s, i: number) => {
     const j = { id: String(s.stage1_job_id ?? "") } as CanonicalStage1JobRow;
     const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
@@ -204,6 +266,7 @@ export async function fetchStage1Units(
     const variationRecorded =
       typeof s.variation_recorded === "boolean" ? s.variation_recorded : variationInvoiceAmount > 0;
 
+    const persistedLines = costLinesByJob.get(String(s.stage1_job_id ?? ""));
     const costLines: CostLine[] = [];
     const pushCost = (label: string, amount: number) => {
       if (amount > 0) {
@@ -223,6 +286,9 @@ export async function fetchStage1Units(
     pushCost("Travel", travelCost);
     pushCost("Rework", reworkCost);
     pushCost("Other Direct Cost", otherDirectCost);
+    // Prefer the persisted per-line detail (description / date / GST / proof);
+    // fall back to the bucket reconstruction only when no detail was stored.
+    const effectiveCostLines = persistedLines && persistedLines.length > 0 ? persistedLines : costLines;
 
     const unit: ProofUnit = {
       n: jobSequenceNumber ?? i + 1,
@@ -248,7 +314,8 @@ export async function fetchStage1Units(
       costLabour: labourCost || undefined,
       costSubcontractors: undefined,
       costOther: otherDirectCost + travelCost + reworkCost || undefined,
-      costLines,
+      costLines: effectiveCostLines,
+      gbExpenses: gbByJob.get(String(s.stage1_job_id ?? "")),
       // Canonical sandbox commercial proof projections (read-only).
       sandboxRevenueAmount: revenue,
       sandboxOriginalInvoiceAmount: originalInvoiceAmount,
@@ -305,6 +372,9 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       invoiceGstOverridden: c.invoiceGstOverridden,
       costLines: c.costLines,
       gm: c.gm,
+      // General Business Expenses are now persisted in the sandbox table, so the
+      // canonical read is authoritative (fall back to cache only if absent).
+      gbExpenses: c.gbExpenses ?? cached.gbExpenses,
       // Preserve canonical commercial fields so dashboard computations work.
       quoteValue: c.quoteValue,
       costMaterials: c.costMaterials,
@@ -340,6 +410,7 @@ export interface Stage1CanonicalWriteError {
     | "stage1_jobs"
     | "stage1_revenue_events"
     | "stage1_job_costs"
+    | "stage1_business_expenses"
     | "auth"
     | "stage1_canonical";
   operation: string;
@@ -468,6 +539,28 @@ function costLineExGst(l: CostLine): number {
     overridden: l.gstOverridden,
   });
   return split.exGst;
+}
+
+/**
+ * Serialize the UI cost lines into a plain JSON array for stage1_job_costs.lines.
+ * This preserves per-line description, Job Cost Date, GST treatment and proof
+ * name (display-only detail the category buckets cannot hold). Margin is still
+ * computed from the ex-GST buckets, never from this array.
+ */
+function serializeCostLines(lines: CostLine[] | undefined): Record<string, unknown>[] {
+  return (lines ?? [])
+    .filter((l) => (l.amount ?? 0) > 0 || (l.description ?? "").trim().length > 0)
+    .map((l) => ({
+      id: l.id,
+      description: l.description ?? "",
+      amount: l.amount ?? null,
+      gstIncluded: l.gstIncluded ?? true,
+      gstTreatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+      gstAmount: l.gstAmount ?? null,
+      gstOverridden: l.gstOverridden ?? false,
+      docName: l.docName ?? null,
+      date: l.date ?? null,
+    }));
 }
 
 function bucketDirectCosts(u: ProofUnit): DirectCostBuckets {
@@ -756,6 +849,7 @@ async function doSyncStage1Units(
         rework_cost: buckets.reworkCost,
         other_direct_cost: buckets.otherDirectCost,
         notes: u.costDocName || null,
+        lines: serializeCostLines(u.costLines),
         created_by: userId,
       };
       const { error: costErr } = await supabase
@@ -782,6 +876,39 @@ async function doSyncStage1Units(
       } else {
         diagnostics.writtenRows.costLines.push(toProbe(costRow));
         if (isDebug()) console.info("[stage1] job cost written", { jobId, savedId: costRow.id });
+      }
+    }
+
+    // General Business Expenses — replace the sandbox rows for this job. These
+    // are NEVER part of gross margin (the margin view does not read this table).
+    const { error: gbDelErr } = await supabase
+      .from("stage1_business_expenses")
+      .delete()
+      .eq("stage1_job_id", jobId);
+    if (gbDelErr) {
+      ok = false;
+      addWriteError(diagnostics, "stage1_business_expenses", "delete existing for job", gbDelErr, { stage1_job_id: jobId });
+    }
+    const gbRows = (u.gbExpenses ?? [])
+      .filter((e) => (e.amount ?? 0) > 0 || e.supplier || e.description || e.receiptName)
+      .map((e) => ({
+        id: newCanonicalId(),
+        autopsy_run_id: runId,
+        stage1_job_id: jobId,
+        expense_date: e.expenseDate || null,
+        supplier: e.supplier || null,
+        description: e.description || null,
+        amount_inc_gst: e.amount ?? 0,
+        gst_included: e.gstIncluded ?? true,
+        notes: e.notes || null,
+        proof_name: e.receiptName || null,
+        created_by: userId,
+      }));
+    if (gbRows.length > 0) {
+      const { error: gbInsErr } = await supabase.from("stage1_business_expenses").insert(gbRows);
+      if (gbInsErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_business_expenses", "insert", gbInsErr, gbRows);
       }
     }
   }
