@@ -109,36 +109,58 @@ type MarginSummaryRow = Record<string, unknown> & { stage1_job_id?: string | nul
  * come from the public.stage1_job_margin_summary view. Returns null on failure
  * so the caller can fall back to the cache.
  */
-export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[] | null> {
+export async function fetchStage1Units(
+  runId: string | null,
+  ctx?: { stageProgressId?: string | null; userId?: string | null },
+): Promise<ProofUnit[] | null> {
   if (!runId) return [];
-  const { data: jobs, error } = await supabase
-    .from("stage1_jobs")
+
+  // CANONICAL READ for Stage 1 commercial proof. The required source of truth is
+  // the public.stage1_job_margin_summary view (NOT Core operational tables). The
+  // view already carries job identity (client_name, job_title, job_status,
+  // job_sequence_number) plus all commercial values (revenue_amount,
+  // total_direct_cost, gross_profit, gross_margin_pct), so the dashboard can
+  // hydrate fully from it after a refresh / re-login.
+  const { data: summary, error: summaryError } = await supabase
+    .from("stage1_job_margin_summary")
     .select("*")
     .eq("autopsy_run_id", runId)
     .order("job_sequence_number", { ascending: true })
     .order("created_at", { ascending: true });
-  if (error) return null;
-  if (!jobs || jobs.length === 0) return [];
-
-  // Commercial display values are read from the sandbox margin summary view —
-  // never from Core operational tables and never recomputed from local state.
-  const { data: summary } = await supabase
-    .from("stage1_job_margin_summary")
-    .select("*")
-    .eq("autopsy_run_id", runId);
 
   const summaries = (summary ?? []) as MarginSummaryRow[];
 
-  if (isDebug()) {
-    console.info("[stage1] sandbox fetch", {
-      runId,
-      jobs: jobs.length,
-      marginRows: summaries.length,
-    });
-  }
+  // --- TEMPORARY hydration diagnostics (read path) ------------------------
+  console.info("[stage1][hydrate] query", {
+    table: "public.stage1_job_margin_summary",
+    autopsyRunId: runId,
+    stageProgressId: ctx?.stageProgressId ?? null,
+    userId: ctx?.userId ?? null,
+    rowCount: summaries.length,
+    firstRow: summaries[0] ?? null,
+    error: summaryError ?? null,
+  });
+  // -----------------------------------------------------------------------
 
-  return (jobs as CanonicalStage1JobRow[]).map((j, i: number) => {
-    const s = summaries.find((r) => r.stage1_job_id === j.id);
+  // Only treat the read as a failure when Supabase actually errored. An empty
+  // result set is a legitimate "no rows yet" — never null-fall-back-to-cache on
+  // an empty (but successful) read, so persisted rows are never clobbered.
+  if (summaryError) return null;
+  if (summaries.length === 0) return [];
+
+  // Optional non-commercial detail (notes) from the job shell. This is a
+  // best-effort enrichment only; the view remains the authoritative source.
+  const { data: jobs } = await supabase
+    .from("stage1_jobs")
+    .select("id,notes")
+    .eq("autopsy_run_id", runId);
+  const jobNotes = new Map<string, string | undefined>();
+  (jobs ?? []).forEach((j: Record<string, unknown>) => {
+    jobNotes.set(String(j.id), typeof j.notes === "string" ? j.notes : undefined);
+  });
+
+  return summaries.map((s, i: number) => {
+    const j = { id: String(s.stage1_job_id ?? "") } as CanonicalStage1JobRow;
     const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
     const revenue = num("revenue_amount");
     const labourCost = num("labour_cost");
@@ -178,16 +200,16 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
     pushCost("Other Direct Cost", otherDirectCost);
 
     const unit: ProofUnit = {
-      n: j.job_sequence_number ?? i + 1,
-      stage1JobId: String(j.id),
-      client: typeof j.client_name === "string" ? j.client_name : "",
-      jobSite: typeof j.job_title === "string" ? j.job_title : undefined,
+      n: (typeof s.job_sequence_number === "number" ? s.job_sequence_number : null) ?? i + 1,
+      stage1JobId: String(s.stage1_job_id ?? ""),
+      client: typeof s.client_name === "string" ? s.client_name : "",
+      jobSite: typeof s.job_title === "string" ? s.job_title : undefined,
       proofType: "Completed Job",
-      status: fromCanonicalStatus(typeof j.job_status === "string" ? j.job_status : null),
+      status: fromCanonicalStatus(typeof s.job_status === "string" ? s.job_status : null),
       gm,
       evidence: false,
-      notes: typeof j.notes === "string" ? j.notes : undefined,
-      lifecycle: j.job_status === "cancelled" ? "voided" : "active",
+      notes: jobNotes.get(String(s.stage1_job_id ?? "")),
+      lifecycle: s.job_status === "cancelled" ? "voided" : "active",
       // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
       invoiceAmount: revenue > 0 ? revenue : undefined,
       invoiceGstTreatment: "no_gst",

@@ -1746,6 +1746,10 @@ function Stage1DashboardInner() {
   useEffect(() => {
     unitsRef.current = units;
   }, [units]);
+  // Once the Stage 1 sandbox (public.stage1_job_margin_summary) has hydrated the
+  // ledger with at least one row, the legacy Core-board loader must NOT override
+  // the canonical commercial units.
+  const sandboxHydratedRef = useRef(false);
   useEffect(() => {
     const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
     if (!nextRunId) return;
@@ -2628,7 +2632,9 @@ function Stage1DashboardInner() {
         if (dbQuotes.length) {
           setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
         }
-        if (dbJobs.length) {
+        // Do NOT clobber the canonical sandbox ledger once it has hydrated from
+        // public.stage1_job_margin_summary. Core jobs are only a legacy fallback.
+        if (dbJobs.length && !sandboxHydratedRef.current) {
           setUnits(
             dbJobs.map((j, i) => ({
               n: i + 1,
@@ -2656,6 +2662,45 @@ function Stage1DashboardInner() {
     })();
     return () => { active = false; };
   }, []);
+
+  // ---- Canonical Stage 1 sandbox hydration (READ-ONLY) ---------------------
+  // On load / refresh / re-login / run change, hydrate the job ledger from the
+  // required source of truth: public.stage1_job_margin_summary (via
+  // fetchStage1Units). Persisted commercial proof (revenue, direct cost, gross
+  // profit, gross margin) is reloaded here so it survives a browser refresh.
+  // Empty (but successful) reads never clear persisted rows.
+  useEffect(() => {
+    if (!activeRunId) return;
+    let cancelled = false;
+    (async () => {
+      const cached = loadStage1UnitsCache(activeRunId);
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id ?? null;
+      const stageProgressId = stage1Snapshot?.stage_progress_id ?? null;
+      console.info("[stage1][hydrate] begin", {
+        activeAutopsyRunId: activeRunId,
+        activeStageProgressId: stageProgressId,
+        currentUserId: userId,
+      });
+      const canonical = await fetchStage1Units(activeRunId, { stageProgressId, userId });
+      if (cancelled) return;
+      if (canonical && canonical.length > 0) {
+        const merged = mergeUnits(canonical, cached);
+        sandboxHydratedRef.current = true;
+        unitsRef.current = merged;
+        setUnits(merged);
+        saveStage1UnitsCache(activeRunId, merged);
+        console.info("[stage1][hydrate] applied", { units: merged.length });
+      } else if (canonical == null) {
+        console.warn("[stage1][hydrate] read failed — keeping existing/cached units");
+      } else {
+        console.info("[stage1][hydrate] no persisted sandbox rows for this run");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, stage1Snapshot?.stage_progress_id]);
 
   const persistUnitsWithDiagnostics = useCallback(
     async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
