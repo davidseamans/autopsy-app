@@ -373,6 +373,9 @@ export interface CostLine {
 export interface ProofUnit {
   n: number;
   jobNumber?: string;
+  // Persisted Stage 1 job number (public.stage1_job_margin_summary.job_sequence_number).
+  // Authoritative source for the displayed "J-#" in the ledger.
+  jobSequenceNumber?: number;
   client: string;
   jobSite?: string;
   proofType: ProofType;
