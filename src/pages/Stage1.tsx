@@ -2093,18 +2093,6 @@ function Stage1SummaryDialog({
 function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   const [exp, setExp] = useState<GBExpense>({ id: "" });
   const reset = () => setExp({ id: "" });
-  const categories: GBCategory[] = [
-    "Fuel / Vehicle",
-    "Phone / Internet",
-    "Parking / Tolls",
-    "Software",
-    "Small Tools",
-    "PPE / Uniforms",
-    "General Supplies",
-    "Training",
-    "Insurance",
-    "Other",
-  ];
   return (
     <div className="rounded border bg-muted/30 p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
@@ -2121,23 +2109,8 @@ function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
           <Input value={exp.description ?? ""} onChange={(e) => setExp({ ...exp, description: e.target.value })} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Category</Label>
-          <Select value={exp.category ?? ""} onValueChange={(v) => setExp({ ...exp, category: v as GBCategory })}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
           <Label className="text-xs">Amount</Label>
           <Input type="number" value={exp.amount ?? ""} onChange={(e) => setExp({ ...exp, amount: e.target.value === "" ? undefined : Number(e.target.value) })} />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={!!exp.gstIncluded} onChange={(e) => setExp({ ...exp, gstIncluded: e.target.checked })} />
-            GST included (optional)
-          </Label>
         </div>
         <div className="space-y-1 col-span-2">
           <Label className="text-xs">Attach Receipt (Take Photo / Upload File)</Label>
