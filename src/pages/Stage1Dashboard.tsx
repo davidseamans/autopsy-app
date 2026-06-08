@@ -1086,14 +1086,13 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.quoteValue ?? 0;
+              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
               const paid = u.paymentAmount ?? 0;
               const outstanding = income - paid;
-              const costs =
-                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const costs = unitTotalCost(u);
               const gp = income - costs;
-              const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
-              const m = marginStatus(gmPctValue ?? 0);
+              const gmStatus = deriveStage1GmStatus(u);
+              const gmPctValue = gmStatus.pct;
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <button
@@ -1113,7 +1112,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
                 </button>
               );
             })}
