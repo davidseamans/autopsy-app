@@ -1142,9 +1142,9 @@ function DrillBody({
                   const gp = income - costs;
                   const gmStatus = deriveStage1GmStatus(u);
                   const pct = gmStatus.pct;
-                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+                  const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
                   return (
-                    <TableRow key={u.n}>
+                    <TableRow key={u.stage1JobId ?? `n-${u.n}`}>
                       <TableCell className="font-mono text-xs">{jobNum}</TableCell>
                       <TableCell>
                         <div className="font-medium leading-tight">{u.client}</div>
