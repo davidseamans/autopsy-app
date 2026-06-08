@@ -289,7 +289,6 @@ export function DetailedJobCostReport({
   // margin uses ex-GST revenue and ex-GST job costs only.
   const revenueIncGst = incomeT.gross; // Client Invoices inc GST (gross/input)
   const revenueExGst = incomeT.net; // Revenue ex GST (drives margin)
-  const costIncGst = costT.gross; // Job Costs inc GST (gross/input)
   const totalDirectCost = costT.net; // Job Costs ex GST (drives margin)
   const directCostsRecorded = totalDirectCost > 0;
   const grossProfit = directCostsRecorded ? revenueExGst - totalDirectCost : null;
