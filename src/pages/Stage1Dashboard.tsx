@@ -2752,34 +2752,16 @@ function Stage1DashboardInner() {
     let active = true;
     (async () => {
       try {
-        const { quotes: dbQuotes, jobs: dbJobs } = await loadStage1Board();
+        // Load ONLY the quote board from Core. The Simple Job Cost Ledger is
+        // driven STRICTLY by the canonical Stage 1 sandbox view
+        // (public.stage1_job_margin_summary, hydrated in the effect below).
+        // Core jobs must never populate the ledger — doing so reindexes rows by
+        // local array position (J-1, J-2, …) and breaks persisted row identity
+        // (job_sequence_number). That legacy fallback is removed.
+        const { quotes: dbQuotes } = await loadStage1Board();
         if (!active) return;
         if (dbQuotes.length) {
           setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
-        }
-        // Do NOT clobber the canonical sandbox ledger once it has hydrated from
-        // public.stage1_job_margin_summary. Core jobs are only a legacy fallback.
-        if (dbJobs.length && !sandboxHydratedRef.current) {
-          setUnits(
-            dbJobs.map((j, i) => ({
-              n: i + 1,
-              jobNumber: j.jobNumber,
-              client: j.client,
-              jobSite: j.site || undefined,
-              proofType: "Completed Job",
-              status: "Scheduled",
-              gm: 0,
-              evidence: false,
-              quoteValue: j.value,
-              projectedRevenue: j.value,
-              sourceQuote: j.sourceQuote,
-              jobId: j.jobId,
-              accountId: j.accountId,
-              siteId: j.siteId,
-              dbQuoteId: j.dbQuoteId,
-              dbQuoteNumber: j.dbQuoteNumber,
-            })),
-          );
         }
       } catch {
         /* board stays empty; nothing persisted yet */
