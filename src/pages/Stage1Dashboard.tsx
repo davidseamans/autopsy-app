@@ -875,6 +875,21 @@ function DrillBody({
   units: ProofUnit[];
   onOpenUnit: (n: number) => void;
 }) {
+  const [quoteFilter, setQuoteFilter] = useState<"all" | "sent" | "converted" | "rejected">("all");
+
+  const filteredQuotes = useMemo(() => {
+    switch (quoteFilter) {
+      case "sent":
+        return quotes.filter((q) => q.status === "Sent");
+      case "converted":
+        return quotes.filter((q) => q.converted);
+      case "rejected":
+        return quotes.filter((q) => q.status === "Rejected");
+      default:
+        return quotes;
+    }
+  }, [quotes, quoteFilter]);
+
   return (
     <div className="space-y-4">
       {kind === "leads" && (
