@@ -324,7 +324,6 @@ export function DetailedJobCostReport({
   }
   const gbT = totals(gbLines);
 
-  const evidenceStatus = unit.evidence ? "Attached" : "Missing";
   // Revenue / payment / outstanding come from the persisted sandbox projection.
   const incomeAsPerQuote = revenueAmount;
   const paymentReceived = unit.sandboxPaymentReceivedAmount ?? unit.paymentAmount ?? 0;
