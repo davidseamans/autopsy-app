@@ -1919,6 +1919,16 @@ function Stage1DashboardInner() {
   // ledger with at least one row, the legacy Core-board loader must NOT override
   // the canonical commercial units.
   const sandboxHydratedRef = useRef(false);
+  // Ledger hydration status for the Simple Job Cost Ledger. While loading we show
+  // "Loading Stage 1 jobs…" and never render an empty/zero dashboard state. On a
+  // Supabase error we surface a visible developer error panel rather than
+  // silently falling back to an empty ledger.
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [ledgerError, setLedgerError] = useState<{
+    source: string;
+    message: string;
+    userId: string | null;
+  } | null>(null);
   useEffect(() => {
     const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
     if (!nextRunId) return;
@@ -2821,9 +2831,14 @@ function Stage1DashboardInner() {
   // profit, gross margin) is reloaded here so it survives a browser refresh.
   // Empty (but successful) reads never clear persisted rows.
   useEffect(() => {
-    if (!activeRunId) return;
+    if (!activeRunId) {
+      // No run resolved yet. Keep showing the loading state until auth + run id
+      // are available; never fall through to an empty ledger.
+      return;
+    }
     let cancelled = false;
     (async () => {
+      setLedgerLoading(true);
       const cached = loadStage1UnitsCache(activeRunId);
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id ?? null;
@@ -2833,25 +2848,56 @@ function Stage1DashboardInner() {
         activeStageProgressId: stageProgressId,
         currentUserId: userId,
       });
-      const canonical = await fetchStage1Units(activeRunId, { stageProgressId, userId });
+      let readError: { source: string; message: string; userId: string | null } | null = null;
+      const canonical = await fetchStage1Units(activeRunId, {
+        stageProgressId,
+        userId,
+        onResult: (r) => {
+          console.info("[stage1][hydrate] read result", {
+            source: r.table,
+            rowCount: r.rowCount,
+            firstRow: r.firstRow,
+            error: r.error,
+          });
+          if (r.error) {
+            readError = {
+              source: r.table,
+              message: r.error.message,
+              userId,
+            };
+          }
+        },
+      });
       if (cancelled) return;
+      if (readError) {
+        // Do not silently swallow the error — surface it in a visible panel.
+        setLedgerError(readError);
+        setLedgerLoading(false);
+        console.warn("[stage1][hydrate] supabase error — showing error panel", readError);
+        return;
+      }
+      setLedgerError(null);
       if (canonical && canonical.length > 0) {
         const merged = mergeUnits(canonical, cached);
         sandboxHydratedRef.current = true;
         unitsRef.current = merged;
         setUnits(merged);
         saveStage1UnitsCache(activeRunId, merged);
-        console.info("[stage1][hydrate] applied", { units: merged.length });
+        console.info("[stage1][hydrate] applied", {
+          mappedLedgerRowCount: merged.length,
+          mappedFirstLedgerRow: merged[0] ?? null,
+        });
       } else if (canonical == null) {
         console.warn("[stage1][hydrate] read failed — keeping existing/cached units");
       } else {
         console.info("[stage1][hydrate] no persisted sandbox rows for this run");
       }
+      setLedgerLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeRunId, stage1Snapshot?.stage_progress_id]);
+  }, [activeRunId, stage1Snapshot?.stage_progress_id, user?.id]);
 
   const persistUnitsWithDiagnostics = useCallback(
     async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
@@ -4461,8 +4507,26 @@ function Stage1DashboardInner() {
       {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
       <p className="text-xs text-muted-foreground">
         Commercial proof:{" "}
-        <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+        {ledgerLoading && ledgerUnits.length === 0 ? (
+          <span className="font-medium text-foreground">Loading Stage 1 jobs…</span>
+        ) : (
+          <>
+            <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+          </>
+        )}
       </p>
+
+      {/* Visible developer error panel — never silently swallow a Supabase error. */}
+      {ledgerError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+          <div className="font-semibold">Stage 1 ledger failed to load</div>
+          <div className="mt-1 font-mono break-all">Query source: {ledgerError.source}</div>
+          <div className="mt-1 font-mono break-all">Supabase error: {ledgerError.message}</div>
+          <div className="mt-1 font-mono break-all">
+            Authenticated user id: {ledgerError.userId ?? "(none)"}
+          </div>
+        </div>
+      )}
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
@@ -4490,7 +4554,22 @@ function Stage1DashboardInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ledgerUnits.map((u) => {
+                  {ledgerUnits.length === 0 && ledgerLoading && !ledgerError ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Loading Stage 1 jobs…
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ) : ledgerUnits.length === 0 && ledgerError ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-8 text-center text-sm text-destructive">
+                        Stage 1 ledger failed to load — see error panel above.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                  ledgerUnits.map((u) => {
                     const isSel = u.n === selectedN;
                     // Gross (inc GST), GST and ex-GST are all derived from the
                     // persisted GST-INCLUSIVE source amount + GST treatment via
@@ -4576,7 +4655,7 @@ function Stage1DashboardInner() {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  }))}
                 </TableBody>
               </Table>
             </CardContent>
