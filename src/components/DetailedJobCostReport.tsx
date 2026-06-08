@@ -427,7 +427,7 @@ export function DetailedJobCostReport({
               supplierLabel="Invoice / Ref"
               emptyText="No customer invoices recorded for this job yet."
             />
-            <TotalsBlock label="Revenue ex GST" t={incomeT} />
+            <TotalsBlock label="Client Invoices" t={incomeT} />
           </section>
 
           {/* Section 3 — Job Costs */}
