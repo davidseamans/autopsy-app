@@ -3187,7 +3187,7 @@ export function JobDetailSheet({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Ref #</Label>
-                <Input value={draft.dbQuoteNumber ?? ""} onChange={(e) => setDraft({ ...draft, dbQuoteNumber: e.target.value })} placeholder="Invoice ref" />
+                <Input value={draft.invoiceRef ?? ""} onChange={(e) => setDraft({ ...draft, invoiceRef: e.target.value })} placeholder="Invoice ref" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Invoice Date</Label>
