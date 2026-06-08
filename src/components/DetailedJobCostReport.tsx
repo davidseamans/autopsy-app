@@ -372,7 +372,7 @@ export function DetailedJobCostReport({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Proof Type</div>
-                <div>{unit.proofType}</div>
+                <div>{proofTypeText}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Job / Contract Status</div>
@@ -395,8 +395,8 @@ export function DetailedJobCostReport({
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Evidence</div>
-                <div>{evidenceStatus}</div>
+                <div className="text-xs text-muted-foreground">Payment Status</div>
+                <div>{paymentStatusText}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">GM %</div>
@@ -439,7 +439,7 @@ export function DetailedJobCostReport({
             <div className="rounded-md border p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
                 <div className="text-xs text-muted-foreground">Income</div>
-                <div className="font-semibold tabular-nums">${fmt(incomeT.gross)}</div>
+                <div className="font-semibold tabular-nums">${fmt(revenueAmount)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Job Costs</div>
