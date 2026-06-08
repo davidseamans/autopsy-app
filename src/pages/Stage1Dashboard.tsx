@@ -1137,12 +1137,11 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.quoteValue ?? 0;
-                  const costs =
-                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
+                  const costs = unitTotalCost(u);
                   const gp = income - costs;
-                  const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
-                  const m = marginStatus(pct ?? 0);
+                  const gmStatus = deriveStage1GmStatus(u);
+                  const pct = gmStatus.pct;
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow key={u.n}>
@@ -1154,8 +1153,8 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</TableCell>
-                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "Not Yet Proven" : m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : gmStatus.tone}>{gmStatus.label}</TableCell>
                     </TableRow>
                   );
                 })}
