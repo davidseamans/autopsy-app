@@ -380,7 +380,7 @@ export function DetailedJobCostReport({
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Income as per quote</div>
+                <div className="text-xs text-muted-foreground">Client Invoices</div>
                 <div className="font-semibold tabular-nums">${fmt(incomeAsPerQuote)}</div>
               </div>
               <div>
@@ -404,17 +404,17 @@ export function DetailedJobCostReport({
             </div>
           </section>
 
-          {/* Section 2 — Customer Income / Invoices */}
+          {/* Section 2 — Client Invoices */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              2. Customer Income / Invoices
+              2. Client Invoices
             </h3>
             <LineTable
               lines={incomeLines}
               supplierLabel="Invoice / Ref"
               emptyText="No customer invoices recorded for this job yet."
             />
-            <TotalsBlock label="Income" t={incomeT} />
+            <TotalsBlock label="Revenue ex GST" t={incomeT} />
           </section>
 
           {/* Section 3 — Job Costs */}
@@ -437,7 +437,7 @@ export function DetailedJobCostReport({
             </h3>
             <div className="rounded-md border p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
-                <div className="text-xs text-muted-foreground">Income</div>
+                <div className="text-xs text-muted-foreground">Revenue ex GST</div>
                 <div className="font-semibold tabular-nums">${fmt(revenueAmount)}</div>
               </div>
               <div>
