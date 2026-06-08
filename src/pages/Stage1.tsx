@@ -445,6 +445,8 @@ export interface ProofUnit {
   sandboxVariationRecorded?: boolean;
   // General Business Expenses (not included in job GM)
   gbExpenses?: GBExpense[];
+  // Miscellaneous attachment / comment (optional, never blocks saving)
+  miscAttachmentName?: string;
   // Lifecycle / audit
   lifecycle?: "active" | "voided" | "archived";
   voidReason?: string;
