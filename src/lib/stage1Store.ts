@@ -266,6 +266,7 @@ export async function fetchStage1Units(
     const variationRecorded =
       typeof s.variation_recorded === "boolean" ? s.variation_recorded : variationInvoiceAmount > 0;
 
+    const persistedLines = costLinesByJob.get(String(s.stage1_job_id ?? ""));
     const costLines: CostLine[] = [];
     const pushCost = (label: string, amount: number) => {
       if (amount > 0) {
@@ -285,6 +286,9 @@ export async function fetchStage1Units(
     pushCost("Travel", travelCost);
     pushCost("Rework", reworkCost);
     pushCost("Other Direct Cost", otherDirectCost);
+    // Prefer the persisted per-line detail (description / date / GST / proof);
+    // fall back to the bucket reconstruction only when no detail was stored.
+    const effectiveCostLines = persistedLines && persistedLines.length > 0 ? persistedLines : costLines;
 
     const unit: ProofUnit = {
       n: jobSequenceNumber ?? i + 1,
@@ -310,7 +314,8 @@ export async function fetchStage1Units(
       costLabour: labourCost || undefined,
       costSubcontractors: undefined,
       costOther: otherDirectCost + travelCost + reworkCost || undefined,
-      costLines,
+      costLines: effectiveCostLines,
+      gbExpenses: gbByJob.get(String(s.stage1_job_id ?? "")),
       // Canonical sandbox commercial proof projections (read-only).
       sandboxRevenueAmount: revenue,
       sandboxOriginalInvoiceAmount: originalInvoiceAmount,
