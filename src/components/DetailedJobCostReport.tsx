@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ProofUnit, GBExpense } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
