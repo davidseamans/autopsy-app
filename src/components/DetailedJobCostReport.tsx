@@ -89,7 +89,7 @@ type Stage1CostRow = {
 function totals(lines: Line[]) {
   return lines.reduce(
     (acc, l) => {
-      const s = splitGst(l.gross, l.gstIncluded);
+      const s = splitLine(l);
       acc.gross += s.gross;
       acc.gst += s.gst;
       acc.net += s.net;
@@ -133,7 +133,7 @@ function LineTable({
         </TableHeader>
         <TableBody>
           {lines.map((l, i) => {
-            const s = splitGst(l.gross, l.gstIncluded);
+            const s = splitLine(l);
             return (
               <TableRow key={i}>
                 <TableCell className="text-muted-foreground">{l.date || "—"}</TableCell>
