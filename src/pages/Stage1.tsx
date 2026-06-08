@@ -3495,33 +3495,76 @@ export function JobDetailSheet({
             </div>
 
             {(draft.gbExpenses ?? []).length > 0 && (
-              <ul className="space-y-1 text-sm">
-                {(draft.gbExpenses ?? []).map((e, idx) => (
-                  <li key={e.id} className="flex items-center justify-between rounded border bg-white px-2 py-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="truncate">
-                        {e.description || e.supplier || "Expense"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
-                        {e.receiptName
-                          ? <span className="text-emerald-700">Receipt uploaded</span>
-                          : <span className="text-amber-700">Receipt missing</span>}
-                      </span>
+              <div className="space-y-2">
+                {(draft.gbExpenses ?? []).map((e, idx) => {
+                  const updateExp = (patch: Partial<GBExpense>) => {
+                    const next = [...(draft.gbExpenses ?? [])];
+                    next[idx] = { ...e, ...patch };
+                    setDraft({ ...draft, gbExpenses: next });
+                  };
+                  return (
+                    <div key={e.id} className="rounded-md border p-3 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Expense Date</Label>
+                          <Input type="date" value={e.expenseDate ?? ""} onChange={(ev) => updateExp({ expenseDate: ev.target.value || undefined })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Supplier</Label>
+                          <Input value={e.supplier ?? ""} onChange={(ev) => updateExp({ supplier: ev.target.value })} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Description</Label>
+                          <Input value={e.description ?? ""} onChange={(ev) => updateExp({ description: ev.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Amount inc GST</Label>
+                          <Input type="number" value={e.amount ?? ""} onChange={(ev) => updateExp({ amount: ev.target.value === "" ? undefined : Number(ev.target.value) })} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label className="text-xs">Notes</Label>
+                          <Textarea rows={2} value={e.notes ?? ""} onChange={(ev) => updateExp({ notes: ev.target.value })} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {fileInput(
+                          e.receiptName ? "Replace receipt" : "Upload file or take picture",
+                          e.receiptName,
+                          (name) => updateExp({ receiptName: name }),
+                        )}
+                        {e.receiptName && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => {
+                              if (!confirmDelete()) return;
+                              updateExp({ receiptName: undefined });
+                            }}
+                          >
+                            Delete receipt
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (!confirmDelete()) return;
+                            setDraft({ ...draft, gbExpenses: (draft.gbExpenses ?? []).filter((_, i) => i !== idx) });
+                          }}
+                        >
+                          Delete expense
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          gbExpenses: (draft.gbExpenses ?? []).filter((_, i) => i !== idx),
-                        })
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+                  );
+                })}
+              </div>
             )}
 
             <GBExpenseForm
