@@ -4431,12 +4431,6 @@ function Stage1DashboardInner() {
                     const gmStatus = deriveStage1GmStatus(u);
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
-                    // Quote # to Job # cross-reference (no one-to-one assumption).
-                    const linkedQuote =
-                      quotes.find((q) => q.convertedToN === u.n) ??
-                      (u.sourceQuote ? quotes.find((q) => q.number === u.sourceQuote) : undefined);
-                    const quoteNumber = linkedQuote?.number ?? u.sourceQuote ?? "—";
-                    const quoteStatus = linkedQuote?.status ?? (u.sourceQuote ? "Accepted" : "—");
                     return (
                       <TableRow
                         key={u.stage1JobId ?? `n-${u.n}`}
