@@ -359,6 +359,66 @@ function newCanonicalId(): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Map the UI cost model (generic cost lines + legacy category fields) onto the
+// categorised stage1_job_costs columns. All amounts are stored EX-GST so margin
+// computed by the sandbox margin summary view stays on an ex-GST basis.
+// ---------------------------------------------------------------------------
+interface DirectCostBuckets {
+  labourHours: number;
+  labourRate: number;
+  labourCost: number;
+  consumablesCost: number;
+  travelCost: number;
+  reworkCost: number;
+  otherDirectCost: number;
+  total: number;
+}
+
+function costLineExGst(l: CostLine): number {
+  const treatment = (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment;
+  const split = computeGstSplit({
+    inclusive: l.amount,
+    treatment,
+    gstOverride: l.gstAmount,
+    overridden: l.gstOverridden,
+  });
+  return split.exGst;
+}
+
+function bucketDirectCosts(u: ProofUnit): DirectCostBuckets {
+  const b: DirectCostBuckets = {
+    labourHours: 0,
+    labourRate: 0,
+    labourCost: 0,
+    consumablesCost: 0,
+    travelCost: 0,
+    reworkCost: 0,
+    otherDirectCost: 0,
+    total: 0,
+  };
+  const lines = u.costLines ?? [];
+  if (lines.length > 0) {
+    for (const l of lines) {
+      const amt = costLineExGst(l);
+      if (amt <= 0) continue;
+      const d = (l.description ?? "").toLowerCase();
+      if (d.includes("labour") || d.includes("labor")) b.labourCost += amt;
+      else if (d.includes("consumable") || d.includes("material")) b.consumablesCost += amt;
+      else if (d.includes("travel") || d.includes("mileage") || d.includes("fuel")) b.travelCost += amt;
+      else if (d.includes("rework") || d.includes("warranty")) b.reworkCost += amt;
+      else b.otherDirectCost += amt;
+    }
+  } else {
+    b.labourCost += u.costLabour ?? 0;
+    b.consumablesCost += u.costMaterials ?? 0;
+    b.otherDirectCost += (u.costOther ?? 0) + (u.costSubcontractors ?? 0);
+  }
+  b.total =
+    b.labourCost + b.consumablesCost + b.travelCost + b.reworkCost + b.otherDirectCost;
+  return b;
+}
+
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
   const runId = diagnostics.runId;
   if (!runId) return;
