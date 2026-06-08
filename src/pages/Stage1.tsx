@@ -2093,18 +2093,6 @@ function Stage1SummaryDialog({
 function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
   const [exp, setExp] = useState<GBExpense>({ id: "" });
   const reset = () => setExp({ id: "" });
-  const categories: GBCategory[] = [
-    "Fuel / Vehicle",
-    "Phone / Internet",
-    "Parking / Tolls",
-    "Software",
-    "Small Tools",
-    "PPE / Uniforms",
-    "General Supplies",
-    "Training",
-    "Insurance",
-    "Other",
-  ];
   return (
     <div className="rounded border bg-muted/30 p-3 space-y-2">
       <div className="grid grid-cols-2 gap-2">
@@ -2121,23 +2109,8 @@ function GBExpenseForm({ onAdd }: { onAdd: (e: GBExpense) => void }) {
           <Input value={exp.description ?? ""} onChange={(e) => setExp({ ...exp, description: e.target.value })} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Category</Label>
-          <Select value={exp.category ?? ""} onValueChange={(v) => setExp({ ...exp, category: v as GBCategory })}>
-            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
           <Label className="text-xs">Amount</Label>
           <Input type="number" value={exp.amount ?? ""} onChange={(e) => setExp({ ...exp, amount: e.target.value === "" ? undefined : Number(e.target.value) })} />
-        </div>
-        <div className="space-y-1 col-span-2">
-          <Label className="text-xs flex items-center gap-2">
-            <input type="checkbox" checked={!!exp.gstIncluded} onChange={(e) => setExp({ ...exp, gstIncluded: e.target.checked })} />
-            GST included (optional)
-          </Label>
         </div>
         <div className="space-y-1 col-span-2">
           <Label className="text-xs">Attach Receipt (Take Photo / Upload File)</Label>
@@ -3193,23 +3166,6 @@ export function JobDetailSheet({
                 <Label className="text-xs">Invoice Date</Label>
                 <Input type="date" value={draft.invoiceDate ?? ""} onChange={(e) => setDraft({ ...draft, invoiceDate: e.target.value })} />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Invoice Status</Label>
-                <Select value={draft.invoiceStatus ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceStatus: v as ProofUnit["invoiceStatus"] })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    {(["Draft","Sent","Approved","Invoiced","Part Paid","Paid","Cancelled"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Contract Start</Label>
-                <Input type="date" value={draft.contractStart ?? ""} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Contract End</Label>
-                <Input type="date" value={draft.contractEnd ?? ""} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} />
-              </div>
             </div>
             {/* GST treatment for revenue. Margin uses ex-GST revenue only. */}
             <div className="rounded border bg-muted/30 p-2 space-y-2">
@@ -3502,7 +3458,7 @@ export function JobDetailSheet({
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="truncate">
-                        {e.category ?? "Uncategorised"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
+                        {e.description || e.supplier || "Expense"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
                         {e.receiptName
                           ? <span className="text-emerald-700">Receipt uploaded</span>
                           : <span className="text-amber-700">Receipt missing</span>}
