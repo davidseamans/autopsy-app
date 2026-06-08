@@ -185,71 +185,106 @@ export function DetailedJobCostReport({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
+  // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
+  // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
+  // modal never resets to zero just because local arrays are empty.
+  const stage1JobId = unit?.stage1JobId ?? null;
+  const [revenueRows, setRevenueRows] = useState<Stage1RevenueRow[]>([]);
+  const [costRows, setCostRows] = useState<Stage1CostRow[]>([]);
+
+  useEffect(() => {
+    if (!open || !stage1JobId) {
+      setRevenueRows([]);
+      setCostRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [rev, cost] = await Promise.all([
+        supabase
+          .from("stage1_revenue_events")
+          .select("id,amount,revenue_type,source,reference,created_at")
+          .eq("stage1_job_id", stage1JobId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("stage1_job_costs")
+          .select(
+            "id,labour_cost,consumables_cost,travel_cost,rework_cost,other_direct_cost,notes,created_at",
+          )
+          .eq("stage1_job_id", stage1JobId)
+          .order("created_at", { ascending: true }),
+      ]);
+      if (cancelled) return;
+      setRevenueRows(((rev.data ?? []) as Stage1RevenueRow[]) || []);
+      setCostRows(((cost.data ?? []) as Stage1CostRow[]) || []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, stage1JobId]);
+
   if (!unit) return null;
 
-  // Income lines (one customer invoice line if present)
-  const incomeLines: Line[] = [];
-  if (unit.invoiceAmount) {
-    incomeLines.push({
-      date: unit.invoiceDate,
-      ref: unit.invoiceDocName,
+  const dateOnly = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
+
+  // Income lines — sandbox revenue events (stored EX-GST, so net == gross here).
+  const incomeLines: Line[] = revenueRows
+    .filter((r) => Number(r.amount) > 0)
+    .map((r) => ({
+      date: dateOnly(r.created_at),
+      ref: r.reference ?? undefined,
       supplier: unit.client,
       description:
-        unit.invoiceDocType ?? (unit.jobSite ? `Invoice — ${unit.jobSite}` : "Customer invoice"),
-      gross: unit.invoiceAmount,
-      gstIncluded: true,
-      proof: unit.invoiceDocName || (unit.evidence ? "Attached" : "Missing"),
-    });
-  }
+        (r.revenue_type ? r.revenue_type.charAt(0).toUpperCase() + r.revenue_type.slice(1) : "Invoice") +
+        (unit.jobSite ? ` — ${unit.jobSite}` : ""),
+      gross: Number(r.amount) || 0,
+      gstIncluded: false,
+      proof: r.reference || r.source || "Recorded",
+    }));
 
-  // Job cost lines (one synthetic line per cost bucket)
+  // Job cost lines — sandbox categorised cost row(s) (stored EX-GST).
   const costLines: Line[] = [];
-  const pushCost = (
-    label: string,
-    amount: number | undefined,
-    opts: { supplier?: string; gstIncluded?: boolean; proof?: string } = {},
-  ) => {
-    if (!amount) return;
-    costLines.push({
-      date: unit.invoiceDate,
-      ref: unit.costDocName,
-      supplier: opts.supplier ?? unit.costDocType ?? "Supplier",
-      description: label,
-      gross: amount,
-      gstIncluded: opts.gstIncluded ?? true,
-      proof: opts.proof ?? unit.costDocName ?? "Missing",
-    });
-  };
-  pushCost("Labour for job", unit.costLabour, {
-    supplier: "Cleaner hours",
-    gstIncluded: false,
-    proof: "Missing",
-  });
-  pushCost("Materials / supplies", unit.costMaterials, {
-    supplier: "Bunnings",
-    gstIncluded: true,
-    proof: unit.costDocName ?? "Attached",
-  });
-  pushCost("Subcontractors", unit.costSubcontractors, { gstIncluded: true });
-  pushCost("Other direct costs", unit.costOther, { gstIncluded: true });
+  for (const c of costRows) {
+    const pushBucket = (label: string, amount: number | null) => {
+      const amt = Number(amount) || 0;
+      if (amt <= 0) return;
+      costLines.push({
+        date: dateOnly(c.created_at),
+        ref: c.notes ?? undefined,
+        supplier: c.notes ?? "Supplier",
+        description: label,
+        gross: amt,
+        gstIncluded: false,
+        proof: c.notes || "Recorded",
+      });
+    };
+    pushBucket("Labour for job", c.labour_cost);
+    pushBucket("Consumables / Materials", c.consumables_cost);
+    pushBucket("Travel", c.travel_cost);
+    pushBucket("Rework", c.rework_cost);
+    pushBucket("Other direct costs", c.other_direct_cost);
+  }
 
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
-  // Governance: zero recorded cost is NOT the same as proven zero cost.
-  // Only calculate gross profit / margin when direct costs are actually recorded.
-  const directCostStatus = (unit as { directCostStatus?: string }).directCostStatus;
-  const directCostDisplay = (unit as { directCostDisplay?: string }).directCostDisplay;
-  const directCostsRecorded =
-    costT.gross > 0 &&
-    directCostStatus !== "not_yet_recorded" &&
-    directCostDisplay !== "Not Yet Recorded";
-  // GST is excluded from gross margin. Gross profit and GM % are calculated
-  // from ex-GST (net) revenue and ex-GST direct costs only.
-  const grossProfit = directCostsRecorded ? incomeT.net - costT.net : null;
+
+  // Summary values come from the persisted Stage 1 margin summary projection on
+  // the unit (NOT recomputed from local arrays), so they always match the ledger.
+  const revenueAmount = unit.sandboxRevenueAmount ?? unit.invoiceAmount ?? unit.quoteValue ?? 0;
+  const totalDirectCost = unit.sandboxTotalDirectCost ?? costT.gross;
+  const directCostsRecorded = totalDirectCost > 0;
+  const grossProfit =
+    unit.sandboxGrossProfit != null
+      ? unit.sandboxGrossProfit
+      : directCostsRecorded
+        ? revenueAmount - totalDirectCost
+        : null;
   const gmPct =
-    directCostsRecorded && incomeT.net > 0
-      ? ((incomeT.net - costT.net) / incomeT.net) * 100
-      : null;
+    unit.sandboxGrossMarginPct != null
+      ? unit.sandboxGrossMarginPct
+      : directCostsRecorded && revenueAmount > 0
+        ? ((revenueAmount - totalDirectCost) / revenueAmount) * 100
+        : null;
   const gmTone =
     gmPct === null
       ? "text-muted-foreground"
@@ -261,7 +296,13 @@ export function DetailedJobCostReport({
   const NOT_YET_PROVEN = "Not Yet Proven";
   const gmPctText = gmPct === null ? NOT_YET_PROVEN : `${gmPct.toFixed(1)}%`;
   const grossProfitText = grossProfit === null ? NOT_YET_PROVEN : `$${fmt(grossProfit)}`;
-  const jobCostsText = directCostsRecorded ? `$${fmt(costT.net)}` : "Not Yet Recorded";
+  const jobCostsText = directCostsRecorded ? `$${fmt(totalDirectCost)}` : "Not Yet Recorded";
+  const proofTypeText = unit.sandboxProofType
+    ? PROOF_TYPE_LABELS[unit.sandboxProofType] ?? unit.proofType
+    : unit.proofType;
+  const paymentStatusText = unit.sandboxPaymentStatus
+    ? PAYMENT_STATUS_LABELS[unit.sandboxPaymentStatus] ?? "—"
+    : "—";
 
   // Global GB expenses across all units
   const gbLines: Line[] = [];
