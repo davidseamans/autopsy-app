@@ -101,12 +101,13 @@ function fromCanonicalStatus(status: string | null): string {
 // Canonical READ — hydrate ProofUnit[] from the canonical tables
 // ---------------------------------------------------------------------------
 type CanonicalStage1JobRow = Record<string, unknown> & { id: string; job_sequence_number?: number | null };
-type CanonicalStage1RevenueRow = Record<string, unknown> & { stage1_job_id?: string | null };
-type CanonicalStage1CostRow = Record<string, unknown> & { stage1_job_id?: string | null };
+type MarginSummaryRow = Record<string, unknown> & { stage1_job_id?: string | null };
 
 /**
- * Fetch the run's commercial records from Supabase (canonical truth).
- * Returns null on failure so the caller can fall back to the cache.
+ * Fetch the run's commercial records from the Stage 1 sandbox (canonical truth
+ * for Stage 1). Job shells come from stage1_jobs; revenue/cost/profit/margin
+ * come from the public.stage1_job_margin_summary view. Returns null on failure
+ * so the caller can fall back to the cache.
  */
 export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[] | null> {
   if (!runId) return [];
@@ -119,38 +120,62 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
   if (error) return null;
   if (!jobs || jobs.length === 0) return [];
 
-  const [{ data: revenue }, { data: costs }] = await Promise.all([
-    supabase.from("stage1_revenue_lines").select("*").eq("autopsy_run_id", runId),
-    supabase.from("stage1_cost_lines").select("*").eq("autopsy_run_id", runId),
-  ]);
+  // Commercial display values are read from the sandbox margin summary view —
+  // never from Core operational tables and never recomputed from local state.
+  const { data: summary } = await supabase
+    .from("stage1_job_margin_summary")
+    .select("*")
+    .eq("autopsy_run_id", runId);
+
+  const summaries = (summary ?? []) as MarginSummaryRow[];
 
   if (isDebug()) {
-    // Diagnostic: canonical row counts loaded for this run.
-    console.info("[stage1] canonical fetch", {
+    console.info("[stage1] sandbox fetch", {
       runId,
       jobs: jobs.length,
-      revenueLines: (revenue ?? []).length,
-      costLines: (costs ?? []).length,
+      marginRows: summaries.length,
     });
   }
 
   return (jobs as CanonicalStage1JobRow[]).map((j, i: number) => {
-    const rev = ((revenue ?? []) as CanonicalStage1RevenueRow[]).find((r) => r.stage1_job_id === j.id);
-    const jobCosts = ((costs ?? []) as CanonicalStage1CostRow[]).filter((c) => c.stage1_job_id === j.id);
+    const s = summaries.find((r) => r.stage1_job_id === j.id);
+    const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
+    const revenue = num("revenue_amount");
+    const labourCost = num("labour_cost");
+    const consumablesCost = num("consumables_cost");
+    const travelCost = num("travel_cost");
+    const reworkCost = num("rework_cost");
+    const otherDirectCost = num("other_direct_cost");
+    const totalDirectCost =
+      s && s.total_direct_cost != null
+        ? Number(s.total_direct_cost) || 0
+        : labourCost + consumablesCost + travelCost + reworkCost + otherDirectCost;
+    const gm =
+      s && s.gross_margin_pct != null
+        ? Math.round(Number(s.gross_margin_pct))
+        : revenue > 0 && totalDirectCost > 0
+          ? Math.round(((revenue - totalDirectCost) / revenue) * 100)
+          : 0;
 
-    const revExGst = rev ? Number(rev.invoice_ex_gst_amount) || 0 : 0;
-    const costExGst = jobCosts.reduce((s: number, c) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
-    const gm = revExGst > 0 && costExGst > 0 ? Math.round(((revExGst - costExGst) / revExGst) * 100) : 0;
-
-    const costLines: CostLine[] = jobCosts.map((c) => ({
-      id: String(c.id),
-      description: typeof c.description === "string" ? c.description : "",
-      amount: Number(c.cost_total_gst_inclusive) || 0,
-      gstIncluded: (c.gst_treatment ?? "gst_included") === "gst_included",
-      gstTreatment: (c.gst_treatment ?? "gst_included") as GstTreatment,
-      gstAmount: Number(c.cost_gst_amount) || 0,
-      gstOverridden: !!c.gst_overridden,
-    }));
+    const costLines: CostLine[] = [];
+    const pushCost = (label: string, amount: number) => {
+      if (amount > 0) {
+        costLines.push({
+          id: `${j.id}:${label}`,
+          description: label,
+          amount,
+          gstIncluded: false,
+          gstTreatment: "no_gst",
+          gstAmount: 0,
+          gstOverridden: false,
+        });
+      }
+    };
+    pushCost("Labour", labourCost);
+    pushCost("Consumables / Materials", consumablesCost);
+    pushCost("Travel", travelCost);
+    pushCost("Rework", reworkCost);
+    pushCost("Other Direct Cost", otherDirectCost);
 
     const unit: ProofUnit = {
       n: j.job_sequence_number ?? i + 1,
@@ -163,10 +188,15 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
       evidence: false,
       notes: typeof j.notes === "string" ? j.notes : undefined,
       lifecycle: j.job_status === "cancelled" ? "voided" : "active",
-      invoiceAmount: rev ? Number(rev.invoice_total_gst_inclusive) || 0 : undefined,
-      invoiceGstTreatment: rev ? ((rev.gst_treatment ?? "gst_included") as GstTreatment) : undefined,
-      invoiceGstAmount: rev ? Number(rev.invoice_gst_amount) || 0 : undefined,
-      invoiceGstOverridden: rev ? !!rev.gst_overridden : undefined,
+      // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
+      invoiceAmount: revenue > 0 ? revenue : undefined,
+      invoiceGstTreatment: "no_gst",
+      invoiceGstAmount: 0,
+      invoiceGstOverridden: false,
+      costMaterials: consumablesCost || undefined,
+      costLabour: labourCost || undefined,
+      costSubcontractors: undefined,
+      costOther: otherDirectCost + travelCost + reworkCost || undefined,
       costLines,
     };
     return unit;
