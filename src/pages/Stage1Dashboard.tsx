@@ -4402,16 +4402,17 @@ function Stage1DashboardInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-20">#</TableHead>
+                    <TableHead className="w-16">Job #</TableHead>
                     <TableHead>Client</TableHead>
+                    <TableHead>Quote #</TableHead>
+                    <TableHead>Quote Status</TableHead>
                     <TableHead>Proof Type</TableHead>
-                    <TableHead className="text-right">
-                      <div className="leading-tight">Income</div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
-                    </TableHead>
+                    <TableHead className="text-right">Client Invoices inc GST</TableHead>
+                    <TableHead className="text-right">Revenue ex GST</TableHead>
                     <TableHead className="text-right">Outstanding</TableHead>
-                    <TableHead className="text-right">Job Costs</TableHead>
-                    <TableHead className="text-right">Gross Profit</TableHead>
+                    <TableHead className="text-right">Job Costs inc GST</TableHead>
+                    <TableHead className="text-right">Job Costs ex GST</TableHead>
+                    <TableHead className="text-right">Gross Profit ex GST</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
                     <TableHead className="text-right">Detailed Report</TableHead>
                   </TableRow>
@@ -4419,20 +4420,26 @@ function Stage1DashboardInner() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-                    const paid = u.paymentAmount ?? 0;
-                    const outstanding = income - paid;
-                    const costs = unitTotalCost(u);
-                    // Gross profit / margin are computed from the PERSISTED Stage 1
-                    // revenue (stage1_revenue_events, surfaced via the margin
-                    // summary view as u.invoiceAmount) when present, falling back
-                    // to the quote value. Margin is only meaningful with real
-                    // revenue: a null margin renders as "—".
-                    const revenue = income;
-                    const gp = revenue - costs;
+                    // Revenue / cost come from persisted Stage 1 sandbox values
+                    // (ex-GST). Client Invoices inc GST and Job Costs inc GST are
+                    // the GST-inclusive equivalents (ex-GST x 1.1). Quote amounts
+                    // never drive revenue or margin.
+                    const revenueEx = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
+                    const costEx = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+                    const invoicesIncGst = revenueEx * 1.1;
+                    const costsIncGst = costEx * 1.1;
+                    const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+                    const outstanding = u.sandboxOutstandingAmount ?? (revenueEx - paid);
+                    const gp = u.sandboxGrossProfit ?? (revenueEx - costEx);
                     const gmStatus = deriveStage1GmStatus(u);
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
+                    // Quote # to Job # cross-reference (no one-to-one assumption).
+                    const linkedQuote =
+                      quotes.find((q) => q.convertedToN === u.n) ??
+                      (u.sourceQuote ? quotes.find((q) => q.number === u.sourceQuote) : undefined);
+                    const quoteNumber = linkedQuote?.number ?? u.sourceQuote ?? "—";
+                    const quoteStatus = linkedQuote?.status ?? (u.sourceQuote ? "Accepted" : "—");
                     return (
                       <TableRow
                         key={u.stage1JobId ?? `n-${u.n}`}
@@ -4454,18 +4461,26 @@ function Stage1DashboardInner() {
                             )}
                           </button>
                         </TableCell>
+                        <TableCell className="font-mono text-xs">{quoteNumber}</TableCell>
+                        <TableCell className="text-xs">{quoteStatus}</TableCell>
                         <TableCell>{deriveStage1ProofType(u)}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${fmtMoney(income)}` : "—"}
+                          {revenueEx > 0 ? `$${fmtMoney(invoicesIncGst)}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {revenueEx > 0 ? `$${fmtMoney(revenueEx)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
-                          {income > 0 ? fmtSignedMoney(outstanding) : "—"}
+                          {revenueEx > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {renderDirectCost(costs)}
+                          {costEx > 0 ? `$${fmtMoney(costsIncGst)}` : renderDirectCost(costEx)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {revenue > 0 ? `$${fmtMoney(gp)}` : "—"}
+                          {renderDirectCost(costEx)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {revenueEx > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}
