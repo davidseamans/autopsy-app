@@ -3458,7 +3458,7 @@ export function JobDetailSheet({
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                       <span className="truncate">
-                        {e.category ?? "Uncategorised"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
+                        {e.description || e.supplier || "Expense"} — ${(e.amount ?? 0).toFixed(2)} —{" "}
                         {e.receiptName
                           ? <span className="text-emerald-700">Receipt uploaded</span>
                           : <span className="text-amber-700">Receipt missing</span>}
