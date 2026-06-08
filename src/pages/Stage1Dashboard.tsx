@@ -2752,34 +2752,16 @@ function Stage1DashboardInner() {
     let active = true;
     (async () => {
       try {
-        const { quotes: dbQuotes, jobs: dbJobs } = await loadStage1Board();
+        // Load ONLY the quote board from Core. The Simple Job Cost Ledger is
+        // driven STRICTLY by the canonical Stage 1 sandbox view
+        // (public.stage1_job_margin_summary, hydrated in the effect below).
+        // Core jobs must never populate the ledger — doing so reindexes rows by
+        // local array position (J-1, J-2, …) and breaks persisted row identity
+        // (job_sequence_number). That legacy fallback is removed.
+        const { quotes: dbQuotes } = await loadStage1Board();
         if (!active) return;
         if (dbQuotes.length) {
           setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
-        }
-        // Do NOT clobber the canonical sandbox ledger once it has hydrated from
-        // public.stage1_job_margin_summary. Core jobs are only a legacy fallback.
-        if (dbJobs.length && !sandboxHydratedRef.current) {
-          setUnits(
-            dbJobs.map((j, i) => ({
-              n: i + 1,
-              jobNumber: j.jobNumber,
-              client: j.client,
-              jobSite: j.site || undefined,
-              proofType: "Completed Job",
-              status: "Scheduled",
-              gm: 0,
-              evidence: false,
-              quoteValue: j.value,
-              projectedRevenue: j.value,
-              sourceQuote: j.sourceQuote,
-              jobId: j.jobId,
-              accountId: j.accountId,
-              siteId: j.siteId,
-              dbQuoteId: j.dbQuoteId,
-              dbQuoteNumber: j.dbQuoteNumber,
-            })),
-          );
         }
       } catch {
         /* board stays empty; nothing persisted yet */
@@ -2917,10 +2899,15 @@ function Stage1DashboardInner() {
   // name, or local array position. The displayed Job # comes only from
   // jobSequenceNumber.
   const ledgerUnits = useMemo(() => {
+    // STRICT canonical identity contract:
+    //  - Only persisted Stage 1 sandbox rows (stage1_job_id present) appear.
+    //  - No fallback to local/Core/seed rows — never rebuild the ledger from
+    //    local mock state or merge quote rows by array position.
+    //  - Sorted ONLY by persisted job_sequence_number ascending (never by
+    //    created_at, revenue, quote number, proof status, or array order).
     const persisted = units.filter((u) => !!u.stage1JobId);
-    const source = persisted.length > 0 ? persisted : units;
-    return [...source].sort(
-      (a, b) => (a.jobSequenceNumber ?? a.n ?? 0) - (b.jobSequenceNumber ?? b.n ?? 0),
+    return [...persisted].sort(
+      (a, b) => (a.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER) - (b.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER),
     );
   }, [units]);
 
@@ -4477,11 +4464,11 @@ function Stage1DashboardInner() {
                     const gmTone = gmStatus.tone;
                     return (
                       <TableRow
-                        key={u.stage1JobId ?? `n-${u.n}`}
+                        key={u.stage1JobId}
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`}</TableCell>
+                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : "—"}</TableCell>
                         <TableCell>
                           <button
                             type="button"
@@ -4493,6 +4480,11 @@ function Stage1DashboardInner() {
                               <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
                             ) : (
                               <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                            )}
+                            {isDebug() && (
+                              <div className="mt-1 text-[10px] leading-tight text-muted-foreground/80 font-mono break-all">
+                                seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
+                              </div>
                             )}
                           </button>
                         </TableCell>
