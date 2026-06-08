@@ -2831,9 +2831,14 @@ function Stage1DashboardInner() {
   // profit, gross margin) is reloaded here so it survives a browser refresh.
   // Empty (but successful) reads never clear persisted rows.
   useEffect(() => {
-    if (!activeRunId) return;
+    if (!activeRunId) {
+      // No run resolved yet. Keep showing the loading state until auth + run id
+      // are available; never fall through to an empty ledger.
+      return;
+    }
     let cancelled = false;
     (async () => {
+      setLedgerLoading(true);
       const cached = loadStage1UnitsCache(activeRunId);
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData?.user?.id ?? null;
@@ -2843,25 +2848,56 @@ function Stage1DashboardInner() {
         activeStageProgressId: stageProgressId,
         currentUserId: userId,
       });
-      const canonical = await fetchStage1Units(activeRunId, { stageProgressId, userId });
+      let readError: { source: string; message: string; userId: string | null } | null = null;
+      const canonical = await fetchStage1Units(activeRunId, {
+        stageProgressId,
+        userId,
+        onResult: (r) => {
+          console.info("[stage1][hydrate] read result", {
+            source: r.table,
+            rowCount: r.rowCount,
+            firstRow: r.firstRow,
+            error: r.error,
+          });
+          if (r.error) {
+            readError = {
+              source: r.table,
+              message: r.error.message,
+              userId,
+            };
+          }
+        },
+      });
       if (cancelled) return;
+      if (readError) {
+        // Do not silently swallow the error — surface it in a visible panel.
+        setLedgerError(readError);
+        setLedgerLoading(false);
+        console.warn("[stage1][hydrate] supabase error — showing error panel", readError);
+        return;
+      }
+      setLedgerError(null);
       if (canonical && canonical.length > 0) {
         const merged = mergeUnits(canonical, cached);
         sandboxHydratedRef.current = true;
         unitsRef.current = merged;
         setUnits(merged);
         saveStage1UnitsCache(activeRunId, merged);
-        console.info("[stage1][hydrate] applied", { units: merged.length });
+        console.info("[stage1][hydrate] applied", {
+          mappedLedgerRowCount: merged.length,
+          mappedFirstLedgerRow: merged[0] ?? null,
+        });
       } else if (canonical == null) {
         console.warn("[stage1][hydrate] read failed — keeping existing/cached units");
       } else {
         console.info("[stage1][hydrate] no persisted sandbox rows for this run");
       }
+      setLedgerLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeRunId, stage1Snapshot?.stage_progress_id]);
+  }, [activeRunId, stage1Snapshot?.stage_progress_id, user?.id]);
 
   const persistUnitsWithDiagnostics = useCallback(
     async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
