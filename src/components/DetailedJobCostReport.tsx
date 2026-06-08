@@ -17,13 +17,18 @@ import { Badge } from "@/components/ui/badge";
 import type { ProofUnit, GBExpense } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
+import { computeGstSplit, type GstTreatment } from "@/lib/gst";
 
 type Line = {
   date?: string;
   ref?: string;
   description?: string;
+  /** GST-INCLUSIVE gross amount as entered (source of truth). */
   gross: number;
   gstIncluded: boolean;
+  gstTreatment?: GstTreatment;
+  gstOverride?: number;
+  overridden?: boolean;
   proof?: string;
   supplier?: string;
   category?: string;
@@ -31,13 +36,17 @@ type Line = {
   fromJobLabel?: string;
 };
 
-function splitGst(gross: number, gstIncluded: boolean) {
-  if (!gross) return { gross: 0, gst: 0, net: 0 };
-  if (gstIncluded) {
-    const gst = gross / 11;
-    return { gross, gst, net: gross - gst };
-  }
-  return { gross, gst: 0, net: gross };
+// Split a line into gross (inc GST) / GST / net (ex GST) using its GST
+// treatment. The entered amount is the GST-inclusive gross; GST and ex-GST are
+// derived deterministically — never gross = ex-GST x 1.1.
+function splitLine(l: Line) {
+  const split = computeGstSplit({
+    inclusive: l.gross,
+    treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+    gstOverride: l.gstOverride,
+    overridden: l.overridden,
+  });
+  return { gross: split.inclusive, gst: split.gst, net: split.exGst };
 }
 
 const fmt = (n: number) =>
