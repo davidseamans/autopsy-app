@@ -111,7 +111,16 @@ type MarginSummaryRow = Record<string, unknown> & { stage1_job_id?: string | nul
  */
 export async function fetchStage1Units(
   runId: string | null,
-  ctx?: { stageProgressId?: string | null; userId?: string | null },
+  ctx?: {
+    stageProgressId?: string | null;
+    userId?: string | null;
+    onResult?: (r: {
+      table: string;
+      rowCount: number;
+      firstRow: unknown;
+      error: { message: string } | null;
+    }) => void;
+  },
 ): Promise<ProofUnit[] | null> {
   if (!runId) return [];
 
@@ -141,6 +150,16 @@ export async function fetchStage1Units(
     error: summaryError ?? null,
   });
   // -----------------------------------------------------------------------
+
+  // Surface the raw read result (including any Supabase error) to the caller so
+  // it can render a visible developer error panel instead of silently swallowing
+  // the failure and falling back to an empty ledger.
+  ctx?.onResult?.({
+    table: "public.stage1_job_margin_summary",
+    rowCount: summaries.length,
+    firstRow: summaries[0] ?? null,
+    error: summaryError ? { message: summaryError.message } : null,
+  });
 
   // Only treat the read as a failure when Supabase actually errored. An empty
   // result set is a legitimate "no rows yet" — never null-fall-back-to-cache on
