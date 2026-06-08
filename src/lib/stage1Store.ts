@@ -300,6 +300,21 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       costLabour: c.costLabour,
       costSubcontractors: c.costSubcontractors,
       costOther: c.costOther,
+      // Canonical sandbox commercial proof projections always come from Supabase.
+      sandboxRevenueAmount: c.sandboxRevenueAmount,
+      sandboxOriginalInvoiceAmount: c.sandboxOriginalInvoiceAmount,
+      sandboxVariationInvoiceAmount: c.sandboxVariationInvoiceAmount,
+      sandboxProgressClaimAmount: c.sandboxProgressClaimAmount,
+      sandboxAdjustmentAmount: c.sandboxAdjustmentAmount,
+      sandboxPaymentReceivedAmount: c.sandboxPaymentReceivedAmount,
+      sandboxOutstandingAmount: c.sandboxOutstandingAmount,
+      sandboxTotalDirectCost: c.sandboxTotalDirectCost,
+      sandboxGrossProfit: c.sandboxGrossProfit,
+      sandboxGrossMarginPct: c.sandboxGrossMarginPct,
+      sandboxProofType: c.sandboxProofType,
+      sandboxPaymentStatus: c.sandboxPaymentStatus,
+      sandboxVariationRecorded: c.sandboxVariationRecorded,
+      paymentAmount: c.paymentAmount ?? cached.paymentAmount,
     };
   });
 }
