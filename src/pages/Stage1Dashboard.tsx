@@ -532,6 +532,34 @@ function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: st
   return { label: "Fail", tone: "text-red-600" };
 }
 
+function unitTotalCost(u: ProofUnit): number {
+  if (u.costLines && u.costLines.length > 0) {
+    return u.costLines.reduce((s, l) => s + (l.amount ?? 0), 0);
+  }
+  return (
+    (u.costMaterials ?? 0) +
+    (u.costLabour ?? 0) +
+    (u.costSubcontractors ?? 0) +
+    (u.costOther ?? 0)
+  );
+}
+
+function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct: number | null } {
+  const revenue = u.invoiceAmount ?? u.quoteValue ?? 0;
+  const costs = unitTotalCost(u);
+  const gmPct = u.gm;
+  if (revenue > 0 && costs > 0 && gmPct != null) {
+    return { label: "GM proven", tone: gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600", pct: gmPct };
+  }
+  if (revenue > 0 && costs === 0) {
+    return { label: "Cost not yet proven", tone: "text-muted-foreground", pct: null };
+  }
+  if (revenue === 0) {
+    return { label: "Revenue not yet proven", tone: "text-muted-foreground", pct: null };
+  }
+  return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
+}
+
 function KpiCard({
   label,
   primary,
@@ -998,14 +1026,13 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.quoteValue ?? 0;
+                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
                   const paid = u.paymentAmount ?? 0;
                   const outstanding = income - paid;
-                  const costs =
-                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const costs = unitTotalCost(u);
                   const gp = income - costs;
-                  const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
-                  const m = marginStatus(gmPctValue ?? 0);
+                  const gmStatus = deriveStage1GmStatus(u);
+                  const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow
@@ -1041,7 +1068,7 @@ function DrillBody({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -1059,14 +1086,13 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.quoteValue ?? 0;
+              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
               const paid = u.paymentAmount ?? 0;
               const outstanding = income - paid;
-              const costs =
-                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const costs = unitTotalCost(u);
               const gp = income - costs;
-              const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
-              const m = marginStatus(gmPctValue ?? 0);
+              const gmStatus = deriveStage1GmStatus(u);
+              const gmPctValue = gmStatus.pct;
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <button
@@ -1086,7 +1112,7 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
                 </button>
               );
             })}
@@ -1111,12 +1137,11 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.quoteValue ?? 0;
-                  const costs =
-                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
+                  const costs = unitTotalCost(u);
                   const gp = income - costs;
-                  const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
-                  const m = marginStatus(pct ?? 0);
+                  const gmStatus = deriveStage1GmStatus(u);
+                  const pct = gmStatus.pct;
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow key={u.n}>
@@ -1128,8 +1153,8 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</TableCell>
-                      <TableCell className={pct === null ? "text-muted-foreground" : m.tone}>{pct === null ? "Not Yet Proven" : m.label}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</TableCell>
+                      <TableCell className={pct === null ? "text-muted-foreground" : gmStatus.tone}>{gmStatus.label}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -1138,25 +1163,24 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.quoteValue ?? 0;
-              const costs =
-                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
+              const costs = unitTotalCost(u);
               const gp = income - costs;
-              const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
-              const m = marginStatus(pct ?? 0);
+              const gmStatus = deriveStage1GmStatus(u);
+              const pct = gmStatus.pct;
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmStatus.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</span></div>
                 </div>
               );
             })}
@@ -2798,16 +2822,8 @@ function Stage1DashboardInner() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = units.reduce((s, u) => s + (u.quoteValue ?? 0), 0);
-  const totalCosts = units.reduce(
-    (s, u) =>
-      s +
-      (u.costMaterials ?? 0) +
-      (u.costLabour ?? 0) +
-      (u.costSubcontractors ?? 0) +
-      (u.costOther ?? 0),
-    0,
-  );
+  const totalIncome = units.reduce((s, u) => s + (u.invoiceAmount ?? u.quoteValue ?? 0), 0);
+  const totalCosts = units.reduce((s, u) => s + unitTotalCost(u), 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
@@ -2847,24 +2863,14 @@ function Stage1DashboardInner() {
   // Governance gate: margin cannot be calculated from missing cost data.
   // When direct costs are not recorded, gross margin is "Not Yet Proven" and
   // Stage 2 is not ready — no 0%, 100%, or any calculated value is shown.
-  const directCostsNotRecorded =
-    dashboardDirectCostStatus === "not_yet_recorded" ||
-    (dashboardDirectCostDisplay ?? "").trim().toLowerCase() === "not yet recorded" ||
-    !directCostsRecorded(totalCosts);
+  const directCostsNotRecorded = !directCostsRecorded(totalCosts);
 
   const displayMarginText = directCostsNotRecorded
     ? "Not Yet Proven"
-    : stage1DashboardDisplay
-      ? renderMarginPct(dashboardMarginRaw as number | null, {
-          display: dashboardMarginDisplay,
-          status: dashboardMarginStatus,
-        })
-      : renderMarginPct(totalIncome > 0 ? gmPct : null);
+    : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
-  const directCostKpiText = renderDirectCost(totalCosts, {
-    display: dashboardDirectCostDisplay,
-  });
+  const directCostKpiText = renderDirectCost(totalCosts);
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4337,33 +4343,20 @@ function Stage1DashboardInner() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.quoteValue ?? 0;
+                    const income = u.invoiceAmount ?? u.quoteValue ?? 0;
                     const paid = u.paymentAmount ?? 0;
                     const outstanding = income - paid;
-                    const costs =
-                      (u.costMaterials ?? 0) +
-                      (u.costLabour ?? 0) +
-                      (u.costSubcontractors ?? 0) +
-                      (u.costOther ?? 0);
+                    const costs = unitTotalCost(u);
                     // Gross profit / margin are computed from the PERSISTED Stage 1
                     // revenue (stage1_revenue_events, surfaced via the margin
                     // summary view as u.invoiceAmount) when present, falling back
                     // to the quote value. Margin is only meaningful with real
                     // revenue: a null margin renders as "—".
-                    const revenue = u.invoiceAmount ?? income;
+                    const revenue = income;
                     const gp = revenue - costs;
-                    const gmPctValue =
-                      revenue > 0 && directCostsRecorded(costs)
-                        ? Math.round((gp / revenue) * 100)
-                        : null;
-                    const gmTone =
-                      gmPctValue === null
-                        ? "text-muted-foreground"
-                        : gmPctValue >= 30
-                          ? "text-emerald-600"
-                          : gmPctValue >= 20
-                            ? "text-amber-600"
-                            : "text-red-600";
+                    const gmStatus = deriveStage1GmStatus(u);
+                    const gmPctValue = gmStatus.pct;
+                    const gmTone = gmStatus.tone;
                     return (
                       <TableRow
                         key={u.n}
@@ -4399,7 +4392,7 @@ function Stage1DashboardInner() {
                           {revenue > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
-                          {renderMarginPct(gmPctValue)}
+                          {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button

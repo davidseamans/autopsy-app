@@ -211,6 +211,7 @@ export async function fetchStage1Units(
       notes: jobNotes.get(String(s.stage1_job_id ?? "")),
       lifecycle: s.job_status === "cancelled" ? "voided" : "active",
       // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
+      quoteValue: revenue > 0 ? revenue : undefined,
       invoiceAmount: revenue > 0 ? revenue : undefined,
       invoiceGstTreatment: "no_gst",
       invoiceGstAmount: 0,
@@ -259,11 +260,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       invoiceGstOverridden: c.invoiceGstOverridden,
       costLines: c.costLines,
       gm: c.gm,
-      // Drop legacy per-category cost fields — canonical cost lines are truth.
-      costMaterials: undefined,
-      costLabour: undefined,
-      costSubcontractors: undefined,
-      costOther: undefined,
+      // Preserve canonical commercial fields so dashboard computations work.
+      quoteValue: c.quoteValue,
+      costMaterials: c.costMaterials,
+      costLabour: c.costLabour,
+      costSubcontractors: c.costSubcontractors,
+      costOther: c.costOther,
     };
   });
 }
