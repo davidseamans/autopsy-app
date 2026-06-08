@@ -3009,6 +3009,9 @@ export function JobDetailSheet({
     </div>
   );
 
+  // Single, shared confirmation for every destructive Stage 1 action.
+  const confirmDelete = () => window.confirm("Delete this item? This cannot be undone.");
+
   const sectionTitle = (n: number, label: string, Icon?: React.ComponentType<{ className?: string }>) => (
     <div className="font-medium text-sm flex items-center gap-2">
       <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">{n}</span>
