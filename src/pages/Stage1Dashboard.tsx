@@ -4383,16 +4383,11 @@ function Stage1DashboardInner() {
         />
       </section>
 
-      {/* Maturity-oriented commercial guidance from the run-scoped dashboard RPC. */}
-      {stage1DashboardDisplay && (dashboardMarginHelper || dashboardNextAction) && (
-        <p className="text-xs text-muted-foreground">
-          {dashboardMarginHelper && <span>{dashboardMarginHelper}</span>}
-          {dashboardMarginHelper && dashboardNextAction && <span> </span>}
-          {dashboardNextAction && (
-            <span className="text-foreground">Next action: {dashboardNextAction}</span>
-          )}
-        </p>
-      )}
+      {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
+      <p className="text-xs text-muted-foreground">
+        Commercial proof:{" "}
+        <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+      </p>
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
