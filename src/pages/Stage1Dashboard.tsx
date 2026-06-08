@@ -4492,17 +4492,20 @@ function Stage1DashboardInner() {
                 <TableBody>
                   {ledgerUnits.map((u) => {
                     const isSel = u.n === selectedN;
-                    // Revenue / cost come from persisted Stage 1 sandbox values
-                    // (ex-GST). Client Invoices inc GST and Job Costs inc GST are
-                    // the GST-inclusive equivalents (ex-GST x 1.1). Quote amounts
-                    // never drive revenue or margin.
-                    const revenueEx = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
-                    const costEx = u.sandboxTotalDirectCost ?? unitTotalCost(u);
-                    const invoicesIncGst = revenueEx * 1.1;
-                    const costsIncGst = costEx * 1.1;
+                    // Gross (inc GST), GST and ex-GST are all derived from the
+                    // persisted GST-INCLUSIVE source amount + GST treatment via
+                    // computeGstSplit — the SAME source used by the Job Detail and
+                    // the Detailed Job Cost Report. Never fabricate gross as
+                    // ex-GST x 1.1. Quote amounts never drive revenue or margin.
+                    const invSplit = unitInvoiceSplit(u);
+                    const costSplit = unitCostSplit(u);
+                    const invoicesIncGst = invSplit.inclusive > 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
+                    const revenueEx = invSplit.inclusive > 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
+                    const costsIncGst = costSplit.inclusive > 0 ? costSplit.inclusive : (u.sandboxTotalDirectCost ?? 0);
+                    const costEx = costSplit.inclusive > 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
                     const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
-                    const outstanding = u.sandboxOutstandingAmount ?? (revenueEx - paid);
-                    const gp = u.sandboxGrossProfit ?? (revenueEx - costEx);
+                    const outstanding = u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
+                    const gp = revenueEx - costEx;
                     const gmStatus = deriveStage1GmStatus(u);
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
