@@ -1026,14 +1026,13 @@ function DrillBody({
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.quoteValue ?? 0;
+                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
                   const paid = u.paymentAmount ?? 0;
                   const outstanding = income - paid;
-                  const costs =
-                    (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+                  const costs = unitTotalCost(u);
                   const gp = income - costs;
-                  const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
-                  const m = marginStatus(gmPctValue ?? 0);
+                  const gmStatus = deriveStage1GmStatus(u);
+                  const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
                   return (
                     <TableRow
@@ -1069,7 +1068,7 @@ function DrillBody({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : m.tone}`}>{renderMarginPct(gmPctValue)}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
