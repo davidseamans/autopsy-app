@@ -4507,8 +4507,26 @@ function Stage1DashboardInner() {
       {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
       <p className="text-xs text-muted-foreground">
         Commercial proof:{" "}
-        <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+        {ledgerLoading && ledgerUnits.length === 0 ? (
+          <span className="font-medium text-foreground">Loading Stage 1 jobs…</span>
+        ) : (
+          <>
+            <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+          </>
+        )}
       </p>
+
+      {/* Visible developer error panel — never silently swallow a Supabase error. */}
+      {ledgerError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+          <div className="font-semibold">Stage 1 ledger failed to load</div>
+          <div className="mt-1 font-mono break-all">Query source: {ledgerError.source}</div>
+          <div className="mt-1 font-mono break-all">Supabase error: {ledgerError.message}</div>
+          <div className="mt-1 font-mono break-all">
+            Authenticated user id: {ledgerError.userId ?? "(none)"}
+          </div>
+        </div>
+      )}
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
