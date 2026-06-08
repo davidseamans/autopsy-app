@@ -1163,25 +1163,24 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.quoteValue ?? 0;
-              const costs =
-                (u.costMaterials ?? 0) + (u.costLabour ?? 0) + (u.costSubcontractors ?? 0) + (u.costOther ?? 0);
+              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
+              const costs = unitTotalCost(u);
               const gp = income - costs;
-              const pct = income > 0 && directCostsRecorded(costs) ? (gp / income) * 100 : null;
-              const m = marginStatus(pct ?? 0);
+              const gmStatus = deriveStage1GmStatus(u);
+              const pct = gmStatus.pct;
               const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
               return (
                 <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : m.label}</span>
+                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmStatus.label}</span>
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
                   <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : m.tone}`}>{pct === null ? "Not Yet Proven" : `${pct.toFixed(1)}%`}</span></div>
+                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</span></div>
                 </div>
               );
             })}
