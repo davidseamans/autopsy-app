@@ -1465,9 +1465,9 @@ export function computeParityAudit(
   // canonical Supabase storage (tables + storage bucket). Local storage is a
   // cache only, so canonical storage is fully achieved across the record set.
   const s6items: ParityItem[] = [
-    { label: "Revenue persistence", status: "Complete", note: "Canonical Supabase storage (stage1_revenue_lines)." },
-    { label: "Cost persistence", status: "Complete", note: "Canonical Supabase storage (stage1_cost_lines)." },
-    { label: "GST persistence", status: "Complete", note: "Canonical Supabase storage (GST split persisted per line)." },
+    { label: "Revenue persistence", status: "Complete", note: "Stage 1 sandbox storage (stage1_revenue_events)." },
+    { label: "Cost persistence", status: "Complete", note: "Stage 1 sandbox storage (stage1_job_costs)." },
+    { label: "GST persistence", status: "Complete", note: "Stage 1 sandbox storage (amounts persisted ex-GST)." },
     { label: "Reflection persistence", status: "Complete", note: "Canonical Supabase storage (stage1_reflections)." },
     { label: "Evidence persistence", status: "Complete", note: "Canonical cloud storage." },
     {
