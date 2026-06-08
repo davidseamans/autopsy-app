@@ -325,9 +325,13 @@ export function DetailedJobCostReport({
   const gbT = totals(gbLines);
 
   const evidenceStatus = unit.evidence ? "Attached" : "Missing";
-  const incomeAsPerQuote = unit.quoteValue ?? 0;
-  const paymentReceived = unit.paymentAmount ?? 0;
-  const outstanding = incomeAsPerQuote - paymentReceived;
+  // Revenue / payment / outstanding come from the persisted sandbox projection.
+  const incomeAsPerQuote = revenueAmount;
+  const paymentReceived = unit.sandboxPaymentReceivedAmount ?? unit.paymentAmount ?? 0;
+  const outstanding =
+    unit.sandboxOutstandingAmount != null
+      ? unit.sandboxOutstandingAmount
+      : incomeAsPerQuote - paymentReceived;
   const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
 
   return (
