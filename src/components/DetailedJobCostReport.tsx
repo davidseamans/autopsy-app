@@ -188,11 +188,13 @@ export function DetailedJobCostReport({
   allUnits,
   open,
   onOpenChange,
+  onEditInDetail,
 }: {
   unit: ProofUnit | null;
   allUnits: ProofUnit[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onEditInDetail?: (n: number) => void;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
