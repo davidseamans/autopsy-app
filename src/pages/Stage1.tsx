@@ -1465,9 +1465,9 @@ export function computeParityAudit(
   // canonical Supabase storage (tables + storage bucket). Local storage is a
   // cache only, so canonical storage is fully achieved across the record set.
   const s6items: ParityItem[] = [
-    { label: "Revenue persistence", status: "Complete", note: "Canonical Supabase storage (stage1_revenue_lines)." },
-    { label: "Cost persistence", status: "Complete", note: "Canonical Supabase storage (stage1_cost_lines)." },
-    { label: "GST persistence", status: "Complete", note: "Canonical Supabase storage (GST split persisted per line)." },
+    { label: "Revenue persistence", status: "Complete", note: "Stage 1 sandbox storage (stage1_revenue_events)." },
+    { label: "Cost persistence", status: "Complete", note: "Stage 1 sandbox storage (stage1_job_costs)." },
+    { label: "GST persistence", status: "Complete", note: "Stage 1 sandbox storage (amounts persisted ex-GST)." },
     { label: "Reflection persistence", status: "Complete", note: "Canonical Supabase storage (stage1_reflections)." },
     { label: "Evidence persistence", status: "Complete", note: "Canonical cloud storage." },
     {
@@ -3819,8 +3819,8 @@ export function JobDetailSheet({
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <div>stage1_jobs: <span className="font-mono font-semibold">{saveDiagnostics.counts.jobs ?? "error"}</span></div>
-                <div>stage1_revenue_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
-                <div>stage1_cost_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
+                <div>stage1_revenue_events: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
+                <div>stage1_job_costs: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3 text-muted-foreground">
                 <div>Auth user id: {saveDiagnostics.authUserIdPresent ? saveDiagnostics.authUserId : "missing"}</div>

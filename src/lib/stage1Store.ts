@@ -1,17 +1,23 @@
-// Run-scoped persistence for Stage 1 proof units.
+// Run-scoped persistence for Stage 1 / First 5 Jobs proof units.
 //
-// Stage 1 is a persistent commercial record system, not a calculator. The
-// CANONICAL source of truth for commercial records (jobs, revenue lines, cost
-// lines and their GST splits) is now Supabase — the four canonical tables:
+// Stage 1 is a PRE-CORE proof sandbox. Its commercial proof is persisted ONLY
+// in the Stage 1 sandbox tables — never in the Core operational tables
+// (public.jobs, public.revenue_events, public.job_costs, public.accounts,
+// public.pipeline, public.quotes). Core tables are reserved for progressed
+// users only.
 //
-//   - stage1_jobs
-//   - stage1_revenue_lines
-//   - stage1_cost_lines
-//   - stage1_reflections (handled in stage1Reflection.ts)
+// Stage 1 sandbox tables (canonical source of truth for Stage 1):
 //
-// Writes happen by direct table INSERT / UPDATE / DELETE under RLS. Reads
-// hydrate rows directly from the canonical tables, and the run-level commercial
-// summary is read from get_stage1_commercial_summary_by_run(p_run_id).
+//   - stage1_jobs            (job shell)
+//   - stage1_revenue_events  (one 'invoice' revenue event per job)
+//   - stage1_job_costs       (one categorised direct-cost row per job)
+//   - stage1_reflections     (handled in stage1Reflection.ts)
+//
+// Writes happen by direct table INSERT / UPDATE / DELETE under RLS. Commercial
+// display values (revenue_amount, total_direct_cost, gross_profit,
+// gross_margin_pct) are READ from the public.stage1_job_margin_summary view so
+// margin is never recomputed from local-only state, and the run-level summary
+// is read from get_stage1_commercial_summary_by_run(p_run_id).
 //
 // localStorage remains as a CACHE ONLY so the UI can paint instantly on load
 // and keep the richer ProofUnit detail (proof type, payment status, evidence
@@ -95,12 +101,13 @@ function fromCanonicalStatus(status: string | null): string {
 // Canonical READ — hydrate ProofUnit[] from the canonical tables
 // ---------------------------------------------------------------------------
 type CanonicalStage1JobRow = Record<string, unknown> & { id: string; job_sequence_number?: number | null };
-type CanonicalStage1RevenueRow = Record<string, unknown> & { stage1_job_id?: string | null };
-type CanonicalStage1CostRow = Record<string, unknown> & { stage1_job_id?: string | null };
+type MarginSummaryRow = Record<string, unknown> & { stage1_job_id?: string | null };
 
 /**
- * Fetch the run's commercial records from Supabase (canonical truth).
- * Returns null on failure so the caller can fall back to the cache.
+ * Fetch the run's commercial records from the Stage 1 sandbox (canonical truth
+ * for Stage 1). Job shells come from stage1_jobs; revenue/cost/profit/margin
+ * come from the public.stage1_job_margin_summary view. Returns null on failure
+ * so the caller can fall back to the cache.
  */
 export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[] | null> {
   if (!runId) return [];
@@ -113,38 +120,62 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
   if (error) return null;
   if (!jobs || jobs.length === 0) return [];
 
-  const [{ data: revenue }, { data: costs }] = await Promise.all([
-    supabase.from("stage1_revenue_lines").select("*").eq("autopsy_run_id", runId),
-    supabase.from("stage1_cost_lines").select("*").eq("autopsy_run_id", runId),
-  ]);
+  // Commercial display values are read from the sandbox margin summary view —
+  // never from Core operational tables and never recomputed from local state.
+  const { data: summary } = await supabase
+    .from("stage1_job_margin_summary")
+    .select("*")
+    .eq("autopsy_run_id", runId);
+
+  const summaries = (summary ?? []) as MarginSummaryRow[];
 
   if (isDebug()) {
-    // Diagnostic: canonical row counts loaded for this run.
-    console.info("[stage1] canonical fetch", {
+    console.info("[stage1] sandbox fetch", {
       runId,
       jobs: jobs.length,
-      revenueLines: (revenue ?? []).length,
-      costLines: (costs ?? []).length,
+      marginRows: summaries.length,
     });
   }
 
   return (jobs as CanonicalStage1JobRow[]).map((j, i: number) => {
-    const rev = ((revenue ?? []) as CanonicalStage1RevenueRow[]).find((r) => r.stage1_job_id === j.id);
-    const jobCosts = ((costs ?? []) as CanonicalStage1CostRow[]).filter((c) => c.stage1_job_id === j.id);
+    const s = summaries.find((r) => r.stage1_job_id === j.id);
+    const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
+    const revenue = num("revenue_amount");
+    const labourCost = num("labour_cost");
+    const consumablesCost = num("consumables_cost");
+    const travelCost = num("travel_cost");
+    const reworkCost = num("rework_cost");
+    const otherDirectCost = num("other_direct_cost");
+    const totalDirectCost =
+      s && s.total_direct_cost != null
+        ? Number(s.total_direct_cost) || 0
+        : labourCost + consumablesCost + travelCost + reworkCost + otherDirectCost;
+    const gm =
+      s && s.gross_margin_pct != null
+        ? Math.round(Number(s.gross_margin_pct))
+        : revenue > 0 && totalDirectCost > 0
+          ? Math.round(((revenue - totalDirectCost) / revenue) * 100)
+          : 0;
 
-    const revExGst = rev ? Number(rev.invoice_ex_gst_amount) || 0 : 0;
-    const costExGst = jobCosts.reduce((s: number, c) => s + (Number(c.cost_ex_gst_amount) || 0), 0);
-    const gm = revExGst > 0 && costExGst > 0 ? Math.round(((revExGst - costExGst) / revExGst) * 100) : 0;
-
-    const costLines: CostLine[] = jobCosts.map((c) => ({
-      id: String(c.id),
-      description: typeof c.description === "string" ? c.description : "",
-      amount: Number(c.cost_total_gst_inclusive) || 0,
-      gstIncluded: (c.gst_treatment ?? "gst_included") === "gst_included",
-      gstTreatment: (c.gst_treatment ?? "gst_included") as GstTreatment,
-      gstAmount: Number(c.cost_gst_amount) || 0,
-      gstOverridden: !!c.gst_overridden,
-    }));
+    const costLines: CostLine[] = [];
+    const pushCost = (label: string, amount: number) => {
+      if (amount > 0) {
+        costLines.push({
+          id: `${j.id}:${label}`,
+          description: label,
+          amount,
+          gstIncluded: false,
+          gstTreatment: "no_gst",
+          gstAmount: 0,
+          gstOverridden: false,
+        });
+      }
+    };
+    pushCost("Labour", labourCost);
+    pushCost("Consumables / Materials", consumablesCost);
+    pushCost("Travel", travelCost);
+    pushCost("Rework", reworkCost);
+    pushCost("Other Direct Cost", otherDirectCost);
 
     const unit: ProofUnit = {
       n: j.job_sequence_number ?? i + 1,
@@ -157,10 +188,15 @@ export async function fetchStage1Units(runId: string | null): Promise<ProofUnit[
       evidence: false,
       notes: typeof j.notes === "string" ? j.notes : undefined,
       lifecycle: j.job_status === "cancelled" ? "voided" : "active",
-      invoiceAmount: rev ? Number(rev.invoice_total_gst_inclusive) || 0 : undefined,
-      invoiceGstTreatment: rev ? ((rev.gst_treatment ?? "gst_included") as GstTreatment) : undefined,
-      invoiceGstAmount: rev ? Number(rev.invoice_gst_amount) || 0 : undefined,
-      invoiceGstOverridden: rev ? !!rev.gst_overridden : undefined,
+      // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
+      invoiceAmount: revenue > 0 ? revenue : undefined,
+      invoiceGstTreatment: "no_gst",
+      invoiceGstAmount: 0,
+      invoiceGstOverridden: false,
+      costMaterials: consumablesCost || undefined,
+      costLabour: labourCost || undefined,
+      costSubcontractors: undefined,
+      costOther: otherDirectCost + travelCost + reworkCost || undefined,
       costLines,
     };
     return unit;
@@ -216,7 +252,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
 let syncChain: Promise<unknown> = Promise.resolve();
 
 export interface Stage1CanonicalWriteError {
-  table: "stage1_jobs" | "stage1_revenue_lines" | "stage1_cost_lines" | "auth" | "stage1_canonical";
+  table:
+    | "stage1_jobs"
+    | "stage1_revenue_events"
+    | "stage1_job_costs"
+    | "auth"
+    | "stage1_canonical";
   operation: string;
   message: string;
   code?: string;
@@ -318,27 +359,94 @@ function newCanonicalId(): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Map the UI cost model (generic cost lines + legacy category fields) onto the
+// categorised stage1_job_costs columns. All amounts are stored EX-GST so margin
+// computed by the sandbox margin summary view stays on an ex-GST basis.
+// ---------------------------------------------------------------------------
+interface DirectCostBuckets {
+  labourHours: number;
+  labourRate: number;
+  labourCost: number;
+  consumablesCost: number;
+  travelCost: number;
+  reworkCost: number;
+  otherDirectCost: number;
+  total: number;
+}
+
+function costLineExGst(l: CostLine): number {
+  const treatment = (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment;
+  const split = computeGstSplit({
+    inclusive: l.amount,
+    treatment,
+    gstOverride: l.gstAmount,
+    overridden: l.gstOverridden,
+  });
+  return split.exGst;
+}
+
+function bucketDirectCosts(u: ProofUnit): DirectCostBuckets {
+  const b: DirectCostBuckets = {
+    labourHours: 0,
+    labourRate: 0,
+    labourCost: 0,
+    consumablesCost: 0,
+    travelCost: 0,
+    reworkCost: 0,
+    otherDirectCost: 0,
+    total: 0,
+  };
+  const lines = u.costLines ?? [];
+  if (lines.length > 0) {
+    for (const l of lines) {
+      const amt = costLineExGst(l);
+      if (amt <= 0) continue;
+      const d = (l.description ?? "").toLowerCase();
+      if (d.includes("labour") || d.includes("labor")) b.labourCost += amt;
+      else if (d.includes("consumable") || d.includes("material")) b.consumablesCost += amt;
+      else if (d.includes("travel") || d.includes("mileage") || d.includes("fuel")) b.travelCost += amt;
+      else if (d.includes("rework") || d.includes("warranty")) b.reworkCost += amt;
+      else b.otherDirectCost += amt;
+    }
+  } else {
+    b.labourCost += u.costLabour ?? 0;
+    b.consumablesCost += u.costMaterials ?? 0;
+    b.otherDirectCost += (u.costOther ?? 0) + (u.costSubcontractors ?? 0);
+  }
+  b.total =
+    b.labourCost + b.consumablesCost + b.travelCost + b.reworkCost + b.otherDirectCost;
+  return b;
+}
+
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
   const runId = diagnostics.runId;
   if (!runId) return;
+  // Resolve the run's job ids so sandbox child rows can be scoped to this run.
+  const { data: jobRows } = await supabase
+    .from("stage1_jobs")
+    .select("id")
+    .eq("autopsy_run_id", runId);
+  const jobIds = (jobRows ?? []).map((r: { id: unknown }) => String(r.id));
+  const scopeIds = jobIds.length ? jobIds : ["00000000-0000-0000-0000-000000000000"];
   const [jobsRes, revenueRes, costsRes] = await Promise.all([
     supabase
       .from("stage1_jobs")
       .select("id,autopsy_run_id,created_by", { count: "exact" })
       .eq("autopsy_run_id", runId),
     supabase
-      .from("stage1_revenue_lines")
-      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
-      .eq("autopsy_run_id", runId),
+      .from("stage1_revenue_events")
+      .select("id,created_by,stage1_job_id", { count: "exact" })
+      .in("stage1_job_id", scopeIds),
     supabase
-      .from("stage1_cost_lines")
-      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
-      .eq("autopsy_run_id", runId),
+      .from("stage1_job_costs")
+      .select("id,created_by,stage1_job_id", { count: "exact" })
+      .in("stage1_job_id", scopeIds),
   ]);
 
   if (jobsRes.error) addWriteError(diagnostics, "stage1_jobs", "post-save count", jobsRes.error);
-  if (revenueRes.error) addWriteError(diagnostics, "stage1_revenue_lines", "post-save count", revenueRes.error);
-  if (costsRes.error) addWriteError(diagnostics, "stage1_cost_lines", "post-save count", costsRes.error);
+  if (revenueRes.error) addWriteError(diagnostics, "stage1_revenue_events", "post-save count", revenueRes.error);
+  if (costsRes.error) addWriteError(diagnostics, "stage1_job_costs", "post-save count", costsRes.error);
 
   diagnostics.rows.jobs = (jobsRes.data ?? []).map(toProbe);
   diagnostics.rows.revenueLines = (revenueRes.data ?? []).map(toProbe);
@@ -349,6 +457,9 @@ async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnost
 }
 
 function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, writeSucceeded: boolean) {
+  // Only stage1_jobs carries autopsy_run_id; sandbox revenue/cost rows link via
+  // stage1_job_id, so the run-match check is based on the job rows.
+  const jobRows = diagnostics.rows.jobs;
   const allRows = [
     ...diagnostics.rows.jobs,
     ...diagnostics.rows.revenueLines,
@@ -356,8 +467,8 @@ function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, write
   ];
   diagnostics.writeSucceeded = writeSucceeded && diagnostics.errors.length === 0;
   diagnostics.authUserIdPresent = !!diagnostics.authUserId;
-  diagnostics.autopsyRunIdWrittenMatchesActiveRun = allRows.length > 0
-    ? allRows.every((r) => r.autopsy_run_id === diagnostics.runId)
+  diagnostics.autopsyRunIdWrittenMatchesActiveRun = jobRows.length > 0
+    ? jobRows.every((r) => r.autopsy_run_id === diagnostics.runId)
     : false;
   diagnostics.createdByMatchesAuthUser = diagnostics.authUserId && allRows.length > 0
     ? allRows.every((r) => r.created_by === diagnostics.authUserId)
@@ -374,9 +485,9 @@ function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, write
     diagnostics.createdByMatchesAuthUser === true;
   diagnostics.status = diagnostics.success ? "success" : "failed";
   diagnostics.message = diagnostics.success
-    ? "Canonical Supabase write confirmed: job, revenue, and cost rows exist for the active run."
+    ? "Stage 1 sandbox write confirmed: job, revenue, and cost rows exist for the active run."
     : diagnostics.errors[0]?.message ??
-      "Canonical Supabase write is not confirmed until stage1_jobs, stage1_revenue_lines, and stage1_cost_lines are all non-zero for the active run.";
+      "Stage 1 sandbox write is not confirmed until stage1_jobs, stage1_revenue_events, and stage1_job_costs are all non-zero for the active run.";
 }
 
 /**
@@ -507,11 +618,12 @@ async function doSyncStage1Units(
     keptIds.add(jobId);
     result.push({ ...u, stage1JobId: jobId });
 
-    // Revenue line — single line per job. Replace to keep canonical in lockstep.
-    const { error: revDelErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", jobId);
+    // Revenue — single sandbox 'invoice' event per job, stored ex-GST. Replace
+    // to keep the sandbox in lockstep with the workspace.
+    const { error: revDelErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", jobId);
     if (revDelErr) {
       ok = false;
-      addWriteError(diagnostics, "stage1_revenue_lines", "delete existing for job", revDelErr, { stage1_job_id: jobId });
+      addWriteError(diagnostics, "stage1_revenue_events", "delete existing for job", revDelErr, { stage1_job_id: jobId });
     }
     if ((u.invoiceAmount ?? 0) > 0) {
       const split = computeGstSplit({
@@ -522,105 +634,87 @@ async function doSyncStage1Units(
       });
       const revenueRow = {
         id: newCanonicalId(),
-        autopsy_run_id: runId,
         stage1_job_id: jobId,
-        invoice_total_gst_inclusive: split.inclusive,
-        invoice_gst_amount: split.gst,
-        invoice_ex_gst_amount: split.exGst,
-        gst_overridden: split.overridden,
-        gst_treatment: u.invoiceGstTreatment ?? "gst_included",
+        amount: split.exGst,
+        revenue_type: "invoice",
+        source: "stage1_dashboard",
+        reference: u.invoiceDocName || null,
         created_by: userId,
       };
       const { error: revErr } = await supabase
-        .from("stage1_revenue_lines")
+        .from("stage1_revenue_events")
         .insert(revenueRow);
       if (revErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_revenue_lines", "insert", revErr, revenueRow);
-        console.error("[stage1] revenue insert failed", { jobId, error: revErr.message });
+        addWriteError(diagnostics, "stage1_revenue_events", "insert", revErr, revenueRow);
+        console.error("[stage1] revenue event insert failed", { jobId, error: revErr.message });
       } else {
         diagnostics.writtenRows.revenueLines.push(toProbe(revenueRow));
       }
     }
 
-    // Cost lines — replace the full set for this job.
-    const { error: costDelErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", jobId);
+    // Direct costs — single categorised sandbox row per job, stored ex-GST.
+    const { error: costDelErr } = await supabase.from("stage1_job_costs").delete().eq("stage1_job_id", jobId);
     if (costDelErr) {
       ok = false;
-      addWriteError(diagnostics, "stage1_cost_lines", "delete existing for job", costDelErr, { stage1_job_id: jobId });
+      addWriteError(diagnostics, "stage1_job_costs", "delete existing for job", costDelErr, { stage1_job_id: jobId });
     }
-    const lines = u.costLines ?? [];
-    if (lines.length > 0) {
-      const rows = lines
-        .filter((l) => (l.amount ?? 0) > 0 || (l.description ?? "").trim().length > 0)
-        .map((l) => {
-          const treatment = (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment;
-          const split = computeGstSplit({
-            inclusive: l.amount,
-            treatment,
-            gstOverride: l.gstAmount,
-            overridden: l.gstOverridden,
-          });
-          return {
-            id: newCanonicalId(),
-            autopsy_run_id: runId,
-            stage1_job_id: jobId,
-            cost_category: "other",
-            description: l.description || null,
-            cost_total_gst_inclusive: split.inclusive,
-            cost_gst_amount: split.gst,
-            cost_ex_gst_amount: split.exGst,
-            gst_overridden: split.overridden,
-            gst_treatment: treatment,
-            created_by: userId,
-          };
+    const buckets = bucketDirectCosts(u);
+    if (buckets.total > 0) {
+      const costRow = {
+        id: newCanonicalId(),
+        stage1_job_id: jobId,
+        labour_hours: buckets.labourHours,
+        labour_rate: buckets.labourRate,
+        labour_cost: buckets.labourCost,
+        consumables_cost: buckets.consumablesCost,
+        travel_cost: buckets.travelCost,
+        rework_cost: buckets.reworkCost,
+        other_direct_cost: buckets.otherDirectCost,
+        notes: u.costDocName || null,
+        created_by: userId,
+      };
+      const { error: costErr } = await supabase
+        .from("stage1_job_costs")
+        .insert(costRow);
+      if (costErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_job_costs", "insert", costErr, costRow);
+        // Always surface cost write failures — a silent failure here is what
+        // produced "Job Costs = Not Yet Recorded" despite a saved cost.
+        console.error("[stage1] job cost insert failed", {
+          jobId,
+          runId,
+          createdBy: userId,
+          requested: {
+            labour_cost: costRow.labour_cost,
+            consumables_cost: costRow.consumables_cost,
+            travel_cost: costRow.travel_cost,
+            rework_cost: costRow.rework_cost,
+            other_direct_cost: costRow.other_direct_cost,
+          },
+          error: costErr.message,
         });
-      if (rows.length > 0) {
-        const { error: costErr } = await supabase
-          .from("stage1_cost_lines")
-          .insert(rows);
-        if (costErr) {
-          ok = false;
-          addWriteError(diagnostics, "stage1_cost_lines", "insert", costErr, rows);
-          // Always surface cost write failures — a silent failure here is what
-          // produced "Job Costs = Not Yet Recorded" despite a saved cost line.
-          console.error("[stage1] cost line insert failed", {
-            jobId,
-            runId,
-            createdBy: userId,
-            requested: rows.map((r) => ({
-              description: r.description,
-              cost_total_gst_inclusive: r.cost_total_gst_inclusive,
-              cost_gst_amount: r.cost_gst_amount,
-              cost_ex_gst_amount: r.cost_ex_gst_amount,
-            })),
-            error: costErr.message,
-          });
-        } else {
-          diagnostics.writtenRows.costLines.push(...rows.map(toProbe));
-          if (isDebug()) console.info("[stage1] cost lines written", {
-            jobId,
-            requested: rows.length,
-            savedIds: rows.map((r) => r.id),
-          });
-        }
+      } else {
+        diagnostics.writtenRows.costLines.push(toProbe(costRow));
+        if (isDebug()) console.info("[stage1] job cost written", { jobId, savedId: costRow.id });
       }
     }
   }
 
-  // Delete jobs (and their lines) that were removed locally.
+  // Delete jobs (and their sandbox child rows) that were removed locally.
   for (const id of existingIds) {
     if (!keptIds.has(id)) {
-      const { error: staleCostErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", id);
-      const { error: staleRevErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", id);
+      const { error: staleCostErr } = await supabase.from("stage1_job_costs").delete().eq("stage1_job_id", id);
+      const { error: staleRevErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", id);
       const { error: staleJobErr } = await supabase.from("stage1_jobs").delete().eq("id", id);
       if (staleCostErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_cost_lines", "delete stale job costs", staleCostErr, { stage1_job_id: id });
+        addWriteError(diagnostics, "stage1_job_costs", "delete stale job costs", staleCostErr, { stage1_job_id: id });
       }
       if (staleRevErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_revenue_lines", "delete stale job revenue", staleRevErr, { stage1_job_id: id });
+        addWriteError(diagnostics, "stage1_revenue_events", "delete stale job revenue", staleRevErr, { stage1_job_id: id });
       }
       if (staleJobErr) {
         ok = false;

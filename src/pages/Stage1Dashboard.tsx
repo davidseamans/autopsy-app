@@ -4300,10 +4300,17 @@ function Stage1DashboardInner() {
                       (u.costLabour ?? 0) +
                       (u.costSubcontractors ?? 0) +
                       (u.costOther ?? 0);
-                    const gp = income - costs;
-                    // Margin is only meaningful with real income. Never fabricate
-                    // a margin client-side: a null margin renders as "—".
-                    const gmPctValue = income > 0 && directCostsRecorded(costs) ? Math.round((gp / income) * 100) : null;
+                    // Gross profit / margin are computed from the PERSISTED Stage 1
+                    // revenue (stage1_revenue_events, surfaced via the margin
+                    // summary view as u.invoiceAmount) when present, falling back
+                    // to the quote value. Margin is only meaningful with real
+                    // revenue: a null margin renders as "—".
+                    const revenue = u.invoiceAmount ?? income;
+                    const gp = revenue - costs;
+                    const gmPctValue =
+                      revenue > 0 && directCostsRecorded(costs)
+                        ? Math.round((gp / revenue) * 100)
+                        : null;
                     const gmTone =
                       gmPctValue === null
                         ? "text-muted-foreground"
@@ -4344,7 +4351,7 @@ function Stage1DashboardInner() {
                           {renderDirectCost(costs)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${fmtMoney(gp)}` : "—"}
+                          {revenue > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {renderMarginPct(gmPctValue)}
