@@ -2893,11 +2893,21 @@ function Stage1DashboardInner() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = units.reduce((s, u) => s + (u.invoiceAmount ?? u.quoteValue ?? 0), 0);
-  const totalCosts = units.reduce((s, u) => s + unitTotalCost(u), 0);
+  // Gross Margin KPI + rollups derive from persisted Stage 1 sandbox values
+  // (ex-GST), counting only rows that have recorded revenue. Quote amounts never
+  // drive margin — only Client Invoice revenue (revenue_amount) does.
+  const revenueRows = units.filter((u) => (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0) > 0);
+  const totalIncome = revenueRows.reduce((s, u) => s + (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0), 0);
+  const totalCosts = revenueRows.reduce((s, u) => s + (u.sandboxTotalDirectCost ?? unitTotalCost(u)), 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
+  // Commercial proof: revenue > 0 AND direct cost > 0 AND margin is known.
+  const commercialProofCount = units.filter((u) => {
+    const rev = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
+    const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+    return rev > 0 && cost > 0 && u.sandboxGrossMarginPct != null;
+  }).length;
 
   // Supabase-derived gross-margin for the active run (display-ready). The
   // consolidated dashboard display RPC owns the wording: we render
