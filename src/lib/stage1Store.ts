@@ -159,6 +159,68 @@ export async function fetchStage1Units(
     jobNotes.set(String(j.id), typeof j.notes === "string" ? j.notes : undefined);
   });
 
+  // Per-line cost detail (display-only) from stage1_job_costs.lines, plus the
+  // proof name carried on the cost row's notes. These restore description /
+  // Job Cost Date / GST treatment / proof that the category buckets cannot hold.
+  const jobIds = summaries
+    .map((s) => String(s.stage1_job_id ?? ""))
+    .filter((id) => id.length > 0);
+  const costLinesByJob = new Map<string, CostLine[]>();
+  if (jobIds.length > 0) {
+    const { data: costRows, error: costRowsErr } = await supabase
+      .from("stage1_job_costs")
+      .select("stage1_job_id,lines")
+      .in("stage1_job_id", jobIds);
+    if (!costRowsErr) {
+      (costRows ?? []).forEach((r: Record<string, unknown>) => {
+        const raw = r.lines;
+        const parsed = Array.isArray(raw) ? raw : [];
+        const lines: CostLine[] = parsed
+          .map((l) => l as Partial<CostLine>)
+          .filter((l) => l && (l.description || l.amount != null))
+          .map((l) => ({
+            id: typeof l.id === "string" && l.id ? l.id : `${String(r.stage1_job_id)}:${Math.random().toString(36).slice(2)}`,
+            description: typeof l.description === "string" ? l.description : "",
+            amount: l.amount != null ? Number(l.amount) : undefined,
+            gstIncluded: l.gstIncluded ?? (l.gstTreatment ?? "gst_included") === "gst_included",
+            gstTreatment: (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment,
+            gstAmount: l.gstAmount != null ? Number(l.gstAmount) : undefined,
+            gstOverridden: l.gstOverridden ?? false,
+            docName: typeof l.docName === "string" ? l.docName : undefined,
+            date: typeof l.date === "string" ? l.date : undefined,
+          }));
+        if (lines.length > 0) costLinesByJob.set(String(r.stage1_job_id), lines);
+      });
+    }
+  }
+
+  // General Business Expenses (NOT part of gross margin) from the sandbox table.
+  const gbByJob = new Map<string, GBExpense[]>();
+  {
+    const { data: gbRows, error: gbErr } = await supabase
+      .from("stage1_business_expenses")
+      .select("id,stage1_job_id,expense_date,supplier,description,amount_inc_gst,gst_included,notes,proof_name")
+      .eq("autopsy_run_id", runId);
+    if (!gbErr) {
+      (gbRows ?? []).forEach((r: Record<string, unknown>) => {
+        const jobId = String(r.stage1_job_id ?? "");
+        if (!jobId) return;
+        const list = gbByJob.get(jobId) ?? [];
+        list.push({
+          id: String(r.id),
+          expenseDate: typeof r.expense_date === "string" ? r.expense_date : undefined,
+          supplier: typeof r.supplier === "string" ? r.supplier : undefined,
+          description: typeof r.description === "string" ? r.description : undefined,
+          amount: r.amount_inc_gst != null ? Number(r.amount_inc_gst) : undefined,
+          gstIncluded: typeof r.gst_included === "boolean" ? r.gst_included : true,
+          notes: typeof r.notes === "string" ? r.notes : undefined,
+          receiptName: typeof r.proof_name === "string" ? r.proof_name : undefined,
+        });
+        gbByJob.set(jobId, list);
+      });
+    }
+  }
+
   return summaries.map((s, i: number) => {
     const j = { id: String(s.stage1_job_id ?? "") } as CanonicalStage1JobRow;
     const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
