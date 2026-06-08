@@ -355,10 +355,24 @@ export function DetailedJobCostReport({
       >
         <div className="p-6 space-y-6">
           <SheetHeader>
-            <SheetTitle>Detailed Job Cost Report</SheetTitle>
-            <SheetDescription>
-              Income, job costs, gross profit, and general business expenses for the selected job.
-            </SheetDescription>
+            <div className="flex items-start justify-between gap-3 pr-10">
+              <div className="min-w-0">
+                <SheetTitle>Detailed Job Cost Report</SheetTitle>
+                <SheetDescription>
+                  Read-only report. Income, job costs, gross profit, and general business expenses for the selected job.
+                </SheetDescription>
+              </div>
+              {onEditInDetail && unit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => onEditInDetail(unit.n)}
+                >
+                  Edit in Job / Contract Site Detail
+                </Button>
+              )}
+            </div>
           </SheetHeader>
 
           {/* Section 1 — Job Summary */}
