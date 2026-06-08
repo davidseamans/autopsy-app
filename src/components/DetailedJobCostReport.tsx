@@ -283,23 +283,20 @@ export function DetailedJobCostReport({
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
 
-  // Summary values come from the persisted Stage 1 margin summary projection on
-  // the unit (NOT recomputed from local arrays), so they always match the ledger.
-  const revenueAmount = unit.sandboxRevenueAmount ?? unit.invoiceAmount ?? unit.quoteValue ?? 0;
-  const totalDirectCost = unit.sandboxTotalDirectCost ?? costT.gross;
+  // GST-correct summary values. Gross (inc GST), GST and ex-GST all derive from
+  // the same line totals used above, so the report matches the Job Detail and
+  // the Simple Job Cost Ledger under both GST and No-GST treatments. Gross
+  // margin uses ex-GST revenue and ex-GST job costs only.
+  const revenueIncGst = incomeT.gross; // Client Invoices inc GST (gross/input)
+  const revenueExGst = incomeT.net; // Revenue ex GST (drives margin)
+  const costIncGst = costT.gross; // Job Costs inc GST (gross/input)
+  const totalDirectCost = costT.net; // Job Costs ex GST (drives margin)
   const directCostsRecorded = totalDirectCost > 0;
-  const grossProfit =
-    unit.sandboxGrossProfit != null
-      ? unit.sandboxGrossProfit
-      : directCostsRecorded
-        ? revenueAmount - totalDirectCost
-        : null;
+  const grossProfit = directCostsRecorded ? revenueExGst - totalDirectCost : null;
   const gmPct =
-    unit.sandboxGrossMarginPct != null
-      ? unit.sandboxGrossMarginPct
-      : directCostsRecorded && revenueAmount > 0
-        ? ((revenueAmount - totalDirectCost) / revenueAmount) * 100
-        : null;
+    directCostsRecorded && revenueExGst > 0
+      ? (grossProfit! / revenueExGst) * 100
+      : null;
   const gmTone =
     gmPct === null
       ? "text-muted-foreground"
