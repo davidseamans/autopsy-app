@@ -3421,12 +3421,8 @@ export function JobDetailSheet({
           {/* 4. Payment Proof */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(4, "Payment Proof", FileText)}
-            <div className="rounded border-l-4 border-blue-400 bg-blue-50 p-2 text-xs text-blue-900 space-y-1">
-              <p><span className="font-semibold">Payment proof does not require a full bank statement.</span> Upload only the relevant invoice, receipt, remittance advice, payment receipt, or transaction screenshot. You may hide unrelated bank transactions.</p>
-              <p>Show only: transaction date, payer / reference, amount, and account name if needed. Redact unrelated transactions, balances, and private information.</p>
-            </div>
-            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-              Cash payments must still have proof. Upload the customer receipt or bank deposit record. Unrecorded cash does not count toward progression.
+            <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -3452,7 +3448,7 @@ export function JobDetailSheet({
                 </Select>
               </div>
             </div>
-            {fileInput("Attach Payment Proof (receipt, remittance, redacted screenshot)", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
+            {fileInput("Upload file or take picture", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
 
             {/* Live payment figures — derived from revenue_events for this job */}
             <div className="grid grid-cols-3 gap-2">
