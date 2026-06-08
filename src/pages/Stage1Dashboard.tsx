@@ -586,7 +586,8 @@ function deriveStage1ProofType(u: ProofUnit): string {
   }
   const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
   const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
-  const completed = toCanonicalStatus(u.status) === "completed";
+  const statusLc = (u.status ?? "").toLowerCase();
+  const completed = statusLc.includes("complete") || u.sandboxProofType === "completed_job";
   if (revenue > 0 && cost > 0) {
     return completed ? "Completed job" : "Commercial proof recorded";
   }
