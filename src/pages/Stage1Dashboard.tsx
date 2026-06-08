@@ -545,6 +545,49 @@ function unitTotalCost(u: ProofUnit): number {
   );
 }
 
+// GST split for a unit's customer invoice. The user-entered amount is the
+// GST-INCLUSIVE gross (source of truth). GST + ex-GST are derived from the GST
+// treatment via computeGstSplit — never by multiplying ex-GST by 1.1.
+function unitInvoiceSplit(u: ProofUnit): { inclusive: number; gst: number; exGst: number } {
+  const split = computeGstSplit({
+    inclusive: u.invoiceAmount ?? 0,
+    treatment: u.invoiceGstTreatment ?? "no_gst",
+    gstOverride: u.invoiceGstAmount,
+    overridden: u.invoiceGstOverridden,
+  });
+  return { inclusive: split.inclusive, gst: split.gst, exGst: split.exGst };
+}
+
+// GST split for a unit's job costs. Each cost line stores a GST-inclusive gross;
+// GST + ex-GST are derived from each line's GST treatment.
+function unitCostSplit(u: ProofUnit): { inclusive: number; gst: number; exGst: number } {
+  const lines = u.costLines ?? [];
+  if (lines.length > 0) {
+    return lines.reduce(
+      (acc, l) => {
+        const s = computeGstSplit({
+          inclusive: l.amount ?? 0,
+          treatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+          gstOverride: l.gstAmount,
+          overridden: l.gstOverridden,
+        });
+        return {
+          inclusive: acc.inclusive + s.inclusive,
+          gst: acc.gst + s.gst,
+          exGst: acc.exGst + s.exGst,
+        };
+      },
+      { inclusive: 0, gst: 0, exGst: 0 },
+    );
+  }
+  const legacy =
+    (u.costMaterials ?? 0) +
+    (u.costLabour ?? 0) +
+    (u.costSubcontractors ?? 0) +
+    (u.costOther ?? 0);
+  return { inclusive: legacy, gst: 0, exGst: legacy };
+}
+
 function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct: number | null } {
   const revenue = u.invoiceAmount ?? u.quoteValue ?? 0;
   const costs = unitTotalCost(u);
