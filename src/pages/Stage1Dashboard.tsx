@@ -1093,10 +1093,10 @@ function DrillBody({
               const gp = income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
-              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+              const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
               return (
                 <button
-                  key={u.n}
+                  key={u.stage1JobId ?? `n-${u.n}`}
                   type="button"
                   onClick={() => onOpenUnit(u.n)}
                   className="block w-full text-left rounded-md border p-3 space-y-1 text-sm hover:bg-muted/30"
