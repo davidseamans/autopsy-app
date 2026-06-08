@@ -3422,8 +3422,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
-      {displayCommitments.length > 0 && (
+      {/* Stage 1 Commitments — removed from the simplified Stage 1 workflow. */}
+      {false && displayCommitments.length > 0 && (
         <Card className="-mt-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
