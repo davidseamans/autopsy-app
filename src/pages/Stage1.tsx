@@ -3193,23 +3193,6 @@ export function JobDetailSheet({
                 <Label className="text-xs">Invoice Date</Label>
                 <Input type="date" value={draft.invoiceDate ?? ""} onChange={(e) => setDraft({ ...draft, invoiceDate: e.target.value })} />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Invoice Status</Label>
-                <Select value={draft.invoiceStatus ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceStatus: v as ProofUnit["invoiceStatus"] })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    {(["Draft","Sent","Approved","Invoiced","Part Paid","Paid","Cancelled"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Contract Start</Label>
-                <Input type="date" value={draft.contractStart ?? ""} onChange={(e) => setDraft({ ...draft, contractStart: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Contract End</Label>
-                <Input type="date" value={draft.contractEnd ?? ""} onChange={(e) => setDraft({ ...draft, contractEnd: e.target.value })} />
-              </div>
             </div>
             {/* GST treatment for revenue. Margin uses ex-GST revenue only. */}
             <div className="rounded border bg-muted/30 p-2 space-y-2">
