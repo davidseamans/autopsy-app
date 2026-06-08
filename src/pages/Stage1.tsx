@@ -3592,7 +3592,25 @@ export function JobDetailSheet({
                 placeholder="Observations, exceptions, anything to remember"
               />
             </div>
-            {fileInput("Upload file or take picture", draft.miscAttachmentName, (name) => setDraft({ ...draft, miscAttachmentName: name }))}
+            {fileInput(
+              draft.miscAttachmentName ? "Replace attachment" : "Upload file or take picture",
+              draft.miscAttachmentName,
+              (name) => setDraft({ ...draft, miscAttachmentName: name }),
+            )}
+            {draft.miscAttachmentName && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => {
+                  if (!confirmDelete()) return;
+                  setDraft({ ...draft, miscAttachmentName: undefined });
+                }}
+              >
+                Delete attachment
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
             </p>
