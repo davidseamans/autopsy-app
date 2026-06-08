@@ -1064,28 +1064,30 @@ function DrillBody({
                 <TableRow>
                   <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Source Quote #</TableHead>
-                  <TableHead className="text-right">
-                    <div className="leading-tight">Income</div>
-                    <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
-                  </TableHead>
+                  <TableHead className="text-right">Revenue / Invoiced</TableHead>
+                  <TableHead className="text-right">Payment Received</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
+                  <TableHead>Proof Type</TableHead>
+                  <TableHead>Payment Status</TableHead>
                   <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-                  const paid = u.paymentAmount ?? 0;
-                  const outstanding = income - paid;
-                  const costs = unitTotalCost(u);
-                  const gp = income - costs;
+                  const income = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+                  const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+                  const outstanding = u.sandboxOutstandingAmount ?? income - paid;
+                  const costs = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+                  const gp = u.sandboxGrossProfit ?? income - costs;
                   const gmStatus = deriveStage1GmStatus(u);
                   const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
+                  const proofTypeLabel = deriveStage1ProofType(u);
+                  const paymentStatusLabel = deriveStage1PaymentStatus(u);
+                  const hasVariation = stage1VariationRecorded(u);
                   return (
                     <TableRow
                       key={u.stage1JobId ?? `n-${u.n}`}
@@ -1113,14 +1115,23 @@ function DrillBody({
                           )}
                         </button>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(paid)}` : "—"}</TableCell>
                       <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
                         {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs">{proofTypeLabel}</span>
+                          {hasVariation && (
+                            <Badge variant="outline" className="w-fit text-[10px]">Variation recorded</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">{paymentStatusLabel}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
