@@ -3323,16 +3323,6 @@ export function JobDetailSheet({
               {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
               {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
-            {fileInput("Upload file or take picture", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
-            <Stage1EvidenceAttachments
-              runId={evidenceRunId}
-              linkType="cost"
-              linkRef={`unit-${draft.n}-general`}
-              linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — general cost proof`}
-              defaultEvidenceType="Supplier Receipt"
-              title="Other cost paperwork"
-              readOnly={readOnly}
-            />
           </div>
 
           {/* Payment Proof — hidden in simplified Stage 1: payments are not written to Core tables. */}
