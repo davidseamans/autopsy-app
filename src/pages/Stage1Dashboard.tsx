@@ -1149,14 +1149,17 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-              const paid = u.paymentAmount ?? 0;
-              const outstanding = income - paid;
-              const costs = unitTotalCost(u);
-              const gp = income - costs;
+              const income = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+              const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+              const outstanding = u.sandboxOutstandingAmount ?? income - paid;
+              const costs = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+              const gp = u.sandboxGrossProfit ?? income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
               const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
+              const proofTypeLabel = deriveStage1ProofType(u);
+              const paymentStatusLabel = deriveStage1PaymentStatus(u);
+              const hasVariation = stage1VariationRecorded(u);
               return (
                 <button
                   key={u.stage1JobId ?? `n-${u.n}`}
@@ -1170,12 +1173,17 @@ function DrillBody({
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
-                  <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Revenue / Invoiced</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Payment received</span><span>{income > 0 ? `$${fmtMoney(paid)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
+                  <div className="flex justify-between text-xs"><span>Proof type</span><span>{proofTypeLabel}</span></div>
+                  <div className="flex justify-between text-xs"><span>Payment status</span><span>{paymentStatusLabel}</span></div>
+                  {hasVariation && (
+                    <Badge variant="outline" className="text-[10px]">Variation recorded</Badge>
+                  )}
                 </button>
               );
             })}
