@@ -3219,95 +3219,78 @@ export function JobDetailSheet({
                 };
                 return (
                   <div key={line.id} className="rounded-md border p-3 space-y-3">
-                    {/* Cost calculation — simple stacked form */}
-                    <div className="space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Description</Label>
+                      <Input
+                        value={line.description}
+                        placeholder="e.g. Materials, Subcontractor help"
+                        onChange={(e) => updateLine({ description: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-xs">Description</Label>
+                        <Label className="text-xs">Total incl. GST</Label>
                         <Input
-                          value={line.description}
-                          placeholder="e.g. Materials, Subcontractor help"
-                          onChange={(e) => updateLine({ description: e.target.value })}
+                          type="number"
+                          value={line.amount ?? ""}
+                          onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
                         />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Total incl. GST</Label>
-                          <Input
-                            type="number"
-                            value={line.amount ?? ""}
-                            onChange={(e) => updateLine({ amount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">GST treatment</Label>
-                          <Select
-                            value={treatment}
-                            onValueChange={(v) =>
-                              updateLine({
-                                gstTreatment: v as GstTreatment,
-                                gstIncluded: v === "gst_included",
-                                gstOverridden: v === "manual" ? line.gstOverridden : false,
-                              })
-                            }
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-xs">GST</Label>
-                          <Input
-                            type="number"
-                            value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
-                            onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Ex-GST (for margin)</Label>
-                          <div className="h-10 flex items-center font-medium tabular-nums">
-                            {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                          </div>
-                        </div>
-                      </div>
-                      {line.gstOverridden && (
-                        <button
-                          type="button"
-                          className="text-xs text-muted-foreground underline"
-                          onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
+                      <div className="space-y-1">
+                        <Label className="text-xs">GST treatment</Label>
+                        <Select
+                          value={treatment}
+                          onValueChange={(v) =>
+                            updateLine({
+                              gstTreatment: v as GstTreatment,
+                              gstIncluded: v === "gst_included",
+                              gstOverridden: v === "manual" ? line.gstOverridden : false,
+                            })
+                          }
                         >
-                          Reset GST to auto (1/11)
-                        </button>
-                      )}
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
-                            setDraft({ ...draft, costLines: next });
-                          }}
-                        >
-                          Remove
-                        </Button>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {GST_TREATMENTS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">GST</Label>
+                        <Input
+                          type="number"
+                          value={line.gstOverridden || treatment === "manual" ? (line.gstAmount ?? "") : split.gst}
+                          onChange={(e) => updateLine({ gstOverridden: true, gstAmount: e.target.value === "" ? undefined : Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Ex-GST (for margin)</Label>
+                        <div className="h-10 flex items-center font-medium tabular-nums">
+                          {line.amount ? `$${split.exGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                        </div>
                       </div>
                     </div>
-                    {/* Supporting paperwork — separated from the cost calculation */}
-                    <div className="rounded-md border bg-muted/20 p-3 space-y-2">
-                      <p className="text-xs font-medium">Supporting paperwork recommended</p>
-                      <Stage1EvidenceAttachments
-                        runId={evidenceRunId}
-                        linkType="cost"
-                        linkRef={`cost-${line.id}`}
-                        linkLabel={`Cost line: ${line.description || "Untitled cost"}`}
-                        defaultEvidenceType="Supplier Receipt"
-                        title="Supplier receipt / cost paperwork"
-                        readOnly={readOnly}
-                      />
+                    {line.gstOverridden && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline"
+                        onClick={() => updateLine({ gstOverridden: false, gstAmount: undefined })}
+                      >
+                        Reset GST to auto (1/11)
+                      </button>
+                    )}
+                    {fileInput("Upload file or take picture", line.docName, (name) => updateLine({ docName: name }))}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
+                          setDraft({ ...draft, costLines: next });
+                        }}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   </div>
                 );
