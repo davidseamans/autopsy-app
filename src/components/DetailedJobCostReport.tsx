@@ -336,8 +336,9 @@ export function DetailedJobCostReport({
   }
   const gbT = totals(gbLines);
 
-  // Revenue / payment / outstanding come from the persisted sandbox projection.
-  const incomeAsPerQuote = revenueAmount;
+  // Outstanding is based on the gross/input (inc GST) invoice amount, matching
+  // the Simple Job Cost Ledger.
+  const incomeAsPerQuote = revenueIncGst;
   const paymentReceived = unit.sandboxPaymentReceivedAmount ?? unit.paymentAmount ?? 0;
   const outstanding =
     unit.sandboxOutstandingAmount != null
@@ -392,7 +393,7 @@ export function DetailedJobCostReport({
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Client Invoices</div>
+                <div className="text-xs text-muted-foreground">Client Invoices inc GST</div>
                 <div className="font-semibold tabular-nums">${fmt(incomeAsPerQuote)}</div>
               </div>
               <div>
@@ -450,7 +451,7 @@ export function DetailedJobCostReport({
             <div className="rounded-md border p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div>
                 <div className="text-xs text-muted-foreground">Revenue ex GST</div>
-                <div className="font-semibold tabular-nums">${fmt(revenueAmount)}</div>
+                <div className="font-semibold tabular-nums">${fmt(revenueExGst)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Job Costs</div>
