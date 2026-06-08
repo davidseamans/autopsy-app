@@ -4458,9 +4458,6 @@ function Stage1DashboardInner() {
                             )}
                           </button>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{quoteNumber}</TableCell>
-                        <TableCell className="text-xs">{quoteStatus}</TableCell>
-                        <TableCell>{deriveStage1ProofType(u)}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {revenueEx > 0 ? `$${fmtMoney(invoicesIncGst)}` : "—"}
                         </TableCell>
