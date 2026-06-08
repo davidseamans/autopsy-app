@@ -4449,7 +4449,7 @@ function Stage1DashboardInner() {
                             )}
                           </button>
                         </TableCell>
-                        <TableCell>{u.proofType}</TableCell>
+                        <TableCell>{deriveStage1ProofType(u)}</TableCell>
                         <TableCell className="text-right tabular-nums">
                           {income > 0 ? `$${fmtMoney(income)}` : "—"}
                         </TableCell>
