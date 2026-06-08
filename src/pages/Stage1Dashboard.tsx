@@ -3370,8 +3370,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
-      {displayCompletion && (
+      {/* Stage 1 Completion Evaluation — removed from the simplified Stage 1 workflow. */}
+      {false && displayCompletion && (
         <Card className="-mt-2" id="stage1-completion-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
