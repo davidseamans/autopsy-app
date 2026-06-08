@@ -3173,9 +3173,9 @@ export function JobDetailSheet({
             </div>
           )}
           <fieldset disabled={readOnly} className="space-y-5 contents [&:disabled_input]:opacity-70 [&:disabled_button]:opacity-70">
-          {/* 2. Customer Invoice / Contract */}
+          {/* 2. Client Invoices */}
           <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
+            {sectionTitle(2, "Client Invoices", DollarSign)}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Quote / Contract Amount</Label>
@@ -3256,16 +3256,7 @@ export function JobDetailSheet({
               )}
               <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Attachment Type</Label>
-              <Select value={draft.invoiceDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceDocType: v as ProofUnit["invoiceDocType"] })}>
-                <SelectTrigger><SelectValue placeholder="Quote, Invoice, Signed Contract, Work Order, Customer Approval, Other" /></SelectTrigger>
-                <SelectContent>
-                  {(["Quote","Customer Invoice","Signed Contract","Work Order","Customer Approval","Other"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {fileInput("Attach Invoice / Contract", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
+            {fileInput("Upload file or take picture", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
             <Stage1EvidenceAttachments
               runId={evidenceRunId}
               linkType="invoice"
