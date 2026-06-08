@@ -3819,8 +3819,8 @@ export function JobDetailSheet({
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 <div>stage1_jobs: <span className="font-mono font-semibold">{saveDiagnostics.counts.jobs ?? "error"}</span></div>
-                <div>stage1_revenue_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
-                <div>stage1_cost_lines: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
+                <div>stage1_revenue_events: <span className="font-mono font-semibold">{saveDiagnostics.counts.revenueLines ?? "error"}</span></div>
+                <div>stage1_job_costs: <span className="font-mono font-semibold">{saveDiagnostics.counts.costLines ?? "error"}</span></div>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-3 text-muted-foreground">
                 <div>Auth user id: {saveDiagnostics.authUserIdPresent ? saveDiagnostics.authUserId : "missing"}</div>
