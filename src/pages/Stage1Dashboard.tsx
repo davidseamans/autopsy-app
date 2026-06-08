@@ -2893,11 +2893,21 @@ function Stage1DashboardInner() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = units.reduce((s, u) => s + (u.invoiceAmount ?? u.quoteValue ?? 0), 0);
-  const totalCosts = units.reduce((s, u) => s + unitTotalCost(u), 0);
+  // Gross Margin KPI + rollups derive from persisted Stage 1 sandbox values
+  // (ex-GST), counting only rows that have recorded revenue. Quote amounts never
+  // drive margin — only Client Invoice revenue (revenue_amount) does.
+  const revenueRows = units.filter((u) => (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0) > 0);
+  const totalIncome = revenueRows.reduce((s, u) => s + (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0), 0);
+  const totalCosts = revenueRows.reduce((s, u) => s + (u.sandboxTotalDirectCost ?? unitTotalCost(u)), 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
+  // Commercial proof: revenue > 0 AND direct cost > 0 AND margin is known.
+  const commercialProofCount = units.filter((u) => {
+    const rev = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
+    const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+    return rev > 0 && cost > 0 && u.sandboxGrossMarginPct != null;
+  }).length;
 
   // Supabase-derived gross-margin for the active run (display-ready). The
   // consolidated dashboard display RPC owns the wording: we render
@@ -3192,8 +3202,8 @@ function Stage1DashboardInner() {
         </div>
       )}
 
-      {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
-      {displayNextStep && (
+      {/* Product-facing next-step guidance — hidden in the simplified Stage 1 workflow. */}
+      {false && displayNextStep && (
         <Card className="-mt-2 border-primary/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Next step</CardTitle>
@@ -3231,8 +3241,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
-      {displayEvidence.length > 0 && (
+      {/* Stage 1 Evidence Requirements — removed from the simplified Stage 1 workflow. */}
+      {false && displayEvidence.length > 0 && (
         <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
@@ -3360,8 +3370,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 completion evaluation (read-only, Supabase-owned) */}
-      {displayCompletion && (
+      {/* Stage 1 Completion Evaluation — removed from the simplified Stage 1 workflow. */}
+      {false && displayCompletion && (
         <Card className="-mt-2" id="stage1-completion-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Completion Evaluation</CardTitle>
@@ -3412,8 +3422,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 commitments (read-only, Supabase-owned) */}
-      {displayCommitments.length > 0 && (
+      {/* Stage 1 Commitments — removed from the simplified Stage 1 workflow. */}
+      {false && displayCommitments.length > 0 && (
         <Card className="-mt-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Commitments</CardTitle>
@@ -4373,16 +4383,11 @@ function Stage1DashboardInner() {
         />
       </section>
 
-      {/* Maturity-oriented commercial guidance from the run-scoped dashboard RPC. */}
-      {stage1DashboardDisplay && (dashboardMarginHelper || dashboardNextAction) && (
-        <p className="text-xs text-muted-foreground">
-          {dashboardMarginHelper && <span>{dashboardMarginHelper}</span>}
-          {dashboardMarginHelper && dashboardNextAction && <span> </span>}
-          {dashboardNextAction && (
-            <span className="text-foreground">Next action: {dashboardNextAction}</span>
-          )}
-        </p>
-      )}
+      {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
+      <p className="text-xs text-muted-foreground">
+        Commercial proof:{" "}
+        <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
+      </p>
 
       {/* ---- Bottom: full-width ledger ---- */}
       <section className="space-y-3">
@@ -4397,16 +4402,17 @@ function Stage1DashboardInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-20">#</TableHead>
+                    <TableHead className="w-16">Job #</TableHead>
                     <TableHead>Client</TableHead>
+                    <TableHead>Quote #</TableHead>
+                    <TableHead>Quote Status</TableHead>
                     <TableHead>Proof Type</TableHead>
-                    <TableHead className="text-right">
-                      <div className="leading-tight">Income</div>
-                      <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
-                    </TableHead>
+                    <TableHead className="text-right">Client Invoices inc GST</TableHead>
+                    <TableHead className="text-right">Revenue ex GST</TableHead>
                     <TableHead className="text-right">Outstanding</TableHead>
-                    <TableHead className="text-right">Job Costs</TableHead>
-                    <TableHead className="text-right">Gross Profit</TableHead>
+                    <TableHead className="text-right">Job Costs inc GST</TableHead>
+                    <TableHead className="text-right">Job Costs ex GST</TableHead>
+                    <TableHead className="text-right">Gross Profit ex GST</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
                     <TableHead className="text-right">Detailed Report</TableHead>
                   </TableRow>
@@ -4414,20 +4420,26 @@ function Stage1DashboardInner() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-                    const paid = u.paymentAmount ?? 0;
-                    const outstanding = income - paid;
-                    const costs = unitTotalCost(u);
-                    // Gross profit / margin are computed from the PERSISTED Stage 1
-                    // revenue (stage1_revenue_events, surfaced via the margin
-                    // summary view as u.invoiceAmount) when present, falling back
-                    // to the quote value. Margin is only meaningful with real
-                    // revenue: a null margin renders as "—".
-                    const revenue = income;
-                    const gp = revenue - costs;
+                    // Revenue / cost come from persisted Stage 1 sandbox values
+                    // (ex-GST). Client Invoices inc GST and Job Costs inc GST are
+                    // the GST-inclusive equivalents (ex-GST x 1.1). Quote amounts
+                    // never drive revenue or margin.
+                    const revenueEx = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
+                    const costEx = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+                    const invoicesIncGst = revenueEx * 1.1;
+                    const costsIncGst = costEx * 1.1;
+                    const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+                    const outstanding = u.sandboxOutstandingAmount ?? (revenueEx - paid);
+                    const gp = u.sandboxGrossProfit ?? (revenueEx - costEx);
                     const gmStatus = deriveStage1GmStatus(u);
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
+                    // Quote # to Job # cross-reference (no one-to-one assumption).
+                    const linkedQuote =
+                      quotes.find((q) => q.convertedToN === u.n) ??
+                      (u.sourceQuote ? quotes.find((q) => q.number === u.sourceQuote) : undefined);
+                    const quoteNumber = linkedQuote?.number ?? u.sourceQuote ?? "—";
+                    const quoteStatus = linkedQuote?.status ?? (u.sourceQuote ? "Accepted" : "—");
                     return (
                       <TableRow
                         key={u.stage1JobId ?? `n-${u.n}`}
@@ -4449,18 +4461,26 @@ function Stage1DashboardInner() {
                             )}
                           </button>
                         </TableCell>
+                        <TableCell className="font-mono text-xs">{quoteNumber}</TableCell>
+                        <TableCell className="text-xs">{quoteStatus}</TableCell>
                         <TableCell>{deriveStage1ProofType(u)}</TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {income > 0 ? `$${fmtMoney(income)}` : "—"}
+                          {revenueEx > 0 ? `$${fmtMoney(invoicesIncGst)}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {revenueEx > 0 ? `$${fmtMoney(revenueEx)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
-                          {income > 0 ? fmtSignedMoney(outstanding) : "—"}
+                          {revenueEx > 0 ? fmtSignedMoney(outstanding) : "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {renderDirectCost(costs)}
+                          {costEx > 0 ? `$${fmtMoney(costsIncGst)}` : renderDirectCost(costEx)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {revenue > 0 ? `$${fmtMoney(gp)}` : "—"}
+                          {renderDirectCost(costEx)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {revenueEx > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}

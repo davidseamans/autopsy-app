@@ -390,6 +390,7 @@ export interface ProofUnit {
   quoteValue?: number;
   scheduledDate?: string;
   sourceQuote?: string;
+  quoteComment?: string;
   notes?: string;
   nextAction?: string;
   // Real Supabase linkage — this unit is a workspace over an existing job row.
@@ -409,6 +410,7 @@ export interface ProofUnit {
   invoiceGstOverridden?: boolean;
   invoiceDate?: string;
   invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
+  invoiceRef?: string;
   contractStart?: string;
   contractEnd?: string;
   invoiceDocType?: "Quote" | "Customer Invoice" | "Signed Contract" | "Work Order" | "Customer Approval" | "Other";
@@ -445,6 +447,8 @@ export interface ProofUnit {
   sandboxVariationRecorded?: boolean;
   // General Business Expenses (not included in job GM)
   gbExpenses?: GBExpense[];
+  // Miscellaneous attachment / comment (optional, never blocks saving)
+  miscAttachmentName?: string;
   // Lifecycle / audit
   lifecycle?: "active" | "voided" | "archived";
   voidReason?: string;
@@ -3101,39 +3105,36 @@ export function JobDetailSheet({
               pricing, and terms in the event of a dispute.
             </p>
           </div>
-          {/* 1. Job / Site Summary */}
-          <div className="rounded-md border bg-muted/30 p-3 space-y-1">
-            {sectionTitle(1, "Job / Site Summary")}
-            {fieldRow("Job #", draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`)}
-            {fieldRow("Source Quote #", draft.sourceQuote || "—")}
+          {/* 1. Quote Reference */}
+          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+            {sectionTitle(1, "Quote Reference")}
+            <p className="text-xs text-muted-foreground">
+              A quote is a sales record proving you are quoting and converting work. The quoted amount is not revenue and never drives gross margin.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Quote #</Label>
+                <Input value={draft.sourceQuote ?? ""} onChange={(e) => setDraft({ ...draft, sourceQuote: e.target.value })} placeholder="e.g. Q-1001" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Quote Status</Label>
+                <div className="h-10 flex items-center text-sm font-medium">{draft.sourceQuote ? "Accepted" : "—"}</div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Quoted amount inc GST</Label>
+                <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Converted to Job #</Label>
+                <div className="h-10 flex items-center text-sm font-medium font-mono">{draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`}</div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Optional comment</Label>
+              <Input value={draft.quoteComment ?? ""} onChange={(e) => setDraft({ ...draft, quoteComment: e.target.value })} placeholder="e.g. scope change agreed by phone" />
+            </div>
             {fieldRow("Client", draft.client)}
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
-            {fieldRow("Proof Type", draft.proofType)}
-            {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
-            {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
-            {fieldRow("Payment Received", `$${paymentReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
-            {fieldRow(
-              "Outstanding",
-              quoteVal > 0 ? (
-                <span className={outstanding < 0 ? "text-red-600" : ""}>
-                  {`${outstanding < 0 ? "-" : ""}$${Math.abs(outstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </span>
-              ) : "—",
-            )}
-            {fieldRow(
-              "Collection Status",
-              <span className={collectionStatusLabel(collectionStatus).tone}>
-                {collectionStatusLabel(collectionStatus).label}
-              </span>,
-            )}
-            {fieldRow(
-              "GM %",
-              revenueExGst > 0 && costs > 0 && computedGm != null ? (
-                <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
-              ) : (
-                <span className="text-muted-foreground">Not Yet Proven</span>
-              ),
-            )}
           </div>
 
           {/* Job record + accepted quote / customer approval paperwork */}
@@ -3152,41 +3153,9 @@ export function JobDetailSheet({
             {!draft.jobSite && (
               <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
             )}
-            {!invoiceProofOk && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Customer proof missing: upload an invoice, quote, signed contract, work order, or customer approval.
-              </div>
-            )}
-            {!costsEntered && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Cost proof incomplete: margin cannot be trusted until direct costs are entered.
-              </div>
-            )}
-            {draft.paymentStatus === "Paid" && !paymentProofOk && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Payment proof missing: paid work must be supported by invoice, receipt, remittance, payment receipt, or transaction evidence.
-              </div>
-            )}
-            {paidStatusMissingAmount && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Paid status requires payment amount.
-              </div>
-            )}
-            {paymentExceedsQuote && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Payment exceeds quoted amount. Check quote or payment amount.
-              </div>
-            )}
-            {cashRequiresProof && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Cash proof missing: unrecorded cash does not count toward progression.
-              </div>
-            )}
-            {computedGm != null && computedGm < 30 && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Margin blocker: this work is not yet economically safe to scale.
-              </div>
-            )}
+            <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
+            </div>
           </div>
 
           {isLocked && (
@@ -3205,17 +3174,20 @@ export function JobDetailSheet({
             </div>
           )}
           <fieldset disabled={readOnly} className="space-y-5 contents [&:disabled_input]:opacity-70 [&:disabled_button]:opacity-70">
-          {/* 2. Customer Invoice / Contract */}
+          {/* 2. Client Invoices */}
           <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(2, "Customer Invoice / Contract", DollarSign)}
+            {sectionTitle(2, "Client Invoices", DollarSign)}
+            <p className="text-xs text-muted-foreground">
+              Record one or more client invoices for this job. Client invoice revenue (ex-GST) is the source of gross margin — invoices do not need to equal the quote, and extra work can be added as another invoice line.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Quote / Contract Amount</Label>
-                <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                <Label className="text-xs">Amount inc GST</Label>
+                <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Invoice Total incl. GST</Label>
-                <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                <Label className="text-xs">Ref #</Label>
+                <Input value={draft.invoiceRef ?? ""} onChange={(e) => setDraft({ ...draft, invoiceRef: e.target.value })} placeholder="Invoice ref" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Invoice Date</Label>
@@ -3288,16 +3260,7 @@ export function JobDetailSheet({
               )}
               <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Attachment Type</Label>
-              <Select value={draft.invoiceDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, invoiceDocType: v as ProofUnit["invoiceDocType"] })}>
-                <SelectTrigger><SelectValue placeholder="Quote, Invoice, Signed Contract, Work Order, Customer Approval, Other" /></SelectTrigger>
-                <SelectContent>
-                  {(["Quote","Customer Invoice","Signed Contract","Work Order","Customer Approval","Other"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {fileInput("Attach Invoice / Contract", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
+            {fileInput("Upload file or take picture", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
             <Stage1EvidenceAttachments
               runId={evidenceRunId}
               linkType="invoice"
@@ -3312,7 +3275,6 @@ export function JobDetailSheet({
           {/* 3. Job Costs */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(3, "Job Costs", Paperclip)}
-            <p className="text-xs text-muted-foreground">Take the photo now. Do not leave receipts in your car, inbox, or memory.</p>
             <p className="text-xs text-muted-foreground">
               Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
             </p>
@@ -3448,16 +3410,7 @@ export function JobDetailSheet({
               {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
               {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Attachment Type</Label>
-              <Select value={draft.costDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, costDocType: v as ProofUnit["costDocType"] })}>
-                <SelectTrigger><SelectValue placeholder="Supplier Receipt, Timesheet, Subcontractor Invoice…" /></SelectTrigger>
-                <SelectContent>
-                  {(["Supplier Receipt","Supplier Bill","Timesheet","Subcontractor Invoice","Materials Receipt","Other Cost Proof"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {fileInput("Attach Cost Proof", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
+            {fileInput("Upload file or take picture", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
             <Stage1EvidenceAttachments
               runId={evidenceRunId}
               linkType="cost"
@@ -3469,15 +3422,12 @@ export function JobDetailSheet({
             />
           </div>
 
-          {/* 4. Payment Proof */}
+          {/* Payment Proof — hidden in simplified Stage 1: payments are not written to Core tables. */}
+          {false && (
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(4, "Payment Proof", FileText)}
-            <div className="rounded border-l-4 border-blue-400 bg-blue-50 p-2 text-xs text-blue-900 space-y-1">
-              <p><span className="font-semibold">Payment proof does not require a full bank statement.</span> Upload only the relevant invoice, receipt, remittance advice, payment receipt, or transaction screenshot. You may hide unrelated bank transactions.</p>
-              <p>Show only: transaction date, payer / reference, amount, and account name if needed. Redact unrelated transactions, balances, and private information.</p>
-            </div>
-            <div className="rounded border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-              Cash payments must still have proof. Upload the customer receipt or bank deposit record. Unrecorded cash does not count toward progression.
+            <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -3503,7 +3453,7 @@ export function JobDetailSheet({
                 </Select>
               </div>
             </div>
-            {fileInput("Attach Payment Proof (receipt, remittance, redacted screenshot)", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
+            {fileInput("Upload file or take picture", draft.paymentProofName, (name) => setDraft({ ...draft, paymentProofName: name }))}
 
             {/* Live payment figures — derived from revenue_events for this job */}
             <div className="grid grid-cols-3 gap-2">
@@ -3530,46 +3480,12 @@ export function JobDetailSheet({
               <PaymentHistoryList rows={payEvents} />
             </div>
           </div>
+          )}
 
-          {/* 4b. Write-Offs & Value Adjustments */}
-          <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(4, "Write-Offs & Value Adjustments", DollarSign)}
-            <p className="text-xs text-muted-foreground">
-              Reduce the collectible value of this job (write-off, credit, or approved reduction).
-              Adjustments lower the outstanding balance — they never change the revenue actually received.
-            </p>
-            <WriteOffsSection jobId={draft.jobId} disabled={isLocked} />
-          </div>
-
-          {/* 5. Status & Next Action */}
-          <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(5, "Status & Next Action")}
-            <div className="space-y-1">
-              <Label className="text-xs">Update Job / Contract Status</Label>
-              <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Only valid next statuses are shown ({kind === "contract" ? "contract" : "one-off"} rules).
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes</Label>
-              <Textarea rows={2} value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Observations, exceptions, anything to remember" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Next Action</Label>
-              <Input value={draft.nextAction ?? ""} onChange={(e) => setDraft({ ...draft, nextAction: e.target.value })} placeholder="e.g. Upload signed contract" />
-            </div>
-          </div>
-
-          {/* 6. General Business Expenses (not in GM) */}
+          {/* 4. General Business Expenses (not in GM) */}
           <div className="rounded-md border p-3 space-y-3">
             <div className="font-medium text-sm flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">6</span>
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">4</span>
               <Paperclip className="h-4 w-4" /> General Business Expenses
             </div>
             <p className="text-xs text-muted-foreground">Not included in this job's gross margin.</p>
@@ -3616,10 +3532,28 @@ export function JobDetailSheet({
             />
 
             {(draft.gbExpenses ?? []).some((e) => !e.receiptName) && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Receipt missing: keep proof now so your accountant is not guessing later.
+              <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+                Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
               </div>
             )}
+          </div>
+
+          {/* 5. Miscellaneous Attachment */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(5, "Miscellaneous Attachment", Paperclip)}
+            <div className="space-y-1">
+              <Label className="text-xs">Comment</Label>
+              <Textarea
+                rows={2}
+                value={draft.notes ?? ""}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                placeholder="Observations, exceptions, anything to remember"
+              />
+            </div>
+            {fileInput("Upload file or take picture", draft.miscAttachmentName, (name) => setDraft({ ...draft, miscAttachmentName: name }))}
+            <p className="text-xs text-muted-foreground">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
+            </p>
           </div>
 
           </fieldset>
