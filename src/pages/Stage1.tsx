@@ -3104,39 +3104,36 @@ export function JobDetailSheet({
               pricing, and terms in the event of a dispute.
             </p>
           </div>
-          {/* 1. Job / Site Summary */}
-          <div className="rounded-md border bg-muted/30 p-3 space-y-1">
-            {sectionTitle(1, "Job / Site Summary")}
-            {fieldRow("Job #", draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`)}
-            {fieldRow("Source Quote #", draft.sourceQuote || "—")}
+          {/* 1. Quote Reference */}
+          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+            {sectionTitle(1, "Quote Reference")}
+            <p className="text-xs text-muted-foreground">
+              A quote is a sales record proving you are quoting and converting work. The quoted amount is not revenue and never drives gross margin.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Quote #</Label>
+                <Input value={draft.sourceQuote ?? ""} onChange={(e) => setDraft({ ...draft, sourceQuote: e.target.value })} placeholder="e.g. Q-1001" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Quote Status</Label>
+                <div className="h-10 flex items-center text-sm font-medium">{draft.sourceQuote ? "Accepted" : "—"}</div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Quoted amount inc GST</Label>
+                <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Converted to Job #</Label>
+                <div className="h-10 flex items-center text-sm font-medium font-mono">{draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`}</div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Optional comment</Label>
+              <Input value={draft.quoteComment ?? ""} onChange={(e) => setDraft({ ...draft, quoteComment: e.target.value })} placeholder="e.g. scope change agreed by phone" />
+            </div>
             {fieldRow("Client", draft.client)}
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
-            {fieldRow("Proof Type", draft.proofType)}
-            {fieldRow("Scheduled Date", draft.scheduledDate || "—")}
-            {fieldRow("Quote / Contract Value", draft.quoteValue != null ? `$${draft.quoteValue.toLocaleString()}` : "—")}
-            {fieldRow("Payment Received", `$${paymentReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
-            {fieldRow(
-              "Outstanding",
-              quoteVal > 0 ? (
-                <span className={outstanding < 0 ? "text-red-600" : ""}>
-                  {`${outstanding < 0 ? "-" : ""}$${Math.abs(outstanding).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                </span>
-              ) : "—",
-            )}
-            {fieldRow(
-              "Collection Status",
-              <span className={collectionStatusLabel(collectionStatus).tone}>
-                {collectionStatusLabel(collectionStatus).label}
-              </span>,
-            )}
-            {fieldRow(
-              "GM %",
-              revenueExGst > 0 && costs > 0 && computedGm != null ? (
-                <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span>
-              ) : (
-                <span className="text-muted-foreground">Not Yet Proven</span>
-              ),
-            )}
           </div>
 
           {/* Job record + accepted quote / customer approval paperwork */}
