@@ -3241,8 +3241,8 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {/* Canonical Stage 1 evidence requirements (read-only, Supabase-owned) */}
-      {displayEvidence.length > 0 && (
+      {/* Stage 1 Evidence Requirements — removed from the simplified Stage 1 workflow. */}
+      {false && displayEvidence.length > 0 && (
         <Card className="-mt-2" id="stage1-evidence-section">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stage 1 Evidence Requirements</CardTitle>
