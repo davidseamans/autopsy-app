@@ -3113,8 +3113,24 @@ export function JobDetailSheet({
               <Label className="text-xs">Optional comment</Label>
               <Input value={draft.quoteComment ?? ""} onChange={(e) => setDraft({ ...draft, quoteComment: e.target.value })} placeholder="e.g. scope change agreed by phone" />
             </div>
-            {fieldRow("Client", draft.client)}
-            {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <Label className="text-xs">Client Name</Label>
+                <Input
+                  value={draft.client ?? ""}
+                  onChange={(e) => setDraft({ ...draft, client: e.target.value })}
+                  placeholder="Client name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Client Address / Job Site / Location</Label>
+                <Input
+                  value={draft.jobSite ?? ""}
+                  onChange={(e) => setDraft({ ...draft, jobSite: e.target.value })}
+                  placeholder="Job site / location"
+                />
+              </div>
+            </div>
           </div>
 
 
