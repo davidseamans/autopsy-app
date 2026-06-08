@@ -3422,7 +3422,8 @@ export function JobDetailSheet({
             />
           </div>
 
-          {/* 4. Payment Proof */}
+          {/* Payment Proof — hidden in simplified Stage 1: payments are not written to Core tables. */}
+          {false && (
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(4, "Payment Proof", FileText)}
             <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
@@ -3479,6 +3480,7 @@ export function JobDetailSheet({
               <PaymentHistoryList rows={payEvents} />
             </div>
           </div>
+          )}
 
           {/* 4. General Business Expenses (not in GM) */}
           <div className="rounded-md border p-3 space-y-3">
