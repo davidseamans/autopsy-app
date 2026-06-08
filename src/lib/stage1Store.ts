@@ -410,6 +410,7 @@ export interface Stage1CanonicalWriteError {
     | "stage1_jobs"
     | "stage1_revenue_events"
     | "stage1_job_costs"
+    | "stage1_business_expenses"
     | "auth"
     | "stage1_canonical";
   operation: string;
