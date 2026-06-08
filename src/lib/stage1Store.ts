@@ -541,6 +541,28 @@ function costLineExGst(l: CostLine): number {
   return split.exGst;
 }
 
+/**
+ * Serialize the UI cost lines into a plain JSON array for stage1_job_costs.lines.
+ * This preserves per-line description, Job Cost Date, GST treatment and proof
+ * name (display-only detail the category buckets cannot hold). Margin is still
+ * computed from the ex-GST buckets, never from this array.
+ */
+function serializeCostLines(lines: CostLine[] | undefined): Record<string, unknown>[] {
+  return (lines ?? [])
+    .filter((l) => (l.amount ?? 0) > 0 || (l.description ?? "").trim().length > 0)
+    .map((l) => ({
+      id: l.id,
+      description: l.description ?? "",
+      amount: l.amount ?? null,
+      gstIncluded: l.gstIncluded ?? true,
+      gstTreatment: l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst"),
+      gstAmount: l.gstAmount ?? null,
+      gstOverridden: l.gstOverridden ?? false,
+      docName: l.docName ?? null,
+      date: l.date ?? null,
+    }));
+}
+
 function bucketDirectCosts(u: ProofUnit): DirectCostBuckets {
   const b: DirectCostBuckets = {
     labourHours: 0,
