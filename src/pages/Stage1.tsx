@@ -370,6 +370,8 @@ export interface CostLine {
   gstOverridden?: boolean;
   /** File name for the simple per-line upload (local cache only). */
   docName?: string;
+  /** Job Cost Date for this line (persisted to stage1_job_costs.lines). */
+  date?: string;
 }
 
 export interface ProofUnit {
