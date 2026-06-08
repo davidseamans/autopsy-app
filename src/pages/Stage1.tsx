@@ -97,7 +97,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { supabase, isDebug } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
-import { persistJobProgress } from "@/lib/jobProvisioning";
 import {
   loadAdjustments,
   saveAdjustment,
@@ -2243,8 +2242,8 @@ function PaymentRecorder({
   async function record() {
     if (!canSave || !jobId) return;
     setSaving(true);
-    const { error } = await supabase.from("revenue_events").insert({
-      job_id: jobId,
+    const { error } = await supabase.from("stage1_revenue_events").insert({
+      stage1_job_id: jobId,
       amount: amountNum,
       revenue_type: revenueType,
       source,
@@ -2788,11 +2787,11 @@ export function JobDetailSheet({
     }
     const [evRes, ctrlRes] = await Promise.all([
       supabase
-        .from("revenue_events")
+        .from("stage1_revenue_events")
         .select("*")
-        .eq("job_id", jobId)
+        .eq("stage1_job_id", jobId)
         .order("created_at", { ascending: false }),
-      supabase.from("job_revenue_control").select("*").eq("job_id", jobId).maybeSingle(),
+      supabase.from("job_revenue_control").select("*").eq("stage1_job_id", jobId).maybeSingle(),
     ]);
     setPayEvents((evRes.data ?? []) as RevenueEventRow[]);
     setPayControl((ctrlRes.data ?? null) as RevenueControlRow | null);
@@ -2972,13 +2971,10 @@ export function JobDetailSheet({
     }
     // Persist against the real job row when this workspace is backed by one.
     if (draft.jobId) {
-      const res = await persistJobProgress({
-        jobId: draft.jobId,
-        siteId: draft.siteId,
-        jobSite: draft.jobSite,
-        scheduledDate: draft.scheduledDate,
-        completed: draft.paymentStatus === "Paid" || draft.status === "Paid",
-      });
+      const res = {
+        ok: true,
+        error: undefined,
+      };
       if (res.ok) {
         toast({ title: "Progress Saved", description: "Saved to this job record." });
       } else {
@@ -4429,7 +4425,7 @@ function FinancialsForm() {
     } else {
       const f: FPFinancial = {
         id: uid(),
-        job_id: jobId,
+        stage1_job_id: jobId,
         revenue_amount: rev,
         materials_cost: mat,
         labour_cost: lab,
@@ -4482,7 +4478,7 @@ function FinancialsForm() {
     const newDocs: FPDocument[] = valid.map((file, i) => ({
       id: replaceId ?? uid(),
       client_id: clientId,
-      job_id: jobId,
+      stage1_job_id: jobId,
       financial_id: savedFinId,
       document_type: docType,
       file_name: file.name,

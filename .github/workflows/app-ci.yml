@@ -1,0 +1,55 @@
+name: App CI
+
+on:
+  push:
+    branches:
+      - main
+      - stage1-build-packet-compliance
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  app-checks:
+    name: App checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Stage 1 forbidden Core table scan
+        run: |
+          set -euo pipefail
+
+          if [ ! -d src ]; then
+            echo "Missing src/ directory."
+            exit 1
+          fi
+
+          echo "Scanning Stage 1 code for direct Core table access risks."
+
+          matches=$(grep -RInE "from\(['\"](jobs|revenue_events|job_costs|accounts|pipeline|quotes)['\"]\)" src || true)
+
+          if echo "$matches" | grep -iE "stage1|stage-1|first 5|first5|job cost|ledger|margin|quote conversion"; then
+            echo "Forbidden or suspicious Stage 1 Core table access detected."
+            echo "$matches"
+            exit 1
+          fi
+
+          echo "No obvious Stage 1 Core table access risks detected."
