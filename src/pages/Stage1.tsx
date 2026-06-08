@@ -373,6 +373,9 @@ export interface CostLine {
 export interface ProofUnit {
   n: number;
   jobNumber?: string;
+  // Persisted Stage 1 job number (public.stage1_job_margin_summary.job_sequence_number).
+  // Authoritative source for the displayed "J-#" in the ledger.
+  jobSequenceNumber?: number;
   client: string;
   jobSite?: string;
   proofType: ProofType;
@@ -3085,7 +3088,7 @@ export function JobDetailSheet({
           {/* 1. Job / Site Summary */}
           <div className="rounded-md border bg-muted/30 p-3 space-y-1">
             {sectionTitle(1, "Job / Site Summary")}
-            {fieldRow("Job #", draft.jobNumber ?? `J-${1000 + draft.n}`)}
+            {fieldRow("Job #", draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`)}
             {fieldRow("Source Quote #", draft.sourceQuote || "—")}
             {fieldRow("Client", draft.client)}
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
@@ -3122,7 +3125,7 @@ export function JobDetailSheet({
             runId={evidenceRunId}
             linkType="quote"
             linkRef={`unit-${draft.n}`}
-            linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — quote / approval`}
+            linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — quote / approval`}
             defaultEvidenceType="Accepted Quote"
             title="Accepted quote / customer approval"
             readOnly={readOnly}
@@ -3283,7 +3286,7 @@ export function JobDetailSheet({
               runId={evidenceRunId}
               linkType="invoice"
               linkRef={`unit-${draft.n}`}
-              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — revenue line`}
+              linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — revenue line`}
               defaultEvidenceType="Invoice"
               title="Invoice paperwork (revenue line)"
               readOnly={readOnly}
@@ -3443,7 +3446,7 @@ export function JobDetailSheet({
               runId={evidenceRunId}
               linkType="cost"
               linkRef={`unit-${draft.n}-general`}
-              linkLabel={`Job ${draft.jobNumber ?? `J-${1000 + draft.n}`} — general cost proof`}
+              linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — general cost proof`}
               defaultEvidenceType="Supplier Receipt"
               title="Other cost paperwork"
               readOnly={readOnly}

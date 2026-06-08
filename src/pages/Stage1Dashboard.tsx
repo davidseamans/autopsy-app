@@ -1033,10 +1033,10 @@ function DrillBody({
                   const gp = income - costs;
                   const gmStatus = deriveStage1GmStatus(u);
                   const gmPctValue = gmStatus.pct;
-                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+                  const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
                   return (
                     <TableRow
-                      key={u.n}
+                      key={u.stage1JobId ?? `n-${u.n}`}
                       className="cursor-pointer hover:bg-muted/30"
                       onClick={() => onOpenUnit(u.n)}
                     >
@@ -1093,10 +1093,10 @@ function DrillBody({
               const gp = income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
-              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+              const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
               return (
                 <button
-                  key={u.n}
+                  key={u.stage1JobId ?? `n-${u.n}`}
                   type="button"
                   onClick={() => onOpenUnit(u.n)}
                   className="block w-full text-left rounded-md border p-3 space-y-1 text-sm hover:bg-muted/30"
@@ -1142,9 +1142,9 @@ function DrillBody({
                   const gp = income - costs;
                   const gmStatus = deriveStage1GmStatus(u);
                   const pct = gmStatus.pct;
-                  const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+                  const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
                   return (
-                    <TableRow key={u.n}>
+                    <TableRow key={u.stage1JobId ?? `n-${u.n}`}>
                       <TableCell className="font-mono text-xs">{jobNum}</TableCell>
                       <TableCell>
                         <div className="font-medium leading-tight">{u.client}</div>
@@ -1168,9 +1168,9 @@ function DrillBody({
               const gp = income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const pct = gmStatus.pct;
-              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+              const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
               return (
-                <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
+                <div key={u.stage1JobId ?? `n-${u.n}`} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
                     <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmStatus.label}</span>
@@ -4359,11 +4359,11 @@ function Stage1DashboardInner() {
                     const gmTone = gmStatus.tone;
                     return (
                       <TableRow
-                        key={u.n}
+                        key={u.stage1JobId ?? `n-${u.n}`}
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-mono text-xs">{u.jobNumber ?? `J-${1000 + u.n}`}</TableCell>
+                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`}</TableCell>
                         <TableCell>
                           <button
                             type="button"

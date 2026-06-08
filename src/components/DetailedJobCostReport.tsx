@@ -251,7 +251,7 @@ export function DetailedJobCostReport({
   const incomeAsPerQuote = unit.quoteValue ?? 0;
   const paymentReceived = unit.paymentAmount ?? 0;
   const outstanding = incomeAsPerQuote - paymentReceived;
-  const jobNumber = unit.jobNumber ?? `J-${1000 + unit.n}`;
+  const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

@@ -201,6 +201,9 @@ export async function fetchStage1Units(
 
     const unit: ProofUnit = {
       n: (typeof s.job_sequence_number === "number" ? s.job_sequence_number : null) ?? i + 1,
+      // Persisted job number — drives the ledger "J-#" display. Comes straight
+      // from the canonical view; never an array index or fallback.
+      jobSequenceNumber: typeof s.job_sequence_number === "number" ? s.job_sequence_number : undefined,
       stage1JobId: String(s.stage1_job_id ?? ""),
       client: typeof s.client_name === "string" ? s.client_name : "",
       jobSite: typeof s.job_title === "string" ? s.job_title : undefined,
@@ -248,6 +251,7 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       // ...then canonical commercial truth ALWAYS overrides it (no fallback).
       stage1JobId: c.stage1JobId,
       n: c.n,
+      jobSequenceNumber: c.jobSequenceNumber ?? cached.jobSequenceNumber,
       client: c.client || cached.client,
       jobSite: c.jobSite ?? cached.jobSite,
       // Preserve a richer cached status (e.g. "Paid") when it maps to the same
