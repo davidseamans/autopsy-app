@@ -3197,15 +3197,7 @@ export function JobDetailSheet({
               <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
             {fileInput("Upload file or take picture", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
-            <Stage1EvidenceAttachments
-              runId={evidenceRunId}
-              linkType="invoice"
-              linkRef={`unit-${draft.n}`}
-              linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — revenue line`}
-              defaultEvidenceType="Invoice"
-              title="Invoice paperwork (revenue line)"
-              readOnly={readOnly}
-            />
+
           </div>
 
           {/* 3. Job Costs */}
