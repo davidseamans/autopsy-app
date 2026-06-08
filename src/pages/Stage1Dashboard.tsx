@@ -560,6 +560,58 @@ function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct:
   return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
 }
 
+// ---------------------------------------------------------------------------
+// Stage 1 sandbox commercial proof model — display helpers
+// Proof type and payment status are DISTINCT axes. Both are derived from the
+// persisted public.stage1_job_margin_summary projection on the unit, falling
+// back to the documented rules when the view did not supply an explicit value.
+// ---------------------------------------------------------------------------
+const PROOF_TYPE_LABELS: Record<string, string> = {
+  not_yet_proven: "Not yet proven",
+  revenue_recorded: "Revenue recorded",
+  commercial_proof_recorded: "Commercial proof recorded",
+  completed_job: "Completed job",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  not_invoiced: "Not invoiced",
+  unpaid: "Unpaid",
+  part_paid: "Part-paid",
+  paid: "Paid",
+};
+
+function deriveStage1ProofType(u: ProofUnit): string {
+  if (u.sandboxProofType && PROOF_TYPE_LABELS[u.sandboxProofType]) {
+    return PROOF_TYPE_LABELS[u.sandboxProofType];
+  }
+  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+  const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+  const statusLc = (u.status ?? "").toLowerCase();
+  const completed = statusLc.includes("complete") || u.sandboxProofType === "completed_job";
+  if (revenue > 0 && cost > 0) {
+    return completed ? "Completed job" : "Commercial proof recorded";
+  }
+  if (revenue > 0) return "Revenue recorded";
+  return "Not yet proven";
+}
+
+function deriveStage1PaymentStatus(u: ProofUnit): string {
+  if (u.sandboxPaymentStatus && PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus]) {
+    return PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus];
+  }
+  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+  const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+  if (revenue <= 0) return "Not invoiced";
+  if (paid >= revenue) return "Paid";
+  if (paid > 0) return "Part-paid";
+  return "Unpaid";
+}
+
+function stage1VariationRecorded(u: ProofUnit): boolean {
+  if (typeof u.sandboxVariationRecorded === "boolean") return u.sandboxVariationRecorded;
+  return (u.sandboxVariationInvoiceAmount ?? 0) > 0;
+}
+
 function KpiCard({
   label,
   primary,
@@ -1012,28 +1064,30 @@ function DrillBody({
                 <TableRow>
                   <TableHead>Job #</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Source Quote #</TableHead>
-                  <TableHead className="text-right">
-                    <div className="leading-tight">Income</div>
-                    <div className="text-[10px] text-muted-foreground leading-tight">(as per quote)</div>
-                  </TableHead>
+                  <TableHead className="text-right">Revenue / Invoiced</TableHead>
+                  <TableHead className="text-right">Payment Received</TableHead>
                   <TableHead className="text-right">Outstanding</TableHead>
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
+                  <TableHead>Proof Type</TableHead>
+                  <TableHead>Payment Status</TableHead>
                   <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.map((u) => {
-                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-                  const paid = u.paymentAmount ?? 0;
-                  const outstanding = income - paid;
-                  const costs = unitTotalCost(u);
-                  const gp = income - costs;
+                  const income = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+                  const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+                  const outstanding = u.sandboxOutstandingAmount ?? income - paid;
+                  const costs = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+                  const gp = u.sandboxGrossProfit ?? income - costs;
                   const gmStatus = deriveStage1GmStatus(u);
                   const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
+                  const proofTypeLabel = deriveStage1ProofType(u);
+                  const paymentStatusLabel = deriveStage1PaymentStatus(u);
+                  const hasVariation = stage1VariationRecorded(u);
                   return (
                     <TableRow
                       key={u.stage1JobId ?? `n-${u.n}`}
@@ -1061,14 +1115,23 @@ function DrillBody({
                           )}
                         </button>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{u.sourceQuote ?? "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(income)}` : "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(paid)}` : "—"}</TableCell>
                       <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
                         {income > 0 ? fmtSignedMoney(outstanding) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs">{proofTypeLabel}</span>
+                          {hasVariation && (
+                            <Badge variant="outline" className="w-fit text-[10px]">Variation recorded</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">{paymentStatusLabel}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -1086,14 +1149,17 @@ function DrillBody({
           </div>
           <div className="md:hidden space-y-3">
             {units.map((u) => {
-              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-              const paid = u.paymentAmount ?? 0;
-              const outstanding = income - paid;
-              const costs = unitTotalCost(u);
-              const gp = income - costs;
+              const income = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+              const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+              const outstanding = u.sandboxOutstandingAmount ?? income - paid;
+              const costs = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+              const gp = u.sandboxGrossProfit ?? income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
               const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
+              const proofTypeLabel = deriveStage1ProofType(u);
+              const paymentStatusLabel = deriveStage1PaymentStatus(u);
+              const hasVariation = stage1VariationRecorded(u);
               return (
                 <button
                   key={u.stage1JobId ?? `n-${u.n}`}
@@ -1107,12 +1173,17 @@ function DrillBody({
                   </div>
                   <div className="font-medium">{u.client}</div>
                   {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
-                  <div className="flex justify-between text-xs"><span>Source Quote</span><span className="font-mono">{u.sourceQuote ?? "—"}</span></div>
-                  <div className="flex justify-between text-xs"><span>Income (as per quote)</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Revenue / Invoiced</span><span>{income > 0 ? `$${fmtMoney(income)}` : "—"}</span></div>
+                  <div className="flex justify-between text-xs"><span>Payment received</span><span>{income > 0 ? `$${fmtMoney(paid)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Outstanding</span><span className={outstanding < 0 ? "text-red-600" : ""}>{income > 0 ? fmtSignedMoney(outstanding) : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
+                  <div className="flex justify-between text-xs"><span>Proof type</span><span>{proofTypeLabel}</span></div>
+                  <div className="flex justify-between text-xs"><span>Payment status</span><span>{paymentStatusLabel}</span></div>
+                  {hasVariation && (
+                    <Badge variant="outline" className="text-[10px]">Variation recorded</Badge>
+                  )}
                 </button>
               );
             })}
