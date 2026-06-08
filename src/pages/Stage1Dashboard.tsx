@@ -1746,6 +1746,10 @@ function Stage1DashboardInner() {
   useEffect(() => {
     unitsRef.current = units;
   }, [units]);
+  // Once the Stage 1 sandbox (public.stage1_job_margin_summary) has hydrated the
+  // ledger with at least one row, the legacy Core-board loader must NOT override
+  // the canonical commercial units.
+  const sandboxHydratedRef = useRef(false);
   useEffect(() => {
     const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
     if (!nextRunId) return;
