@@ -3152,41 +3152,9 @@ export function JobDetailSheet({
             {!draft.jobSite && (
               <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
             )}
-            {!invoiceProofOk && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Customer proof missing: upload an invoice, quote, signed contract, work order, or customer approval.
-              </div>
-            )}
-            {!costsEntered && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Cost proof incomplete: margin cannot be trusted until direct costs are entered.
-              </div>
-            )}
-            {draft.paymentStatus === "Paid" && !paymentProofOk && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Payment proof missing: paid work must be supported by invoice, receipt, remittance, payment receipt, or transaction evidence.
-              </div>
-            )}
-            {paidStatusMissingAmount && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Paid status requires payment amount.
-              </div>
-            )}
-            {paymentExceedsQuote && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Payment exceeds quoted amount. Check quote or payment amount.
-              </div>
-            )}
-            {cashRequiresProof && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Cash proof missing: unrecorded cash does not count toward progression.
-              </div>
-            )}
-            {computedGm != null && computedGm < 30 && (
-              <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-2 text-xs text-red-900">
-                Margin blocker: this work is not yet economically safe to scale.
-              </div>
-            )}
+            <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
+            </div>
           </div>
 
           {isLocked && (
