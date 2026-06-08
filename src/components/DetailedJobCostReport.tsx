@@ -270,7 +270,7 @@ export function DetailedJobCostReport({
     .map((l, i) => {
       const treatment = l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst");
       return {
-        date: dateOnly(costRows[i]?.created_at),
+        date: l.date ? dateOnly(l.date) : dateOnly(costRows[i]?.created_at),
         ref: l.docName ?? costRows[i]?.notes ?? undefined,
         supplier: costRows[i]?.notes ?? "Supplier",
         description: l.description || "Job cost",
