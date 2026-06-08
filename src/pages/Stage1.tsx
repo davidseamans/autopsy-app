@@ -368,6 +368,8 @@ export interface CostLine {
   gstAmount?: number;
   /** True when the operator overwrote the auto GST amount. */
   gstOverridden?: boolean;
+  /** File name for the simple per-line upload (local cache only). */
+  docName?: string;
 }
 
 export interface ProofUnit {
