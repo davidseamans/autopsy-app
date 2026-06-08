@@ -558,11 +558,12 @@ async function doSyncStage1Units(
     keptIds.add(jobId);
     result.push({ ...u, stage1JobId: jobId });
 
-    // Revenue line — single line per job. Replace to keep canonical in lockstep.
-    const { error: revDelErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", jobId);
+    // Revenue — single sandbox 'invoice' event per job, stored ex-GST. Replace
+    // to keep the sandbox in lockstep with the workspace.
+    const { error: revDelErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", jobId);
     if (revDelErr) {
       ok = false;
-      addWriteError(diagnostics, "stage1_revenue_lines", "delete existing for job", revDelErr, { stage1_job_id: jobId });
+      addWriteError(diagnostics, "stage1_revenue_events", "delete existing for job", revDelErr, { stage1_job_id: jobId });
     }
     if ((u.invoiceAmount ?? 0) > 0) {
       const split = computeGstSplit({
@@ -573,105 +574,87 @@ async function doSyncStage1Units(
       });
       const revenueRow = {
         id: newCanonicalId(),
-        autopsy_run_id: runId,
         stage1_job_id: jobId,
-        invoice_total_gst_inclusive: split.inclusive,
-        invoice_gst_amount: split.gst,
-        invoice_ex_gst_amount: split.exGst,
-        gst_overridden: split.overridden,
-        gst_treatment: u.invoiceGstTreatment ?? "gst_included",
+        amount: split.exGst,
+        revenue_type: "invoice",
+        source: "stage1_dashboard",
+        reference: u.invoiceDocName || null,
         created_by: userId,
       };
       const { error: revErr } = await supabase
-        .from("stage1_revenue_lines")
+        .from("stage1_revenue_events")
         .insert(revenueRow);
       if (revErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_revenue_lines", "insert", revErr, revenueRow);
-        console.error("[stage1] revenue insert failed", { jobId, error: revErr.message });
+        addWriteError(diagnostics, "stage1_revenue_events", "insert", revErr, revenueRow);
+        console.error("[stage1] revenue event insert failed", { jobId, error: revErr.message });
       } else {
         diagnostics.writtenRows.revenueLines.push(toProbe(revenueRow));
       }
     }
 
-    // Cost lines — replace the full set for this job.
-    const { error: costDelErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", jobId);
+    // Direct costs — single categorised sandbox row per job, stored ex-GST.
+    const { error: costDelErr } = await supabase.from("stage1_job_costs").delete().eq("stage1_job_id", jobId);
     if (costDelErr) {
       ok = false;
-      addWriteError(diagnostics, "stage1_cost_lines", "delete existing for job", costDelErr, { stage1_job_id: jobId });
+      addWriteError(diagnostics, "stage1_job_costs", "delete existing for job", costDelErr, { stage1_job_id: jobId });
     }
-    const lines = u.costLines ?? [];
-    if (lines.length > 0) {
-      const rows = lines
-        .filter((l) => (l.amount ?? 0) > 0 || (l.description ?? "").trim().length > 0)
-        .map((l) => {
-          const treatment = (l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst")) as GstTreatment;
-          const split = computeGstSplit({
-            inclusive: l.amount,
-            treatment,
-            gstOverride: l.gstAmount,
-            overridden: l.gstOverridden,
-          });
-          return {
-            id: newCanonicalId(),
-            autopsy_run_id: runId,
-            stage1_job_id: jobId,
-            cost_category: "other",
-            description: l.description || null,
-            cost_total_gst_inclusive: split.inclusive,
-            cost_gst_amount: split.gst,
-            cost_ex_gst_amount: split.exGst,
-            gst_overridden: split.overridden,
-            gst_treatment: treatment,
-            created_by: userId,
-          };
+    const buckets = bucketDirectCosts(u);
+    if (buckets.total > 0) {
+      const costRow = {
+        id: newCanonicalId(),
+        stage1_job_id: jobId,
+        labour_hours: buckets.labourHours,
+        labour_rate: buckets.labourRate,
+        labour_cost: buckets.labourCost,
+        consumables_cost: buckets.consumablesCost,
+        travel_cost: buckets.travelCost,
+        rework_cost: buckets.reworkCost,
+        other_direct_cost: buckets.otherDirectCost,
+        notes: u.costDocName || null,
+        created_by: userId,
+      };
+      const { error: costErr } = await supabase
+        .from("stage1_job_costs")
+        .insert(costRow);
+      if (costErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_job_costs", "insert", costErr, costRow);
+        // Always surface cost write failures — a silent failure here is what
+        // produced "Job Costs = Not Yet Recorded" despite a saved cost.
+        console.error("[stage1] job cost insert failed", {
+          jobId,
+          runId,
+          createdBy: userId,
+          requested: {
+            labour_cost: costRow.labour_cost,
+            consumables_cost: costRow.consumables_cost,
+            travel_cost: costRow.travel_cost,
+            rework_cost: costRow.rework_cost,
+            other_direct_cost: costRow.other_direct_cost,
+          },
+          error: costErr.message,
         });
-      if (rows.length > 0) {
-        const { error: costErr } = await supabase
-          .from("stage1_cost_lines")
-          .insert(rows);
-        if (costErr) {
-          ok = false;
-          addWriteError(diagnostics, "stage1_cost_lines", "insert", costErr, rows);
-          // Always surface cost write failures — a silent failure here is what
-          // produced "Job Costs = Not Yet Recorded" despite a saved cost line.
-          console.error("[stage1] cost line insert failed", {
-            jobId,
-            runId,
-            createdBy: userId,
-            requested: rows.map((r) => ({
-              description: r.description,
-              cost_total_gst_inclusive: r.cost_total_gst_inclusive,
-              cost_gst_amount: r.cost_gst_amount,
-              cost_ex_gst_amount: r.cost_ex_gst_amount,
-            })),
-            error: costErr.message,
-          });
-        } else {
-          diagnostics.writtenRows.costLines.push(...rows.map(toProbe));
-          if (isDebug()) console.info("[stage1] cost lines written", {
-            jobId,
-            requested: rows.length,
-            savedIds: rows.map((r) => r.id),
-          });
-        }
+      } else {
+        diagnostics.writtenRows.costLines.push(toProbe(costRow));
+        if (isDebug()) console.info("[stage1] job cost written", { jobId, savedId: costRow.id });
       }
     }
   }
 
-  // Delete jobs (and their lines) that were removed locally.
+  // Delete jobs (and their sandbox child rows) that were removed locally.
   for (const id of existingIds) {
     if (!keptIds.has(id)) {
-      const { error: staleCostErr } = await supabase.from("stage1_cost_lines").delete().eq("stage1_job_id", id);
-      const { error: staleRevErr } = await supabase.from("stage1_revenue_lines").delete().eq("stage1_job_id", id);
+      const { error: staleCostErr } = await supabase.from("stage1_job_costs").delete().eq("stage1_job_id", id);
+      const { error: staleRevErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", id);
       const { error: staleJobErr } = await supabase.from("stage1_jobs").delete().eq("id", id);
       if (staleCostErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_cost_lines", "delete stale job costs", staleCostErr, { stage1_job_id: id });
+        addWriteError(diagnostics, "stage1_job_costs", "delete stale job costs", staleCostErr, { stage1_job_id: id });
       }
       if (staleRevErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_revenue_lines", "delete stale job revenue", staleRevErr, { stage1_job_id: id });
+        addWriteError(diagnostics, "stage1_revenue_events", "delete stale job revenue", staleRevErr, { stage1_job_id: id });
       }
       if (staleJobErr) {
         ok = false;
