@@ -3219,8 +3219,51 @@ export function JobDetailSheet({
               )}
               <p className="text-[11px] text-muted-foreground">GST is excluded from gross margin. Only ex-GST revenue is used.</p>
             </div>
-            {fileInput("Upload file or take picture", draft.invoiceDocName, (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }))}
-
+            <div className="space-y-2">
+              {fileInput(
+                draft.invoiceDocName ? "Replace invoice proof" : "Upload file or take picture",
+                draft.invoiceDocName,
+                (name) => setDraft({ ...draft, invoiceDocName: name, evidence: true }),
+              )}
+              {draft.invoiceDocName && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() => {
+                    if (!confirmDelete()) return;
+                    setDraft({ ...draft, invoiceDocName: undefined });
+                  }}
+                >
+                  Delete invoice proof
+                </Button>
+              )}
+            </div>
+            {(draft.invoiceAmount ?? 0) > 0 && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive"
+                  onClick={() => {
+                    if (!confirmDelete()) return;
+                    setDraft({
+                      ...draft,
+                      invoiceAmount: undefined,
+                      invoiceRef: undefined,
+                      invoiceDate: undefined,
+                      invoiceDocName: undefined,
+                      invoiceGstAmount: undefined,
+                      invoiceGstOverridden: false,
+                    });
+                  }}
+                >
+                  Delete invoice
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* 3. Job Costs */}
