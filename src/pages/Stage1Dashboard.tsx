@@ -1168,9 +1168,9 @@ function DrillBody({
               const gp = income - costs;
               const gmStatus = deriveStage1GmStatus(u);
               const pct = gmStatus.pct;
-              const jobNum = u.jobNumber ?? `J-${1000 + u.n}`;
+              const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
               return (
-                <div key={u.n} className="rounded-md border p-3 space-y-1 text-sm">
+                <div key={u.stage1JobId ?? `n-${u.n}`} className="rounded-md border p-3 space-y-1 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs">{jobNum}</span>
                     <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmStatus.label}</span>
