@@ -1919,6 +1919,16 @@ function Stage1DashboardInner() {
   // ledger with at least one row, the legacy Core-board loader must NOT override
   // the canonical commercial units.
   const sandboxHydratedRef = useRef(false);
+  // Ledger hydration status for the Simple Job Cost Ledger. While loading we show
+  // "Loading Stage 1 jobs…" and never render an empty/zero dashboard state. On a
+  // Supabase error we surface a visible developer error panel rather than
+  // silently falling back to an empty ledger.
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [ledgerError, setLedgerError] = useState<{
+    source: string;
+    message: string;
+    userId: string | null;
+  } | null>(null);
   useEffect(() => {
     const nextRunId = searchParams.get("runId") || getStage1RunId() || getActiveRunId();
     if (!nextRunId) return;
