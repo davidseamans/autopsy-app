@@ -3202,8 +3202,8 @@ function Stage1DashboardInner() {
         </div>
       )}
 
-      {/* Product-facing next-step guidance (read-only, Supabase-owned) */}
-      {displayNextStep && (
+      {/* Product-facing next-step guidance — hidden in the simplified Stage 1 workflow. */}
+      {false && displayNextStep && (
         <Card className="-mt-2 border-primary/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Next step</CardTitle>
