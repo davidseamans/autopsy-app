@@ -4361,33 +4361,20 @@ function Stage1DashboardInner() {
                 <TableBody>
                   {units.map((u) => {
                     const isSel = u.n === selectedN;
-                    const income = u.quoteValue ?? 0;
+                    const income = u.invoiceAmount ?? u.quoteValue ?? 0;
                     const paid = u.paymentAmount ?? 0;
                     const outstanding = income - paid;
-                    const costs =
-                      (u.costMaterials ?? 0) +
-                      (u.costLabour ?? 0) +
-                      (u.costSubcontractors ?? 0) +
-                      (u.costOther ?? 0);
+                    const costs = unitTotalCost(u);
                     // Gross profit / margin are computed from the PERSISTED Stage 1
                     // revenue (stage1_revenue_events, surfaced via the margin
                     // summary view as u.invoiceAmount) when present, falling back
                     // to the quote value. Margin is only meaningful with real
                     // revenue: a null margin renders as "—".
-                    const revenue = u.invoiceAmount ?? income;
+                    const revenue = income;
                     const gp = revenue - costs;
-                    const gmPctValue =
-                      revenue > 0 && directCostsRecorded(costs)
-                        ? Math.round((gp / revenue) * 100)
-                        : null;
-                    const gmTone =
-                      gmPctValue === null
-                        ? "text-muted-foreground"
-                        : gmPctValue >= 30
-                          ? "text-emerald-600"
-                          : gmPctValue >= 20
-                            ? "text-amber-600"
-                            : "text-red-600";
+                    const gmStatus = deriveStage1GmStatus(u);
+                    const gmPctValue = gmStatus.pct;
+                    const gmTone = gmStatus.tone;
                     return (
                       <TableRow
                         key={u.n}
@@ -4423,7 +4410,7 @@ function Stage1DashboardInner() {
                           {revenue > 0 ? `$${fmtMoney(gp)}` : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
-                          {renderMarginPct(gmPctValue)}
+                          {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
