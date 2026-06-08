@@ -3546,7 +3546,7 @@ export function JobDetailSheet({
                 placeholder="Observations, exceptions, anything to remember"
               />
             </div>
-            {fileInput("Upload file or take picture", draft.invoiceDocName ? undefined : draft.paymentProofName, (name) => setDraft({ ...draft, notes: draft.notes }))}
+            {fileInput("Upload file or take picture", draft.miscAttachmentName, (name) => setDraft({ ...draft, miscAttachmentName: name }))}
             <p className="text-xs text-muted-foreground">
               Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
             </p>
