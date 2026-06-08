@@ -3476,45 +3476,10 @@ export function JobDetailSheet({
             </div>
           </div>
 
-          {/* 4b. Write-Offs & Value Adjustments */}
-          <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(4, "Write-Offs & Value Adjustments", DollarSign)}
-            <p className="text-xs text-muted-foreground">
-              Reduce the collectible value of this job (write-off, credit, or approved reduction).
-              Adjustments lower the outstanding balance — they never change the revenue actually received.
-            </p>
-            <WriteOffsSection jobId={draft.jobId} disabled={isLocked} />
-          </div>
-
-          {/* 5. Status & Next Action */}
-          <div className="rounded-md border p-3 space-y-3">
-            {sectionTitle(5, "Status & Next Action")}
-            <div className="space-y-1">
-              <Label className="text-xs">Update Job / Contract Status</Label>
-              <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Only valid next statuses are shown ({kind === "contract" ? "contract" : "one-off"} rules).
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes</Label>
-              <Textarea rows={2} value={draft.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Observations, exceptions, anything to remember" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Next Action</Label>
-              <Input value={draft.nextAction ?? ""} onChange={(e) => setDraft({ ...draft, nextAction: e.target.value })} placeholder="e.g. Upload signed contract" />
-            </div>
-          </div>
-
-          {/* 6. General Business Expenses (not in GM) */}
+          {/* 4. General Business Expenses (not in GM) */}
           <div className="rounded-md border p-3 space-y-3">
             <div className="font-medium text-sm flex items-center gap-2">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">6</span>
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">4</span>
               <Paperclip className="h-4 w-4" /> General Business Expenses
             </div>
             <p className="text-xs text-muted-foreground">Not included in this job's gross margin.</p>
@@ -3561,10 +3526,28 @@ export function JobDetailSheet({
             />
 
             {(draft.gbExpenses ?? []).some((e) => !e.receiptName) && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">
-                Receipt missing: keep proof now so your accountant is not guessing later.
+              <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
+                Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
               </div>
             )}
+          </div>
+
+          {/* 5. Miscellaneous Attachment */}
+          <div className="rounded-md border p-3 space-y-3">
+            {sectionTitle(5, "Miscellaneous Attachment", Paperclip)}
+            <div className="space-y-1">
+              <Label className="text-xs">Comment</Label>
+              <Textarea
+                rows={2}
+                value={draft.notes ?? ""}
+                onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                placeholder="Observations, exceptions, anything to remember"
+              />
+            </div>
+            {fileInput("Upload file or take picture", draft.invoiceDocName ? undefined : draft.paymentProofName, (name) => setDraft({ ...draft, notes: draft.notes }))}
+            <p className="text-xs text-muted-foreground">
+              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
+            </p>
           </div>
 
           </fieldset>
