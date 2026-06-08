@@ -252,7 +252,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
 let syncChain: Promise<unknown> = Promise.resolve();
 
 export interface Stage1CanonicalWriteError {
-  table: "stage1_jobs" | "stage1_revenue_lines" | "stage1_cost_lines" | "auth" | "stage1_canonical";
+  table:
+    | "stage1_jobs"
+    | "stage1_revenue_events"
+    | "stage1_job_costs"
+    | "auth"
+    | "stage1_canonical";
   operation: string;
   message: string;
   code?: string;
