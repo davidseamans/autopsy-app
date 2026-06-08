@@ -3110,26 +3110,6 @@ export function JobDetailSheet({
             {fieldRow("Job Site / Location", draft.jobSite ?? <span className="text-amber-600">Site not entered</span>)}
           </div>
 
-          {/* Job record + accepted quote / customer approval paperwork */}
-          <Stage1EvidenceAttachments
-            runId={evidenceRunId}
-            linkType="quote"
-            linkRef={`unit-${draft.n}`}
-            linkLabel={`Job ${draft.jobSequenceNumber != null ? `J-${draft.jobSequenceNumber}` : `J-${draft.n}`} — quote / approval`}
-            defaultEvidenceType="Accepted Quote"
-            title="Accepted quote / customer approval"
-            readOnly={readOnly}
-          />
-
-          {/* Blockers / warnings */}
-          <div className="space-y-2">
-            {!draft.jobSite && (
-              <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-2 text-xs text-amber-900">Site not entered</div>
-            )}
-            <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 p-2 text-xs text-slate-700">
-              Optional supporting evidence helps verify the record. Missing paperwork does not block saving.
-            </div>
-          </div>
 
           {isLocked && (
             <div className="rounded-md border-l-4 border-slate-500 bg-slate-50 p-2 text-xs text-slate-800">
