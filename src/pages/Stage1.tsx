@@ -427,6 +427,22 @@ export interface ProofUnit {
   paymentAmount?: number;
   paymentMethod?: "Bank Transfer" | "Card" | "Cash with Receipt" | "Payment Platform" | "Other";
   paymentProofName?: string;
+  // Canonical Stage 1 sandbox commercial proof model
+  // (public.stage1_job_margin_summary). These are read-only projections of the
+  // persisted sandbox view used by the First 5 Jobs ledger.
+  sandboxRevenueAmount?: number;
+  sandboxOriginalInvoiceAmount?: number;
+  sandboxVariationInvoiceAmount?: number;
+  sandboxProgressClaimAmount?: number;
+  sandboxAdjustmentAmount?: number;
+  sandboxPaymentReceivedAmount?: number;
+  sandboxOutstandingAmount?: number;
+  sandboxTotalDirectCost?: number;
+  sandboxGrossProfit?: number;
+  sandboxGrossMarginPct?: number;
+  sandboxProofType?: string;
+  sandboxPaymentStatus?: string;
+  sandboxVariationRecorded?: boolean;
   // General Business Expenses (not included in job GM)
   gbExpenses?: GBExpense[];
   // Lifecycle / audit
