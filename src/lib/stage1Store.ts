@@ -397,6 +397,9 @@ async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnost
 }
 
 function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, writeSucceeded: boolean) {
+  // Only stage1_jobs carries autopsy_run_id; sandbox revenue/cost rows link via
+  // stage1_job_id, so the run-match check is based on the job rows.
+  const jobRows = diagnostics.rows.jobs;
   const allRows = [
     ...diagnostics.rows.jobs,
     ...diagnostics.rows.revenueLines,
@@ -404,8 +407,8 @@ function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, write
   ];
   diagnostics.writeSucceeded = writeSucceeded && diagnostics.errors.length === 0;
   diagnostics.authUserIdPresent = !!diagnostics.authUserId;
-  diagnostics.autopsyRunIdWrittenMatchesActiveRun = allRows.length > 0
-    ? allRows.every((r) => r.autopsy_run_id === diagnostics.runId)
+  diagnostics.autopsyRunIdWrittenMatchesActiveRun = jobRows.length > 0
+    ? jobRows.every((r) => r.autopsy_run_id === diagnostics.runId)
     : false;
   diagnostics.createdByMatchesAuthUser = diagnostics.authUserId && allRows.length > 0
     ? allRows.every((r) => r.created_by === diagnostics.authUserId)
@@ -422,9 +425,9 @@ function finalizeDiagnostics(diagnostics: Stage1CanonicalWriteDiagnostics, write
     diagnostics.createdByMatchesAuthUser === true;
   diagnostics.status = diagnostics.success ? "success" : "failed";
   diagnostics.message = diagnostics.success
-    ? "Canonical Supabase write confirmed: job, revenue, and cost rows exist for the active run."
+    ? "Stage 1 sandbox write confirmed: job, revenue, and cost rows exist for the active run."
     : diagnostics.errors[0]?.message ??
-      "Canonical Supabase write is not confirmed until stage1_jobs, stage1_revenue_lines, and stage1_cost_lines are all non-zero for the active run.";
+      "Stage 1 sandbox write is not confirmed until stage1_jobs, stage1_revenue_events, and stage1_job_costs are all non-zero for the active run.";
 }
 
 /**
