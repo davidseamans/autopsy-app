@@ -4464,11 +4464,11 @@ function Stage1DashboardInner() {
                     const gmTone = gmStatus.tone;
                     return (
                       <TableRow
-                        key={u.stage1JobId ?? `n-${u.n}`}
+                        key={u.stage1JobId}
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`}</TableCell>
+                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : "—"}</TableCell>
                         <TableCell>
                           <button
                             type="button"
@@ -4480,6 +4480,11 @@ function Stage1DashboardInner() {
                               <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
                             ) : (
                               <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                            )}
+                            {isDebug() && (
+                              <div className="mt-1 text-[10px] leading-tight text-muted-foreground/80 font-mono break-all">
+                                seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
+                              </div>
                             )}
                           </button>
                         </TableCell>
