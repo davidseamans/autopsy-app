@@ -179,6 +179,20 @@ export async function fetchStage1Units(
           ? Math.round(((revenue - totalDirectCost) / revenue) * 100)
           : 0;
 
+    // Expanded sandbox commercial proof model (from the margin summary view).
+    const originalInvoiceAmount = num("original_invoice_amount");
+    const variationInvoiceAmount = num("variation_invoice_amount");
+    const progressClaimAmount = num("progress_claim_amount");
+    const adjustmentAmount = num("adjustment_amount");
+    const paymentReceivedAmount = num("payment_received_amount");
+    const outstandingAmount =
+      s && s.outstanding_amount != null ? Number(s.outstanding_amount) || 0 : revenue - paymentReceivedAmount;
+    const grossProfit = s && s.gross_profit != null ? Number(s.gross_profit) || 0 : revenue - totalDirectCost;
+    const sandboxProofType = typeof s.proof_type === "string" ? s.proof_type : undefined;
+    const sandboxPaymentStatus = typeof s.payment_status === "string" ? s.payment_status : undefined;
+    const variationRecorded =
+      typeof s.variation_recorded === "boolean" ? s.variation_recorded : variationInvoiceAmount > 0;
+
     const costLines: CostLine[] = [];
     const pushCost = (label: string, amount: number) => {
       if (amount > 0) {
@@ -224,6 +238,22 @@ export async function fetchStage1Units(
       costSubcontractors: undefined,
       costOther: otherDirectCost + travelCost + reworkCost || undefined,
       costLines,
+      // Canonical sandbox commercial proof projections (read-only).
+      sandboxRevenueAmount: revenue,
+      sandboxOriginalInvoiceAmount: originalInvoiceAmount,
+      sandboxVariationInvoiceAmount: variationInvoiceAmount,
+      sandboxProgressClaimAmount: progressClaimAmount,
+      sandboxAdjustmentAmount: adjustmentAmount,
+      sandboxPaymentReceivedAmount: paymentReceivedAmount,
+      sandboxOutstandingAmount: outstandingAmount,
+      sandboxTotalDirectCost: totalDirectCost,
+      sandboxGrossProfit: grossProfit,
+      sandboxGrossMarginPct: s && s.gross_margin_pct != null ? Number(s.gross_margin_pct) : undefined,
+      sandboxProofType,
+      sandboxPaymentStatus,
+      sandboxVariationRecorded: variationRecorded,
+      // Surface persisted payment so the ledger's "Outstanding" reflects collection.
+      paymentAmount: paymentReceivedAmount > 0 ? paymentReceivedAmount : undefined,
     };
     return unit;
   });
