@@ -29,7 +29,7 @@
 // always recalculates from ex-GST values only. Margin governance ("Not Yet
 // Proven" when costs are missing) is preserved because no fabricated values are
 // stored — only what the operator actually entered.
-import type { ProofUnit, CostLine } from "@/pages/Stage1";
+import type { ProofUnit, CostLine, GBExpense } from "@/pages/Stage1";
 import type { GstTreatment } from "@/lib/gst";
 import { computeGstSplit } from "@/lib/gst";
 import { supabase, isDebug } from "@/lib/supabase";
