@@ -4554,7 +4554,22 @@ function Stage1DashboardInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ledgerUnits.map((u) => {
+                  {ledgerUnits.length === 0 && ledgerLoading && !ledgerError ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Loading Stage 1 jobs…
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ) : ledgerUnits.length === 0 && ledgerError ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-8 text-center text-sm text-destructive">
+                        Stage 1 ledger failed to load — see error panel above.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                  ledgerUnits.map((u) => {
                     const isSel = u.n === selectedN;
                     // Gross (inc GST), GST and ex-GST are all derived from the
                     // persisted GST-INCLUSIVE source amount + GST treatment via
@@ -4640,7 +4655,7 @@ function Stage1DashboardInner() {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  }))}
                 </TableBody>
               </Table>
             </CardContent>
