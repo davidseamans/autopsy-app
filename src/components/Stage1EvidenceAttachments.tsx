@@ -126,20 +126,9 @@ export function Stage1EvidenceAttachments({
       </div>
 
       {!readOnly && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+        <div className="grid grid-cols-1 gap-2 items-end">
           <div className="space-y-1">
-            <Label className="text-xs">Evidence type</Label>
-            <Select value={evidenceType} onValueChange={(v) => setEvidenceType(v as EvidenceType)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EVIDENCE_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Attach file / photo</Label>
+            <Label className="text-xs">Upload file or take picture</Label>
             <input
               ref={inputRef}
               type="file"
