@@ -2822,16 +2822,8 @@ function Stage1DashboardInner() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  const totalIncome = units.reduce((s, u) => s + (u.quoteValue ?? 0), 0);
-  const totalCosts = units.reduce(
-    (s, u) =>
-      s +
-      (u.costMaterials ?? 0) +
-      (u.costLabour ?? 0) +
-      (u.costSubcontractors ?? 0) +
-      (u.costOther ?? 0),
-    0,
-  );
+  const totalIncome = units.reduce((s, u) => s + (u.invoiceAmount ?? u.quoteValue ?? 0), 0);
+  const totalCosts = units.reduce((s, u) => s + unitTotalCost(u), 0);
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
@@ -2871,19 +2863,11 @@ function Stage1DashboardInner() {
   // Governance gate: margin cannot be calculated from missing cost data.
   // When direct costs are not recorded, gross margin is "Not Yet Proven" and
   // Stage 2 is not ready — no 0%, 100%, or any calculated value is shown.
-  const directCostsNotRecorded =
-    dashboardDirectCostStatus === "not_yet_recorded" ||
-    (dashboardDirectCostDisplay ?? "").trim().toLowerCase() === "not yet recorded" ||
-    !directCostsRecorded(totalCosts);
+  const directCostsNotRecorded = !directCostsRecorded(totalCosts);
 
   const displayMarginText = directCostsNotRecorded
     ? "Not Yet Proven"
-    : stage1DashboardDisplay
-      ? renderMarginPct(dashboardMarginRaw as number | null, {
-          display: dashboardMarginDisplay,
-          status: dashboardMarginStatus,
-        })
-      : renderMarginPct(totalIncome > 0 ? gmPct : null);
+    : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
   const directCostKpiText = renderDirectCost(totalCosts, {
