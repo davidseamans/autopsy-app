@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { ProofUnit, GBExpense } from "@/pages/Stage1";
+import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 type Line = {
   date?: string;
@@ -40,6 +42,40 @@ function splitGst(gross: number, gstIncluded: boolean) {
 
 const fmt = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Stage 1 sandbox proof-type / payment-status display labels (mirrors the ledger).
+const PROOF_TYPE_LABELS: Record<string, string> = {
+  not_yet_proven: "Not yet proven",
+  revenue_recorded: "Revenue recorded",
+  commercial_proof_recorded: "Commercial proof recorded",
+  completed_job: "Completed job",
+};
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  not_invoiced: "Not invoiced",
+  unpaid: "Unpaid",
+  part_paid: "Part-paid",
+  paid: "Paid",
+};
+
+// Detail rows fetched live from the Stage 1 sandbox tables (canonical truth).
+type Stage1RevenueRow = {
+  id: string;
+  amount: number | null;
+  revenue_type: string | null;
+  source: string | null;
+  reference: string | null;
+  created_at: string | null;
+};
+type Stage1CostRow = {
+  id: string;
+  labour_cost: number | null;
+  consumables_cost: number | null;
+  travel_cost: number | null;
+  rework_cost: number | null;
+  other_direct_cost: number | null;
+  notes: string | null;
+  created_at: string | null;
+};
 
 function totals(lines: Line[]) {
   return lines.reduce(
