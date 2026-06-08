@@ -236,43 +236,49 @@ export function DetailedJobCostReport({
 
   const dateOnly = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
 
-  // Income lines — sandbox revenue events (stored EX-GST, so net == gross here).
-  const incomeLines: Line[] = revenueRows
-    .filter((r) => Number(r.amount) > 0)
-    .map((r) => ({
-      date: dateOnly(r.created_at),
-      ref: r.reference ?? undefined,
-      supplier: unit.client,
-      description:
-        (r.revenue_type ? r.revenue_type.charAt(0).toUpperCase() + r.revenue_type.slice(1) : "Invoice") +
-        (unit.jobSite ? ` — ${unit.jobSite}` : ""),
-      gross: Number(r.amount) || 0,
-      gstIncluded: false,
-      proof: r.reference || r.source || "Recorded",
-    }));
+  // Income line — built from the UNIT (source of truth): the GST-INCLUSIVE gross
+  // amount + GST treatment. GST + ex-GST are derived via computeGstSplit so the
+  // report matches the Job Detail and the Simple Job Cost Ledger exactly. The
+  // sandbox revenue rows are used only to enrich date / reference.
+  const invoiceTreatment = unit.invoiceGstTreatment ?? "no_gst";
+  const invoiceGross = unit.invoiceAmount ?? 0;
+  const incomeLines: Line[] =
+    invoiceGross > 0
+      ? [
+          {
+            date: dateOnly(revenueRows[0]?.created_at),
+            ref: revenueRows[0]?.reference ?? unit.invoiceDocName ?? undefined,
+            supplier: unit.client,
+            description: "Invoice" + (unit.jobSite ? ` — ${unit.jobSite}` : ""),
+            gross: invoiceGross,
+            gstIncluded: invoiceTreatment === "gst_included" || invoiceTreatment === "manual",
+            gstTreatment: invoiceTreatment,
+            gstOverride: unit.invoiceGstAmount,
+            overridden: unit.invoiceGstOverridden,
+            proof: revenueRows[0]?.reference || revenueRows[0]?.source || "Recorded",
+          },
+        ]
+      : [];
 
-  // Job cost lines — sandbox categorised cost row(s) (stored EX-GST).
-  const costLines: Line[] = [];
-  for (const c of costRows) {
-    const pushBucket = (label: string, amount: number | null) => {
-      const amt = Number(amount) || 0;
-      if (amt <= 0) return;
-      costLines.push({
-        date: dateOnly(c.created_at),
-        ref: c.notes ?? undefined,
-        supplier: c.notes ?? "Supplier",
-        description: label,
-        gross: amt,
-        gstIncluded: false,
-        proof: c.notes || "Recorded",
-      });
-    };
-    pushBucket("Labour for job", c.labour_cost);
-    pushBucket("Consumables / Materials", c.consumables_cost);
-    pushBucket("Travel", c.travel_cost);
-    pushBucket("Rework", c.rework_cost);
-    pushBucket("Other direct costs", c.other_direct_cost);
-  }
+  // Job cost lines — built from the UNIT's cost lines (each carries its own
+  // GST-INCLUSIVE gross + GST treatment). Sandbox cost rows enrich date / ref.
+  const costLines: Line[] = (unit.costLines ?? [])
+    .filter((l) => (l.amount ?? 0) > 0)
+    .map((l, i) => {
+      const treatment = l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst");
+      return {
+        date: dateOnly(costRows[i]?.created_at),
+        ref: l.docName ?? costRows[i]?.notes ?? undefined,
+        supplier: costRows[i]?.notes ?? "Supplier",
+        description: l.description || "Job cost",
+        gross: l.amount ?? 0,
+        gstIncluded: treatment === "gst_included" || treatment === "manual",
+        gstTreatment: treatment,
+        gstOverride: l.gstAmount,
+        overridden: l.gstOverridden,
+        proof: l.docName || costRows[i]?.notes || "Recorded",
+      };
+    });
 
   const incomeT = totals(incomeLines);
   const costT = totals(costLines);
