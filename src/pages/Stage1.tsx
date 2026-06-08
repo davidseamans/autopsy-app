@@ -3283,13 +3283,23 @@ export function JobDetailSheet({
                 };
                 return (
                   <div key={line.id} className="rounded-md border p-3 space-y-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Description</Label>
-                      <Input
-                        value={line.description}
-                        placeholder="e.g. Materials, Subcontractor help"
-                        onChange={(e) => updateLine({ description: e.target.value })}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Description</Label>
+                        <Input
+                          value={line.description}
+                          placeholder="e.g. Materials, Subcontractor help"
+                          onChange={(e) => updateLine({ description: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Job Cost Date</Label>
+                        <Input
+                          type="date"
+                          value={line.date ?? ""}
+                          onChange={(e) => updateLine({ date: e.target.value || undefined })}
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="space-y-1">
@@ -3342,18 +3352,40 @@ export function JobDetailSheet({
                         Reset GST to auto (1/11)
                       </button>
                     )}
-                    {fileInput("Upload file or take picture", line.docName, (name) => updateLine({ docName: name }))}
+                    <div className="space-y-2">
+                      {fileInput(
+                        line.docName ? "Replace cost proof" : "Upload file or take picture",
+                        line.docName,
+                        (name) => updateLine({ docName: name }),
+                      )}
+                      {line.docName && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => {
+                            if (!confirmDelete()) return;
+                            updateLine({ docName: undefined });
+                          }}
+                        >
+                          Delete cost proof
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex justify-end">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="text-destructive"
                         onClick={() => {
+                          if (!confirmDelete()) return;
                           const next = (draft.costLines ?? []).filter((_, i) => i !== idx);
                           setDraft({ ...draft, costLines: next });
                         }}
                       >
-                        Remove
+                        Delete cost line
                       </Button>
                     </div>
                   </div>
