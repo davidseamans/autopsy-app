@@ -826,6 +826,7 @@ async function doSyncStage1Units(
         rework_cost: buckets.reworkCost,
         other_direct_cost: buckets.otherDirectCost,
         notes: u.costDocName || null,
+        lines: serializeCostLines(u.costLines),
         created_by: userId,
       };
       const { error: costErr } = await supabase
@@ -852,6 +853,39 @@ async function doSyncStage1Units(
       } else {
         diagnostics.writtenRows.costLines.push(toProbe(costRow));
         if (isDebug()) console.info("[stage1] job cost written", { jobId, savedId: costRow.id });
+      }
+    }
+
+    // General Business Expenses — replace the sandbox rows for this job. These
+    // are NEVER part of gross margin (the margin view does not read this table).
+    const { error: gbDelErr } = await supabase
+      .from("stage1_business_expenses")
+      .delete()
+      .eq("stage1_job_id", jobId);
+    if (gbDelErr) {
+      ok = false;
+      addWriteError(diagnostics, "stage1_business_expenses", "delete existing for job", gbDelErr, { stage1_job_id: jobId });
+    }
+    const gbRows = (u.gbExpenses ?? [])
+      .filter((e) => (e.amount ?? 0) > 0 || e.supplier || e.description || e.receiptName)
+      .map((e) => ({
+        id: newCanonicalId(),
+        autopsy_run_id: runId,
+        stage1_job_id: jobId,
+        expense_date: e.expenseDate || null,
+        supplier: e.supplier || null,
+        description: e.description || null,
+        amount_inc_gst: e.amount ?? 0,
+        gst_included: e.gstIncluded ?? true,
+        notes: e.notes || null,
+        proof_name: e.receiptName || null,
+        created_by: userId,
+      }));
+    if (gbRows.length > 0) {
+      const { error: gbInsErr } = await supabase.from("stage1_business_expenses").insert(gbRows);
+      if (gbInsErr) {
+        ok = false;
+        addWriteError(diagnostics, "stage1_business_expenses", "insert", gbInsErr, gbRows);
       }
     }
   }
