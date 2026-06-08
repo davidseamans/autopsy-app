@@ -532,6 +532,34 @@ function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: st
   return { label: "Fail", tone: "text-red-600" };
 }
 
+function unitTotalCost(u: ProofUnit): number {
+  if (u.costLines && u.costLines.length > 0) {
+    return u.costLines.reduce((s, l) => s + (l.amount ?? 0), 0);
+  }
+  return (
+    (u.costMaterials ?? 0) +
+    (u.costLabour ?? 0) +
+    (u.costSubcontractors ?? 0) +
+    (u.costOther ?? 0)
+  );
+}
+
+function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct: number | null } {
+  const revenue = u.invoiceAmount ?? u.quoteValue ?? 0;
+  const costs = unitTotalCost(u);
+  const gmPct = u.gm;
+  if (revenue > 0 && costs > 0 && gmPct != null) {
+    return { label: "GM proven", tone: gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600", pct: gmPct };
+  }
+  if (revenue > 0 && costs === 0) {
+    return { label: "Cost not yet proven", tone: "text-muted-foreground", pct: null };
+  }
+  if (revenue === 0) {
+    return { label: "Revenue not yet proven", tone: "text-muted-foreground", pct: null };
+  }
+  return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
+}
+
 function KpiCard({
   label,
   primary,
