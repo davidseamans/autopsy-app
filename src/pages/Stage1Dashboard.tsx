@@ -560,6 +560,57 @@ function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct:
   return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
 }
 
+// ---------------------------------------------------------------------------
+// Stage 1 sandbox commercial proof model — display helpers
+// Proof type and payment status are DISTINCT axes. Both are derived from the
+// persisted public.stage1_job_margin_summary projection on the unit, falling
+// back to the documented rules when the view did not supply an explicit value.
+// ---------------------------------------------------------------------------
+const PROOF_TYPE_LABELS: Record<string, string> = {
+  not_yet_proven: "Not yet proven",
+  revenue_recorded: "Revenue recorded",
+  commercial_proof_recorded: "Commercial proof recorded",
+  completed_job: "Completed job",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  not_invoiced: "Not invoiced",
+  unpaid: "Unpaid",
+  part_paid: "Part-paid",
+  paid: "Paid",
+};
+
+function deriveStage1ProofType(u: ProofUnit): string {
+  if (u.sandboxProofType && PROOF_TYPE_LABELS[u.sandboxProofType]) {
+    return PROOF_TYPE_LABELS[u.sandboxProofType];
+  }
+  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+  const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
+  const completed = toCanonicalStatus(u.status) === "completed";
+  if (revenue > 0 && cost > 0) {
+    return completed ? "Completed job" : "Commercial proof recorded";
+  }
+  if (revenue > 0) return "Revenue recorded";
+  return "Not yet proven";
+}
+
+function deriveStage1PaymentStatus(u: ProofUnit): string {
+  if (u.sandboxPaymentStatus && PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus]) {
+    return PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus];
+  }
+  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
+  const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+  if (revenue <= 0) return "Not invoiced";
+  if (paid >= revenue) return "Paid";
+  if (paid > 0) return "Part-paid";
+  return "Unpaid";
+}
+
+function stage1VariationRecorded(u: ProofUnit): boolean {
+  if (typeof u.sandboxVariationRecorded === "boolean") return u.sandboxVariationRecorded;
+  return (u.sandboxVariationInvoiceAmount ?? 0) > 0;
+}
+
 function KpiCard({
   label,
   primary,
