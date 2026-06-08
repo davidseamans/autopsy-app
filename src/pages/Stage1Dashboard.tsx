@@ -944,6 +944,21 @@ function DrillBody({
 
       {kind === "conversions" && (
         <>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="quote-filter" className="text-sm text-muted-foreground">Filter</Label>
+            <select
+              id="quote-filter"
+              value={quoteFilter}
+              onChange={(e) => setQuoteFilter(e.target.value as "all" | "sent" | "converted" | "rejected")}
+              className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              <option value="all">Show all quotes</option>
+              <option value="sent">Sent</option>
+              <option value="converted">Job Converted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <span className="text-xs text-muted-foreground ml-auto">{filteredQuotes.length} quote{filteredQuotes.length === 1 ? "" : "s"}</span>
+          </div>
           <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
@@ -960,7 +975,7 @@ function DrillBody({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quotes.filter((q) => !q.converted).map((r) => {
+                {filteredQuotes.map((r) => {
                   const isSel = r.number === selectedQuoteNumber;
                   return (
                   <TableRow
@@ -1020,7 +1035,7 @@ function DrillBody({
             </Table>
           </div>
           <div className="md:hidden space-y-3">
-            {quotes.filter((q) => !q.converted).map((r) => {
+            {filteredQuotes.map((r) => {
               const isSel = r.number === selectedQuoteNumber;
               return (
               <div
@@ -1065,8 +1080,8 @@ function DrillBody({
             })}
           </div>
           <p className="text-xs text-muted-foreground">
-            Active quotes only. Select a row and use <span className="font-medium text-foreground">Quote Activity</span> to update status.
-            Accepting a quote creates one job in the Simple Job Cost Ledger and removes the quote from this list.
+            Select a row and use <span className="font-medium text-foreground">Quote Activity</span> to update status.
+            Accepting a quote creates one job in the Simple Job Cost Ledger.
           </p>
         </>
       )}
