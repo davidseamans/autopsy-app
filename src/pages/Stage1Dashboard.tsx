@@ -7,6 +7,7 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
+import { computeGstSplit } from "@/lib/gst";
 import { AuthGate } from "@/components/AuthGate";
 import { useAuth } from "@/lib/auth";
 import {
