@@ -4459,7 +4459,7 @@ function Stage1DashboardInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {units.map((u) => {
+                  {ledgerUnits.map((u) => {
                     const isSel = u.n === selectedN;
                     // Revenue / cost come from persisted Stage 1 sandbox values
                     // (ex-GST). Client Invoices inc GST and Job Costs inc GST are
