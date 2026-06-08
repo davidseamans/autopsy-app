@@ -390,6 +390,7 @@ export interface ProofUnit {
   quoteValue?: number;
   scheduledDate?: string;
   sourceQuote?: string;
+  quoteComment?: string;
   notes?: string;
   nextAction?: string;
   // Real Supabase linkage — this unit is a workspace over an existing job row.
