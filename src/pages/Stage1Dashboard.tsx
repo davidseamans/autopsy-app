@@ -4402,11 +4402,8 @@ function Stage1DashboardInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16">Job #</TableHead>
+                  <TableHead className="w-16">Job #</TableHead>
                     <TableHead>Client</TableHead>
-                    <TableHead>Quote #</TableHead>
-                    <TableHead>Quote Status</TableHead>
-                    <TableHead>Proof Type</TableHead>
                     <TableHead className="text-right">Client Invoices inc GST</TableHead>
                     <TableHead className="text-right">Revenue ex GST</TableHead>
                     <TableHead className="text-right">Outstanding</TableHead>
