@@ -410,6 +410,7 @@ export interface ProofUnit {
   invoiceGstOverridden?: boolean;
   invoiceDate?: string;
   invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
+  invoiceRef?: string;
   contractStart?: string;
   contractEnd?: string;
   invoiceDocType?: "Quote" | "Customer Invoice" | "Signed Contract" | "Work Order" | "Customer Approval" | "Other";
