@@ -362,24 +362,31 @@ function newCanonicalId(): string {
 async function populatePostWriteCounts(diagnostics: Stage1CanonicalWriteDiagnostics) {
   const runId = diagnostics.runId;
   if (!runId) return;
+  // Resolve the run's job ids so sandbox child rows can be scoped to this run.
+  const { data: jobRows } = await supabase
+    .from("stage1_jobs")
+    .select("id")
+    .eq("autopsy_run_id", runId);
+  const jobIds = (jobRows ?? []).map((r: { id: unknown }) => String(r.id));
+  const scopeIds = jobIds.length ? jobIds : ["00000000-0000-0000-0000-000000000000"];
   const [jobsRes, revenueRes, costsRes] = await Promise.all([
     supabase
       .from("stage1_jobs")
       .select("id,autopsy_run_id,created_by", { count: "exact" })
       .eq("autopsy_run_id", runId),
     supabase
-      .from("stage1_revenue_lines")
-      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
-      .eq("autopsy_run_id", runId),
+      .from("stage1_revenue_events")
+      .select("id,created_by,stage1_job_id", { count: "exact" })
+      .in("stage1_job_id", scopeIds),
     supabase
-      .from("stage1_cost_lines")
-      .select("id,autopsy_run_id,created_by,stage1_job_id", { count: "exact" })
-      .eq("autopsy_run_id", runId),
+      .from("stage1_job_costs")
+      .select("id,created_by,stage1_job_id", { count: "exact" })
+      .in("stage1_job_id", scopeIds),
   ]);
 
   if (jobsRes.error) addWriteError(diagnostics, "stage1_jobs", "post-save count", jobsRes.error);
-  if (revenueRes.error) addWriteError(diagnostics, "stage1_revenue_lines", "post-save count", revenueRes.error);
-  if (costsRes.error) addWriteError(diagnostics, "stage1_cost_lines", "post-save count", costsRes.error);
+  if (revenueRes.error) addWriteError(diagnostics, "stage1_revenue_events", "post-save count", revenueRes.error);
+  if (costsRes.error) addWriteError(diagnostics, "stage1_job_costs", "post-save count", costsRes.error);
 
   diagnostics.rows.jobs = (jobsRes.data ?? []).map(toProbe);
   diagnostics.rows.revenueLines = (revenueRes.data ?? []).map(toProbe);
