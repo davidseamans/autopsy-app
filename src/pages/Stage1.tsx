@@ -3176,14 +3176,17 @@ export function JobDetailSheet({
           {/* 2. Client Invoices */}
           <div className="rounded-md border p-3 space-y-3">
             {sectionTitle(2, "Client Invoices", DollarSign)}
+            <p className="text-xs text-muted-foreground">
+              Record one or more client invoices for this job. Client invoice revenue (ex-GST) is the source of gross margin — invoices do not need to equal the quote, and extra work can be added as another invoice line.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Quote / Contract Amount</Label>
-                <Input type="number" value={draft.quoteValue ?? ""} onChange={(e) => setDraft({ ...draft, quoteValue: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                <Label className="text-xs">Amount inc GST</Label>
+                <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Invoice Total incl. GST</Label>
-                <Input type="number" value={draft.invoiceAmount ?? ""} onChange={(e) => setDraft({ ...draft, invoiceAmount: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                <Label className="text-xs">Ref #</Label>
+                <Input value={draft.dbQuoteNumber ?? ""} onChange={(e) => setDraft({ ...draft, dbQuoteNumber: e.target.value })} placeholder="Invoice ref" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Invoice Date</Label>
