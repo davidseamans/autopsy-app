@@ -3406,16 +3406,7 @@ export function JobDetailSheet({
               {fieldRow("Gross Profit (ex-GST)", revenueExGst > 0 && costs > 0 ? `$${grossProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Proven")}
               {fieldRow("GM %", revenueExGst > 0 && costs > 0 && computedGm != null ? <span className={computedGm >= 30 ? "text-emerald-600" : "text-amber-600"}>{computedGm}%</span> : "Not Yet Proven")}
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Attachment Type</Label>
-              <Select value={draft.costDocType ?? ""} onValueChange={(v) => setDraft({ ...draft, costDocType: v as ProofUnit["costDocType"] })}>
-                <SelectTrigger><SelectValue placeholder="Supplier Receipt, Timesheet, Subcontractor Invoice…" /></SelectTrigger>
-                <SelectContent>
-                  {(["Supplier Receipt","Supplier Bill","Timesheet","Subcontractor Invoice","Materials Receipt","Other Cost Proof"] as const).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {fileInput("Attach Cost Proof", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
+            {fileInput("Upload file or take picture", draft.costDocName, (name) => setDraft({ ...draft, costDocName: name }))}
             <Stage1EvidenceAttachments
               runId={evidenceRunId}
               linkType="cost"
