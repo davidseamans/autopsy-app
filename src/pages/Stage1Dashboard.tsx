@@ -4486,7 +4486,7 @@ function Stage1DashboardInner() {
                     <TableHead className="text-right">Job Costs ex GST</TableHead>
                     <TableHead className="text-right">Gross Profit ex GST</TableHead>
                     <TableHead className="text-right">GM %</TableHead>
-                    <TableHead className="text-right">Detailed Report</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -4557,13 +4557,22 @@ function Stage1DashboardInner() {
                           {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
-                          >
-                            Detailed Report
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
+                            >
+                              Detailed Report
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={(e) => { e.stopPropagation(); openUnit(u.n); }}
+                            >
+                              Edit Job
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
