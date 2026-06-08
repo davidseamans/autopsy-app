@@ -2899,10 +2899,15 @@ function Stage1DashboardInner() {
   // name, or local array position. The displayed Job # comes only from
   // jobSequenceNumber.
   const ledgerUnits = useMemo(() => {
+    // STRICT canonical identity contract:
+    //  - Only persisted Stage 1 sandbox rows (stage1_job_id present) appear.
+    //  - No fallback to local/Core/seed rows — never rebuild the ledger from
+    //    local mock state or merge quote rows by array position.
+    //  - Sorted ONLY by persisted job_sequence_number ascending (never by
+    //    created_at, revenue, quote number, proof status, or array order).
     const persisted = units.filter((u) => !!u.stage1JobId);
-    const source = persisted.length > 0 ? persisted : units;
-    return [...source].sort(
-      (a, b) => (a.jobSequenceNumber ?? a.n ?? 0) - (b.jobSequenceNumber ?? b.n ?? 0),
+    return [...persisted].sort(
+      (a, b) => (a.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER) - (b.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER),
     );
   }, [units]);
 
