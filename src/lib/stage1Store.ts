@@ -162,6 +162,17 @@ export async function fetchStage1Units(
   return summaries.map((s, i: number) => {
     const j = { id: String(s.stage1_job_id ?? "") } as CanonicalStage1JobRow;
     const num = (k: string) => (s && s[k] != null ? Number(s[k]) || 0 : 0);
+    // job_sequence_number is the authoritative persisted Job # (J-#). PostgREST
+    // may serialise it as a number or a numeric string, so coerce defensively
+    // and only treat a finite, positive value as a valid sequence number.
+    const rawSeq = s.job_sequence_number;
+    const parsedSeq =
+      rawSeq == null || rawSeq === ""
+        ? null
+        : Number.isFinite(Number(rawSeq))
+          ? Number(rawSeq)
+          : null;
+    const jobSequenceNumber = parsedSeq != null && parsedSeq > 0 ? parsedSeq : undefined;
     const revenue = num("revenue_amount");
     const labourCost = num("labour_cost");
     const consumablesCost = num("consumables_cost");
@@ -214,10 +225,10 @@ export async function fetchStage1Units(
     pushCost("Other Direct Cost", otherDirectCost);
 
     const unit: ProofUnit = {
-      n: (typeof s.job_sequence_number === "number" ? s.job_sequence_number : null) ?? i + 1,
+      n: jobSequenceNumber ?? i + 1,
       // Persisted job number — drives the ledger "J-#" display. Comes straight
       // from the canonical view; never an array index or fallback.
-      jobSequenceNumber: typeof s.job_sequence_number === "number" ? s.job_sequence_number : undefined,
+      jobSequenceNumber,
       stage1JobId: String(s.stage1_job_id ?? ""),
       client: typeof s.client_name === "string" ? s.client_name : "",
       jobSite: typeof s.job_title === "string" ? s.job_title : undefined,
