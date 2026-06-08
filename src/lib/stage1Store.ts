@@ -1,17 +1,23 @@
-// Run-scoped persistence for Stage 1 proof units.
+// Run-scoped persistence for Stage 1 / First 5 Jobs proof units.
 //
-// Stage 1 is a persistent commercial record system, not a calculator. The
-// CANONICAL source of truth for commercial records (jobs, revenue lines, cost
-// lines and their GST splits) is now Supabase — the four canonical tables:
+// Stage 1 is a PRE-CORE proof sandbox. Its commercial proof is persisted ONLY
+// in the Stage 1 sandbox tables — never in the Core operational tables
+// (public.jobs, public.revenue_events, public.job_costs, public.accounts,
+// public.pipeline, public.quotes). Core tables are reserved for progressed
+// users only.
 //
-//   - stage1_jobs
-//   - stage1_revenue_lines
-//   - stage1_cost_lines
-//   - stage1_reflections (handled in stage1Reflection.ts)
+// Stage 1 sandbox tables (canonical source of truth for Stage 1):
 //
-// Writes happen by direct table INSERT / UPDATE / DELETE under RLS. Reads
-// hydrate rows directly from the canonical tables, and the run-level commercial
-// summary is read from get_stage1_commercial_summary_by_run(p_run_id).
+//   - stage1_jobs            (job shell)
+//   - stage1_revenue_events  (one 'invoice' revenue event per job)
+//   - stage1_job_costs       (one categorised direct-cost row per job)
+//   - stage1_reflections     (handled in stage1Reflection.ts)
+//
+// Writes happen by direct table INSERT / UPDATE / DELETE under RLS. Commercial
+// display values (revenue_amount, total_direct_cost, gross_profit,
+// gross_margin_pct) are READ from the public.stage1_job_margin_summary view so
+// margin is never recomputed from local-only state, and the run-level summary
+// is read from get_stage1_commercial_summary_by_run(p_run_id).
 //
 // localStorage remains as a CACHE ONLY so the UI can paint instantly on load
 // and keep the richer ProofUnit detail (proof type, payment status, evidence
