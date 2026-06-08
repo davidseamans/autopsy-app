@@ -2910,6 +2910,20 @@ function Stage1DashboardInner() {
   const scorecard = useMemo(() => computeScorecard(units), [units]);
   const selectedUnit = units.find((u) => u.n === selectedN) ?? null;
 
+  // Ledger row identity/order is driven strictly by persisted Stage 1 rows
+  // (public.stage1_job_margin_summary, hydrated into units with stage1JobId +
+  // jobSequenceNumber). Rows are sorted by persisted job_sequence_number
+  // ascending — never by created_at, revenue presence, quote number, client
+  // name, or local array position. The displayed Job # comes only from
+  // jobSequenceNumber.
+  const ledgerUnits = useMemo(() => {
+    const persisted = units.filter((u) => !!u.stage1JobId);
+    const source = persisted.length > 0 ? persisted : units;
+    return [...source].sort(
+      (a, b) => (a.jobSequenceNumber ?? a.n ?? 0) - (b.jobSequenceNumber ?? b.n ?? 0),
+    );
+  }, [units]);
+
   const openUnit = (n: number) => {
     setSelectedN(n);
     setSheetOpen(true);
