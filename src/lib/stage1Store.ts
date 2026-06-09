@@ -218,7 +218,7 @@ export async function fetchStage1Units(
   {
     const { data: gbRows, error: gbErr } = await supabase
       .from("stage1_business_expenses")
-      .select("id,stage1_job_id,expense_date,supplier,description,amount_inc_gst,gst_included,notes,proof_name")
+      .select("id,stage1_job_id,expense_date,supplier_name,description,amount_inc_gst,gst_treatment,gst_amount,amount_ex_gst,notes,proof_file_name,proof_url")
       .eq("autopsy_run_id", runId);
     if (!gbErr) {
       (gbRows ?? []).forEach((r: Record<string, unknown>) => {
@@ -228,12 +228,12 @@ export async function fetchStage1Units(
         list.push({
           id: String(r.id),
           expenseDate: typeof r.expense_date === "string" ? r.expense_date : undefined,
-          supplier: typeof r.supplier === "string" ? r.supplier : undefined,
+          supplier: typeof r.supplier_name === "string" ? r.supplier_name : undefined,
           description: typeof r.description === "string" ? r.description : undefined,
           amount: r.amount_inc_gst != null ? Number(r.amount_inc_gst) : undefined,
-          gstIncluded: typeof r.gst_included === "boolean" ? r.gst_included : true,
+          gstIncluded: r.gst_treatment === "GST" || r.gst_treatment === "gst_included",
           notes: typeof r.notes === "string" ? r.notes : undefined,
-          receiptName: typeof r.proof_name === "string" ? r.proof_name : undefined,
+          receiptName: typeof r.proof_file_name === "string" ? r.proof_file_name : undefined,
         });
         gbByJob.set(jobId, list);
       });
@@ -956,12 +956,14 @@ amount_ex_gst: (() => {
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         expense_date: e.expenseDate || null,
-        supplier: e.supplier || null,
+        supplier_name: e.supplier || null,
         description: e.description || null,
         amount_inc_gst: e.amount ?? 0,
-        gst_included: e.gstIncluded ?? true,
+        gst_treatment: e.gstIncluded ? "GST" : "NO_GST",
+          gst_amount: e.gstIncluded ? (e.amount ?? 0) / 11 : 0,
+          amount_ex_gst: e.gstIncluded ? (e.amount ?? 0) - ((e.amount ?? 0) / 11) : (e.amount ?? 0),
         notes: e.notes || null,
-        proof_name: e.receiptName || null,
+        proof_file_name: e.receiptName || null,
         created_by: userId,
       }));
     if (gbRows.length > 0) {
