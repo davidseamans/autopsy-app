@@ -871,6 +871,43 @@ async function doSyncStage1Units(
         travel_cost: buckets.travelCost,
         rework_cost: buckets.reworkCost,
         other_direct_cost: buckets.otherDirectCost,
+        amount_inc_gst: (() => {
+  const serializedCostLines = serializeCostLines(u.costLines);
+  return serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+})(),
+gst_treatment: (() => {
+  const serializedCostLines = serializeCostLines(u.costLines);
+  const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
+    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
+      return sum + num(line.amount) / 11;
+    }
+    return sum;
+  }, 0);
+  return gstAmount > 0 ? "gst_included" : "no_gst";
+})(),
+gst_amount: (() => {
+  const serializedCostLines = serializeCostLines(u.costLines);
+  return serializedCostLines.reduce((sum: number, line: any) => {
+    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
+      return sum + num(line.amount) / 11;
+    }
+    return sum;
+  }, 0);
+})(),
+amount_ex_gst: (() => {
+  const serializedCostLines = serializeCostLines(u.costLines);
+  const incGst = serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+  const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
+    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
+      return sum + num(line.amount) / 11;
+    }
+    return sum;
+  }, 0);
+  return incGst - gstAmount;
+})(),
         notes: u.costDocName || null,
         lines: serializeCostLines(u.costLines),
         created_by: userId,
