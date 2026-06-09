@@ -884,7 +884,7 @@ gst_treatment: (() => {
     }
     return sum;
   }, 0);
-  return gstAmount > 0 ? "gst_included" : "no_gst";
+  return gstAmount > 0 ? "GST" : "NO_GST";
 })(),
 gst_amount: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
