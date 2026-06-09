@@ -1,0 +1,25 @@
+-- Migration: fix_stage1_margin_summary_legacy_bucket_costs
+-- Date: 2026-06-09
+-- Project: autopsy-canonical / fzbdztapkyrfwjwxtwte
+--
+-- Purpose:
+-- Stage 1 legacy/category cost rows may store the commercial cost in bucket
+-- columns such as consumables_cost while amount_ex_gst is present as 0.
+-- The prior stage1_job_margin_summary view used COALESCE(amount_ex_gst, ...),
+-- so amount_ex_gst = 0 blocked fallback to the bucket total and caused
+-- false gross margin output.
+--
+-- Verified runtime proof:
+-- J-9 / run b12533e9-b109-4011-bc66-a11064b43f0b
+-- revenue_ex_gst = 11
+-- job_costs_ex_gst = 400
+-- gross_profit = -389
+-- gross_margin_pct = -3536.36
+-- proof_type = commercial_proof_recorded
+
+-- NOTE:
+-- The full SQL definition was applied through Supabase migration:
+-- fix_stage1_margin_summary_legacy_bucket_costs.
+-- This repository file records the operational reason and verification result.
+-- If schema rebuild is required, retrieve the canonical view definition from
+-- Supabase migration history or pg_get_viewdef(public.stage1_job_margin_summary).
