@@ -832,9 +832,14 @@ async function doSyncStage1Units(
         id: newCanonicalId(),
         stage1_job_id: jobId,
         amount: split.exGst,
+        amount_inc_gst: u.invoiceAmount,
+        gst_treatment: u.invoiceGstTreatment ?? "gst_included",
+        gst_amount: split.gst,
+        amount_ex_gst: split.exGst,
         revenue_type: "invoice",
         source: "stage1_dashboard",
         reference: u.invoiceDocName || null,
+        description: u.invoiceDocName || "Stage 1 client invoice",
         created_by: userId,
       };
       const { error: revErr } = await supabase
