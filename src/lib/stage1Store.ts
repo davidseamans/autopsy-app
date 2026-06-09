@@ -265,11 +265,9 @@ export async function fetchStage1Units(
         ? Number(s.total_direct_cost) || 0
         : labourCost + consumablesCost + travelCost + reworkCost + otherDirectCost;
     const gm =
-      s && s.gross_margin_pct != null
-        ? Math.round(Number(s.gross_margin_pct))
-        : revenue > 0 && totalDirectCost > 0
-          ? Math.round(((revenue - totalDirectCost) / revenue) * 100)
-          : 0;
+      Number.isFinite(revenue) && revenue > 0
+        ? Math.round(((revenue - totalDirectCost) / revenue) * 10000) / 100
+        : undefined;
 
     // Expanded sandbox commercial proof model (from the margin summary view).
     const originalInvoiceAmount = num("original_invoice_amount");
