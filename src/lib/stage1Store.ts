@@ -271,6 +271,7 @@ export async function fetchStage1Units(
 
     // Expanded sandbox commercial proof model (from the margin summary view).
     const originalInvoiceAmount = num("original_invoice_amount");
+const clientInvoicesIncGst = num("client_invoices_inc_gst");
     const variationInvoiceAmount = num("variation_invoice_amount");
     const progressClaimAmount = num("progress_claim_amount");
     const adjustmentAmount = num("adjustment_amount");
@@ -323,9 +324,9 @@ export async function fetchStage1Units(
       lifecycle: s.job_status === "cancelled" ? "voided" : "active",
       // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
       quoteValue: revenue > 0 ? revenue : undefined,
-      invoiceAmount: revenue > 0 ? revenue : undefined,
-      invoiceGstTreatment: "no_gst",
-      invoiceGstAmount: 0,
+      invoiceAmount: clientInvoicesIncGst > 0 ? clientInvoicesIncGst : revenue > 0 ? revenue : undefined,
+      invoiceGstTreatment: "gst_included",
+      invoiceGstAmount: Number(s.invoice_gst_amount) || undefined,
       invoiceGstOverridden: false,
       costMaterials: consumablesCost || undefined,
       costLabour: labourCost || undefined,
