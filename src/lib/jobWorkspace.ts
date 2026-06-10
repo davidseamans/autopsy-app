@@ -49,7 +49,7 @@ export async function loadRevenue(jobId: string): Promise<{
       .select("*")
       .eq("job_id", jobId)
       .order("created_at", { ascending: false }),
-    supabase.from("job_revenue_control").select("*").eq("job_id", jobId).maybeSingle(),
+    supabase.from("core_job_revenue_control").select("*").eq("job_id", jobId).maybeSingle(),
   ]);
   return {
     events: (evRes.data ?? []) as RevenueEventRow[],
@@ -431,7 +431,7 @@ export async function updateJobStatus(
     if (patch.completed !== undefined)
       body.completed_at = patch.completed ? new Date().toISOString() : null;
     if (Object.keys(body).length === 0) return { ok: true };
-    const { error } = await supabase.from("jobs").update(body).eq("id", jobId);
+    const { error } = await supabase.from("core_jobs").update(body).eq("id", jobId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {

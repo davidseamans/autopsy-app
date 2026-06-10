@@ -137,10 +137,10 @@ export function RevenuePanel() {
     // Jobs + linked client (account) + quote reference for human-readable labels.
     const [jobsRes, controlRes, eventsRes] = await Promise.all([
       supabase
-        .from("jobs")
+        .from("core_jobs")
         .select("id, po_number, status, created_at, account_id, quote_id")
         .order("created_at", { ascending: false }),
-      supabase.from("job_revenue_control").select("*"),
+      supabase.from("core_job_revenue_control").select("*"),
       supabase.from("revenue_events").select("*").order("created_at", { ascending: false }),
     ]);
 
@@ -153,10 +153,10 @@ export function RevenuePanel() {
     const quoteIds = [...new Set(jobsData.map((j) => j.quote_id).filter(Boolean))];
     const [accRes, qRes] = await Promise.all([
       accountIds.length
-        ? supabase.from("accounts").select("id, name").in("id", accountIds)
+        ? supabase.from("core_accounts").select("id, name").in("id", accountIds)
         : Promise.resolve({ data: [] as any[] }),
       quoteIds.length
-        ? supabase.from("quotes").select("id, quote_number").in("id", quoteIds)
+        ? supabase.from("core_quotes").select("id, quote_number").in("id", quoteIds)
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const accMap = new Map((accRes.data ?? []).map((a: any) => [a.id, a.name]));

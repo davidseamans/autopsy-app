@@ -2791,7 +2791,7 @@ export function JobDetailSheet({
         .select("*")
         .eq("stage1_job_id", jobId)
         .order("created_at", { ascending: false }),
-      supabase.from("job_revenue_control").select("*").eq("stage1_job_id", jobId).maybeSingle(),
+      supabase.from("core_job_revenue_control").select("*").eq("stage1_job_id", jobId).maybeSingle(),
     ]);
     setPayEvents((evRes.data ?? []) as RevenueEventRow[]);
     setPayControl((ctrlRes.data ?? null) as RevenueControlRow | null);
