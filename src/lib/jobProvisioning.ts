@@ -43,7 +43,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
     // 1. Account — reuse an existing one with the same name where possible.
     let accountId: string | undefined;
     const { data: existingAcc } = await supabase
-      .from("accounts")
+      .from("core_accounts")
       .select("id")
       .eq("name", clientName)
       .limit(1)
@@ -52,7 +52,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
       accountId = existingAcc.id as string;
     } else {
       const { data, error } = await supabase
-        .from("accounts")
+        .from("core_accounts")
         .insert({ name: clientName })
         .select("id")
         .single();
@@ -63,7 +63,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
     // 2. Site — reuse by account + address where possible.
     let siteId: string | undefined;
     const { data: existingSite } = await supabase
-      .from("sites")
+      .from("core_sites")
       .select("id")
       .eq("account_id", accountId)
       .eq("address", address)
@@ -73,7 +73,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
       siteId = existingSite.id as string;
     } else {
       const { data, error } = await supabase
-        .from("sites")
+        .from("core_sites")
         .insert({ account_id: accountId, address, name: clientName })
         .select("id")
         .single();
@@ -83,7 +83,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
 
     // 3. Pipeline entry (required parent for a quote).
     const { data: pipe, error: pipeErr } = await supabase
-      .from("pipeline")
+      .from("core_pipeline")
       .insert({ account_id: accountId, site_id: siteId, stage: "lead", value })
       .select("id")
       .single();
@@ -92,7 +92,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
     // 4. Quote — created already accepted, since this is the conversion step.
     const nowIso = new Date().toISOString();
     const { data: quote, error: quoteErr } = await supabase
-      .from("quotes")
+      .from("core_quotes")
       .insert({
         pipeline_id: pipe.id,
         site_id: siteId,
@@ -107,7 +107,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
 
     // 5. Job — the real source-of-truth row.
     const { data: job, error: jobErr } = await supabase
-      .from("jobs")
+      .from("core_jobs")
       .insert({
         quote_id: quote.id,
         account_id: accountId,
@@ -120,7 +120,7 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
     if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
 
     // 6. Link the quote back to the job for lineage.
-    await supabase.from("quotes").update({ job_id: job.id }).eq("id", quote.id);
+    await supabase.from("core_quotes").update({ job_id: job.id }).eq("id", quote.id);
 
     return {
       ok: true,
@@ -160,14 +160,14 @@ export async function persistJobProgress(input: PersistProgressInput): Promise<P
     jobPatch.completed_at = input.completed ? new Date().toISOString() : null;
 
     const { error: jobErr } = await supabase
-      .from("jobs")
+      .from("core_jobs")
       .update(jobPatch)
       .eq("id", input.jobId);
     if (jobErr) return { ok: false, error: jobErr.message };
 
     if (input.siteId && input.jobSite && input.jobSite.trim()) {
       const { error: siteErr } = await supabase
-        .from("sites")
+        .from("core_sites")
         .update({ address: input.jobSite.trim() })
         .eq("id", input.siteId);
       if (siteErr) return { ok: false, error: siteErr.message };
@@ -219,27 +219,27 @@ async function ensureChain(
   // Account
   let accountId: string;
   const { data: existingAcc } = await supabase
-    .from("accounts").select("id").eq("name", clientName).limit(1).maybeSingle();
+    .from("core_accounts").select("id").eq("name", clientName).limit(1).maybeSingle();
   if (existingAcc?.id) accountId = existingAcc.id as string;
   else {
-    const { data, error } = await supabase.from("accounts").insert({ name: clientName }).select("id").single();
+    const { data, error } = await supabase.from("core_accounts").insert({ name: clientName }).select("id").single();
     if (error) throw new Error(`Account: ${error.message}`);
     accountId = data.id as string;
   }
   // Site
   let siteId: string;
   const { data: existingSite } = await supabase
-    .from("sites").select("id").eq("account_id", accountId).eq("address", address).limit(1).maybeSingle();
+    .from("core_sites").select("id").eq("account_id", accountId).eq("address", address).limit(1).maybeSingle();
   if (existingSite?.id) siteId = existingSite.id as string;
   else {
     const { data, error } = await supabase
-      .from("sites").insert({ account_id: accountId, address, name: clientName }).select("id").single();
+      .from("core_sites").insert({ account_id: accountId, address, name: clientName }).select("id").single();
     if (error) throw new Error(`Site: ${error.message}`);
     siteId = data.id as string;
   }
   // Pipeline
   const { data: pipe, error: pipeErr } = await supabase
-    .from("pipeline").insert({ account_id: accountId, site_id: siteId, stage: "lead", value }).select("id").single();
+    .from("core_pipeline").insert({ account_id: accountId, site_id: siteId, stage: "lead", value }).select("id").single();
   if (pipeErr) throw new Error(`Pipeline: ${pipeErr.message}`);
   return { accountId, siteId, pipelineId: pipe.id as string };
 }
@@ -299,7 +299,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   try {
     const chain = await ensureChain(clientName, address, value);
     const { data, error } = await supabase
-      .from("quotes")
+      .from("core_quotes")
       .insert({
         pipeline_id: chain.pipelineId,
         site_id: chain.siteId,
@@ -350,7 +350,7 @@ export async function setQuoteOutcome(
       patch.rejection_reason = reason?.trim() || null;
     }
     if (status === "Expired") patch.rejected_at = now;
-    const { error } = await supabase.from("quotes").update(patch).eq("id", quoteId);
+    const { error } = await supabase.from("core_quotes").update(patch).eq("id", quoteId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {
@@ -376,13 +376,13 @@ export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<Conve
   try {
     const nowIso = new Date().toISOString();
     const { error: accErr } = await supabase
-      .from("quotes")
+      .from("core_quotes")
       .update({ status: "accepted", accepted_at: nowIso })
       .eq("id", input.quoteId);
     if (accErr) return { ok: false, error: `Quote accept: ${accErr.message}` };
 
     const { data: job, error: jobErr } = await supabase
-      .from("jobs")
+      .from("core_jobs")
       .insert({
         quote_id: input.quoteId,
         account_id: input.accountId,
@@ -394,7 +394,7 @@ export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<Conve
       .single();
     if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
 
-    await supabase.from("quotes").update({ job_id: job.id }).eq("id", input.quoteId);
+    await supabase.from("core_quotes").update({ job_id: job.id }).eq("id", input.quoteId);
     return {
       ok: true,
       jobId: job.id as string,
@@ -406,9 +406,9 @@ export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<Conve
 }
 
 const pickClient = (q: any): string =>
-  q?.sites?.accounts?.name ?? q?.pipeline?.accounts?.name ?? "Unknown client";
+  q?.core_sites?.core_accounts?.name ?? q?.core_pipeline?.core_accounts?.name ?? "Unknown client";
 const pickAccountId = (q: any): string =>
-  q?.sites?.account_id ?? q?.pipeline?.account_id ?? "";
+  q?.core_sites?.account_id ?? q?.core_pipeline?.account_id ?? "";
 
 /** Load the persisted quote board + job ledger so Stage 1 survives refresh. */
 export async function loadStage1Board(): Promise<{
@@ -417,21 +417,21 @@ export async function loadStage1Board(): Promise<{
 }> {
   const quoteSel =
     "id,quote_number,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,job_id,site_id," +
-    "sites(address,account_id,accounts(name)),pipeline(account_id,accounts(name))";
+    "core_sites(address,account_id,core_accounts(name)),core_pipeline(account_id,core_accounts(name))";
   const jobSel =
     "id,status,job_sequence_number,created_at,account_id,site_id,quote_id," +
-    "quotes!jobs_quote_id_fkey(quote_number,amount),accounts(name),sites(address)";
+    "core_quotes!core_jobs_quote_id_fkey(quote_number,amount),core_accounts(name),core_sites(address)";
 
   const [qRes, jRes] = await Promise.all([
-    supabase.from("quotes").select(quoteSel).is("job_id", null).order("created_at", { ascending: false }).limit(200),
-    supabase.from("jobs").select(jobSel).order("created_at", { ascending: false }).limit(200),
+    supabase.from("core_quotes").select(quoteSel).is("job_id", null).order("created_at", { ascending: false }).limit(200),
+    supabase.from("core_jobs").select(jobSel).order("created_at", { ascending: false }).limit(200),
   ]);
 
   const quotes: Stage1QuoteRecord[] = (qRes.data ?? []).map((q: any) => ({
     dbId: q.id,
     number: q.quote_number ?? "",
     client: pickClient(q),
-    site: q.sites?.address ?? "",
+    site: q.core_sites?.address ?? "",
     value: Number(q.amount ?? 0),
     status: dbToUiStatus(q.status),
     quoteDate: (q.created_at as string)?.slice(0, 10) ?? "",
@@ -447,15 +447,15 @@ export async function loadStage1Board(): Promise<{
   const jobs: Stage1JobRecord[] = (jRes.data ?? []).map((j: any) => ({
     jobId: j.id,
     jobNumber: `J-${j.job_sequence_number ?? ""}`,
-    client: j.accounts?.name ?? "Unknown client",
-    site: j.sites?.address ?? "",
-    value: Number(j.quotes?.amount ?? 0),
+    client: j.core_accounts?.name ?? "Unknown client",
+    site: j.core_sites?.address ?? "",
+    value: Number(j.core_quotes?.amount ?? 0),
     status: j.status ?? "completed",
-    sourceQuote: j.quotes?.quote_number ?? "",
+    sourceQuote: j.core_quotes?.quote_number ?? "",
     accountId: j.account_id ?? "",
     siteId: j.site_id ?? "",
     dbQuoteId: j.quote_id ?? "",
-    dbQuoteNumber: j.quotes?.quote_number ?? "",
+    dbQuoteNumber: j.core_quotes?.quote_number ?? "",
   }));
 
   return { quotes, jobs };
