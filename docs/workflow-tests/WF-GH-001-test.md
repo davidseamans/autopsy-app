@@ -37,3 +37,7 @@ Seventh test event:
 Eighth test event:
 
 - This line was added after selecting PR Review Intake from the n8n Notion database picker.
+
+Ninth test event:
+
+- This line was added after simplifying the Notion node mapping for a minimal create-page test.
