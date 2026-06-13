@@ -9,6 +9,11 @@ Expected result:
 - GitHub pull request event fires.
 - n8n creates a Notion PR Review Intake packet.
 - The test PR is closed without merge after verification.
+
 Second test event:
 
 - This line was added while n8n was actively listening for a GitHub pull request update event.
+
+Third test event:
+
+- This line was added after confirming n8n was executing/listening.
