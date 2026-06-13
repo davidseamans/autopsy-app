@@ -33,3 +33,7 @@ Sixth test event:
 Seventh test event:
 
 - This line was added during a re-execution test of the Notion review packet workflow.
+
+Eighth test event:
+
+- This line was added after selecting PR Review Intake from the n8n Notion database picker.
