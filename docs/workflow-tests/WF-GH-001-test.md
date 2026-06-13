@@ -25,3 +25,7 @@ Fourth test event:
 Fifth test event:
 
 - This line was added after granting the n8n Notion connection access to the PR Review Intake database.
+
+Sixth test event:
+
+- This line was added after selecting the Notion database through the n8n database picker.
