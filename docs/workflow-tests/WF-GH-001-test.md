@@ -17,3 +17,7 @@ Second test event:
 Third test event:
 
 - This line was added after confirming n8n was executing/listening.
+
+Fourth test event:
+
+- This line was added after fixing the IF node to read body.action.
