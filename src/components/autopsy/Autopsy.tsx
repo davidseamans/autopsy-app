@@ -2349,7 +2349,7 @@ function VerdictView({
               <div className="font-medium">{copy.title}</div>
               <p className="text-sm text-muted-foreground">{copy.body}</p>
               <div className="flex flex-wrap gap-2 pt-1">
-                <Button asChild className="bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
+                <Button variant="outline" asChild>
                   <Link to={copy.primaryCta.to(runId)}>{copy.primaryCta.label}</Link>
                 </Button>
                 {copy.secondaryCta && (
