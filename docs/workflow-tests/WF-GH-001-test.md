@@ -21,3 +21,7 @@ Third test event:
 Fourth test event:
 
 - This line was added after fixing the IF node to read body.action.
+
+Fifth test event:
+
+- This line was added after granting the n8n Notion connection access to the PR Review Intake database.
