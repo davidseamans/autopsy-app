@@ -2779,6 +2779,12 @@ export function JobDetailSheet({
       message: "Canonical Supabase write did not return diagnostics.",
     };
   };
+  const draftSaveSucceeded = (diagnostics: Stage1CanonicalWriteDiagnostics) =>
+    diagnostics.writeSucceeded &&
+    (diagnostics.counts.jobs ?? 0) > 0 &&
+    diagnostics.authUserIdPresent &&
+    diagnostics.autopsyRunIdWrittenMatchesActiveRun === true &&
+    diagnostics.createdByMatchesAuthUser === true;
   const loadPayments = useCallback(async () => {
     if (!jobId) {
       setPayEvents([]);
@@ -2957,11 +2963,11 @@ export function JobDetailSheet({
     };
     const next: ProofUnit = { ...draft, audit: [...(draft.audit ?? []), entry] };
     setDraft(next);
-    // Commercial truth (invoice, costs, GST) is written to the canonical
-    // Supabase tables here. Only claim "saved" when that write succeeds.
+    // Save Progress is a draft/detail save: job row confirmation is enough.
+    // Revenue and cost rows are still required for commercial proof.
     const diagnostics = normalizeSaveResult(await onSave(next));
     setSaveDiagnostics(diagnostics);
-    if (!diagnostics.success) {
+    if (!draftSaveSucceeded(diagnostics)) {
       toast({
         title: "Not saved",
         description: diagnostics.message,
@@ -5166,14 +5172,17 @@ export default function Stage1() {
       // cached commercial values. If a write failed, the refetch will show the
       // canonical (possibly unchanged) state rather than pretend it landed.
       const canonical = await fetchStage1Units(runId);
+      let reconciled: ProofUnit[] | null = null;
       if (canonical != null) {
-        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
-        unitsRef.current = merged;
-        setUnits(merged);
-        saveStage1UnitsCache(runId, merged);
+        reconciled = canonical.length > 0
+          ? mergeUnits(canonical, loadStage1UnitsCache(runId))
+          : synced ?? [];
+        unitsRef.current = reconciled;
+        setUnits(reconciled);
+        saveStage1UnitsCache(runId, reconciled);
       }
       // `synced` is null when any canonical write errored → treat as not saved.
-      return synced ? (canonical != null ? mergeUnits(canonical, loadStage1UnitsCache(runId)) : synced) : null;
+      return synced ? (reconciled ?? synced) : null;
     },
     [runId, user?.id],
   );
@@ -5207,10 +5216,12 @@ export default function Stage1() {
       const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(runId, nextUnits);
       const canonical = await fetchStage1Units(runId);
       if (canonical != null) {
-        const merged = mergeUnits(canonical, loadStage1UnitsCache(runId));
-        unitsRef.current = merged;
-        setUnits(merged);
-        saveStage1UnitsCache(runId, merged);
+        const reconciled = canonical.length > 0
+          ? mergeUnits(canonical, loadStage1UnitsCache(runId))
+          : syncedUnits ?? [];
+        unitsRef.current = reconciled;
+        setUnits(reconciled);
+        saveStage1UnitsCache(runId, reconciled);
       } else if (syncedUnits) {
         unitsRef.current = syncedUnits;
         setUnits(syncedUnits);
