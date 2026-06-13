@@ -4461,6 +4461,17 @@ function Stage1DashboardInner() {
           </div>
         )}
 
+      {ledgerUnits.length === 0 && !ledgerLoading && !ledgerError && (
+        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+          <div className="font-medium text-foreground">
+            Stage 1 is ready. Add your first quote or job to begin proof tracking.
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Your Autopsy handoff is active; the dashboard will populate once operating records are created.
+          </div>
+        </div>
+      )}
+
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
