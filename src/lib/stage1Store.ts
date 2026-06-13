@@ -393,8 +393,9 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       // General Business Expenses are now persisted in the sandbox table, so the
       // canonical read is authoritative (fall back to cache only if absent).
       gbExpenses: c.gbExpenses ?? cached.gbExpenses,
-      // Preserve canonical commercial fields so dashboard computations work.
-      quoteValue: c.quoteValue,
+      // Quote value is sales context, not proven revenue. Preserve the cached
+      // quote-only value until canonical revenue exists.
+      quoteValue: c.quoteValue ?? cached.quoteValue,
       costMaterials: c.costMaterials,
       costLabour: c.costLabour,
       costSubcontractors: c.costSubcontractors,

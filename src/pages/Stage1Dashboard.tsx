@@ -2927,10 +2927,12 @@ function Stage1DashboardInner() {
       const { units: syncedUnits, diagnostics } = await syncStage1UnitsWithDiagnostics(activeRunId, nextUnits);
       const canonical = await fetchStage1Units(activeRunId);
       if (canonical != null) {
-        const merged = mergeUnits(canonical, loadStage1UnitsCache(activeRunId));
-        unitsRef.current = merged;
-        setUnits(merged);
-        saveStage1UnitsCache(activeRunId, merged);
+        const reconciled = canonical.length > 0
+          ? mergeUnits(canonical, loadStage1UnitsCache(activeRunId))
+          : syncedUnits ?? [];
+        unitsRef.current = reconciled;
+        setUnits(reconciled);
+        saveStage1UnitsCache(activeRunId, reconciled);
       } else if (syncedUnits) {
         unitsRef.current = syncedUnits;
         setUnits(syncedUnits);
