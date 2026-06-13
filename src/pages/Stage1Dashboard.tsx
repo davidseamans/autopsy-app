@@ -4568,6 +4568,19 @@ function Stage1DashboardInner() {
                         Stage 1 ledger failed to load — see error panel above.
                       </TableCell>
                     </TableRow>
+                  ) : ledgerUnits.length === 0 && !ledgerLoading && !ledgerError ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="py-8 text-center">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium text-foreground">
+                            No Stage 1 jobs have been created for this Autopsy run yet.
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Your Autopsy handoff is active. Stage 1 will populate once jobs, quotes, or sandbox records are created.
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                   ledgerUnits.map((u) => {
                     const isSel = u.n === selectedN;
