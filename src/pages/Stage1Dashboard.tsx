@@ -2982,24 +2982,22 @@ function Stage1DashboardInner() {
   const scorecard = useMemo(() => computeScorecard(units), [units]);
   const selectedUnit = units.find((u) => u.n === selectedN) ?? null;
 
-  // Ledger row identity/order is driven strictly by persisted Stage 1 rows
-  // (public.stage1_job_margin_summary, hydrated into units with stage1JobId +
-  // jobSequenceNumber). Rows are sorted by persisted job_sequence_number
-  // ascending — never by created_at, revenue presence, quote number, client
-  // name, or local array position. The displayed Job # comes only from
-  // jobSequenceNumber.
-  const ledgerUnits = useMemo(() => {
-    // STRICT canonical identity contract:
-    //  - Only persisted Stage 1 sandbox rows (stage1_job_id present) appear.
-    //  - No fallback to local/Core/seed rows — never rebuild the ledger from
-    //    local mock state or merge quote rows by array position.
-    //  - Sorted ONLY by persisted job_sequence_number ascending (never by
-    //    created_at, revenue, quote number, proof status, or array order).
-    const persisted = units.filter((u) => !!u.stage1JobId);
-    return [...persisted].sort(
-      (a, b) => (a.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER) - (b.jobSequenceNumber ?? Number.MAX_SAFE_INTEGER),
-    );
+  // The ledger shows every active Stage 1 job. Persisted sandbox rows keep their
+  // canonical financial projections; immature jobs render with safe placeholders
+  // until proof records exist.
+  const ledgerRows = useMemo(() => {
+    const sortValue = (u: ProofUnit) => {
+      if (u.jobSequenceNumber != null) return u.jobSequenceNumber;
+      const parsed = Number(u.jobNumber?.match(/\d+/)?.[0]);
+      return Number.isFinite(parsed) ? parsed : u.n;
+    };
+    return units
+      .filter((u) => (u.lifecycle ?? "active") === "active")
+      .sort((a, b) => sortValue(a) - sortValue(b));
   }, [units]);
+  const ledgerRowsAwaitingProof = ledgerRows.some((u) => !u.stage1JobId);
+  const formatLedgerJobNumber = (u: ProofUnit) =>
+    u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : u.jobNumber?.trim() || `J-${u.n}`;
 
   const openUnit = (n: number) => {
     setSelectedN(n);
@@ -4461,7 +4459,7 @@ function Stage1DashboardInner() {
           </div>
         )}
 
-      {ledgerUnits.length === 0 && !ledgerLoading && !ledgerError && (
+      {units.length === 0 && !ledgerLoading && !ledgerError && (
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
           <div className="font-medium text-foreground">
             Stage 1 is ready. Add your first quote or job to begin proof tracking.
@@ -4469,6 +4467,12 @@ function Stage1DashboardInner() {
           <div className="mt-1 text-xs text-muted-foreground">
             Your Autopsy handoff is active; the dashboard will populate once operating records are created.
           </div>
+        </div>
+      )}
+
+      {units.length > 0 && ledgerRowsAwaitingProof && !ledgerError && (
+        <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Some jobs are awaiting financial proof records.
         </div>
       )}
 
@@ -4518,7 +4522,7 @@ function Stage1DashboardInner() {
       {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
       <p className="text-xs text-muted-foreground">
         Commercial proof:{" "}
-        {ledgerLoading && ledgerUnits.length === 0 ? (
+        {ledgerLoading && ledgerRows.length === 0 ? (
           <span className="font-medium text-foreground">Loading Stage 1 jobs…</span>
         ) : (
           <>
@@ -4565,7 +4569,7 @@ function Stage1DashboardInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ledgerUnits.length === 0 && ledgerLoading && !ledgerError ? (
+                  {ledgerRows.length === 0 && ledgerLoading && !ledgerError ? (
                     <TableRow>
                       <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2">
@@ -4573,13 +4577,13 @@ function Stage1DashboardInner() {
                         </span>
                       </TableCell>
                     </TableRow>
-                  ) : ledgerUnits.length === 0 && ledgerError ? (
+                  ) : ledgerRows.length === 0 && ledgerError ? (
                     <TableRow>
                       <TableCell colSpan={10} className="py-8 text-center text-sm text-destructive">
                         Stage 1 ledger failed to load — see error panel above.
                       </TableCell>
                     </TableRow>
-                  ) : ledgerUnits.length === 0 && !ledgerLoading && !ledgerError ? (
+                  ) : units.length === 0 && !ledgerLoading && !ledgerError ? (
                     <TableRow>
                       <TableCell colSpan={10} className="py-8 text-center">
                         <div className="space-y-1">
@@ -4593,7 +4597,7 @@ function Stage1DashboardInner() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                  ledgerUnits.map((u) => {
+                  ledgerRows.map((u) => {
                     const isSel = u.n === selectedN;
                     // Gross (inc GST), GST and ex-GST are all derived from the
                     // persisted GST-INCLUSIVE source amount + GST treatment via
@@ -4612,13 +4616,14 @@ function Stage1DashboardInner() {
                     const gmStatus = deriveStage1GmStatus(u);
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
+                    const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
                     return (
                       <TableRow
-                        key={u.stage1JobId}
+                        key={u.stage1JobId ?? u.jobId ?? `n-${u.n}`}
                         className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
                         onClick={() => openUnit(u.n)}
                       >
-                        <TableCell className="font-mono text-xs">{u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">{formatLedgerJobNumber(u)}</TableCell>
                         <TableCell>
                           <button
                             type="button"
@@ -4633,7 +4638,7 @@ function Stage1DashboardInner() {
                             )}
                             {isDebug() && (
                               <div className="mt-1 text-[10px] leading-tight text-muted-foreground/80 font-mono break-all">
-                                seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
+                                seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId ?? "pending"} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
                               </div>
                             )}
                           </button>
@@ -4654,7 +4659,7 @@ function Stage1DashboardInner() {
                           {renderDirectCost(costEx)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {revenueEx > 0 ? `$${fmtMoney(gp)}` : "—"}
+                          {hasRevenueAndCost ? `$${fmtMoney(gp)}` : revenueEx > 0 ? "Not Yet Proven" : "—"}
                         </TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${gmTone}`}>
                           {gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}
