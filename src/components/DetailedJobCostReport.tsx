@@ -358,7 +358,7 @@ export function DetailedJobCostReport({
           <SheetHeader>
             <div className="flex items-start justify-between gap-3 pr-10">
               <div className="min-w-0">
-                <SheetTitle>Detailed Job Cost Report</SheetTitle>
+                <SheetTitle>Job Cost Summary Report</SheetTitle>
                 <SheetDescription>
                   Read-only report. Income, job costs, gross profit, and general business expenses for the selected job.
                 </SheetDescription>
@@ -506,6 +506,16 @@ export function DetailedJobCostReport({
               this job's gross margin. They may affect whole-business viability, but they do not
               decide whether this job counts toward Stage 1 margin proof.
             </p>
+          </section>
+
+          {/* Section 6 — Report Notes */}
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              6. Report Notes
+            </h3>
+            <div className="rounded-md border p-3 text-sm text-muted-foreground">
+              {unit.notes?.trim() || "No report notes recorded."}
+            </div>
           </section>
         </div>
       </SheetContent>
