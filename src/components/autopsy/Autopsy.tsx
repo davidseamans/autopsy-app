@@ -1877,6 +1877,31 @@ function VerdictView({
     }
   }, [runId, run, selectedAnswerAudit]);
 
+  const progressionRouting = runId
+    ? (() => {
+        let routingBand = deriveBand(verdictName);
+        if (isCriticalStop) {
+          routingBand = "critical_stop";
+        } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
+          routingBand = "not_viable";
+        }
+        const baseCopy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
+        const copy = isHardFail
+          ? {
+              ...baseCopy,
+              title: "Critical Stop — hard-fail repair required",
+              body:
+                "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
+              primaryCta: {
+                label: "Start Hard-Fail Repair Worksheet",
+                to: (id: string) => `/autopsy/run/${id}/worksheet`,
+              },
+            }
+          : baseCopy;
+        return { copy };
+      })()
+    : null;
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
@@ -1975,6 +2000,26 @@ function VerdictView({
           )}
         </div>
       </div>
+
+      {runId && progressionRouting && (
+        <div className="rounded-xl border bg-card px-4 py-3 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Next step
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Your result has a recommended progression path. You can review the full routing details below.
+              </p>
+            </div>
+            <Button asChild className="shrink-0 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]">
+              <Link to={progressionRouting.copy.primaryCta.to(runId)}>
+                {progressionRouting.copy.primaryCta.label}
+              </Link>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Run Details — visually understated */}
       <RunDetailsStrip run={run} />
@@ -2285,26 +2330,8 @@ function VerdictView({
       )}
       {/* 11. Worksheet link */}
       {/* 11. Progression Routing */}
-      {runId && (() => {
-        let routingBand = deriveBand(verdictName);
-        if (isCriticalStop) {
-          routingBand = "critical_stop";
-        } else if (routingBand === "unknown" && (isHardFail || isScoreBandNotViable || isProgressionLocked)) {
-          routingBand = "not_viable";
-        }
-        const baseCopy = ROUTING_COPY[routingBand] ?? ROUTING_COPY.unknown;
-        const copy = isHardFail
-          ? {
-              ...baseCopy,
-              title: "Critical Stop — hard-fail repair required",
-              body:
-                "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
-              primaryCta: {
-                label: "Start Hard-Fail Repair Worksheet",
-                to: (id: string) => `/autopsy/run/${id}/worksheet`,
-              },
-            }
-          : baseCopy;
+      {runId && progressionRouting && (() => {
+        const { copy } = progressionRouting;
         return (
           <SurfaceCard title="Progression Routing">
             <SectionMicrocopy>
