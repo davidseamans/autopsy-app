@@ -4619,6 +4619,7 @@ function Stage1DashboardInner() {
                     const gmPctValue = gmStatus.pct;
                     const gmTone = gmStatus.tone;
                     const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
+                    const rowStateLabel = hasRevenueAndCost ? deriveStage1ProofType(u) : "Pending - Not Yet Proven";
                     return (
                       <TableRow
                         key={u.stage1JobId ?? u.jobId ?? `n-${u.n}`}
@@ -4638,6 +4639,9 @@ function Stage1DashboardInner() {
                             ) : (
                               <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
                             )}
+                            <Badge variant="outline" className="mt-1 w-fit text-[10px]">
+                              {rowStateLabel}
+                            </Badge>
                             {isDebug() && (
                               <div className="mt-1 text-[10px] leading-tight text-muted-foreground/80 font-mono break-all">
                                 seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId ?? "pending"} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
