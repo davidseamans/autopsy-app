@@ -9,16 +9,13 @@ import { Autopsy, AutopsyRunRoute } from "@/components/autopsy/Autopsy";
 import AutopsyHistory from "@/pages/AutopsyHistory";
 import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
 import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
-import Stage1 from "@/pages/Stage1";
 import Stage1Dashboard from "@/pages/Stage1Dashboard";
-import Stage1Archived from "@/pages/Stage1Archived";
 import Leads from "@/pages/crm/Leads";
 import Accounts from "@/pages/crm/Accounts";
 import Pipeline from "@/pages/crm/Pipeline";
 import Quotes from "@/pages/crm/Quotes";
 import Jobs from "@/pages/crm/Jobs";
 import NotFound from "./pages/NotFound.tsx";
-import Placeholder from "@/pages/Placeholder";
 import Launchpad from "@/pages/Launchpad";
 import BusinessSetup from "@/pages/BusinessSetup";
 import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
@@ -43,7 +40,6 @@ const App = () => (
             <Route path="/worksheet" element={<AutopsyWorksheet />} />
             <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
             <Route path="/stage-1" element={<Stage1Dashboard />} />
-            <Route path="/stage-1-archived" element={<Stage1Archived />} />
             <Route path="/launchpad" element={<Launchpad />} />
             <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
             <Route path="/business-setup" element={<BusinessSetup />} />
