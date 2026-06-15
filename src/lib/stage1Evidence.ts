@@ -2,8 +2,8 @@
 // Stage 1 Evidence Persistence
 // ----------------------------------------------------------------------------
 // Supporting paperwork (transaction-related documents) is persisted in the
-// canonical Lovable Cloud backend, scoped to the active Autopsy run and linked
-// to the relevant transaction line (job, invoice/revenue line, cost line, or
+// canonical Supabase backend, scoped to the active Autopsy run and linked to the
+// relevant Stage 1 transaction line (job, invoice/revenue line, cost line, or
 // quote/approval).
 //
 // Doctrine:
@@ -13,12 +13,11 @@
 //   - Evidence is NOT financial surveillance. We never request bank statements
 //     or unrelated private financial records.
 //
-// Canonical persistence (replaces the previous IndexedDB store):
+// Canonical persistence:
 //   - Binary files live in the private Supabase Storage bucket
 //     `stage1-evidence`, under a run-scoped path.
-//   - Metadata lives in `public.stage1_evidence` and is written ONLY through
-//     the run-scoped RPC `register_stage1_evidence(...)`, so Supabase resolves
-//     identity and ownership server-side.
+//   - Metadata lives in `public.stage1_evidence` and is written through
+//     `register_stage1_evidence(...)` using the current Stage 1 contract.
 //   - Reads are run-scoped table selects guarded by RLS; downloads use signed
 //     URLs against the private bucket.
 //
@@ -71,32 +70,39 @@ export interface EvidenceRecord {
   storagePath: string;
 }
 
-/** Shape of a `public.stage1_evidence` row returned by the Data API. */
+/** Shape of a current `public.stage1_evidence` row returned by the Data API. */
 interface EvidenceRow {
   id: string;
-  run_id: string;
-  link_type: EvidenceLinkType;
-  link_ref: string;
-  link_label: string;
+  autopsy_run_id: string;
+  stage_progress_id: string;
+  linked_object_type: EvidenceLinkType;
+  linked_object_id: string;
   evidence_type: EvidenceType;
   file_name: string;
-  content_type: string;
-  size: number | string | null;
+  mime_type: string;
+  file_size_bytes: number | string | null;
+  storage_bucket?: string | null;
   storage_path: string;
+  uploaded_by?: string | null;
   uploaded_at: string;
+  notes?: string | null;
+}
+
+interface StageProgressRow {
+  stage_progress_id: string | null;
 }
 
 function fromRow(row: EvidenceRow): EvidenceRecord {
   return {
     id: row.id,
-    runId: row.run_id,
-    linkType: row.link_type,
-    linkRef: row.link_ref,
-    linkLabel: row.link_label,
+    runId: row.autopsy_run_id,
+    linkType: row.linked_object_type,
+    linkRef: row.linked_object_id,
+    linkLabel: row.notes || row.linked_object_id,
     evidenceType: row.evidence_type,
     fileName: row.file_name,
-    contentType: row.content_type,
-    size: Number(row.size ?? 0) || 0,
+    contentType: row.mime_type,
+    size: Number(row.file_size_bytes ?? 0) || 0,
     uploadedAt: row.uploaded_at,
     storagePath: row.storage_path,
   };
@@ -112,10 +118,26 @@ function sanitizeFileName(name: string): string {
   return (name || "file").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
 }
 
+async function resolveStageProgressId(runId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("get_stage1_progress_snapshot_by_run", {
+    p_run_id: runId,
+  });
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as StageProgressRow | null;
+  const stageProgressId = row?.stage_progress_id;
+
+  if (!stageProgressId) {
+    throw new Error("Stage 1 progress record not found for this Autopsy run.");
+  }
+
+  return stageProgressId;
+}
+
 /**
  * Attach a file to a transaction line. The binary is uploaded to the private
- * `stage1-evidence` bucket, then metadata is registered via the run-scoped
- * RPC `register_stage1_evidence`. Returns the persisted metadata.
+ * `stage1-evidence` bucket, then metadata is registered through Supabase.
+ * Returns the persisted metadata.
  */
 export async function addEvidence(input: {
   runId: string;
@@ -129,22 +151,24 @@ export async function addEvidence(input: {
   const contentType = input.file.type || "application/octet-stream";
   const storagePath = `${input.runId}/${input.linkType}/${input.linkRef}/${id}-${sanitizeFileName(input.file.name)}`;
 
+  const stageProgressId = await resolveStageProgressId(input.runId);
+
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, input.file, { contentType, upsert: false });
   if (upErr) throw upErr;
 
   const { data, error } = await supabase.rpc("register_stage1_evidence", {
-    p_evidence_id: id,
-    p_run_id: input.runId,
-    p_link_type: input.linkType,
-    p_link_ref: input.linkRef,
-    p_link_label: input.linkLabel,
+    p_autopsy_run_id: input.runId,
+    p_stage_progress_id: stageProgressId,
+    p_linked_object_type: input.linkType,
+    p_linked_object_id: input.linkRef,
     p_evidence_type: input.evidenceType,
     p_file_name: input.file.name,
-    p_content_type: contentType,
-    p_size: input.file.size,
+    p_mime_type: contentType,
+    p_file_size_bytes: input.file.size,
     p_storage_path: storagePath,
+    p_notes: input.linkLabel || null,
   });
   if (error) {
     // Roll back the orphaned object so storage and metadata stay consistent.
@@ -154,7 +178,6 @@ export async function addEvidence(input: {
 
   const row = (Array.isArray(data) ? data[0] : data) as EvidenceRow | null;
   if (row) return fromRow(row);
-  // RPC may return only the id; fall back to the values we just wrote.
   return {
     id,
     runId: input.runId,
@@ -180,9 +203,9 @@ export async function listEvidence(
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
-    .eq("run_id", runId)
-    .eq("link_type", linkType)
-    .eq("link_ref", linkRef)
+    .eq("autopsy_run_id", runId)
+    .eq("linked_object_type", linkType)
+    .eq("linked_object_id", linkRef)
     .order("uploaded_at", { ascending: true });
   if (error) throw error;
   return ((data ?? []) as EvidenceRow[]).map(fromRow);
@@ -194,7 +217,7 @@ export async function listRunEvidence(runId: string): Promise<EvidenceRecord[]> 
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
-    .eq("run_id", runId)
+    .eq("autopsy_run_id", runId)
     .order("uploaded_at", { ascending: true });
   if (error) throw error;
   return ((data ?? []) as EvidenceRow[]).map(fromRow);
