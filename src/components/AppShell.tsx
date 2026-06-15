@@ -1,118 +1,36 @@
 import { NavLink, Outlet } from "react-router-dom";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import {
-  LayoutDashboard,
-  Stethoscope,
-  GitBranch,
-  FileText,
-  Briefcase,
-  Users,
-  Building2,
-  Rocket,
-  IdCard,
-  Archive,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
 
-type NavItem = { title: string; url: string; icon: typeof Stethoscope };
-type NavSection = { label: string | null; items: NavItem[] };
-
-const navSections: NavSection[] = [
-  {
-    label: null,
-    items: [
-      { title: "Autopsy", url: "/autopsy", icon: Stethoscope },
-      { title: "Launchpad", url: "/launchpad", icon: Rocket },
-    ],
-  },
-  {
-    label: "Core",
-    items: [
-      { title: "Leads", url: "/leads", icon: Users },
-      { title: "Accounts", url: "/accounts", icon: Building2 },
-      { title: "Pipeline", url: "/pipeline", icon: GitBranch },
-      { title: "Quotes", url: "/quotes", icon: FileText },
-      { title: "Jobs", url: "/jobs", icon: Briefcase },
-    ],
-  },
-  {
-    label: "Stage 1",
-    items: [
-      { title: "First 5 Jobs Dashboard", url: "/stage-1", icon: LayoutDashboard },
-      { title: "Business Details", url: "/business-setup", icon: IdCard },
-    ],
-  },
-  {
-    label: "Archive / Legacy",
-    items: [
-      { title: "Preliminary First 5 Jobs Dashboard", url: "/stage-1-archived", icon: Archive },
-    ],
-  },
+const navItems = [
+  { title: "Autopsy", url: "/autopsy" },
+  { title: "Launchpad", url: "/launchpad" },
+  { title: "First 5 Jobs", url: "/stage-1" },
+  { title: "Business Details", url: "/business-setup" },
 ];
-
-function AppSidebar() {
-  return (
-    <Sidebar collapsible="icon">
-      <SidebarContent>
-        {navSections.map((section, i) => (
-          <SidebarGroup key={section.label ?? `top-${i}`}>
-            {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {section.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        className={({ isActive }) =>
-                          cn(
-                            "flex items-center gap-2",
-                            isActive &&
-                              "bg-[hsl(var(--autopsy-accent-soft))] text-[hsl(var(--autopsy-accent))] font-medium border-l-2 border-[hsl(var(--autopsy-accent))]",
-                          )
-                        }
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
-      </SidebarContent>
-    </Sidebar>
-  );
-}
 
 export default function AppShell() {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-[hsl(var(--autopsy-bg))] text-foreground">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b px-2 gap-2 bg-white">
-            <SidebarTrigger />
-            <span className="text-sm font-medium tracking-tight">Autopsy Console</span>
-          </header>
-          <main className="flex-1 min-w-0 bg-white">
-            <Outlet />
-          </main>
+    <div className="min-h-screen bg-white text-foreground">
+      <header className="border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold tracking-tight">Autopsy Console</span>
+          <nav className="flex flex-wrap gap-2 text-sm">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.url}
+                to={item.url}
+                className={({ isActive }) =>
+                  `rounded-md px-3 py-1.5 ${isActive ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted"}`
+                }
+              >
+                {item.title}
+              </NavLink>
+            ))}
+          </nav>
         </div>
-      </div>
-    </SidebarProvider>
+      </header>
+      <main className="min-w-0">
+        <Outlet />
+      </main>
+    </div>
   );
 }
