@@ -9,6 +9,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -106,16 +107,18 @@ function LineTable({
   showFromJob,
   showCategory,
   emptyText,
+  totalLabel,
+  total,
 }: {
   lines: Line[];
   supplierLabel: string;
   showFromJob?: boolean;
   showCategory?: boolean;
   emptyText: string;
+  totalLabel: string;
+  total: { gross: number; gst: number; net: number };
 }) {
-  if (lines.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">{emptyText}</p>;
-  }
+  const labelColSpan = 3 + (showFromJob ? 1 : 0) + (showCategory ? 1 : 0);
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -133,7 +136,16 @@ function LineTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {lines.map((l, i) => {
+          {lines.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={labelColSpan + 4}
+                className="text-xs text-muted-foreground italic"
+              >
+                {emptyText}
+              </TableCell>
+            </TableRow>
+          ) : lines.map((l, i) => {
             const s = splitLine(l);
             return (
               <TableRow key={i}>
@@ -154,32 +166,27 @@ function LineTable({
             );
           })}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={labelColSpan} className="font-semibold">
+              Totals
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              <div className="text-xs text-muted-foreground">Total {totalLabel} incl. GST</div>
+              <div className="font-semibold">${fmt(total.gross)}</div>
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              <div className="text-xs text-muted-foreground">GST on {totalLabel}</div>
+              <div className="font-semibold">${fmt(total.gst)}</div>
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              <div className="text-xs text-muted-foreground">Net {totalLabel} ex GST</div>
+              <div className="font-semibold">${fmt(total.net)}</div>
+            </TableCell>
+            <TableCell />
+          </TableRow>
+        </TableFooter>
       </Table>
-    </div>
-  );
-}
-
-function TotalsBlock({
-  label,
-  t,
-}: {
-  label: string;
-  t: { gross: number; gst: number; net: number };
-}) {
-  return (
-    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-      <div className="rounded-md border p-2">
-        <div className="text-xs text-muted-foreground">Total {label} incl. GST</div>
-        <div className="font-semibold tabular-nums">${fmt(t.gross)}</div>
-      </div>
-      <div className="rounded-md border p-2">
-        <div className="text-xs text-muted-foreground">GST on {label}</div>
-        <div className="font-semibold tabular-nums">${fmt(t.gst)}</div>
-      </div>
-      <div className="rounded-md border p-2">
-        <div className="text-xs text-muted-foreground">Net {label} ex GST</div>
-        <div className="font-semibold tabular-nums">${fmt(t.net)}</div>
-      </div>
     </div>
   );
 }
@@ -442,8 +449,9 @@ export function DetailedJobCostReport({
               lines={incomeLines}
               supplierLabel="Invoice / Ref"
               emptyText="No customer invoices recorded for this job yet."
+              totalLabel="Client Invoices"
+              total={incomeT}
             />
-            <TotalsBlock label="Client Invoices" t={incomeT} />
           </section>
 
           {/* Section 3 — Job Costs */}
@@ -455,8 +463,9 @@ export function DetailedJobCostReport({
               lines={costLines}
               supplierLabel="Supplier / Ref"
               emptyText="No job costs recorded for this job yet."
+              totalLabel="Job Costs"
+              total={costT}
             />
-            <TotalsBlock label="Job Costs" t={costT} />
           </section>
 
           {/* Section 4 — Job Gross Profit */}
@@ -499,8 +508,9 @@ export function DetailedJobCostReport({
               showFromJob
               showCategory
               emptyText="No general business expenses recorded yet."
+              totalLabel="General Business Expenses"
+              total={gbT}
             />
-            <TotalsBlock label="General Business Expenses" t={gbT} />
             <p className="text-xs text-muted-foreground">
               General business expenses are recorded separately from job costs. They do not change
               this job's gross margin. They may affect whole-business viability, but they do not
