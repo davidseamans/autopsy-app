@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { CostLine, GBExpense, ProofUnit } from "@/pages/Stage1";
+import type { CostLine, GBExpense, InvoiceLine, PaymentLine, ProofUnit } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { computeGstSplit, type GstTreatment } from "@/lib/gst";
@@ -76,9 +76,14 @@ const fmt = (n: number) =>
 type Stage1RevenueRow = {
   id: string;
   amount: number | null;
+  amount_inc_gst?: number | null;
+  amount_ex_gst?: number | null;
+  gst_treatment?: string | null;
+  gst_amount?: number | null;
   revenue_type: string | null;
   source: string | null;
   reference: string | null;
+  description?: string | null;
   created_at: string | null;
 };
 type Stage1CostRow = {
@@ -103,6 +108,105 @@ function totals(lines: Line[]) {
     },
     { gross: 0, gst: 0, net: 0 },
   );
+}
+
+function newLineId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return Math.random().toString(36).slice(2);
+}
+
+function invoiceLinesForUnit(unit: ProofUnit, revenueRows: Stage1RevenueRow[] = []): InvoiceLine[] {
+  if (unit.invoiceLines && unit.invoiceLines.length > 0) return unit.invoiceLines;
+  const persisted = revenueRows.filter((r) => (r.revenue_type ?? "invoice") !== "payment");
+  if (persisted.length > 0) {
+    return persisted
+      .filter((r) => Number(r.amount_inc_gst ?? r.amount ?? 0) > 0)
+      .map((r) => ({
+        id: r.id,
+        date: r.created_at?.slice(0, 10),
+        ref: r.reference ?? undefined,
+        description: r.description ?? "Invoice",
+        amount: Number(r.amount_inc_gst ?? r.amount ?? 0),
+        gstIncluded: r.gst_treatment === "gst_included" || r.gst_treatment === "GST",
+        gstTreatment: (r.gst_treatment ?? "gst_included") as GstTreatment,
+        gstAmount: r.gst_amount != null ? Number(r.gst_amount) : undefined,
+        gstOverridden: false,
+        proofName: r.reference ?? undefined,
+      }));
+  }
+  return (unit.invoiceAmount ?? 0) > 0
+    ? [{
+        id: "legacy-invoice",
+        date: unit.invoiceDate,
+        ref: unit.invoiceRef ?? unit.invoiceDocName,
+        description: "Invoice" + (unit.jobSite ? ` - ${unit.jobSite}` : ""),
+        amount: unit.invoiceAmount,
+        gstIncluded: unit.invoiceGstTreatment === "gst_included" || unit.invoiceGstTreatment === "manual",
+        gstTreatment: unit.invoiceGstTreatment ?? "gst_included",
+        gstAmount: unit.invoiceGstAmount,
+        gstOverridden: unit.invoiceGstOverridden,
+        proofName: unit.invoiceDocName,
+      }]
+    : [];
+}
+
+function paymentLinesForUnit(unit: ProofUnit, revenueRows: Stage1RevenueRow[] = []): PaymentLine[] {
+  if (unit.paymentLines && unit.paymentLines.length > 0) return unit.paymentLines;
+  const persisted = revenueRows.filter((r) => r.revenue_type === "payment");
+  if (persisted.length > 0) {
+    return persisted
+      .filter((r) => Number(r.amount_inc_gst ?? r.amount ?? 0) > 0)
+      .map((r) => ({
+        id: r.id,
+        date: r.created_at?.slice(0, 10),
+        client: unit.client,
+        description: r.description ?? "Payment received",
+        amount: Number(r.amount_inc_gst ?? r.amount ?? 0),
+        method: r.reference ?? undefined,
+        proofName: r.source ?? undefined,
+      }));
+  }
+  return (unit.paymentAmount ?? 0) > 0
+    ? [{
+        id: "legacy-payment",
+        date: unit.paymentDate,
+        client: unit.client,
+        description: unit.paymentMethod ?? "Payment received",
+        amount: unit.paymentAmount,
+        method: unit.paymentMethod,
+        proofName: unit.paymentProofName,
+      }]
+    : [];
+}
+
+function applyInvoiceSummary(unit: ProofUnit, invoiceLines: InvoiceLine[]): ProofUnit {
+  const first = invoiceLines[0];
+  const total = invoiceLines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+  return {
+    ...unit,
+    invoiceLines,
+    invoiceAmount: total > 0 ? total : undefined,
+    invoiceDate: first?.date,
+    invoiceRef: first?.ref,
+    invoiceDocName: first?.proofName ?? first?.ref,
+    invoiceGstTreatment: first?.gstTreatment ?? unit.invoiceGstTreatment ?? "gst_included",
+    invoiceGstAmount: first?.gstAmount,
+    invoiceGstOverridden: first?.gstOverridden,
+    evidence: unit.evidence || invoiceLines.some((line) => Boolean(line.proofName || line.ref)),
+  };
+}
+
+function applyPaymentSummary(unit: ProofUnit, paymentLines: PaymentLine[]): ProofUnit {
+  const first = paymentLines[0];
+  const total = paymentLines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+  return {
+    ...unit,
+    paymentLines,
+    paymentAmount: total > 0 ? total : undefined,
+    paymentDate: first?.date,
+    paymentMethod: first?.method as ProofUnit["paymentMethod"],
+    paymentProofName: first?.proofName,
+  };
 }
 
 function LineTable({
@@ -227,16 +331,15 @@ function LineTable({
 }
 
 function PaymentTable({
-  payment,
+  payments,
   outstanding,
   onAdd,
-  onEdit,
 }: {
-  payment: { date?: string; client: string; description: string; amount: number } | null;
+  payments: { date?: string; client: string; description: string; amount: number; onEdit: () => void }[];
   outstanding: number;
   onAdd: () => void;
-  onEdit: () => void;
 }) {
+  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -250,25 +353,27 @@ function PaymentTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {payment ? (
-            <TableRow>
+          {payments.length > 0 ? (
+            payments.map((payment, index) => (
+            <TableRow key={index}>
               <TableCell className="text-muted-foreground">{payment.date || "—"}</TableCell>
               <TableCell>{payment.client}</TableCell>
               <TableCell>{payment.description}</TableCell>
               <TableCell className="text-right tabular-nums">${fmt(payment.amount)}</TableCell>
               <TableCell className="text-right">
-                <Button size="sm" variant="outline" onClick={onEdit}>
+                <Button size="sm" variant="outline" onClick={payment.onEdit}>
                   Edit
                 </Button>
               </TableCell>
             </TableRow>
+            ))
           ) : (
             <TableRow>
               <TableCell colSpan={4} className="text-xs text-muted-foreground italic">
                 No client payments recorded for this job yet.
               </TableCell>
               <TableCell className="text-right">
-                <Button size="sm" variant="outline" onClick={onAdd}>
+                <Button size="sm" variant="outline" onClick={() => onAdd()}>
                   Add
                 </Button>
               </TableCell>
@@ -281,7 +386,7 @@ function PaymentTable({
               Total Payments Received
             </TableCell>
             <TableCell className="text-right font-semibold tabular-nums">
-              ${fmt(payment?.amount ?? 0)}
+              ${fmt(totalPayments)}
             </TableCell>
             <TableCell />
           </TableRow>
@@ -397,7 +502,7 @@ export function DetailedJobCostReport({
       const [rev, cost] = await Promise.all([
         supabase
           .from("stage1_revenue_events")
-          .select("id,amount,revenue_type,source,reference,created_at")
+          .select("id,amount,amount_inc_gst,amount_ex_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
           .eq("stage1_job_id", stage1JobId)
           .order("created_at", { ascending: true }),
         supabase
@@ -421,23 +526,25 @@ export function DetailedJobCostReport({
 
   const dateOnly = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
   const closeTransactionDialog = () => setTransactionDraft(null);
-  const openInvoiceDialog = () =>
+  const openInvoiceDialog = (line?: InvoiceLine, index?: number) =>
     setTransactionDraft({
       kind: "invoice",
-      date: unit.invoiceDate ?? "",
-      ref: unit.invoiceRef ?? unit.invoiceDocName ?? "",
-      description: "Invoice" + (unit.jobSite ? ` - ${unit.jobSite}` : ""),
-      amount: unit.invoiceAmount != null ? String(unit.invoiceAmount) : "",
-      proof: unit.invoiceDocName ?? "",
+      index,
+      date: line?.date ?? "",
+      ref: line?.ref ?? "",
+      description: line?.description ?? "Invoice" + (unit.jobSite ? ` - ${unit.jobSite}` : ""),
+      amount: line?.amount != null ? String(line.amount) : "",
+      proof: line?.proofName ?? "",
     });
-  const openPaymentDialog = () =>
+  const openPaymentDialog = (line?: PaymentLine, index?: number) =>
     setTransactionDraft({
       kind: "payment",
-      date: unit.paymentDate ?? "",
-      ref: unit.paymentMethod ?? "",
-      description: unit.paymentMethod ?? "Payment received",
-      amount: unit.paymentAmount != null ? String(unit.paymentAmount) : "",
-      proof: unit.paymentProofName ?? "",
+      index,
+      date: line?.date ?? "",
+      ref: line?.method ?? "",
+      description: line?.description ?? "Payment received",
+      amount: line?.amount != null ? String(line.amount) : "",
+      proof: line?.proofName ?? "",
     });
   const openCostDialog = (line?: CostLine, index?: number) =>
     setTransactionDraft({
@@ -460,34 +567,50 @@ export function DetailedJobCostReport({
       proof: expense?.receiptName ?? "",
     });
   const saveTransaction = async () => {
-    if (!transactionDraft || !onSave) return;
+    if (!transactionDraft || !onSave || transactionSaving) return;
     setTransactionSaving(true);
     try {
       const parsedAmount = transactionDraft.amount === "" ? undefined : Number(transactionDraft.amount);
       const amount = parsedAmount !== undefined && Number.isFinite(parsedAmount) ? parsedAmount : undefined;
       let next: ProofUnit = { ...unit };
       if (transactionDraft.kind === "invoice") {
-        next = {
-          ...next,
-          invoiceAmount: amount,
-          invoiceDate: transactionDraft.date || undefined,
-          invoiceRef: transactionDraft.ref || undefined,
-          invoiceDocName: transactionDraft.proof || transactionDraft.ref || undefined,
-          evidence: Boolean(transactionDraft.proof || transactionDraft.ref || next.evidence),
+        const invoiceLines = [...invoiceLinesForUnit(unit, revenueRows)];
+        const existing = transactionDraft.index == null ? undefined : invoiceLines[transactionDraft.index];
+        const line: InvoiceLine = {
+          id: existing?.id ?? newLineId(),
+          date: transactionDraft.date || undefined,
+          ref: transactionDraft.ref || undefined,
+          description: transactionDraft.description || undefined,
+          amount,
+          gstIncluded: existing?.gstIncluded ?? true,
+          gstTreatment: existing?.gstTreatment ?? "gst_included",
+          gstAmount: existing?.gstAmount,
+          gstOverridden: existing?.gstOverridden,
+          proofName: transactionDraft.proof || transactionDraft.ref || undefined,
         };
+        if (transactionDraft.index == null) invoiceLines.push(line);
+        else invoiceLines[transactionDraft.index] = line;
+        next = applyInvoiceSummary(next, invoiceLines);
       } else if (transactionDraft.kind === "payment") {
-        next = {
-          ...next,
-          paymentAmount: amount,
-          paymentDate: transactionDraft.date || undefined,
-          paymentMethod: (transactionDraft.ref || undefined) as ProofUnit["paymentMethod"],
-          paymentProofName: transactionDraft.proof || undefined,
+        const paymentLines = [...paymentLinesForUnit(unit, revenueRows)];
+        const existing = transactionDraft.index == null ? undefined : paymentLines[transactionDraft.index];
+        const line: PaymentLine = {
+          id: existing?.id ?? newLineId(),
+          date: transactionDraft.date || undefined,
+          client: unit.client,
+          description: transactionDraft.description || "Payment received",
+          amount,
+          method: transactionDraft.ref || undefined,
+          proofName: transactionDraft.proof || undefined,
         };
+        if (transactionDraft.index == null) paymentLines.push(line);
+        else paymentLines[transactionDraft.index] = line;
+        next = applyPaymentSummary(next, paymentLines);
       } else if (transactionDraft.kind === "cost") {
         const lines = [...(next.costLines ?? [])];
         const existing = transactionDraft.index == null ? undefined : lines[transactionDraft.index];
         const line: CostLine = {
-          id: existing?.id ?? crypto.randomUUID(),
+          id: existing?.id ?? newLineId(),
           description: transactionDraft.description,
           amount,
           date: transactionDraft.date || undefined,
@@ -504,7 +627,7 @@ export function DetailedJobCostReport({
         const expenses = [...(next.gbExpenses ?? [])];
         const existing = transactionDraft.index == null ? undefined : expenses[transactionDraft.index];
         const expense: GBExpense = {
-          id: existing?.id ?? crypto.randomUUID(),
+          id: existing?.id ?? newLineId(),
           expenseDate: transactionDraft.date || undefined,
           supplier: transactionDraft.ref || undefined,
           description: transactionDraft.description || undefined,
@@ -529,26 +652,26 @@ export function DetailedJobCostReport({
   // amount + GST treatment. GST + ex-GST are derived via computeGstSplit so the
   // report matches the Job Detail and the Simple Job Cost Ledger exactly. The
   // sandbox revenue rows are used only to enrich date / reference.
-  const invoiceTreatment = unit.invoiceGstTreatment ?? "no_gst";
-  const invoiceGross = unit.invoiceAmount ?? 0;
-  const incomeLines: Line[] =
-    invoiceGross > 0
-      ? [
-          {
-            date: dateOnly(revenueRows[0]?.created_at),
-            ref: revenueRows[0]?.reference ?? unit.invoiceDocName ?? undefined,
-            supplier: unit.client,
-            description: "Invoice" + (unit.jobSite ? ` — ${unit.jobSite}` : ""),
-            gross: invoiceGross,
-            gstIncluded: invoiceTreatment === "gst_included" || invoiceTreatment === "manual",
-            gstTreatment: invoiceTreatment,
-            gstOverride: unit.invoiceGstAmount,
-            overridden: unit.invoiceGstOverridden,
-            proof: revenueRows[0]?.reference || revenueRows[0]?.source || "Recorded",
-            onEdit: openInvoiceDialog,
-          },
-        ]
-      : [];
+  const invoiceLines = invoiceLinesForUnit(unit, revenueRows);
+  const paymentLines = paymentLinesForUnit(unit, revenueRows);
+  const incomeLines: Line[] = invoiceLines
+    .filter((line) => (line.amount ?? 0) > 0)
+    .map((line, index) => {
+      const treatment = line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst");
+      return {
+        date: line.date,
+        ref: line.ref,
+        supplier: line.ref ?? unit.client,
+        description: line.description || "Invoice" + (unit.jobSite ? ` — ${unit.jobSite}` : ""),
+        gross: line.amount ?? 0,
+        gstIncluded: treatment === "gst_included" || treatment === "manual",
+        gstTreatment: treatment,
+        gstOverride: line.gstAmount,
+        overridden: line.gstOverridden,
+        proof: line.proofName || line.ref || "Recorded",
+        onEdit: () => openInvoiceDialog(line, index),
+      };
+    });
 
   // Job cost lines — built from the UNIT's cost lines (each carries its own
   // GST-INCLUSIVE gross + GST treatment). Sandbox cost rows enrich date / ref.
@@ -613,20 +736,21 @@ export function DetailedJobCostReport({
   // Outstanding is based on the gross/input (inc GST) invoice amount, matching
   // the Simple Job Cost Ledger.
   const incomeAsPerQuote = revenueIncGst;
-  const paymentReceived = unit.sandboxPaymentReceivedAmount ?? unit.paymentAmount ?? 0;
+  const paymentReceived = paymentLines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+  const hasCurrentInvoiceOrPaymentLines = invoiceLines.length > 0 || paymentLines.length > 0;
   const outstanding =
-    unit.sandboxOutstandingAmount != null
+    !hasCurrentInvoiceOrPaymentLines && unit.sandboxOutstandingAmount != null
       ? unit.sandboxOutstandingAmount
       : incomeAsPerQuote - paymentReceived;
-  const paymentLine =
-    paymentReceived > 0
-      ? {
-          date: unit.paymentDate,
-          client: unit.client,
-          description: unit.paymentMethod ?? "Payment received",
-          amount: paymentReceived,
-        }
-      : null;
+  const paymentRows = paymentLines
+    .filter((line) => (line.amount ?? 0) > 0)
+    .map((line, index) => ({
+      date: line.date,
+      client: line.client ?? unit.client,
+      description: line.description ?? line.method ?? "Payment received",
+      amount: line.amount ?? 0,
+      onEdit: () => openPaymentDialog(line, index),
+    }));
   const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
 
   return (
@@ -671,7 +795,7 @@ export function DetailedJobCostReport({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 2. Client Invoices
               </h3>
-              <Button size="sm" variant="outline" onClick={openInvoiceDialog}>
+              <Button size="sm" variant="outline" onClick={() => openInvoiceDialog()}>
                 Add Client Invoice
               </Button>
             </div>
@@ -690,15 +814,14 @@ export function DetailedJobCostReport({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 2a. Client Payments
               </h3>
-              <Button size="sm" variant="outline" onClick={openPaymentDialog}>
+              <Button size="sm" variant="outline" onClick={() => openPaymentDialog()}>
                 Add Client Payment
               </Button>
             </div>
             <PaymentTable
-              payment={paymentLine}
+              payments={paymentRows}
               outstanding={outstanding}
-              onAdd={openPaymentDialog}
-              onEdit={openPaymentDialog}
+              onAdd={() => openPaymentDialog()}
             />
           </section>
 

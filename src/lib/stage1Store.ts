@@ -9,7 +9,7 @@
 // Stage 1 sandbox tables (canonical source of truth for Stage 1):
 //
 //   - stage1_jobs            (job shell)
-//   - stage1_revenue_events  (one 'invoice' revenue event per job)
+//   - stage1_revenue_events  (invoice/payment revenue events per job)
 //   - stage1_job_costs       (one categorised direct-cost row per job)
 //   - stage1_reflections     (handled in stage1Reflection.ts)
 //
@@ -29,7 +29,7 @@
 // always recalculates from ex-GST values only. Margin governance ("Not Yet
 // Proven" when costs are missing) is preserved because no fabricated values are
 // stored — only what the operator actually entered.
-import type { ProofUnit, CostLine, GBExpense } from "@/pages/Stage1";
+import type { ProofUnit, CostLine, GBExpense, InvoiceLine, PaymentLine } from "@/pages/Stage1";
 import type { GstTreatment } from "@/lib/gst";
 import { computeGstSplit } from "@/lib/gst";
 import { supabase, isDebug } from "@/lib/supabase";
@@ -102,6 +102,10 @@ function fromCanonicalStatus(status: string | null): string {
 // ---------------------------------------------------------------------------
 type CanonicalStage1JobRow = Record<string, unknown> & { id: string; job_sequence_number?: number | null };
 type MarginSummaryRow = Record<string, unknown> & { stage1_job_id?: string | null };
+
+function numValue(value: unknown): number {
+  return value != null ? Number(value) || 0 : 0;
+}
 
 /**
  * Fetch the run's commercial records from the Stage 1 sandbox (canonical truth
@@ -185,7 +189,52 @@ export async function fetchStage1Units(
     .map((s) => String(s.stage1_job_id ?? ""))
     .filter((id) => id.length > 0);
   const costLinesByJob = new Map<string, CostLine[]>();
+  const invoiceLinesByJob = new Map<string, InvoiceLine[]>();
+  const paymentLinesByJob = new Map<string, PaymentLine[]>();
   if (jobIds.length > 0) {
+    const { data: revenueRows, error: revenueRowsErr } = await supabase
+      .from("stage1_revenue_events")
+      .select("id,stage1_job_id,amount,amount_inc_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
+      .in("stage1_job_id", jobIds)
+      .order("created_at", { ascending: true });
+    if (!revenueRowsErr) {
+      (revenueRows ?? []).forEach((r: Record<string, unknown>) => {
+        const jobId = String(r.stage1_job_id ?? "");
+        if (!jobId) return;
+        const type = typeof r.revenue_type === "string" ? r.revenue_type : "invoice";
+        const amount = numValue(r.amount_inc_gst ?? r.amount);
+        if (amount <= 0) return;
+        if (type === "payment") {
+          const list = paymentLinesByJob.get(jobId) ?? [];
+          list.push({
+            id: String(r.id),
+            date: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : undefined,
+            description: typeof r.description === "string" ? r.description : "Payment received",
+            amount,
+            method: typeof r.reference === "string" ? r.reference : undefined,
+            proofName: typeof r.source === "string" ? r.source : undefined,
+          });
+          paymentLinesByJob.set(jobId, list);
+        } else {
+          const treatment = (typeof r.gst_treatment === "string" ? r.gst_treatment : "gst_included") as GstTreatment;
+          const list = invoiceLinesByJob.get(jobId) ?? [];
+          list.push({
+            id: String(r.id),
+            date: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : undefined,
+            ref: typeof r.reference === "string" ? r.reference : undefined,
+            description: typeof r.description === "string" ? r.description : "Invoice",
+            amount,
+            gstIncluded: treatment === "gst_included" || treatment === "GST",
+            gstTreatment: treatment,
+            gstAmount: r.gst_amount != null ? Number(r.gst_amount) : undefined,
+            gstOverridden: false,
+            proofName: typeof r.reference === "string" ? r.reference : undefined,
+          });
+          invoiceLinesByJob.set(jobId, list);
+        }
+      });
+    }
+
     const { data: costRows, error: costRowsErr } = await supabase
       .from("stage1_job_costs")
       .select("stage1_job_id,lines")
@@ -285,6 +334,10 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       typeof s.variation_recorded === "boolean" ? s.variation_recorded : variationInvoiceAmount > 0;
 
     const persistedLines = costLinesByJob.get(String(s.stage1_job_id ?? ""));
+    const persistedInvoiceLines = invoiceLinesByJob.get(String(s.stage1_job_id ?? ""));
+    const persistedPaymentLines = paymentLinesByJob.get(String(s.stage1_job_id ?? ""));
+    const persistedInvoiceTotal = (persistedInvoiceLines ?? []).reduce((sum, line) => sum + (line.amount ?? 0), 0);
+    const persistedPaymentTotal = (persistedPaymentLines ?? []).reduce((sum, line) => sum + (line.amount ?? 0), 0);
     const costLines: CostLine[] = [];
     const pushCost = (label: string, amount: number) => {
       if (amount > 0) {
@@ -324,10 +377,17 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       lifecycle: s.job_status === "cancelled" ? "voided" : "active",
       // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
       quoteValue: revenue > 0 ? revenue : undefined,
-      invoiceAmount: clientInvoicesIncGst > 0 ? clientInvoicesIncGst : revenue > 0 ? revenue : undefined,
+      invoiceAmount: persistedInvoiceTotal > 0
+        ? persistedInvoiceTotal
+        : clientInvoicesIncGst > 0
+          ? clientInvoicesIncGst
+          : revenue > 0
+            ? revenue
+            : undefined,
       invoiceGstTreatment: "gst_included",
       invoiceGstAmount: Number(s.invoice_gst_amount) || undefined,
       invoiceGstOverridden: false,
+      invoiceLines: persistedInvoiceLines,
       costMaterials: consumablesCost || undefined,
       costLabour: labourCost || undefined,
       costSubcontractors: undefined,
@@ -349,7 +409,15 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       sandboxPaymentStatus,
       sandboxVariationRecorded: variationRecorded,
       // Surface persisted payment so the ledger's "Outstanding" reflects collection.
-      paymentAmount: paymentReceivedAmount > 0 ? paymentReceivedAmount : undefined,
+      paymentAmount: persistedPaymentTotal > 0
+        ? persistedPaymentTotal
+        : paymentReceivedAmount > 0
+          ? paymentReceivedAmount
+          : undefined,
+      paymentLines: persistedPaymentLines,
+      paymentDate: persistedPaymentLines?.[0]?.date,
+      paymentMethod: persistedPaymentLines?.[0]?.method as ProofUnit["paymentMethod"],
+      paymentProofName: persistedPaymentLines?.[0]?.proofName,
     };
     return unit;
   });
@@ -388,6 +456,7 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       invoiceGstTreatment: c.invoiceGstTreatment,
       invoiceGstAmount: c.invoiceGstAmount,
       invoiceGstOverridden: c.invoiceGstOverridden,
+      invoiceLines: c.invoiceLines && c.invoiceLines.length > 0 ? c.invoiceLines : cached.invoiceLines,
       costLines: c.costLines,
       gm: c.gm,
       // General Business Expenses are now persisted in the sandbox table, so the
@@ -415,6 +484,10 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       sandboxPaymentStatus: c.sandboxPaymentStatus,
       sandboxVariationRecorded: c.sandboxVariationRecorded,
       paymentAmount: c.paymentAmount ?? cached.paymentAmount,
+      paymentDate: c.paymentDate ?? cached.paymentDate,
+      paymentMethod: c.paymentMethod ?? cached.paymentMethod,
+      paymentProofName: c.paymentProofName ?? cached.paymentProofName,
+      paymentLines: c.paymentLines && c.paymentLines.length > 0 ? c.paymentLines : cached.paymentLines,
     };
   });
 }
@@ -558,6 +631,39 @@ function costLineExGst(l: CostLine): number {
     overridden: l.gstOverridden,
   });
   return split.exGst;
+}
+
+function invoiceLinesForWrite(u: ProofUnit): InvoiceLine[] {
+  if (u.invoiceLines && u.invoiceLines.length > 0) return u.invoiceLines;
+  return (u.invoiceAmount ?? 0) > 0
+    ? [{
+        id: "legacy-invoice",
+        date: u.invoiceDate,
+        ref: u.invoiceRef ?? u.invoiceDocName,
+        description: u.invoiceDocName || "Stage 1 client invoice",
+        amount: u.invoiceAmount,
+        gstIncluded: u.invoiceGstTreatment !== "no_gst",
+        gstTreatment: u.invoiceGstTreatment ?? "gst_included",
+        gstAmount: u.invoiceGstAmount,
+        gstOverridden: u.invoiceGstOverridden,
+        proofName: u.invoiceDocName,
+      }]
+    : [];
+}
+
+function paymentLinesForWrite(u: ProofUnit): PaymentLine[] {
+  if (u.paymentLines && u.paymentLines.length > 0) return u.paymentLines;
+  return (u.paymentAmount ?? 0) > 0
+    ? [{
+        id: "legacy-payment",
+        date: u.paymentDate,
+        client: u.client,
+        description: u.paymentMethod ?? "Payment received",
+        amount: u.paymentAmount,
+        method: u.paymentMethod,
+        proofName: u.paymentProofName,
+      }]
+    : [];
 }
 
 /**
@@ -814,43 +920,66 @@ async function doSyncStage1Units(
     keptIds.add(jobId);
     result.push({ ...u, stage1JobId: jobId });
 
-    // Revenue — single sandbox 'invoice' event per job, stored ex-GST. Replace
-    // to keep the sandbox in lockstep with the workspace.
+    // Revenue — invoice/payment sandbox events per job. Replace all rows to
+    // keep the sandbox in lockstep with the report transaction lines.
     const { error: revDelErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", jobId);
     if (revDelErr) {
       ok = false;
       addWriteError(diagnostics, "stage1_revenue_events", "delete existing for job", revDelErr, { stage1_job_id: jobId });
     }
-    if ((u.invoiceAmount ?? 0) > 0) {
+    const revenueRows: Record<string, unknown>[] = [];
+    for (const line of invoiceLinesForWrite(u)) {
+      if ((line.amount ?? 0) <= 0) continue;
       const split = computeGstSplit({
-        inclusive: u.invoiceAmount,
-        treatment: u.invoiceGstTreatment ?? "gst_included",
-        gstOverride: u.invoiceGstAmount,
-        overridden: u.invoiceGstOverridden,
+        inclusive: line.amount,
+        treatment: line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst"),
+        gstOverride: line.gstAmount,
+        overridden: line.gstOverridden,
       });
-      const revenueRow = {
+      revenueRows.push({
         id: newCanonicalId(),
         stage1_job_id: jobId,
         amount: split.exGst,
-        amount_inc_gst: u.invoiceAmount,
-        gst_treatment: u.invoiceGstTreatment ?? "gst_included",
+        amount_inc_gst: line.amount,
+        gst_treatment: line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst"),
         gst_amount: split.gst,
         amount_ex_gst: split.exGst,
         revenue_type: "invoice",
         source: "stage1_dashboard",
-        reference: u.invoiceDocName || null,
-        description: u.invoiceDocName || "Stage 1 client invoice",
+        reference: line.ref || line.proofName || null,
+        description: line.description || "Stage 1 client invoice",
+        created_at: line.date ? new Date(`${line.date}T00:00:00`).toISOString() : undefined,
         created_by: userId,
-      };
+      });
+    }
+    for (const line of paymentLinesForWrite(u)) {
+      if ((line.amount ?? 0) <= 0) continue;
+      revenueRows.push({
+        id: newCanonicalId(),
+        stage1_job_id: jobId,
+        amount: line.amount,
+        amount_inc_gst: line.amount,
+        gst_treatment: "no_gst",
+        gst_amount: 0,
+        amount_ex_gst: line.amount,
+        revenue_type: "payment",
+        source: line.proofName || "stage1_dashboard",
+        reference: line.method || null,
+        description: line.description || "Payment received",
+        created_at: line.date ? new Date(`${line.date}T00:00:00`).toISOString() : undefined,
+        created_by: userId,
+      });
+    }
+    if (revenueRows.length > 0) {
       const { error: revErr } = await supabase
         .from("stage1_revenue_events")
-        .insert(revenueRow);
+        .insert(revenueRows);
       if (revErr) {
         ok = false;
-        addWriteError(diagnostics, "stage1_revenue_events", "insert", revErr, revenueRow);
+        addWriteError(diagnostics, "stage1_revenue_events", "insert", revErr, revenueRows);
         console.error("[stage1] revenue event insert failed", { jobId, error: revErr.message });
       } else {
-        diagnostics.writtenRows.revenueLines.push(toProbe(revenueRow));
+        diagnostics.writtenRows.revenueLines.push(...revenueRows.map(toProbe));
       }
     }
 

@@ -554,6 +554,24 @@ function unitTotalCost(u: ProofUnit): number {
 // GST-INCLUSIVE gross (source of truth). GST + ex-GST are derived from the GST
 // treatment via computeGstSplit — never by multiplying ex-GST by 1.1.
 function unitInvoiceSplit(u: ProofUnit): { inclusive: number; gst: number; exGst: number } {
+  if (u.invoiceLines && u.invoiceLines.length > 0) {
+    return u.invoiceLines.reduce(
+      (acc, line) => {
+        const split = computeGstSplit({
+          inclusive: line.amount ?? 0,
+          treatment: line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst"),
+          gstOverride: line.gstAmount,
+          overridden: line.gstOverridden,
+        });
+        return {
+          inclusive: acc.inclusive + split.inclusive,
+          gst: acc.gst + split.gst,
+          exGst: acc.exGst + split.exGst,
+        };
+      },
+      { inclusive: 0, gst: 0, exGst: 0 },
+    );
+  }
   const split = computeGstSplit({
     inclusive: u.invoiceAmount ?? 0,
     treatment: u.invoiceGstTreatment ?? "no_gst",
@@ -591,6 +609,13 @@ function unitCostSplit(u: ProofUnit): { inclusive: number; gst: number; exGst: n
     (u.costSubcontractors ?? 0) +
     (u.costOther ?? 0);
   return { inclusive: legacy, gst: 0, exGst: legacy };
+}
+
+function unitPaymentTotal(u: ProofUnit): number {
+  if (u.paymentLines && u.paymentLines.length > 0) {
+    return u.paymentLines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+  }
+  return u.paymentAmount ?? 0;
 }
 
 function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct: number | null } {
@@ -3018,8 +3043,11 @@ function Stage1DashboardInner() {
       const invoicesIncGst = invSplit.inclusive > 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
       const revenueEx = invSplit.inclusive > 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
       const costEx = costSplit.inclusive > 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
-      const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
-      const outstanding = u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
+      const localPaid = unitPaymentTotal(u);
+      const paid = localPaid > 0 ? localPaid : (u.sandboxPaymentReceivedAmount ?? 0);
+      const outstanding = localPaid > 0 || invSplit.inclusive > 0
+        ? invoicesIncGst - paid
+        : u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
       const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
       const grossMargin = hasRevenueAndCost ? revenueEx - costEx : null;
       const gmPct = hasRevenueAndCost && revenueEx > 0
@@ -3070,8 +3098,7 @@ function Stage1DashboardInner() {
   }, [ledgerFinancialRows, units]);
 
   const openUnit = (n: number) => {
-    setSelectedN(n);
-    setSheetOpen(true);
+    openReport(n);
   };
 
   // Compute KPI aggregates from current state
