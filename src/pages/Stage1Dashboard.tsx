@@ -4908,9 +4908,13 @@ function Stage1DashboardInner() {
       />
       <DetailedJobCostReport
         unit={reportUnit}
-        allUnits={units}
         open={reportOpen}
         onOpenChange={setReportOpen}
+        onSave={async (u) =>
+          persistUnitsWithDiagnostics((prev) =>
+            prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
+          )
+        }
       />
     </div>
   );
