@@ -4911,7 +4911,6 @@ function Stage1DashboardInner() {
         allUnits={units}
         open={reportOpen}
         onOpenChange={setReportOpen}
-        onEditInDetail={(n) => { setReportOpen(false); openUnit(n); }}
       />
     </div>
   );
