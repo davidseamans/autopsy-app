@@ -373,6 +373,37 @@ export interface CostLine {
   date?: string;
 }
 
+export interface InvoiceLine {
+  id: string;
+  date?: string;
+  ref?: string;
+  description?: string;
+  /** GST-inclusive invoice amount as entered. */
+  amount?: number;
+  gstIncluded: boolean;
+  gstTreatment?: GstTreatment;
+  gstAmount?: number;
+  gstOverridden?: boolean;
+  proofName?: string;
+}
+
+export type PaymentMethod =
+  | "Bank Transfer"
+  | "Card"
+  | "Cash with Receipt"
+  | "Payment Platform"
+  | "Other";
+
+export interface PaymentLine {
+  id: string;
+  date?: string;
+  client?: string;
+  description?: string;
+  amount?: number;
+  method?: PaymentMethod | string;
+  proofName?: string;
+}
+
 export interface ProofUnit {
   n: number;
   jobNumber?: string;
@@ -414,6 +445,7 @@ export interface ProofUnit {
   invoiceDate?: string;
   invoiceStatus?: "Draft" | "Sent" | "Approved" | "Invoiced" | "Part Paid" | "Paid" | "Cancelled";
   invoiceRef?: string;
+  invoiceLines?: InvoiceLine[];
   contractStart?: string;
   contractEnd?: string;
   invoiceDocType?: "Quote" | "Customer Invoice" | "Signed Contract" | "Work Order" | "Customer Approval" | "Other";
@@ -430,8 +462,9 @@ export interface ProofUnit {
   paymentStatus?: "Not Paid" | "Part Paid" | "Paid" | "Disputed" | "Written Off";
   paymentDate?: string;
   paymentAmount?: number;
-  paymentMethod?: "Bank Transfer" | "Card" | "Cash with Receipt" | "Payment Platform" | "Other";
+  paymentMethod?: PaymentMethod;
   paymentProofName?: string;
+  paymentLines?: PaymentLine[];
   // Canonical Stage 1 sandbox commercial proof model
   // (public.stage1_job_margin_summary). These are read-only projections of the
   // persisted sandbox view used by the First 5 Jobs ledger.
