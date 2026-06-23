@@ -5,6 +5,16 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Table,
   TableBody,
   TableCell,
@@ -13,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { ProofUnit } from "@/pages/Stage1";
+import type { CostLine, GBExpense, ProofUnit } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { computeGstSplit, type GstTreatment } from "@/lib/gst";
@@ -33,6 +43,17 @@ type Line = {
   category?: string;
   fromJobN?: number;
   fromJobLabel?: string;
+  onEdit?: () => void;
+};
+
+type TransactionDraft = {
+  kind: "invoice" | "payment" | "cost" | "gb";
+  index?: number;
+  date: string;
+  ref: string;
+  description: string;
+  amount: string;
+  proof: string;
 };
 
 // Split a line into gross (inc GST) / GST / net (ex GST) using its GST
@@ -148,7 +169,18 @@ function LineTable({
                 <TableCell className="text-right tabular-nums">${fmt(s.gst)}</TableCell>
                 <TableCell className="text-right tabular-nums">${fmt(s.net)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{l.proof || "—"}</TableCell>
-                <TableCell className="text-right text-muted-foreground">—</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      l.onEdit?.();
+                    }}
+                  >
+                    Edit
+                  </Button>
+                </TableCell>
               </TableRow>
             );
           })}
@@ -197,9 +229,13 @@ function LineTable({
 function PaymentTable({
   payment,
   outstanding,
+  onAdd,
+  onEdit,
 }: {
   payment: { date?: string; client: string; description: string; amount: number } | null;
   outstanding: number;
+  onAdd: () => void;
+  onEdit: () => void;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -220,12 +256,21 @@ function PaymentTable({
               <TableCell>{payment.client}</TableCell>
               <TableCell>{payment.description}</TableCell>
               <TableCell className="text-right tabular-nums">${fmt(payment.amount)}</TableCell>
-              <TableCell className="text-right text-muted-foreground">—</TableCell>
+              <TableCell className="text-right">
+                <Button size="sm" variant="outline" onClick={onEdit}>
+                  Edit
+                </Button>
+              </TableCell>
             </TableRow>
           ) : (
             <TableRow>
-              <TableCell colSpan={5} className="text-xs text-muted-foreground italic">
+              <TableCell colSpan={4} className="text-xs text-muted-foreground italic">
                 No client payments recorded for this job yet.
+              </TableCell>
+              <TableCell className="text-right">
+                <Button size="sm" variant="outline" onClick={onAdd}>
+                  Add
+                </Button>
               </TableCell>
             </TableRow>
           )}
@@ -255,16 +300,82 @@ function PaymentTable({
   );
 }
 
+function TransactionDialog({
+  draft,
+  open,
+  saving,
+  onDraftChange,
+  onOpenChange,
+  onSave,
+}: {
+  draft: TransactionDraft | null;
+  open: boolean;
+  saving: boolean;
+  onDraftChange: (draft: TransactionDraft) => void;
+  onOpenChange: (open: boolean) => void;
+  onSave: () => void;
+}) {
+  if (!draft) return null;
+  const title =
+    draft.kind === "invoice"
+      ? "Client Invoice"
+      : draft.kind === "payment"
+        ? "Client Payment"
+        : draft.kind === "cost"
+          ? "Job Cost"
+          : "General Business Expense";
+  const patch = (next: Partial<TransactionDraft>) => onDraftChange({ ...draft, ...next });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{draft.index == null ? `Add ${title}` : `Edit ${title}`}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Date</Label>
+            <Input type="date" value={draft.date} onChange={(e) => patch({ date: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>{draft.kind === "payment" ? "Method" : "Invoice / Ref"}</Label>
+            <Input value={draft.ref} onChange={(e) => patch({ ref: e.target.value })} />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label>Description</Label>
+            <Input value={draft.description} onChange={(e) => patch({ description: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>{draft.kind === "payment" ? "Total Amount" : "Gross incl. GST"}</Label>
+            <Input type="number" value={draft.amount} onChange={(e) => patch({ amount: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Proof</Label>
+            <Input value={draft.proof} onChange={(e) => patch({ proof: e.target.value })} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={onSave} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function DetailedJobCostReport({
   unit,
-  allUnits,
   open,
   onOpenChange,
+  onSave,
 }: {
   unit: ProofUnit | null;
-  allUnits: ProofUnit[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onSave?: (unit: ProofUnit) => Promise<void> | void;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
@@ -272,6 +383,8 @@ export function DetailedJobCostReport({
   const stage1JobId = unit?.stage1JobId ?? null;
   const [revenueRows, setRevenueRows] = useState<Stage1RevenueRow[]>([]);
   const [costRows, setCostRows] = useState<Stage1CostRow[]>([]);
+  const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
+  const [transactionSaving, setTransactionSaving] = useState(false);
 
   useEffect(() => {
     if (!open || !stage1JobId) {
@@ -307,6 +420,110 @@ export function DetailedJobCostReport({
   if (!unit) return null;
 
   const dateOnly = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
+  const closeTransactionDialog = () => setTransactionDraft(null);
+  const openInvoiceDialog = () =>
+    setTransactionDraft({
+      kind: "invoice",
+      date: unit.invoiceDate ?? "",
+      ref: unit.invoiceRef ?? unit.invoiceDocName ?? "",
+      description: "Invoice" + (unit.jobSite ? ` - ${unit.jobSite}` : ""),
+      amount: unit.invoiceAmount != null ? String(unit.invoiceAmount) : "",
+      proof: unit.invoiceDocName ?? "",
+    });
+  const openPaymentDialog = () =>
+    setTransactionDraft({
+      kind: "payment",
+      date: unit.paymentDate ?? "",
+      ref: unit.paymentMethod ?? "",
+      description: unit.paymentMethod ?? "Payment received",
+      amount: unit.paymentAmount != null ? String(unit.paymentAmount) : "",
+      proof: unit.paymentProofName ?? "",
+    });
+  const openCostDialog = (line?: CostLine, index?: number) =>
+    setTransactionDraft({
+      kind: "cost",
+      index,
+      date: line?.date ?? "",
+      ref: line?.docName ?? "",
+      description: line?.description ?? "",
+      amount: line?.amount != null ? String(line.amount) : "",
+      proof: line?.docName ?? "",
+    });
+  const openGbDialog = (expense?: GBExpense, index?: number) =>
+    setTransactionDraft({
+      kind: "gb",
+      index,
+      date: expense?.expenseDate ?? "",
+      ref: expense?.supplier ?? "",
+      description: expense?.description ?? "",
+      amount: expense?.amount != null ? String(expense.amount) : "",
+      proof: expense?.receiptName ?? "",
+    });
+  const saveTransaction = async () => {
+    if (!transactionDraft || !onSave) return;
+    setTransactionSaving(true);
+    try {
+      const parsedAmount = transactionDraft.amount === "" ? undefined : Number(transactionDraft.amount);
+      const amount = parsedAmount !== undefined && Number.isFinite(parsedAmount) ? parsedAmount : undefined;
+      let next: ProofUnit = { ...unit };
+      if (transactionDraft.kind === "invoice") {
+        next = {
+          ...next,
+          invoiceAmount: amount,
+          invoiceDate: transactionDraft.date || undefined,
+          invoiceRef: transactionDraft.ref || undefined,
+          invoiceDocName: transactionDraft.proof || transactionDraft.ref || undefined,
+          evidence: Boolean(transactionDraft.proof || transactionDraft.ref || next.evidence),
+        };
+      } else if (transactionDraft.kind === "payment") {
+        next = {
+          ...next,
+          paymentAmount: amount,
+          paymentDate: transactionDraft.date || undefined,
+          paymentMethod: (transactionDraft.ref || undefined) as ProofUnit["paymentMethod"],
+          paymentProofName: transactionDraft.proof || undefined,
+        };
+      } else if (transactionDraft.kind === "cost") {
+        const lines = [...(next.costLines ?? [])];
+        const existing = transactionDraft.index == null ? undefined : lines[transactionDraft.index];
+        const line: CostLine = {
+          id: existing?.id ?? crypto.randomUUID(),
+          description: transactionDraft.description,
+          amount,
+          date: transactionDraft.date || undefined,
+          docName: transactionDraft.proof || transactionDraft.ref || undefined,
+          gstIncluded: existing?.gstIncluded ?? true,
+          gstTreatment: existing?.gstTreatment ?? "gst_included",
+          gstAmount: existing?.gstAmount,
+          gstOverridden: existing?.gstOverridden,
+        };
+        if (transactionDraft.index == null) lines.push(line);
+        else lines[transactionDraft.index] = line;
+        next = { ...next, costLines: lines };
+      } else {
+        const expenses = [...(next.gbExpenses ?? [])];
+        const existing = transactionDraft.index == null ? undefined : expenses[transactionDraft.index];
+        const expense: GBExpense = {
+          id: existing?.id ?? crypto.randomUUID(),
+          expenseDate: transactionDraft.date || undefined,
+          supplier: transactionDraft.ref || undefined,
+          description: transactionDraft.description || undefined,
+          amount,
+          gstIncluded: existing?.gstIncluded ?? true,
+          receiptName: transactionDraft.proof || undefined,
+          category: existing?.category,
+          notes: existing?.notes,
+        };
+        if (transactionDraft.index == null) expenses.push(expense);
+        else expenses[transactionDraft.index] = expense;
+        next = { ...next, gbExpenses: expenses };
+      }
+      await onSave(next);
+      closeTransactionDialog();
+    } finally {
+      setTransactionSaving(false);
+    }
+  };
 
   // Income line — built from the UNIT (source of truth): the GST-INCLUSIVE gross
   // amount + GST treatment. GST + ex-GST are derived via computeGstSplit so the
@@ -328,6 +545,7 @@ export function DetailedJobCostReport({
             gstOverride: unit.invoiceGstAmount,
             overridden: unit.invoiceGstOverridden,
             proof: revenueRows[0]?.reference || revenueRows[0]?.source || "Recorded",
+            onEdit: openInvoiceDialog,
           },
         ]
       : [];
@@ -349,6 +567,7 @@ export function DetailedJobCostReport({
         gstOverride: l.gstAmount,
         overridden: l.gstOverridden,
         proof: l.docName || costRows[i]?.notes || "Recorded",
+        onEdit: () => openCostDialog(l, i),
       };
     });
 
@@ -375,20 +594,19 @@ export function DetailedJobCostReport({
         ? "text-emerald-600"
         : "text-red-600";
 
-  // Global GB expenses across all units
+  // General business expenses are kept separate from job margin.
   const gbLines: Line[] = [];
-  for (const u of allUnits) {
-    for (const g of u.gbExpenses ?? []) {
-      if (!g.amount) continue;
-      gbLines.push({
-        date: g.expenseDate,
-        ref: g.supplier,
-        description: g.description,
-        gross: g.amount,
-        gstIncluded: g.gstIncluded !== false,
-        proof: g.receiptName,
-      });
-    }
+  for (const [i, g] of (unit.gbExpenses ?? []).entries()) {
+    if (!g.amount) continue;
+    gbLines.push({
+      date: g.expenseDate,
+      ref: g.supplier,
+      description: g.description,
+      gross: g.amount,
+      gstIncluded: g.gstIncluded !== false,
+      proof: g.receiptName,
+      onEdit: () => openGbDialog(g, i),
+    });
   }
   const gbT = totals(gbLines);
 
@@ -449,9 +667,14 @@ export function DetailedJobCostReport({
 
           {/* Section 2 — Client Invoices */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              2. Client Invoices
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                2. Client Invoices
+              </h3>
+              <Button size="sm" variant="outline" onClick={openInvoiceDialog}>
+                Add Client Invoice
+              </Button>
+            </div>
             <LineTable
               lines={incomeLines}
               supplierLabel="Invoice / Ref"
@@ -463,17 +686,32 @@ export function DetailedJobCostReport({
 
           {/* Section 2a — Client Payments */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              2a. Client Payments
-            </h3>
-            <PaymentTable payment={paymentLine} outstanding={outstanding} />
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                2a. Client Payments
+              </h3>
+              <Button size="sm" variant="outline" onClick={openPaymentDialog}>
+                Add Client Payment
+              </Button>
+            </div>
+            <PaymentTable
+              payment={paymentLine}
+              outstanding={outstanding}
+              onAdd={openPaymentDialog}
+              onEdit={openPaymentDialog}
+            />
           </section>
 
           {/* Section 3 — Job Costs */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              3. Job Costs
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                3. Job Costs
+              </h3>
+              <Button size="sm" variant="outline" onClick={() => openCostDialog()}>
+                Add Job Cost
+              </Button>
+            </div>
             <LineTable
               lines={costLines}
               supplierLabel="Supplier / Ref"
@@ -486,9 +724,14 @@ export function DetailedJobCostReport({
 
           {/* Section 4 — General Business Expenses */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              4. General Business Expenses
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                4. General Business Expenses
+              </h3>
+              <Button size="sm" variant="outline" onClick={() => openGbDialog()}>
+                Add General Business Expense
+              </Button>
+            </div>
             <LineTable
               lines={gbLines}
               supplierLabel="Invoice / Ref"
@@ -502,6 +745,16 @@ export function DetailedJobCostReport({
               decide whether this job counts toward Stage 1 margin proof.
             </p>
           </section>
+          <TransactionDialog
+            draft={transactionDraft}
+            open={transactionDraft !== null}
+            saving={transactionSaving}
+            onDraftChange={setTransactionDraft}
+            onOpenChange={(nextOpen) => {
+              if (!nextOpen) closeTransactionDialog();
+            }}
+            onSave={saveTransaction}
+          />
         </div>
       </SheetContent>
     </Sheet>
