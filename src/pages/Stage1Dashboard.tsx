@@ -533,6 +533,11 @@ function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: st
   return { label: "Fail", tone: "text-red-600" };
 }
 
+function marginTone35(pct: number | null): string {
+  if (pct === null) return "text-muted-foreground";
+  return pct >= 35 ? "text-emerald-600" : "text-red-600";
+}
+
 function unitTotalCost(u: ProofUnit): number {
   if (u.costLines && u.costLines.length > 0) {
     return u.costLines.reduce((s, l) => s + (l.amount ?? 0), 0);
@@ -1892,6 +1897,7 @@ function Stage1DashboardInner() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [ledgerView, setLedgerView] = useState<"debtors" | "summary">("debtors");
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
@@ -2997,9 +3003,71 @@ function Stage1DashboardInner() {
       .filter((u) => (u.lifecycle ?? "active") === "active")
       .sort((a, b) => sortValue(a) - sortValue(b));
   }, [units]);
-  const ledgerRowsAwaitingProof = ledgerRows.some((u) => !u.stage1JobId);
   const formatLedgerJobNumber = (u: ProofUnit) =>
     u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : u.jobNumber?.trim() || `J-${u.n}`;
+  const daysSinceLastPayment = (iso?: string) => {
+    if (!iso) return null;
+    const paidAt = new Date(iso);
+    if (Number.isNaN(paidAt.getTime())) return null;
+    return Math.max(0, Math.floor((Date.now() - paidAt.getTime()) / 86_400_000));
+  };
+  const ledgerFinancialRows = useMemo(() => {
+    return ledgerRows.map((u) => {
+      const invSplit = unitInvoiceSplit(u);
+      const costSplit = unitCostSplit(u);
+      const invoicesIncGst = invSplit.inclusive > 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
+      const revenueEx = invSplit.inclusive > 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
+      const costEx = costSplit.inclusive > 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
+      const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
+      const outstanding = u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
+      const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
+      const grossMargin = hasRevenueAndCost ? revenueEx - costEx : null;
+      const gmPct = hasRevenueAndCost && revenueEx > 0
+        ? Math.round(((grossMargin ?? 0) / revenueEx) * 100)
+        : null;
+      return {
+        unit: u,
+        invoicesIncGst,
+        revenueEx,
+        costEx,
+        paid,
+        outstanding,
+        grossMargin,
+        gmPct,
+        daysSincePayment: daysSinceLastPayment(u.paymentDate),
+      };
+    });
+  }, [ledgerRows]);
+  const ledgerTotals = useMemo(() => {
+    const totalInvoices = ledgerFinancialRows.reduce((s, r) => s + r.invoicesIncGst, 0);
+    const totalPaid = ledgerFinancialRows.reduce((s, r) => s + r.paid, 0);
+    const totalOutstanding = ledgerFinancialRows.reduce((s, r) => s + r.outstanding, 0);
+    const totalRevenueEx = ledgerFinancialRows.reduce((s, r) => s + r.revenueEx, 0);
+    const totalCostEx = ledgerFinancialRows.reduce((s, r) => s + r.costEx, 0);
+    const totalGrossMargin = totalRevenueEx > 0 && totalCostEx > 0 ? totalRevenueEx - totalCostEx : null;
+    const totalGmPct = totalGrossMargin !== null && totalRevenueEx > 0
+      ? Math.round((totalGrossMargin / totalRevenueEx) * 100)
+      : null;
+    const totalGeneralBusinessCostsEx = units.reduce((sum, u) => {
+      return sum + (u.gbExpenses ?? []).reduce((expenseSum, expense) => {
+        const split = computeGstSplit({
+          inclusive: expense.amount ?? 0,
+          treatment: expense.gstIncluded === false ? "no_gst" : "gst_included",
+        });
+        return expenseSum + split.exGst;
+      }, 0);
+    }, 0);
+    return {
+      totalInvoices,
+      totalPaid,
+      totalOutstanding,
+      totalRevenueEx,
+      totalCostEx,
+      totalGrossMargin,
+      totalGmPct,
+      totalGeneralBusinessCostsEx,
+    };
+  }, [ledgerFinancialRows, units]);
 
   const openUnit = (n: number) => {
     setSelectedN(n);
@@ -3023,13 +3091,6 @@ function Stage1DashboardInner() {
   const grossProfit = totalIncome - totalCosts;
   const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
   const gmStatus = marginStatus(gmPct);
-  // Commercial proof: revenue > 0 AND direct cost > 0 AND margin is known.
-  const commercialProofCount = units.filter((u) => {
-    const rev = u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0;
-    const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
-    return rev > 0 && cost > 0 && u.sandboxGrossMarginPct != null;
-  }).length;
-
   // Supabase-derived gross-margin for the active run (display-ready). The
   // consolidated dashboard display RPC owns the wording: we render
   // gross_margin_display / gross_margin_helper_text / ready_for_stage_2_review /
@@ -3068,11 +3129,11 @@ function Stage1DashboardInner() {
   const directCostsNotRecorded = !directCostsRecorded(totalCosts);
 
   const displayMarginText = directCostsNotRecorded
-    ? "Not Yet Proven"
+    ? "—"
     : renderMarginPct(totalIncome > 0 ? gmPct : null);
 
   const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
-  const directCostKpiText = renderDirectCost(totalCosts);
+  const directCostKpiText = totalCosts > 0 ? `$${fmtMoney(totalCosts)}` : "—";
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4472,12 +4533,6 @@ function Stage1DashboardInner() {
         </div>
       )}
 
-      {units.length > 0 && ledgerRowsAwaitingProof && !ledgerError && (
-        <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Some jobs are awaiting financial proof records.
-        </div>
-      )}
-
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
@@ -4510,7 +4565,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
-          tone={displayMarginText === "Not Yet Proven" ? "text-muted-foreground" : gmStatus.tone}
+          tone={displayMarginText === "—" ? "text-muted-foreground" : gmStatus.tone}
           primary={displayMarginText}
           secondaries={[
             { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
@@ -4520,18 +4575,6 @@ function Stage1DashboardInner() {
           onClick={() => setDrill("margin")}
         />
       </section>
-
-      {/* Commercial proof progress — persisted Stage 1 sandbox rollup. */}
-      <p className="text-xs text-muted-foreground">
-        Commercial proof:{" "}
-        {ledgerLoading && ledgerRows.length === 0 ? (
-          <span className="font-medium text-foreground">Loading Stage 1 jobs…</span>
-        ) : (
-          <>
-            <span className="font-medium text-foreground">{commercialProofCount} / 5</span> jobs
-          </>
-        )}
-      </p>
 
       {/* Visible developer error panel — never silently swallow a Supabase error. */}
       {ledgerError && (
@@ -4545,35 +4588,56 @@ function Stage1DashboardInner() {
         </div>
       )}
 
-      {/* ---- Bottom: full-width ledger ---- */}
+      {/* ---- Bottom: report switcher ---- */}
       <section className="space-y-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Simple Job Cost Ledger</CardTitle>
-              <CardDescription className="text-xs">
-                Jobs created by converting accepted quotes from the Quote Conversion Board. Click a row to open the Job / Contract Site Detail curtain.
-              </CardDescription>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="text-base">
+                    {ledgerView === "debtors" ? "Debtors / people who owe you money" : "Job Summary"}
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Jobs created by converting accepted quotes from the Quote Conversion Board. Click a row to open the detailed report.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={ledgerView === "debtors" ? "default" : "outline"}
+                    onClick={() => setLedgerView("debtors")}
+                  >
+                    Debtors / people who owe you money
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={ledgerView === "summary" ? "default" : "outline"}
+                    onClick={() => setLedgerView("summary")}
+                  >
+                    Job Summary
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
-                <TableHeader>
-                  <TableRow>
-                  <TableHead className="w-16">Job #</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead className="text-right">Client Invoices inc GST</TableHead>
-                    <TableHead className="text-right">Revenue ex GST</TableHead>
-                    <TableHead className="text-right">Outstanding</TableHead>
-                    <TableHead className="text-right">Job Costs inc GST</TableHead>
-                    <TableHead className="text-right">Job Costs ex GST</TableHead>
-                    <TableHead className="text-right">Gross Profit ex GST</TableHead>
-                    <TableHead className="text-right">GM %</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ledgerRows.length === 0 && ledgerLoading && !ledgerError ? (
+                {ledgerView === "debtors" ? (
+                  <>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Job #</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead className="text-right">Total Invoices</TableHead>
+                        <TableHead className="text-right">Total Payments Received</TableHead>
+                        <TableHead className="text-right">Balance Owing</TableHead>
+                        <TableHead className="text-right">No. of Days Since Last Payment</TableHead>
+                        <TableHead className="text-right">Open</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ledgerRows.length === 0 && ledgerLoading && !ledgerError ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" /> Loading Stage 1 jobs…
                         </span>
@@ -4581,13 +4645,13 @@ function Stage1DashboardInner() {
                     </TableRow>
                   ) : ledgerRows.length === 0 && ledgerError ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="py-8 text-center text-sm text-destructive">
+                      <TableCell colSpan={7} className="py-8 text-center text-sm text-destructive">
                         Stage 1 ledger failed to load — see error panel above.
                       </TableCell>
                     </TableRow>
                   ) : units.length === 0 && !ledgerLoading && !ledgerError ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="py-8 text-center">
+                      <TableCell colSpan={7} className="py-8 text-center">
                         <div className="space-y-1">
                           <div className="text-sm font-medium text-foreground">
                             No Stage 1 jobs have been created for this Autopsy run yet.
@@ -4599,95 +4663,176 @@ function Stage1DashboardInner() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                  ledgerRows.map((u) => {
-                    const isSel = u.n === selectedN;
-                    // Gross (inc GST), GST and ex-GST are all derived from the
-                    // persisted GST-INCLUSIVE source amount + GST treatment via
-                    // computeGstSplit — the SAME source used by the Job Detail and
-                    // the Detailed Job Cost Report. Never fabricate gross as
-                    // ex-GST x 1.1. Quote amounts never drive revenue or margin.
-                    const invSplit = unitInvoiceSplit(u);
-                    const costSplit = unitCostSplit(u);
-                    const invoicesIncGst = invSplit.inclusive > 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
-                    const revenueEx = invSplit.inclusive > 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
-                    const costsIncGst = costSplit.inclusive > 0 ? costSplit.inclusive : (u.sandboxTotalDirectCost ?? 0);
-                    const costEx = costSplit.inclusive > 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
-                    const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
-                    const outstanding = u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
-                    const gp = revenueEx - costEx;
-                    const gmStatus = deriveStage1GmStatus(u);
-                    const gmPctValue = gmStatus.pct;
-                    const gmTone = gmStatus.tone;
-                    const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
-                    return (
-                      <TableRow
-                        key={u.stage1JobId ?? u.jobId ?? `n-${u.n}`}
-                        className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
-                        onClick={() => openUnit(u.n)}
-                      >
-                        <TableCell className="font-mono text-xs">{formatLedgerJobNumber(u)}</TableCell>
-                        <TableCell>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); openUnit(u.n); }}
-                            className="text-left hover:underline focus:outline-none"
+                    <>
+                      {ledgerFinancialRows.map((row) => {
+                        const u = row.unit;
+                        const isSel = u.n === selectedN;
+                        return (
+                          <TableRow
+                            key={u.stage1JobId ?? u.jobId ?? `n-${u.n}`}
+                            className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
+                            onClick={() => openReport(u.n)}
                           >
-                            <div className="font-medium leading-tight">{u.client}</div>
-                            {u.jobSite ? (
-                              <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
-                            ) : (
-                              <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
-                            )}
-                            {isDebug() && (
-                              <div className="mt-1 text-[10px] leading-tight text-muted-foreground/80 font-mono break-all">
-                                seq={u.jobSequenceNumber ?? "∅"} · id={u.stage1JobId ?? "pending"} · client={u.client || "∅"} · site={u.jobSite ?? "∅"}
-                              </div>
-                            )}
-                          </button>
+                            <TableCell className="font-mono text-xs">{formatLedgerJobNumber(u)}</TableCell>
+                            <TableCell>
+                              <div className="font-medium leading-tight">{u.client}</div>
+                              {u.jobSite ? (
+                                <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                              ) : (
+                                <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.invoicesIncGst > 0 ? `$${fmtMoney(row.invoicesIncGst)}` : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.paid > 0 ? `$${fmtMoney(row.paid)}` : "—"}
+                            </TableCell>
+                            <TableCell className={`text-right tabular-nums ${row.outstanding < 0 ? "text-red-600" : ""}`}>
+                              {row.invoicesIncGst > 0 ? fmtSignedMoney(row.outstanding) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.daysSincePayment !== null ? row.daysSincePayment : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
+                              >
+                                Open
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="font-semibold">
+                        <TableCell colSpan={2}>Totals</TableCell>
+                        <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalInvoices)}</TableCell>
+                        <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalPaid)}</TableCell>
+                        <TableCell className={`text-right tabular-nums ${ledgerTotals.totalOutstanding < 0 ? "text-red-600" : ""}`}>
+                          {fmtSignedMoney(ledgerTotals.totalOutstanding)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {revenueEx > 0 ? `$${fmtMoney(invoicesIncGst)}` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {revenueEx > 0 ? `$${fmtMoney(revenueEx)}` : "—"}
-                        </TableCell>
-                        <TableCell className={`text-right tabular-nums ${outstanding < 0 ? "text-red-600" : ""}`}>
-                          {revenueEx > 0 ? fmtSignedMoney(outstanding) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {costEx > 0 ? `$${fmtMoney(costsIncGst)}` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {costEx > 0 ? `$${fmtMoney(costEx)}` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {hasRevenueAndCost ? `$${fmtMoney(gp)}` : "—"}
-                        </TableCell>
-                        <TableCell className={`text-right font-medium tabular-nums ${gmPctValue != null ? gmTone : "text-muted-foreground"}`}>
-                          {gmPctValue != null ? `${gmPctValue}%` : "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
-                            >
-                              Detailed Report
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={(e) => { e.stopPropagation(); openUnit(u.n); }}
-                            >
-                              Edit Job
-                            </Button>
-                          </div>
-                        </TableCell>
+                        <TableCell />
+                        <TableCell />
                       </TableRow>
-                    );
-                  }))}
-                </TableBody>
+                    </>
+                  )}
+                    </TableBody>
+                  </>
+                ) : (
+                  <>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Job #</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead className="text-right">Revenue net of GST</TableHead>
+                        <TableHead className="text-right">Job Costs net of GST</TableHead>
+                        <TableHead className="text-right">Gross Margin</TableHead>
+                        <TableHead className="text-right">Gross Margin %</TableHead>
+                        <TableHead className="text-right">Open</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ledgerRows.length === 0 && ledgerLoading && !ledgerError ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                            <span className="inline-flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" /> Loading Stage 1 jobs…
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ) : ledgerRows.length === 0 && ledgerError ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="py-8 text-center text-sm text-destructive">
+                            Stage 1 ledger failed to load — see error panel above.
+                          </TableCell>
+                        </TableRow>
+                      ) : units.length === 0 && !ledgerLoading && !ledgerError ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="py-8 text-center">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium text-foreground">
+                                No Stage 1 jobs have been created for this Autopsy run yet.
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Your Autopsy handoff is active. Stage 1 will populate once jobs, quotes, or sandbox records are created.
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {ledgerFinancialRows.map((row) => {
+                            const u = row.unit;
+                            const isSel = u.n === selectedN;
+                            return (
+                              <TableRow
+                                key={u.stage1JobId ?? u.jobId ?? `n-${u.n}`}
+                                className={`cursor-pointer ${isSel ? "bg-muted/60" : "hover:bg-muted/30"}`}
+                                onClick={() => openReport(u.n)}
+                              >
+                                <TableCell className="font-mono text-xs">{formatLedgerJobNumber(u)}</TableCell>
+                                <TableCell>
+                                  <div className="font-medium leading-tight">{u.client}</div>
+                                  {u.jobSite ? (
+                                    <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>
+                                  ) : (
+                                    <div className="text-xs text-amber-600 leading-tight">Site not entered</div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {row.revenueEx > 0 ? `$${fmtMoney(row.revenueEx)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {row.costEx > 0 ? `$${fmtMoney(row.costEx)}` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {row.grossMargin !== null ? `$${fmtMoney(row.grossMargin)}` : "—"}
+                                </TableCell>
+                                <TableCell className={`text-right font-medium tabular-nums ${marginTone35(row.gmPct)}`}>
+                                  {row.gmPct !== null ? `${row.gmPct}%` : "—"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => { e.stopPropagation(); openReport(u.n); }}
+                                  >
+                                    Open
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          <TableRow className="font-semibold">
+                            <TableCell colSpan={2}>Totals</TableCell>
+                            <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalRevenueEx)}</TableCell>
+                            <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalCostEx)}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {ledgerTotals.totalGrossMargin !== null ? `$${fmtMoney(ledgerTotals.totalGrossMargin)}` : "—"}
+                            </TableCell>
+                            <TableCell className={`text-right tabular-nums ${marginTone35(ledgerTotals.totalGmPct)}`}>
+                              {ledgerTotals.totalGmPct !== null ? `${ledgerTotals.totalGmPct}%` : "—"}
+                            </TableCell>
+                            <TableCell />
+                          </TableRow>
+                          <TableRow>
+                            <TableCell colSpan={3} className="font-medium">
+                              General Business Costs (net of GST)
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              ${fmtMoney(ledgerTotals.totalGeneralBusinessCostsEx)}
+                            </TableCell>
+                            <TableCell />
+                            <TableCell />
+                            <TableCell />
+                          </TableRow>
+                        </>
+                      )}
+                    </TableBody>
+                  </>
+                )}
               </Table>
             </CardContent>
           </Card>
