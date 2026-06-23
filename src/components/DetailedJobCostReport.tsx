@@ -1,7 +1,6 @@
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -14,9 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import type { ProofUnit, GBExpense } from "@/pages/Stage1";
+import type { ProofUnit } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { computeGstSplit, type GstTreatment } from "@/lib/gst";
@@ -53,20 +50,6 @@ function splitLine(l: Line) {
 
 const fmt = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-// Stage 1 sandbox proof-type / payment-status display labels (mirrors the ledger).
-const PROOF_TYPE_LABELS: Record<string, string> = {
-  not_yet_proven: "Not yet proven",
-  revenue_recorded: "Revenue recorded",
-  commercial_proof_recorded: "Commercial proof recorded",
-  completed_job: "Completed job",
-};
-const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  not_invoiced: "Not invoiced",
-  unpaid: "Unpaid",
-  part_paid: "Part-paid",
-  paid: "Paid",
-};
 
 // Detail rows fetched live from the Stage 1 sandbox tables (canonical truth).
 type Stage1RevenueRow = {
@@ -109,6 +92,7 @@ function LineTable({
   emptyText,
   totalLabel,
   total,
+  nettMargin,
 }: {
   lines: Line[];
   supplierLabel: string;
@@ -117,6 +101,7 @@ function LineTable({
   emptyText: string;
   totalLabel: string;
   total: { gross: number; gst: number; net: number };
+  nettMargin?: { amount: number | null; pct: number | null; tone: string };
 }) {
   const labelColSpan = 3 + (showFromJob ? 1 : 0) + (showCategory ? 1 : 0);
   return (
@@ -133,13 +118,14 @@ function LineTable({
             <TableHead className="text-right">GST</TableHead>
             <TableHead className="text-right">Net ex GST</TableHead>
             <TableHead>Proof</TableHead>
+            <TableHead className="text-right">Edit</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {lines.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={labelColSpan + 4}
+                colSpan={labelColSpan + 5}
                 className="text-xs text-muted-foreground italic"
               >
                 {emptyText}
@@ -162,6 +148,7 @@ function LineTable({
                 <TableCell className="text-right tabular-nums">${fmt(s.gst)}</TableCell>
                 <TableCell className="text-right tabular-nums">${fmt(s.net)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{l.proof || "—"}</TableCell>
+                <TableCell className="text-right text-muted-foreground">—</TableCell>
               </TableRow>
             );
           })}
@@ -184,6 +171,83 @@ function LineTable({
               <div className="font-semibold">${fmt(total.net)}</div>
             </TableCell>
             <TableCell />
+            <TableCell />
+          </TableRow>
+          {nettMargin && (
+            <TableRow>
+              <TableCell colSpan={labelColSpan + 2} className="font-semibold">
+                Nett Margin
+              </TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">
+                {nettMargin.amount !== null ? `$${fmt(nettMargin.amount)}` : "—"}
+              </TableCell>
+              <TableCell className={`text-right font-semibold tabular-nums ${nettMargin.tone}`}>
+                {nettMargin.pct !== null ? `${nettMargin.pct.toFixed(1)}%` : "—"}
+              </TableCell>
+              <TableCell />
+              <TableCell />
+            </TableRow>
+          )}
+        </TableFooter>
+      </Table>
+    </div>
+  );
+}
+
+function PaymentTable({
+  payment,
+  outstanding,
+}: {
+  payment: { date?: string; client: string; description: string; amount: number } | null;
+  outstanding: number;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Client</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead className="text-right">Total Amount</TableHead>
+            <TableHead className="text-right">Edit</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {payment ? (
+            <TableRow>
+              <TableCell className="text-muted-foreground">{payment.date || "—"}</TableCell>
+              <TableCell>{payment.client}</TableCell>
+              <TableCell>{payment.description}</TableCell>
+              <TableCell className="text-right tabular-nums">${fmt(payment.amount)}</TableCell>
+              <TableCell className="text-right text-muted-foreground">—</TableCell>
+            </TableRow>
+          ) : (
+            <TableRow>
+              <TableCell colSpan={5} className="text-xs text-muted-foreground italic">
+                No client payments recorded for this job yet.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={3} className="font-semibold">
+              Total Payments Received
+            </TableCell>
+            <TableCell className="text-right font-semibold tabular-nums">
+              ${fmt(payment?.amount ?? 0)}
+            </TableCell>
+            <TableCell />
+          </TableRow>
+          <TableRow>
+            <TableCell colSpan={3} className="font-semibold">
+              Amount Outstanding
+            </TableCell>
+            <TableCell className="text-right font-semibold tabular-nums">
+              ${fmt(outstanding)}
+            </TableCell>
+            <TableCell />
           </TableRow>
         </TableFooter>
       </Table>
@@ -196,13 +260,11 @@ export function DetailedJobCostReport({
   allUnits,
   open,
   onOpenChange,
-  onEditInDetail,
 }: {
   unit: ProofUnit | null;
   allUnits: ProofUnit[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onEditInDetail?: (n: number) => void;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
@@ -309,21 +371,9 @@ export function DetailedJobCostReport({
   const gmTone =
     gmPct === null
       ? "text-muted-foreground"
-      : gmPct >= 30
+      : gmPct >= 35
         ? "text-emerald-600"
-        : gmPct >= 20
-          ? "text-amber-600"
-          : "text-red-600";
-  const NOT_YET_PROVEN = "Not Yet Proven";
-  const gmPctText = gmPct === null ? NOT_YET_PROVEN : `${gmPct.toFixed(1)}%`;
-  const grossProfitText = grossProfit === null ? NOT_YET_PROVEN : `$${fmt(grossProfit)}`;
-  const jobCostsText = directCostsRecorded ? `$${fmt(totalDirectCost)}` : "Not Yet Recorded";
-  const proofTypeText = unit.sandboxProofType
-    ? PROOF_TYPE_LABELS[unit.sandboxProofType] ?? unit.proofType
-    : unit.proofType;
-  const paymentStatusText = unit.sandboxPaymentStatus
-    ? PAYMENT_STATUS_LABELS[unit.sandboxPaymentStatus] ?? "—"
-    : "—";
+        : "text-red-600";
 
   // Global GB expenses across all units
   const gbLines: Line[] = [];
@@ -332,14 +382,11 @@ export function DetailedJobCostReport({
       if (!g.amount) continue;
       gbLines.push({
         date: g.expenseDate,
-        supplier: g.supplier,
+        ref: g.supplier,
         description: g.description,
-        category: g.category,
         gross: g.amount,
         gstIncluded: g.gstIncluded !== false,
         proof: g.receiptName,
-        fromJobN: u.n,
-        fromJobLabel: `Job #${u.n} — ${u.client}`,
       });
     }
   }
@@ -353,6 +400,15 @@ export function DetailedJobCostReport({
     unit.sandboxOutstandingAmount != null
       ? unit.sandboxOutstandingAmount
       : incomeAsPerQuote - paymentReceived;
+  const paymentLine =
+    paymentReceived > 0
+      ? {
+          date: unit.paymentDate,
+          client: unit.client,
+          description: unit.paymentMethod ?? "Payment received",
+          amount: paymentReceived,
+        }
+      : null;
   const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
 
   return (
@@ -363,24 +419,7 @@ export function DetailedJobCostReport({
       >
         <div className="p-6 space-y-6">
           <SheetHeader>
-            <div className="flex items-start justify-between gap-3 pr-10">
-              <div className="min-w-0">
-                <SheetTitle>Job Cost Summary Report</SheetTitle>
-                <SheetDescription>
-                  Read-only report. Income, job costs, gross profit, and general business expenses for the selected job.
-                </SheetDescription>
-              </div>
-              {onEditInDetail && unit && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => onEditInDetail(unit.n)}
-                >
-                  Edit in Job / Contract Site Detail
-                </Button>
-              )}
-            </div>
+            <SheetTitle>Job Cost Summary Report</SheetTitle>
           </SheetHeader>
 
           {/* Section 1 — Job Summary */}
@@ -405,38 +444,6 @@ export function DetailedJobCostReport({
                 <div className="text-xs text-muted-foreground">Job / Site Location</div>
                 <div>{unit.jobSite ?? "—"}</div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Proof Type</div>
-                <div>{proofTypeText}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Job / Contract Status</div>
-                <div>
-                  <Badge variant="outline">{unit.status}</Badge>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Client Invoices inc GST</div>
-                <div className="font-semibold tabular-nums">${fmt(incomeAsPerQuote)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Payment Received</div>
-                <div className="font-semibold tabular-nums">${fmt(paymentReceived)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Outstanding</div>
-                <div className={`font-semibold tabular-nums ${outstanding > 0 ? "text-amber-600" : ""}`}>
-                  ${fmt(outstanding)}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Payment Status</div>
-                <div>{paymentStatusText}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">GM %</div>
-                <div className={`font-medium ${gmTone}`}>{gmPctText}</div>
-              </div>
             </div>
           </section>
 
@@ -454,6 +461,14 @@ export function DetailedJobCostReport({
             />
           </section>
 
+          {/* Section 2a — Client Payments */}
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              2a. Client Payments
+            </h3>
+            <PaymentTable payment={paymentLine} outstanding={outstanding} />
+          </section>
+
           {/* Section 3 — Job Costs */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -465,48 +480,18 @@ export function DetailedJobCostReport({
               emptyText="No job costs recorded for this job yet."
               totalLabel="Job Costs"
               total={costT}
+              nettMargin={{ amount: grossProfit, pct: gmPct, tone: gmTone }}
             />
           </section>
 
-          {/* Section 4 — Job Gross Profit */}
+          {/* Section 4 — General Business Expenses */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              4. Job Result
-            </h3>
-            <div className="rounded-md border p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <div>
-                <div className="text-xs text-muted-foreground">Revenue ex GST</div>
-                <div className="font-semibold tabular-nums">${fmt(revenueExGst)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Job Costs</div>
-                <div className="font-semibold tabular-nums">{jobCostsText}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Gross Profit</div>
-                <div className="font-semibold tabular-nums">{grossProfitText}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Gross Margin %</div>
-                <div className={`font-semibold ${gmTone}`}>{gmPctText}</div>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Formula: gross_profit = income − job_costs. gross_margin_% = gross_profit / income.
-              Values match the front-page Simple Job Cost Ledger.
-            </p>
-          </section>
-
-          {/* Section 5 — General Business Expenses (global) */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              5. General Business Expenses
+              4. General Business Expenses
             </h3>
             <LineTable
               lines={gbLines}
-              supplierLabel="Supplier"
-              showFromJob
-              showCategory
+              supplierLabel="Invoice / Ref"
               emptyText="No general business expenses recorded yet."
               totalLabel="General Business Expenses"
               total={gbT}
@@ -516,16 +501,6 @@ export function DetailedJobCostReport({
               this job's gross margin. They may affect whole-business viability, but they do not
               decide whether this job counts toward Stage 1 margin proof.
             </p>
-          </section>
-
-          {/* Section 6 — Report Notes */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              6. Report Notes
-            </h3>
-            <div className="rounded-md border p-3 text-sm text-muted-foreground">
-              {unit.notes?.trim() || "No report notes recorded."}
-            </div>
           </section>
         </div>
       </SheetContent>
