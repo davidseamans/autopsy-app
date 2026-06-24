@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 //   It must not write to Core tables (`core_accounts`, `core_sites`,
 //   `core_pipeline`, `core_quotes`, `core_jobs`).
 //
-// Stage 1 quote flow now persists only to:
+// Stage 1 quote flow persists only to:
 //   - public.stage1_leads
 //   - public.stage1_quotes
 //   - public.stage1_jobs
@@ -73,6 +73,38 @@ const moneyNumber = (v: unknown) => Number(v ?? 0) || 0;
 async function currentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
+}
+
+function localStorageRunId(): string | null {
+  try {
+    return (
+      localStorage.getItem("autopsy_stage1_run_id") ||
+      localStorage.getItem("autopsy_active_run_id") ||
+      localStorage.getItem("autopsy_current_run_id") ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function latestOwnedRunId(): Promise<string | null> {
+  const { data } = await supabase
+    .from("autopsy_runs")
+    .select("id")
+    .not("verdict_name", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
+}
+
+async function resolveRunId(candidate?: string | null): Promise<string | null> {
+  const runId = candidate || localStorageRunId() || await latestOwnedRunId();
+  if (runId) {
+    try { localStorage.setItem("autopsy_stage1_run_id", runId); } catch { /* noop */ }
+  }
+  return runId;
 }
 
 async function resolveStageProgressId(runId: string | null | undefined): Promise<string | null> {
@@ -146,15 +178,16 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   const value = Number.isFinite(input.value as number) ? Number(input.value) : 0;
   const userId = await currentUserId();
   if (!userId) return { ok: false, error: "A valid session is required to create a Stage 1 quote." };
-  if (!input.runId) return { ok: false, error: "Active Autopsy run is required to create a Stage 1 quote." };
+  const runId = await resolveRunId(input.runId);
+  if (!runId) return { ok: false, error: "Active Autopsy run is required to create a Stage 1 quote." };
 
   try {
-    const stageProgressId = input.stageProgressId ?? await resolveStageProgressId(input.runId);
+    const stageProgressId = input.stageProgressId ?? await resolveStageProgressId(runId);
 
     const { data: lead, error: leadErr } = await supabase
       .from("stage1_leads")
       .insert({
-        autopsy_run_id: input.runId,
+        autopsy_run_id: runId,
         stage_progress_id: stageProgressId,
         client_name: clientName,
         site_address: address,
@@ -171,7 +204,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
     const { data, error } = await supabase
       .from("stage1_quotes")
       .insert({
-        autopsy_run_id: input.runId,
+        autopsy_run_id: runId,
         stage_progress_id: stageProgressId,
         stage1_lead_id: lead.id,
         client_name: clientName,
@@ -200,8 +233,8 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
         followUp: input.followUp ?? isoDate(data.follow_up_due_at as string),
         reason: "",
         notes: input.quoteNotes?.trim() || undefined,
-        accountId: "",
-        siteId: "",
+        accountId: "stage1",
+        siteId: "stage1",
         converted: false,
         createdAt: data.created_at as string,
       },
@@ -225,8 +258,8 @@ export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJ
 
   const accepted = await convertQuoteToJob({
     quoteId: created.quote.dbId,
-    accountId: "",
-    siteId: "",
+    accountId: "stage1",
+    siteId: "stage1",
   });
   if (!accepted.ok) return { ok: false, error: accepted.error };
 
@@ -345,6 +378,7 @@ export async function loadStage1Board(runId?: string | null): Promise<{
   quotes: Stage1QuoteRecord[];
   jobs: Stage1JobRecord[];
 }> {
+  const resolvedRunId = await resolveRunId(runId);
   const quoteQuery = supabase
     .from("stage1_quotes")
     .select("id,quote_sequence_number,client_name,site_address,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,stage1_job_id")
@@ -358,8 +392,8 @@ export async function loadStage1Board(runId?: string | null): Promise<{
     .limit(200);
 
   const [qRes, jRes] = await Promise.all([
-    runId ? quoteQuery.eq("autopsy_run_id", runId) : quoteQuery,
-    runId ? jobQuery.eq("autopsy_run_id", runId) : jobQuery,
+    resolvedRunId ? quoteQuery.eq("autopsy_run_id", resolvedRunId) : quoteQuery,
+    resolvedRunId ? jobQuery.eq("autopsy_run_id", resolvedRunId) : jobQuery,
   ]);
 
   if (qRes.error) throw qRes.error;
@@ -376,8 +410,8 @@ export async function loadStage1Board(runId?: string | null): Promise<{
     followUp: isoDate(q.follow_up_due_at),
     reason: q.rejection_reason ?? "",
     notes: q.quote_notes ?? undefined,
-    accountId: "",
-    siteId: "",
+    accountId: "stage1",
+    siteId: "stage1",
     converted: false,
     createdAt: q.created_at,
   }));
@@ -390,8 +424,8 @@ export async function loadStage1Board(runId?: string | null): Promise<{
     value: 0,
     status: j.job_status ?? "draft",
     sourceQuote: "",
-    accountId: "",
-    siteId: "",
+    accountId: "stage1",
+    siteId: "stage1",
     dbQuoteId: "",
     dbQuoteNumber: "",
   }));
