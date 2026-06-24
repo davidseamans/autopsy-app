@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import type { CostLine, GBExpense, InvoiceLine, PaymentLine, ProofUnit } from "@/pages/Stage1";
 import { supabase } from "@/lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { computeGstSplit, type GstTreatment } from "@/lib/gst";
 
 type Line = {
@@ -490,6 +490,7 @@ export function DetailedJobCostReport({
   const [costRows, setCostRows] = useState<Stage1CostRow[]>([]);
   const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
   const [transactionSaving, setTransactionSaving] = useState(false);
+  const transactionSavingRef = useRef(false);
 
   useEffect(() => {
     if (!open || !stage1JobId) {
@@ -567,7 +568,8 @@ export function DetailedJobCostReport({
       proof: expense?.receiptName ?? "",
     });
   const saveTransaction = async () => {
-    if (!transactionDraft || !onSave || transactionSaving) return;
+    if (!transactionDraft || !onSave || transactionSavingRef.current) return;
+    transactionSavingRef.current = true;
     setTransactionSaving(true);
     try {
       const parsedAmount = transactionDraft.amount === "" ? undefined : Number(transactionDraft.amount);
@@ -641,9 +643,10 @@ export function DetailedJobCostReport({
         else expenses[transactionDraft.index] = expense;
         next = { ...next, gbExpenses: expenses };
       }
-      await onSave(next);
       closeTransactionDialog();
+      await onSave(next);
     } finally {
+      transactionSavingRef.current = false;
       setTransactionSaving(false);
     }
   };

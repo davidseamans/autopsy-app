@@ -476,31 +476,10 @@ type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: a
 // views (or base tables) directly.
 //   - get_stage1_dashboard_display_by_run(p_run_id)
 //   - get_stage1_job_detail_display_by_run(p_run_id)
-// Supabase owns ALL derivation, including gross-margin. Margin is rendered
-// exactly as returned; a null margin is shown as an em dash and never computed
-// or fabricated client-side.
+// Supabase owns public display derivation; dashboard financial rollups render
+// from the current Stage 1 ledger rows.
 type Stage1DashboardDisplay = { [key: string]: any };
 type Stage1JobDetailDisplay = { [key: string]: any };
-
-// Render a Supabase-derived gross-margin value using maturity-oriented wording.
-// Never compute or fabricate a margin client-side. Order of precedence:
-//   1. an explicit display string from Supabase (gross_margin_display)
-//   2. a "not_yet_proven" status → "Not Yet Proven"
-//   3. a finite numeric margin → rounded percentage
-//   4. otherwise → "Not Yet Proven" (never a dash / 0% / NaN / blank)
-function renderMarginPct(
-  pct: number | null | undefined,
-  opts?: { display?: string | null; status?: string | null },
-): string {
-  const display = opts?.display;
-  if (typeof display === "string" && display.trim() !== "") return display.trim();
-  if (opts?.status === "not_yet_proven") return "Not Yet Proven";
-  if (pct !== null && pct !== undefined) {
-    const n = typeof pct === "number" ? pct : Number(pct);
-    if (Number.isFinite(n)) return `${Math.round(n)}%`;
-  }
-  return "Not Yet Proven";
-}
 
 // Render a Supabase-derived direct-cost value using maturity-oriented wording.
 // Prefers an explicit display string (direct_cost_display); a missing/zero cost
@@ -516,21 +495,6 @@ function renderDirectCost(
     if (Number.isFinite(n) && n > 0) return `$${fmtMoney(n)}`;
   }
   return "Not Yet Recorded";
-}
-
-// Governance: direct costs are "recorded" only when a positive cost exists.
-// Zero recorded cost is NOT the same as proven zero cost, so margin must stay
-// "Not Yet Proven" until real cost data is captured. Never compute
-// (income - 0) / income.
-function directCostsRecorded(costs: number | null | undefined): boolean {
-  const n = typeof costs === "number" ? costs : Number(costs);
-  return Number.isFinite(n) && n > 0;
-}
-
-function marginStatus(pct: number): { label: "Pass" | "Watch" | "Fail"; tone: string } {
-  if (pct >= 30) return { label: "Pass", tone: "text-emerald-600" };
-  if (pct >= 20) return { label: "Watch", tone: "text-amber-600" };
-  return { label: "Fail", tone: "text-red-600" };
 }
 
 function marginTone35(pct: number | null): string {
@@ -699,13 +663,10 @@ function KpiCard({
   secondaries?: { k: string; v: React.ReactNode }[];
   icon: React.ComponentType<{ className?: string }>;
   tone?: string;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className="text-left rounded-lg border bg-white p-4 hover:border-foreground/40 hover:shadow-sm transition-all"
-    >
+  const content = (
+    <>
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -721,7 +682,24 @@ function KpiCard({
           ))}
         </div>
       )}
-      <div className="mt-2 text-[11px] uppercase tracking-wide text-muted-foreground">Click to drill down →</div>
+      {onClick && (
+        <div className="mt-2 text-[11px] uppercase tracking-wide text-muted-foreground">Click to drill down →</div>
+      )}
+    </>
+  );
+  if (!onClick) {
+    return (
+      <div className="text-left rounded-lg border bg-white p-4">
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-lg border bg-white p-4 hover:border-foreground/40 hover:shadow-sm transition-all"
+    >
+      {content}
     </button>
   );
 }
@@ -907,7 +885,7 @@ function BusinessDetailsDialog({
 }
 
 // ---------- Drill-down panel (inline, horizontal) ----------
-type DrillKey = "leads" | "conversions" | "jobs" | "margin";
+type DrillKey = "leads" | "conversions" | "jobs";
 
 const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   leads: {
@@ -921,10 +899,6 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   jobs: {
     title: "Active Jobs Register",
     subtitle: "Current and completed jobs contributing to Stage 1 proof.",
-  },
-  margin: {
-    title: "Gross Margin Summary",
-    subtitle: "Income, job costs, gross profit, and margin by job.",
   },
 };
 
@@ -1295,76 +1269,6 @@ function DrillBody({
         </>
       )}
 
-      {kind === "margin" && (
-        <>
-          <div className="hidden md:block overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job #</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead className="text-right">Income</TableHead>
-                  <TableHead className="text-right">Job Costs</TableHead>
-                  <TableHead className="text-right">Gross Profit</TableHead>
-                  <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {units.map((u) => {
-                  const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-                  const costs = unitTotalCost(u);
-                  const gp = income - costs;
-                  const gmStatus = deriveStage1GmStatus(u);
-                  const pct = gmStatus.pct;
-                  const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-                  return (
-                    <TableRow key={u.stage1JobId ?? `n-${u.n}`}>
-                      <TableCell className="font-mono text-xs">{jobNum}</TableCell>
-                      <TableCell>
-                        <div className="font-medium leading-tight">{u.client}</div>
-                        {u.jobSite && <div className="text-xs text-muted-foreground leading-tight">{u.jobSite}</div>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">${fmtMoney(income)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
-                      <TableCell className="text-right tabular-nums">${fmtMoney(gp)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</TableCell>
-                      <TableCell className={pct === null ? "text-muted-foreground" : gmStatus.tone}>{gmStatus.label}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="md:hidden space-y-3">
-            {units.map((u) => {
-              const income = u.invoiceAmount ?? u.quoteValue ?? 0;
-              const costs = unitTotalCost(u);
-              const gp = income - costs;
-              const gmStatus = deriveStage1GmStatus(u);
-              const pct = gmStatus.pct;
-              const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-              return (
-                <div key={u.stage1JobId ?? `n-${u.n}`} className="rounded-md border p-3 space-y-1 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{jobNum}</span>
-                    <span className={`text-xs font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmStatus.label}</span>
-                  </div>
-                  <div className="font-medium">{u.client}</div>
-                  {u.jobSite && <div className="text-xs text-muted-foreground">{u.jobSite}</div>}
-                  <div className="flex justify-between text-xs"><span>Income</span><span>${fmtMoney(income)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
-                  <div className="flex justify-between text-xs"><span>Gross profit</span><span>${fmtMoney(gp)}</span></div>
-                  <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${pct === null ? "text-muted-foreground" : gmStatus.tone}`}>{pct === null ? gmStatus.label : `${pct}%`}</span></div>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Pass ≥ 30%. Watch 20–29%. Fail &lt; 20%. Formula: gross_profit = income − job_costs; gross_margin_% = gross_profit / income.
-          </p>
-        </>
-      )}
     </div>
   );
 }
@@ -3109,58 +3013,10 @@ function Stage1DashboardInner() {
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
   const completedJobs = units.filter((u) => u.status === "Paid").length;
-  // Gross Margin KPI + rollups derive from persisted Stage 1 sandbox values
-  // (ex-GST), counting only rows that have recorded revenue. Quote amounts never
-  // drive margin — only Client Invoice revenue (revenue_amount) does.
-  const revenueRows = units.filter((u) => (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0) > 0);
-  const totalIncome = revenueRows.reduce((s, u) => s + (u.sandboxRevenueAmount ?? u.invoiceAmount ?? 0), 0);
-  const totalCosts = revenueRows.reduce((s, u) => s + (u.sandboxTotalDirectCost ?? unitTotalCost(u)), 0);
-  const grossProfit = totalIncome - totalCosts;
-  const gmPct = totalIncome ? Math.round((grossProfit / totalIncome) * 100) : 0;
-  const gmStatus = marginStatus(gmPct);
-  // Supabase-derived gross-margin for the active run (display-ready). The
-  // consolidated dashboard display RPC owns the wording: we render
-  // gross_margin_display / gross_margin_helper_text / ready_for_stage_2_review /
-  // next_action verbatim. Unknown margin is "Not Yet Proven" — never a dash,
-  // 0%, 100%, NaN, or blank — and is never recomputed client-side.
-  const dashboardMarginRaw =
-    stage1DashboardDisplay?.gross_margin_pct ??
-    stage1DashboardDisplay?.gross_margin_percent ??
-    stage1DashboardDisplay?.margin_pct ??
-    null;
-  const dashboardMarginDisplay =
-    (stage1DashboardDisplay?.gross_margin_display as string | null | undefined) ?? null;
-  const dashboardMarginStatus =
-    (stage1DashboardDisplay?.gross_margin_status as string | null | undefined) ?? null;
-  const dashboardMarginHelper =
-    (stage1DashboardDisplay?.gross_margin_helper_text as string | null | undefined) ?? null;
-  const dashboardNextAction =
-    (stage1DashboardDisplay?.next_action as string | null | undefined) ?? null;
-  const dashboardStage2Ready = stage1DashboardDisplay?.ready_for_stage_2_review;
-  const dashboardStage2ReadyText =
-    dashboardStage2Ready === true
-      ? "Yes"
-      : dashboardStage2Ready === false || dashboardStage2Ready === undefined
-        ? "No"
-        : String(dashboardStage2Ready);
-
-  // Direct-cost maturity from the run-scoped dashboard RPC.
-  const dashboardDirectCostStatus =
-    (stage1DashboardDisplay?.direct_cost_status as string | null | undefined) ?? null;
-  const dashboardDirectCostDisplay =
-    (stage1DashboardDisplay?.direct_cost_display as string | null | undefined) ?? null;
-
-  // Governance gate: margin cannot be calculated from missing cost data.
-  // When direct costs are not recorded, gross margin is "Not Yet Proven" and
-  // Stage 2 is not ready — no 0%, 100%, or any calculated value is shown.
-  const directCostsNotRecorded = !directCostsRecorded(totalCosts);
-
-  const displayMarginText = directCostsNotRecorded
-    ? "—"
-    : renderMarginPct(totalIncome > 0 ? gmPct : null);
-
-  const stage2ReadyText = directCostsNotRecorded ? "No" : dashboardStage2ReadyText;
-  const directCostKpiText = totalCosts > 0 ? `$${fmtMoney(totalCosts)}` : "—";
+  const displayMarginText = ledgerTotals.totalGmPct !== null
+    ? `${ledgerTotals.totalGmPct}%`
+    : "—";
+  const displayMarginTone = marginTone35(ledgerTotals.totalGmPct);
 
   const nextQuoteNumberStart = useMemo(() => {
     const nums = quotes
@@ -4592,14 +4448,8 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
-          tone={displayMarginText === "—" ? "text-muted-foreground" : gmStatus.tone}
+          tone={displayMarginTone}
           primary={displayMarginText}
-          secondaries={[
-            { k: "Total income", v: `$${fmtMoney(totalIncome)}` },
-            { k: "Direct cost", v: directCostKpiText },
-            { k: "Stage 2 Ready", v: stage2ReadyText },
-          ]}
-          onClick={() => setDrill("margin")}
         />
       </section>
 
