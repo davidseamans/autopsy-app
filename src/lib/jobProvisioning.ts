@@ -1,16 +1,19 @@
 import { supabase } from "@/lib/supabase";
 
 // ---------------------------------------------------------------------------
-// Job provisioning
+// Stage 1 quote / job provisioning
 //
-// The Job / Contract Site Detail screen is a *workspace* over an existing job.
-// A job only becomes real once an accepted quote is converted. That conversion
-// must produce a genuine row in the existing `jobs` table — the single source
-// of truth — together with the parent records the schema requires by foreign
-// key (account -> site -> pipeline -> quote -> job).
+// Architecture rule:
+//   Stage 1 is a PRE-CORE evidence sandbox.
+//   It must not write to Core tables (`core_accounts`, `core_sites`,
+//   `core_pipeline`, `core_quotes`, `core_jobs`).
 //
-// We deliberately do NOT create a parallel "Stage 1 job" entity. Everything
-// hangs off the real `jobs.id` returned here.
+// Stage 1 quote flow persists only to:
+//   - public.stage1_leads
+//   - public.stage1_quotes
+//   - public.stage1_jobs
+//
+// Core handover happens later through an explicit progression/handover path.
 // ---------------------------------------------------------------------------
 
 export interface ProvisionJobInput {
@@ -18,6 +21,8 @@ export interface ProvisionJobInput {
   site?: string;
   value?: number;
   quoteNotes?: string;
+  runId?: string | null;
+  stageProgressId?: string | null;
 }
 
 export interface ProvisionJobResult {
@@ -30,116 +35,11 @@ export interface ProvisionJobResult {
   quoteNumber?: string;
 }
 
-/**
- * Create (or reuse) the Core entity chain and a real job row.
- * Returns the generated `jobs.id` so the workspace can persist against it.
- */
-export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJobResult> {
-  const clientName = input.client?.trim() || "Unnamed client";
-  const address = input.site?.trim() || clientName;
-  const value = Number.isFinite(input.value as number) ? Number(input.value) : 0;
-
-  try {
-    // 1. Account — reuse an existing one with the same name where possible.
-    let accountId: string | undefined;
-    const { data: existingAcc } = await supabase
-      .from("core_accounts")
-      .select("id")
-      .eq("name", clientName)
-      .limit(1)
-      .maybeSingle();
-    if (existingAcc?.id) {
-      accountId = existingAcc.id as string;
-    } else {
-      const { data, error } = await supabase
-        .from("core_accounts")
-        .insert({ name: clientName })
-        .select("id")
-        .single();
-      if (error) return { ok: false, error: `Account: ${error.message}` };
-      accountId = data.id as string;
-    }
-
-    // 2. Site — reuse by account + address where possible.
-    let siteId: string | undefined;
-    const { data: existingSite } = await supabase
-      .from("core_sites")
-      .select("id")
-      .eq("account_id", accountId)
-      .eq("address", address)
-      .limit(1)
-      .maybeSingle();
-    if (existingSite?.id) {
-      siteId = existingSite.id as string;
-    } else {
-      const { data, error } = await supabase
-        .from("core_sites")
-        .insert({ account_id: accountId, address, name: clientName })
-        .select("id")
-        .single();
-      if (error) return { ok: false, error: `Site: ${error.message}` };
-      siteId = data.id as string;
-    }
-
-    // 3. Pipeline entry (required parent for a quote).
-    const { data: pipe, error: pipeErr } = await supabase
-      .from("core_pipeline")
-      .insert({ account_id: accountId, site_id: siteId, stage: "lead", value })
-      .select("id")
-      .single();
-    if (pipeErr) return { ok: false, error: `Pipeline: ${pipeErr.message}` };
-
-    // 4. Quote — created already accepted, since this is the conversion step.
-    const nowIso = new Date().toISOString();
-    const { data: quote, error: quoteErr } = await supabase
-      .from("core_quotes")
-      .insert({
-        pipeline_id: pipe.id,
-        site_id: siteId,
-        amount: value,
-        status: "accepted",
-        accepted_at: nowIso,
-        quote_notes: input.quoteNotes || null,
-      })
-      .select("id, quote_number")
-      .single();
-    if (quoteErr) return { ok: false, error: `Quote: ${quoteErr.message}` };
-
-    // 5. Job — the real source-of-truth row.
-    const { data: job, error: jobErr } = await supabase
-      .from("core_jobs")
-      .insert({
-        quote_id: quote.id,
-        account_id: accountId,
-        site_id: siteId,
-        status: "completed",
-        relationship_context: "new_job",
-      })
-      .select("id")
-      .single();
-    if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
-
-    // 6. Link the quote back to the job for lineage.
-    await supabase.from("core_quotes").update({ job_id: job.id }).eq("id", quote.id);
-
-    return {
-      ok: true,
-      jobId: job.id as string,
-      accountId,
-      siteId,
-      quoteId: quote.id as string,
-      quoteNumber: (quote.quote_number as string) ?? undefined,
-    };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
 export interface PersistProgressInput {
   jobId: string;
   siteId?: string;
   jobSite?: string;
-  scheduledDate?: string; // yyyy-mm-dd
+  scheduledDate?: string;
   completed?: boolean;
 }
 
@@ -148,47 +48,6 @@ export interface PersistProgressResult {
   error?: string;
 }
 
-/**
- * Persist the workspace fields that the existing `jobs` / `sites` tables can
- * actually hold, against the real job_id. Returns ok:false with a message if
- * the Data API rejects the write so the caller can surface it honestly.
- */
-export async function persistJobProgress(input: PersistProgressInput): Promise<PersistProgressResult> {
-  try {
-    const jobPatch: Record<string, unknown> = {};
-    if (input.scheduledDate) jobPatch.scheduled_date = input.scheduledDate;
-    jobPatch.completed_at = input.completed ? new Date().toISOString() : null;
-
-    const { error: jobErr } = await supabase
-      .from("core_jobs")
-      .update(jobPatch)
-      .eq("id", input.jobId);
-    if (jobErr) return { ok: false, error: jobErr.message };
-
-    if (input.siteId && input.jobSite && input.jobSite.trim()) {
-      const { error: siteErr } = await supabase
-        .from("core_sites")
-        .update({ address: input.jobSite.trim() })
-        .eq("id", input.siteId);
-      if (siteErr) return { ok: false, error: siteErr.message };
-    }
-
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-// ===========================================================================
-// Builds 2–4 — quote lifecycle persisted on the existing Core `quotes` table.
-//
-// Single source of truth: every quote is a real `quotes` row reached through the
-// Account -> Site -> Pipeline -> Quote chain. quote_number is generated by the
-// database. No Stage-1 duplicate tables are created. Converting an accepted quote
-// reuses that exact quote row (lineage preserved) rather than minting a new chain.
-// ===========================================================================
-
-// UI status labels <-> stored lowercase status on quotes.status (free text).
 export type UiQuoteStatus = "Sent" | "Accepted" | "Declined" | "Expired" | "Rejected";
 
 export const uiToDbStatus = (s: UiQuoteStatus): string => s.toLowerCase();
@@ -204,56 +63,71 @@ export const dbToUiStatus = (s: string | null): UiQuoteStatus => {
 
 const dateToIso = (d?: string) => {
   if (!d) return null;
-  // Accept yyyy-mm-dd from <input type="date">; store as ISO timestamp.
   const parsed = new Date(d);
   return isNaN(parsed.getTime()) ? null : parsed.toISOString();
 };
 
-// Reuse-or-create the Account -> Site -> Pipeline chain a quote requires.
-// Throws on any Data API error; callers run inside try/catch.
-async function ensureChain(
-  clientName: string,
-  address: string,
-  value: number,
-): Promise<{ accountId: string; siteId: string; pipelineId: string }> {
-  // Account
-  let accountId: string;
-  const { data: existingAcc } = await supabase
-    .from("core_accounts").select("id").eq("name", clientName).limit(1).maybeSingle();
-  if (existingAcc?.id) accountId = existingAcc.id as string;
-  else {
-    const { data, error } = await supabase.from("core_accounts").insert({ name: clientName }).select("id").single();
-    if (error) throw new Error(`Account: ${error.message}`);
-    accountId = data.id as string;
-  }
-  // Site
-  let siteId: string;
-  const { data: existingSite } = await supabase
-    .from("core_sites").select("id").eq("account_id", accountId).eq("address", address).limit(1).maybeSingle();
-  if (existingSite?.id) siteId = existingSite.id as string;
-  else {
-    const { data, error } = await supabase
-      .from("core_sites").insert({ account_id: accountId, address, name: clientName }).select("id").single();
-    if (error) throw new Error(`Site: ${error.message}`);
-    siteId = data.id as string;
-  }
-  // Pipeline
-  const { data: pipe, error: pipeErr } = await supabase
-    .from("core_pipeline").insert({ account_id: accountId, site_id: siteId, stage: "lead", value }).select("id").single();
-  if (pipeErr) throw new Error(`Pipeline: ${pipeErr.message}`);
-  return { accountId, siteId, pipelineId: pipe.id as string };
+const isoDate = (iso?: string | null) => (iso ? String(iso).slice(0, 10) : "");
+const moneyNumber = (v: unknown) => Number(v ?? 0) || 0;
+
+async function currentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
 }
 
-// A quote as the Stage 1 board consumes it (decoupled from page-level types).
+function localStorageRunId(): string | null {
+  try {
+    return (
+      localStorage.getItem("autopsy_stage1_run_id") ||
+      localStorage.getItem("autopsy_active_run_id") ||
+      localStorage.getItem("autopsy_current_run_id") ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function latestOwnedRunId(): Promise<string | null> {
+  const { data } = await supabase
+    .from("autopsy_runs")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
+}
+
+async function resolveRunId(candidate?: string | null): Promise<string | null> {
+  const runId = candidate || localStorageRunId() || await latestOwnedRunId();
+  if (runId) {
+    try { localStorage.setItem("autopsy_stage1_run_id", runId); } catch { /* noop */ }
+  }
+  return runId;
+}
+
+async function resolveStageProgressId(runId: string | null | undefined): Promise<string | null> {
+  if (!runId) return null;
+  const { data, error } = await supabase.rpc("get_stage1_progress_snapshot_by_run", { p_run_id: runId });
+  if (error) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.stage_progress_id ?? null;
+}
+
+function makeQuoteNumber(sequence: unknown): string {
+  const n = Number(sequence ?? 0);
+  return n > 0 ? `Q-${n}` : "Q-—";
+}
+
 export interface Stage1QuoteRecord {
   dbId: string;
-  number: string;          // quote_number (DB generated)
+  number: string;
   client: string;
   site: string;
   value: number;
   status: UiQuoteStatus;
-  quoteDate: string;       // yyyy-mm-dd
-  followUp: string;        // yyyy-mm-dd
+  quoteDate: string;
+  followUp: string;
   reason: string;
   notes?: string;
   accountId: string;
@@ -281,8 +155,10 @@ export interface CreateQuoteInput {
   client: string;
   site?: string;
   value?: number;
-  followUp?: string; // yyyy-mm-dd
+  followUp?: string;
   quoteNotes?: string;
+  runId?: string | null;
+  stageProgressId?: string | null;
 }
 
 export interface CreateQuoteResult {
@@ -291,42 +167,73 @@ export interface CreateQuoteResult {
   quote?: Stage1QuoteRecord;
 }
 
-/** Build 2 — create a real quote (status "sent") and return its DB quote_number. */
+/**
+ * Create a Stage 1 sandbox lead + quote.
+ * This deliberately avoids Core. Quote conversion later creates a Stage 1 job.
+ */
 export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteResult> {
   const clientName = input.client?.trim() || "Unnamed client";
   const address = input.site?.trim() || clientName;
   const value = Number.isFinite(input.value as number) ? Number(input.value) : 0;
+  const userId = await currentUserId();
+  if (!userId) return { ok: false, error: "A valid session is required to create a Stage 1 quote." };
+  const runId = await resolveRunId(input.runId);
+  if (!runId) return { ok: false, error: "Active Autopsy run is required to create a Stage 1 quote." };
+
   try {
-    const chain = await ensureChain(clientName, address, value);
-    const { data, error } = await supabase
-      .from("core_quotes")
+    const stageProgressId = input.stageProgressId ?? await resolveStageProgressId(runId);
+
+    const { data: lead, error: leadErr } = await supabase
+      .from("stage1_leads")
       .insert({
-        pipeline_id: chain.pipelineId,
-        site_id: chain.siteId,
+        autopsy_run_id: runId,
+        stage_progress_id: stageProgressId,
+        client_name: clientName,
+        site_address: address,
+        source: "stage1_quote_board",
+        status: "quoted",
+        estimated_value: value,
+        notes: input.quoteNotes?.trim() || null,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (leadErr) return { ok: false, error: `Lead: ${leadErr.message}` };
+
+    const { data, error } = await supabase
+      .from("stage1_quotes")
+      .insert({
+        autopsy_run_id: runId,
+        stage_progress_id: stageProgressId,
+        stage1_lead_id: lead.id,
+        client_name: clientName,
+        site_address: address,
         amount: value,
         status: "sent",
         issued_at: new Date().toISOString(),
         follow_up_due_at: dateToIso(input.followUp),
         quote_notes: input.quoteNotes?.trim() || null,
+        created_by: userId,
       })
-      .select("id, quote_number, created_at")
+      .select("id, quote_sequence_number, created_at, follow_up_due_at")
       .single();
     if (error) return { ok: false, error: `Quote: ${error.message}` };
+
     return {
       ok: true,
       quote: {
         dbId: data.id as string,
-        number: (data.quote_number as string) ?? "",
+        number: makeQuoteNumber(data.quote_sequence_number),
         client: clientName,
         site: address,
         value,
         status: "Sent",
-        quoteDate: (data.created_at as string)?.slice(0, 10) ?? "",
-        followUp: input.followUp ?? "",
+        quoteDate: isoDate(data.created_at as string),
+        followUp: input.followUp ?? isoDate(data.follow_up_due_at as string),
         reason: "",
         notes: input.quoteNotes?.trim() || undefined,
-        accountId: chain.accountId,
-        siteId: chain.siteId,
+        accountId: "stage1",
+        siteId: "stage1",
         converted: false,
         createdAt: data.created_at as string,
       },
@@ -336,7 +243,52 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   }
 }
 
-/** Build 3 — persist a quote outcome (Sent / Declined / Expired; Accepted goes via convert). */
+/** Create an accepted quote and Stage 1 job in the sandbox. */
+export async function provisionJob(input: ProvisionJobInput): Promise<ProvisionJobResult> {
+  const created = await createQuote({
+    client: input.client,
+    site: input.site,
+    value: input.value,
+    quoteNotes: input.quoteNotes,
+    runId: input.runId,
+    stageProgressId: input.stageProgressId,
+  });
+  if (!created.ok || !created.quote) return { ok: false, error: created.error };
+
+  const accepted = await convertQuoteToJob({
+    quoteId: created.quote.dbId,
+    accountId: "stage1",
+    siteId: "stage1",
+  });
+  if (!accepted.ok) return { ok: false, error: accepted.error };
+
+  return {
+    ok: true,
+    jobId: accepted.jobId,
+    quoteId: created.quote.dbId,
+    quoteNumber: created.quote.number,
+  };
+}
+
+/** Persist workspace fields against Stage 1 job only. */
+export async function persistJobProgress(input: PersistProgressInput): Promise<PersistProgressResult> {
+  try {
+    const patch: Record<string, unknown> = {};
+    if (input.scheduledDate) patch.scheduled_date = input.scheduledDate;
+    patch.completed_at = input.completed ? new Date().toISOString() : null;
+    if (input.jobSite?.trim()) patch.job_title = input.jobSite.trim();
+
+    const { error } = await supabase
+      .from("stage1_jobs")
+      .update(patch)
+      .eq("id", input.jobId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function setQuoteOutcome(
   quoteId: string,
   status: UiQuoteStatus,
@@ -345,12 +297,14 @@ export async function setQuoteOutcome(
   try {
     const patch: Record<string, unknown> = { status: uiToDbStatus(status) };
     const now = new Date().toISOString();
+    if (status === "Accepted") patch.accepted_at = now;
     if (status === "Declined" || status === "Rejected") {
       patch.rejected_at = now;
       patch.rejection_reason = reason?.trim() || null;
     }
     if (status === "Expired") patch.rejected_at = now;
-    const { error } = await supabase.from("core_quotes").update(patch).eq("id", quoteId);
+
+    const { error } = await supabase.from("stage1_quotes").update(patch).eq("id", quoteId);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {
@@ -371,30 +325,43 @@ export interface ConvertQuoteResult {
   jobNumber?: string;
 }
 
-/** Build 4 — convert the EXISTING accepted quote into a real job (lineage preserved). */
+/** Convert a Stage 1 sandbox quote into a Stage 1 sandbox job. */
 export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<ConvertQuoteResult> {
   try {
+    const userId = await currentUserId();
+    if (!userId) return { ok: false, error: "A valid session is required to convert a Stage 1 quote." };
+
+    const { data: quote, error: quoteLoadErr } = await supabase
+      .from("stage1_quotes")
+      .select("id,autopsy_run_id,stage_progress_id,client_name,site_address,amount,quote_sequence_number")
+      .eq("id", input.quoteId)
+      .single();
+    if (quoteLoadErr) return { ok: false, error: `Quote load: ${quoteLoadErr.message}` };
+
     const nowIso = new Date().toISOString();
     const { error: accErr } = await supabase
-      .from("core_quotes")
+      .from("stage1_quotes")
       .update({ status: "accepted", accepted_at: nowIso })
       .eq("id", input.quoteId);
     if (accErr) return { ok: false, error: `Quote accept: ${accErr.message}` };
 
     const { data: job, error: jobErr } = await supabase
-      .from("core_jobs")
+      .from("stage1_jobs")
       .insert({
-        quote_id: input.quoteId,
-        account_id: input.accountId,
-        site_id: input.siteId,
-        status: "completed",
-        relationship_context: "new_job",
+        autopsy_run_id: quote.autopsy_run_id,
+        stage_progress_id: quote.stage_progress_id,
+        client_name: quote.client_name,
+        job_title: quote.site_address || quote.client_name,
+        job_status: "draft",
+        notes: `Created from Stage 1 quote ${makeQuoteNumber(quote.quote_sequence_number)}.`,
+        created_by: userId,
       })
       .select("id, job_sequence_number")
       .single();
     if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
 
-    await supabase.from("core_quotes").update({ job_id: job.id }).eq("id", input.quoteId);
+    await supabase.from("stage1_quotes").update({ stage1_job_id: job.id }).eq("id", input.quoteId);
+
     return {
       ok: true,
       jobId: job.id as string,
@@ -405,41 +372,45 @@ export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<Conve
   }
 }
 
-const pickClient = (q: any): string =>
-  q?.core_sites?.core_accounts?.name ?? q?.core_pipeline?.core_accounts?.name ?? "Unknown client";
-const pickAccountId = (q: any): string =>
-  q?.core_sites?.account_id ?? q?.core_pipeline?.account_id ?? "";
-
-/** Load the persisted quote board + job ledger so Stage 1 survives refresh. */
-export async function loadStage1Board(): Promise<{
+/** Load the Stage 1 sandbox quote board + sandbox job ledger. */
+export async function loadStage1Board(runId?: string | null): Promise<{
   quotes: Stage1QuoteRecord[];
   jobs: Stage1JobRecord[];
 }> {
-  const quoteSel =
-    "id,quote_number,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,job_id,site_id," +
-    "core_sites(address,account_id,core_accounts(name)),core_pipeline(account_id,core_accounts(name))";
-  const jobSel =
-    "id,status,job_sequence_number,created_at,account_id,site_id,quote_id," +
-    "core_quotes!core_jobs_quote_id_fkey(quote_number,amount),core_accounts(name),core_sites(address)";
+  const resolvedRunId = await resolveRunId(runId);
+  const quoteQuery = supabase
+    .from("stage1_quotes")
+    .select("id,quote_sequence_number,client_name,site_address,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,stage1_job_id")
+    .is("stage1_job_id", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  const jobQuery = supabase
+    .from("stage1_jobs")
+    .select("id,job_status,job_sequence_number,created_at,autopsy_run_id,client_name,job_title")
+    .order("created_at", { ascending: false })
+    .limit(200);
 
   const [qRes, jRes] = await Promise.all([
-    supabase.from("core_quotes").select(quoteSel).is("job_id", null).order("created_at", { ascending: false }).limit(200),
-    supabase.from("core_jobs").select(jobSel).order("created_at", { ascending: false }).limit(200),
+    resolvedRunId ? quoteQuery.eq("autopsy_run_id", resolvedRunId) : quoteQuery,
+    resolvedRunId ? jobQuery.eq("autopsy_run_id", resolvedRunId) : jobQuery,
   ]);
+
+  if (qRes.error) throw qRes.error;
+  if (jRes.error) throw jRes.error;
 
   const quotes: Stage1QuoteRecord[] = (qRes.data ?? []).map((q: any) => ({
     dbId: q.id,
-    number: q.quote_number ?? "",
-    client: pickClient(q),
-    site: q.core_sites?.address ?? "",
-    value: Number(q.amount ?? 0),
+    number: makeQuoteNumber(q.quote_sequence_number),
+    client: q.client_name ?? "Unknown client",
+    site: q.site_address ?? "",
+    value: moneyNumber(q.amount),
     status: dbToUiStatus(q.status),
-    quoteDate: (q.created_at as string)?.slice(0, 10) ?? "",
-    followUp: (q.follow_up_due_at as string)?.slice(0, 10) ?? "",
+    quoteDate: isoDate(q.created_at),
+    followUp: isoDate(q.follow_up_due_at),
     reason: q.rejection_reason ?? "",
     notes: q.quote_notes ?? undefined,
-    accountId: pickAccountId(q),
-    siteId: q.site_id ?? "",
+    accountId: "stage1",
+    siteId: "stage1",
     converted: false,
     createdAt: q.created_at,
   }));
@@ -447,15 +418,15 @@ export async function loadStage1Board(): Promise<{
   const jobs: Stage1JobRecord[] = (jRes.data ?? []).map((j: any) => ({
     jobId: j.id,
     jobNumber: `J-${j.job_sequence_number ?? ""}`,
-    client: j.core_accounts?.name ?? "Unknown client",
-    site: j.core_sites?.address ?? "",
-    value: Number(j.core_quotes?.amount ?? 0),
-    status: j.status ?? "completed",
-    sourceQuote: j.core_quotes?.quote_number ?? "",
-    accountId: j.account_id ?? "",
-    siteId: j.site_id ?? "",
-    dbQuoteId: j.quote_id ?? "",
-    dbQuoteNumber: j.core_quotes?.quote_number ?? "",
+    client: j.client_name ?? "Unknown client",
+    site: j.job_title ?? "",
+    value: 0,
+    status: j.job_status ?? "draft",
+    sourceQuote: "",
+    accountId: "stage1",
+    siteId: "stage1",
+    dbQuoteId: "",
+    dbQuoteNumber: "",
   }));
 
   return { quotes, jobs };
