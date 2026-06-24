@@ -92,7 +92,6 @@ async function latestOwnedRunId(): Promise<string | null> {
   const { data } = await supabase
     .from("autopsy_runs")
     .select("id")
-    .not("verdict_name", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
