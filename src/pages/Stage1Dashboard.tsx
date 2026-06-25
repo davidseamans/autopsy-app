@@ -63,8 +63,6 @@ import {
   IdCard,
   Loader2,
   Plus,
-  Lightbulb,
-  ChevronRight,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
@@ -657,79 +655,50 @@ function KpiCard({
   primary,
   secondaries,
   icon: Icon,
-  variant = "blue",
   tone,
-  helper,
   onClick,
 }: {
   label: string;
   primary: React.ReactNode;
   secondaries?: { k: string; v: React.ReactNode }[];
   icon: React.ComponentType<{ className?: string }>;
-  variant?: "blue" | "green" | "purple" | "orange";
   tone?: string;
-  helper?: React.ReactNode;
   onClick?: () => void;
 }) {
-  const styles = {
-    blue: {
-      text: "text-blue-700",
-      icon: "bg-blue-100 text-blue-700",
-      cta: "text-blue-700",
-      border: "hover:border-blue-300",
-    },
-    green: {
-      text: "text-emerald-700",
-      icon: "bg-emerald-100 text-emerald-700",
-      cta: "text-emerald-700",
-      border: "hover:border-emerald-300",
-    },
-    purple: {
-      text: "text-violet-700",
-      icon: "bg-violet-100 text-violet-700",
-      cta: "text-violet-700",
-      border: "hover:border-violet-300",
-    },
-    orange: {
-      text: "text-orange-600",
-      icon: "bg-orange-100 text-orange-600",
-      cta: "text-orange-600",
-      border: "hover:border-orange-300",
-    },
-  }[variant];
-
   const content = (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-full ${styles.icon}`}>
-          <Icon className="h-6 w-6" />
-        </div>
-        <span className={`text-xs font-bold uppercase tracking-wide ${styles.text}`}>{label}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div className={`mt-4 text-5xl font-bold tracking-tight ${tone ?? styles.text}`}>{primary}</div>
-      {helper && <div className="mt-1 text-sm text-slate-500">{helper}</div>}
+      <div className={`mt-2 text-3xl font-semibold ${tone ?? ""}`}>{primary}</div>
       {secondaries && (
-        <div className="mt-5 space-y-2 border-t border-slate-100 pt-4">
+        <div className="mt-2 space-y-0.5">
           {secondaries.map((s) => (
-            <div key={s.k} className="flex justify-between gap-4 text-sm text-slate-600">
+            <div key={s.k} className="text-xs text-muted-foreground flex justify-between">
               <span>{s.k}</span>
-              <span className="font-semibold text-slate-950 tabular-nums">{s.v}</span>
+              <span className="font-medium text-foreground">{s.v}</span>
             </div>
           ))}
         </div>
       )}
       {onClick && (
-        <div className={`mt-5 flex items-center gap-1 text-xs font-bold uppercase tracking-wide ${styles.cta}`}>
-          Click to drill down <ChevronRight className="h-3.5 w-3.5" />
-        </div>
+        <div className="mt-2 text-[11px] uppercase tracking-wide text-muted-foreground">Click to drill down →</div>
       )}
     </>
   );
-
-  const className = `group text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all ${styles.border} hover:shadow-md`;
-  if (!onClick) return <div className={className}>{content}</div>;
+  if (!onClick) {
+    return (
+      <div className="text-left rounded-lg border bg-white p-4">
+        {content}
+      </div>
+    );
+  }
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button
+      onClick={onClick}
+      className="text-left rounded-lg border bg-white p-4 hover:border-foreground/40 hover:shadow-sm transition-all"
+    >
       {content}
     </button>
   );
@@ -754,10 +723,18 @@ const EMPTY_BD: BDForm = {
   phone: "",
   email: "",
 };
-const BD_REQUIRED: (keyof BDForm)[] = [
-  "business_name", "abn", "business_address", "contact_name", "phone", "email",
-];
+const BD_REQUIRED: (keyof BDForm)[] = ["abn"];
 const BD_EXTRA_KEY = "stage1.business_details.extras";
+
+const normaliseAbn = (value: string) => value.replace(/\D/g, "");
+const isEnteredAbn = (value: string) => normaliseAbn(value).length === 11;
+
+type BusinessGateStatus = "missing" | "entered" | "pending_verification" | "verified" | "invalid";
+
+function getBusinessGateStatus(form: BDForm): BusinessGateStatus {
+  return isEnteredAbn(form.abn) ? "entered" : "missing";
+}
+
 
 function useBusinessDetails() {
   const [loaded, setLoaded] = useState(false);
@@ -790,7 +767,7 @@ function useBusinessDetails() {
             business_address: extras.business_address ?? "",
           };
           setForm(merged);
-          setComplete(BD_REQUIRED.every((k) => String(merged[k] ?? "").trim().length > 0));
+          setComplete(isEnteredAbn(merged.abn));
         }
       } catch {
         /* ignore */
@@ -825,11 +802,13 @@ function useBusinessDetails() {
       }),
     );
     setForm(next);
-    setComplete(true);
+    setComplete(isEnteredAbn(next.abn));
     return { ok: true };
   }
 
-  return { loaded, complete, form, setForm, save };
+  const gateStatus = getBusinessGateStatus(form);
+  const canOperate = gateStatus === "entered";
+  return { loaded, complete, form, setForm, save, gateStatus, canOperate };
 }
 
 function BusinessDetailsDialog({
@@ -882,20 +861,20 @@ function BusinessDetailsDialog({
         <DialogHeader>
           <DialogTitle>Complete Business Details</DialogTitle>
           <DialogDescription>
-            Required for Stage 1. ABN will be validated externally later. GST registration and bank account details are intentionally not collected here.
+            Your ABN is required before you can create quotes, convert jobs, or record business transactions. ATO/ABR verification will be wired next; for now this gate requires a correctly entered 11-digit ABN.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          {field("business_name", "Business name", true)}
+          {field("business_name", "Business name")}
           {field("abn", "ABN", true)}
           {field("trading_name", "Trading name (if different)")}
           <div className="md:col-span-2">
-            {field("business_address", "Business address", true)}
+            {field("business_address", "Business address")}
           </div>
-          {field("contact_name", "Contact name", true)}
-          {field("phone", "Contact phone", true)}
-          {field("email", "Contact email", true, "email")}
+          {field("contact_name", "Contact name")}
+          {field("phone", "Contact phone")}
+          {field("email", "Contact email", false, "email")}
         </div>
 
         {err && <p className="text-xs text-destructive">{err}</p>}
@@ -2975,15 +2954,15 @@ function Stage1DashboardInner() {
     return ledgerRows.map((u) => {
       const invSplit = unitInvoiceSplit(u);
       const costSplit = unitCostSplit(u);
-      const invoicesIncGst = invSplit.inclusive > 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
-      const revenueEx = invSplit.inclusive > 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
-      const costEx = costSplit.inclusive > 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
+      const invoicesIncGst = invSplit.inclusive !== 0 ? invSplit.inclusive : (u.sandboxRevenueAmount ?? 0);
+      const revenueEx = invSplit.inclusive !== 0 ? invSplit.exGst : (u.sandboxRevenueAmount ?? 0);
+      const costEx = costSplit.inclusive !== 0 ? costSplit.exGst : (u.sandboxTotalDirectCost ?? unitTotalCost(u));
       const localPaid = unitPaymentTotal(u);
-      const paid = localPaid > 0 ? localPaid : (u.sandboxPaymentReceivedAmount ?? 0);
-      const outstanding = localPaid > 0 || invSplit.inclusive > 0
+      const paid = localPaid !== 0 ? localPaid : (u.sandboxPaymentReceivedAmount ?? 0);
+      const outstanding = localPaid !== 0 || invSplit.inclusive !== 0
         ? invoicesIncGst - paid
         : u.sandboxOutstandingAmount ?? (invoicesIncGst - paid);
-      const hasRevenueAndCost = revenueEx > 0 && costEx > 0;
+      const hasRevenueAndCost = revenueEx !== 0 && costEx !== 0;
       const grossMargin = hasRevenueAndCost ? revenueEx - costEx : null;
       const gmPct = hasRevenueAndCost && revenueEx > 0
         ? Math.round(((grossMargin ?? 0) / revenueEx) * 100)
@@ -3058,6 +3037,7 @@ function Stage1DashboardInner() {
   }, [quotes]);
 
   const handleAcceptAndConvert = async (q: Quote) => {
+    if (!requireBusinessRegistration("convert quotes to jobs")) return;
     const nextN = (units.reduce((m, u) => Math.max(m, u.n), 0) || 0) + 1;
     // Convert the EXISTING accepted quote (lineage preserved) — no duplicate chain.
     let jobNumber = `J-${1000 + nextN}`;
@@ -3136,6 +3116,7 @@ function Stage1DashboardInner() {
   };
 
   const openQuoteActivity = () => {
+    if (!requireBusinessRegistration("update quotes")) return;
     if (!selectedQuoteNumber) {
       setQuoteActivityError("Select a quote first.");
       window.alert("Select a quote first.");
@@ -3147,6 +3128,7 @@ function Stage1DashboardInner() {
 
   // Row-level Update: target that exact row, no prior selection required.
   const handleUpdateQuote = (n: string) => {
+    if (!requireBusinessRegistration("update quotes")) return;
     setSelectedQuoteNumber(n);
     setQuoteActivityError(null);
     setQuoteActivityOpen(true);
@@ -3155,6 +3137,16 @@ function Stage1DashboardInner() {
   const handleOpenQuoteDetail = (n: string) => {
     setQuoteDetailNumber(n);
     setQuoteDetailOpen(true);
+  };
+
+  const requireBusinessRegistration = (action: string) => {
+    if (bd.canOperate) return true;
+    toast({
+      title: "Business registration required",
+      description: `Enter your ABN before you ${action}.`,
+    });
+    setBdOpen(true);
+    return false;
   };
 
   const handleSaveQuoteDetail = (patch: Partial<Quote>) => {
@@ -3183,41 +3175,55 @@ function Stage1DashboardInner() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="bg-slate-950 text-white shadow-sm">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 px-4 py-6 md:px-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-emerald-400 text-4xl font-black leading-none text-white shadow-lg shadow-blue-950/30">
-              5
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Stage 1 command centre</p>
-              <h1 className="text-3xl font-bold tracking-tight md:text-4xl">First 5 Jobs</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {bd.loaded && !bd.complete && (
-              <Button onClick={() => setBdOpen(true)} className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-                <IdCard className="h-4 w-4" />
-                Complete Business Details
-              </Button>
-            )}
-            {bd.loaded && bd.complete && (
-              <Badge variant="outline" className="border-emerald-300 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Business Details Verified
-              </Badge>
-            )}
-          </div>
+    <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Stage 1 command centre</p>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">First 5 Jobs</h1>
+          <p className="text-xs text-muted-foreground mt-1">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
-      </div>
+        <div className="flex items-center gap-2">
+          {bd.loaded && !bd.complete && (
+            <Button onClick={() => setBdOpen(true)} className="gap-2">
+              <IdCard className="h-4 w-4" />
+              Complete Business Details
+            </Button>
+          )}
+          {bd.loaded && bd.complete && (
+            <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 gap-1.5 py-1.5 px-3">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Business Registration Ready
+            </Badge>
+          )}
+        </div>
+      </header>
 
-      <main className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 md:px-6">
-        {bd.loaded && bd.complete && (
-          <p className="text-xs text-slate-500">
-            Business Details have been verified and may be updated if required. Business Details remain available through the Business Details menu.
-          </p>
-        )}
+      {bd.loaded && bd.complete && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          Business registration is ready. You can now create quotes and record Stage 1 transactions. Business details can be updated if required.
+        </p>
+      )}
+
+      {bd.loaded && !bd.canOperate && (
+        <Card className="border-amber-300 bg-amber-50/70">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Complete Business Registration</CardTitle>
+            <CardDescription>
+              Enter your ABN before creating quotes, converting jobs, or recording business transactions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-amber-900">
+              Required: <span className="font-semibold">Australian Business Number (ABN)</span>.
+              Trading name and other details can be added later.
+            </div>
+            <Button onClick={() => setBdOpen(true)} className="gap-2 shrink-0">
+              <IdCard className="h-4 w-4" />
+              Enter ABN
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Diagnostics: canonical Stage 1 snapshot RPC hydration (debug-only, read-only) */}
       {isDebug() && stage1SnapshotLoaded && (
@@ -4453,20 +4459,17 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Top half: KPI cards ---- */}
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
           label="Leads"
           icon={Users}
-          variant="blue"
           primary={totalLeads}
-          helper="Total leads"
           secondaries={[{ k: "Total leads", v: totalLeads }]}
           onClick={() => setDrill("leads")}
         />
         <KpiCard
           label="Conversions"
           icon={FileText}
-          variant="green"
           primary={`${quoteConvPct}%`}
           secondaries={[
             { k: "Quotes sent", v: quotesSent },
@@ -4477,7 +4480,6 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Active Jobs"
           icon={Briefcase}
-          variant="purple"
           primary={activeJobs}
           secondaries={[
             { k: "Active jobs", v: activeJobs },
@@ -4488,10 +4490,8 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
-          variant="orange"
-          tone={ledgerTotals.totalGmPct === null ? "text-orange-500" : displayMarginTone}
+          tone={displayMarginTone}
           primary={displayMarginText}
-          helper={ledgerTotals.totalGmPct === null ? "No margin data yet" : "Net of direct job costs"}
         />
       </section>
 
@@ -4508,15 +4508,12 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className="space-y-4">
-          <Card className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
-            <CardHeader className="pb-4">
+      <section className="space-y-3">
+          <Card>
+            <CardHeader className="pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-3 text-lg">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-orange-100 text-orange-600">
-                      <IdCard className="h-5 w-5" />
-                    </span>
+                  <CardTitle className="text-base">
                     {ledgerView === "debtors" ? "Debtors / people who owe you money" : "Job Summary"}
                   </CardTitle>
                   <CardDescription className="text-xs">
@@ -4605,13 +4602,13 @@ function Stage1DashboardInner() {
                               )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {row.invoicesIncGst > 0 ? `$${fmtMoney(row.invoicesIncGst)}` : "—"}
+                              {row.invoicesIncGst !== 0 ? fmtSignedMoney(row.invoicesIncGst) : "—"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {row.paid > 0 ? `$${fmtMoney(row.paid)}` : "—"}
+                              {row.paid !== 0 ? fmtSignedMoney(row.paid) : "—"}
                             </TableCell>
                             <TableCell className={`text-right tabular-nums ${row.outstanding < 0 ? "text-red-600" : ""}`}>
-                              {row.invoicesIncGst > 0 ? fmtSignedMoney(row.outstanding) : "—"}
+                              {row.invoicesIncGst !== 0 ? fmtSignedMoney(row.outstanding) : "—"}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.daysSincePayment !== null ? row.daysSincePayment : "—"}
@@ -4630,8 +4627,8 @@ function Stage1DashboardInner() {
                       })}
                       <TableRow className="font-semibold">
                         <TableCell colSpan={2}>Totals</TableCell>
-                        <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalInvoices)}</TableCell>
-                        <TableCell className="text-right tabular-nums">${fmtMoney(ledgerTotals.totalPaid)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtSignedMoney(ledgerTotals.totalInvoices)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{fmtSignedMoney(ledgerTotals.totalPaid)}</TableCell>
                         <TableCell className={`text-right tabular-nums ${ledgerTotals.totalOutstanding < 0 ? "text-red-600" : ""}`}>
                           {fmtSignedMoney(ledgerTotals.totalOutstanding)}
                         </TableCell>
@@ -4704,13 +4701,13 @@ function Stage1DashboardInner() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums">
-                                  {row.revenueEx > 0 ? `$${fmtMoney(row.revenueEx)}` : "—"}
+                                  {row.revenueEx !== 0 ? fmtSignedMoney(row.revenueEx) : "—"}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums">
-                                  {row.costEx > 0 ? `$${fmtMoney(row.costEx)}` : "—"}
+                                  {row.costEx !== 0 ? fmtSignedMoney(row.costEx) : "—"}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums">
-                                  {row.grossMargin !== null ? `$${fmtMoney(row.grossMargin)}` : "—"}
+                                  {row.grossMargin !== null ? fmtSignedMoney(row.grossMargin) : "—"}
                                 </TableCell>
                                 <TableCell className={`text-right font-medium tabular-nums ${marginTone35(row.gmPct)}`}>
                                   {row.gmPct !== null ? `${row.gmPct}%` : "—"}
@@ -4760,34 +4757,16 @@ function Stage1DashboardInner() {
           </Card>
       </section>
 
-      <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
-            <Lightbulb className="h-6 w-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-semibold text-slate-950">Tip of the Day</div>
-            <p className="text-sm text-slate-700">
-              {quotesSent > quotesAccepted
-                ? "Follow up on accepted quotes to keep your conversion rate strong."
-                : "Add one new lead today. Stage 1 starts with finding the next real conversation."}
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-slate-500" />
-        </div>
-      </section>
-
-      </main>
-
       <JobDetailSheet
         unit={selectedUnit}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        onSave={async (u) =>
-          persistUnitsWithDiagnostics((prev) =>
+        onSave={async (u) => {
+          if (!requireBusinessRegistration("record job transactions")) return;
+          return persistUnitsWithDiagnostics((prev) =>
             prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
-          )
-        }
+          );
+        }}
         savePrerequisites={{ runId: activeRunId, authUserId: user?.id ?? null, loading: authLoading }}
         onJumpToFinancials={() => { /* no-op on dashboard */ }}
         concentrationClient={scorecard.concentrationClient}
@@ -4801,7 +4780,7 @@ function Stage1DashboardInner() {
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
-        onLogActivity={() => setLogActOpen(true)}
+        onLogActivity={() => { if (requireBusinessRegistration("create quotes")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
@@ -4828,6 +4807,7 @@ function Stage1DashboardInner() {
         onOpenChange={setLogActOpen}
         nextQuoteNumberStart={nextQuoteNumberStart}
         onSave={async (a, newQuotes) => {
+          if (!requireBusinessRegistration("create quotes")) return;
           setActivities((prev) => [...prev, a]);
           setLogActOpen(false);
           for (const nq of newQuotes) {
@@ -4851,11 +4831,12 @@ function Stage1DashboardInner() {
         unit={reportUnit}
         open={reportOpen}
         onOpenChange={setReportOpen}
-        onSave={async (u) =>
-          persistUnitsWithDiagnostics((prev) =>
+        onSave={async (u) => {
+          if (!requireBusinessRegistration("record job transactions")) return;
+          return persistUnitsWithDiagnostics((prev) =>
             prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
-          )
-        }
+          );
+        }}
       />
     </div>
   );
