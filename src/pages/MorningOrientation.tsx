@@ -1,16 +1,69 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Clock, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { baselineMorningOrientation, signalEmoji } from "@/lib/morningOrientation";
-
-const briefing = baselineMorningOrientation;
+import { supabase } from "@/lib/supabase";
+import { baselineMorningOrientation, MorningOrientationReport, MorningPriority, MorningSection, signalEmoji } from "@/lib/morningOrientation";
 
 function Divider() {
   return <div className="border-t border-dashed" />;
 }
 
+function asSections(value: unknown): MorningSection[] {
+  return Array.isArray(value) ? (value as MorningSection[]) : baselineMorningOrientation.sections;
+}
+
+function asPriorities(value: unknown): MorningPriority[] {
+  return Array.isArray(value) ? (value as MorningPriority[]) : baselineMorningOrientation.priorities;
+}
+
+function asYesterday(value: unknown): string[] {
+  return Array.isArray(value) ? (value as string[]) : baselineMorningOrientation.yesterday;
+}
+
 export default function MorningOrientation() {
+  const [briefing, setBriefing] = useState<MorningOrientationReport>(baselineMorningOrientation);
+  const [sourceNote, setSourceNote] = useState("BuildOS baseline loaded. Checking Core briefing record...");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadBriefing() {
+      const { data, error } = await supabase
+        .from("morning_orientation_reports")
+        .select("owner_name, report_date, generated_at, source, sections, priorities, yesterday, recommendation")
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      if (error || !data) {
+        setSourceNote("No live Core briefing yet. Showing safe BuildOS baseline.");
+        return;
+      }
+
+      setBriefing({
+        owner_name: data.owner_name ?? baselineMorningOrientation.owner_name,
+        report_date: data.report_date ?? baselineMorningOrientation.report_date,
+        generated_at: data.generated_at ?? baselineMorningOrientation.generated_at,
+        source: data.source ?? "core",
+        sections: asSections(data.sections),
+        priorities: asPriorities(data.priorities),
+        yesterday: asYesterday(data.yesterday),
+        recommendation: data.recommendation ?? baselineMorningOrientation.recommendation,
+      });
+      setSourceNote("Live Morning Orientation loaded from Supabase Core.");
+    }
+
+    loadBriefing();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 py-5 sm:py-8">
@@ -21,7 +74,7 @@ export default function MorningOrientation() {
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Morning Orientation</p>
                   <h1 className="mt-2 text-2xl font-semibold tracking-tight">Good Morning, {briefing.owner_name}</h1>
-                  <p className="mt-1 text-sm text-slate-500">BuildOS briefing baseline</p>
+                  <p className="mt-1 text-sm text-slate-500">Source: {briefing.source}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2 text-sm text-slate-500">
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 shadow-sm">
@@ -93,7 +146,7 @@ export default function MorningOrientation() {
             <Divider />
 
             <footer className="space-y-4 text-center">
-              <p className="text-xs text-slate-400">BuildOS-owned briefing baseline. Supabase runtime is next.</p>
+              <p className="text-xs text-slate-400">{sourceNote}</p>
               <p className="text-sm font-medium text-slate-600">Morning Orientation Complete</p>
               <Button asChild className="w-full rounded-xl">
                 <Link to="/owner-cockpit">
