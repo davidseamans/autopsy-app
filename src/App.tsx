@@ -10,6 +10,7 @@ import AutopsyHistory from "@/pages/AutopsyHistory";
 import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
 import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
 import Stage1Dashboard from "@/pages/Stage1Dashboard";
+import MorningOrientation from "@/pages/MorningOrientation";
 import Leads from "@/pages/crm/Leads";
 import Accounts from "@/pages/crm/Accounts";
 import Pipeline from "@/pages/crm/Pipeline";
@@ -30,8 +31,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
         <Routes>
+          <Route path="/orientation" element={<MorningOrientation />} />
           <Route element={<AppShell />}>
-            <Route path="/" element={<Navigate to="/autopsy" replace />} />
+            <Route path="/" element={<Navigate to="/orientation" replace />} />
             <Route path="/autopsy" element={<Autopsy />} />
             <Route path="/autopsy/history" element={<AutopsyHistory />} />
             <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
