@@ -11,6 +11,7 @@ import AutopsyWorksheet from "@/pages/AutopsyWorksheet";
 import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
 import Stage1Dashboard from "@/pages/Stage1Dashboard";
 import MorningOrientation from "@/pages/MorningOrientation";
+import FirstConversation from "@/pages/FirstConversation";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
 import Leads from "@/pages/crm/Leads";
@@ -34,6 +35,7 @@ const App = () => (
         <BrowserRouter>
         <Routes>
           <Route path="/orientation" element={<MorningOrientation />} />
+          <Route path="/first-conversation" element={<FirstConversation />} />
           <Route path="/owner-cockpit" element={<OwnerCockpit />} />
           <Route path="/staff-cockpit" element={<StaffCockpit />} />
           <Route element={<AppShell />}>
