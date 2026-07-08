@@ -33,32 +33,32 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-        <Routes>
-          <Route path="/orientation" element={<MorningOrientation />} />
-          <Route path="/first-conversation" element={<FirstConversation />} />
-          <Route path="/owner-cockpit" element={<OwnerCockpit />} />
-          <Route path="/staff-cockpit" element={<StaffCockpit />} />
-          <Route element={<AppShell />}>
-            <Route path="/" element={<Navigate to="/orientation" replace />} />
-            <Route path="/autopsy" element={<Autopsy />} />
-            <Route path="/autopsy/history" element={<AutopsyHistory />} />
-            <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
-            <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
-            <Route path="/autopsy/run/:runId/readiness" element={<ReadinessWorksheet />} />
-            <Route path="/worksheet" element={<AutopsyWorksheet />} />
-            <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
-            <Route path="/stage-1" element={<Stage1Dashboard />} />
-            <Route path="/launchpad" element={<Launchpad />} />
-            <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
-            <Route path="/business-setup" element={<BusinessSetup />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/pipeline" element={<Pipeline />} />
-            <Route path="/quotes" element={<Quotes />} />
-            <Route path="/jobs" element={<Jobs />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Navigate to="/orientation" replace />} />
+              <Route path="/orientation" element={<MorningOrientation />} />
+              <Route path="/first-conversation" element={<FirstConversation />} />
+              <Route path="/owner-cockpit" element={<OwnerCockpit />} />
+              <Route path="/staff-cockpit" element={<StaffCockpit />} />
+              <Route path="/autopsy" element={<Autopsy />} />
+              <Route path="/autopsy/history" element={<AutopsyHistory />} />
+              <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
+              <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
+              <Route path="/autopsy/run/:runId/readiness" element={<ReadinessWorksheet />} />
+              <Route path="/worksheet" element={<AutopsyWorksheet />} />
+              <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
+              <Route path="/stage-1" element={<Stage1Dashboard />} />
+              <Route path="/launchpad" element={<Launchpad />} />
+              <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
+              <Route path="/business-setup" element={<BusinessSetup />} />
+              <Route path="/leads" element={<Leads />} />
+              <Route path="/accounts" element={<Accounts />} />
+              <Route path="/pipeline" element={<Pipeline />} />
+              <Route path="/quotes" element={<Quotes />} />
+              <Route path="/jobs" element={<Jobs />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
