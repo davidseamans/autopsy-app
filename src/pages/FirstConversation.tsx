@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import {
+  createAutopsyRun,
+  extractRunId,
+  finalizeAutopsyRun,
+  recordAutopsyAnswer,
+} from "@/components/autopsy/rpc";
 
 type BusinessStage = string;
 type ExperienceLevel = string;
@@ -16,6 +23,7 @@ type ExperienceOption = {
 };
 
 type AnswerOption = {
+  id?: string | number;
   score: 0 | 1 | 2 | 3;
   label: string;
 };
@@ -39,8 +47,9 @@ type ConversationGroup = {
 };
 
 type Answers = Record<string, number>;
-
+type SelectedOptions = Record<string, string | number>;
 type LoadState = "loading" | "live" | "fallback";
+type RunState = "not_started" | "creating" | "live" | "saving" | "finalising" | "finalised" | "local_only" | "error";
 
 type DbQuestion = {
   id: string;
@@ -51,6 +60,7 @@ type DbQuestion = {
 };
 
 type DbAnswerOption = {
+  id: string | number;
   question_id: string;
   score_value: number;
   label: string;
@@ -320,6 +330,25 @@ const normaliseAnswerScore = (score: number): 0 | 1 | 2 | 3 => {
   return 3;
 };
 
+const scenarioForRun = (stage: BusinessStage) => {
+  if (stage === "existing") return "existing_business";
+  if (stage === "acquisition") return "existing_business";
+  return stage;
+};
+
+const operatorClassForExperience = (experience: ExperienceLevel) => {
+  if (experience === "experienced") return "experienced";
+  if (experience === "some") return "developing";
+  return "unproven";
+};
+
+const displayExperience = (experience: ExperienceLevel, fallback: string) => {
+  if (experience === "never") return "First business";
+  if (experience === "some") return "Some experience";
+  if (experience === "experienced") return "Experienced operator";
+  return fallback;
+};
+
 const buildDimensionsFromSupabase = (
   questions: DbQuestion[],
   answerOptions: DbAnswerOption[],
@@ -334,7 +363,7 @@ const buildDimensionsFromSupabase = (
 
   const answersByQuestionId = answerOptions.reduce<Record<string, AnswerOption[]>>((acc, option) => {
     const list = acc[option.question_id] ?? [];
-    list.push({ score: normaliseAnswerScore(option.score_value), label: option.label });
+    list.push({ id: option.id, score: normaliseAnswerScore(option.score_value), label: option.label });
     acc[option.question_id] = list;
     return acc;
   }, {});
@@ -358,6 +387,7 @@ const buildDimensionsFromSupabase = (
 };
 
 const FirstConversation = () => {
+  const { user } = useAuth();
   const [stageOptions, setStageOptions] = useState<StageOption[]>(fallbackStages);
   const [experienceOptions, setExperienceOptions] = useState<ExperienceOption[]>(fallbackExperienceLevels);
   const [stage, setStage] = useState<BusinessStage>(fallbackStages[0].value);
@@ -365,8 +395,12 @@ const FirstConversation = () => {
   const [experience, setExperience] = useState<ExperienceLevel>(fallbackExperienceLevels[0].value);
   const [activeGroupId, setActiveGroupId] = useState(groupDefinitions[0].id);
   const [answers, setAnswers] = useState<Answers>({});
+  const [selectedOptions, setSelectedOptions] = useState<SelectedOptions>({});
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadMessage, setLoadMessage] = useState("Loading Stage 0 overlays from Supabase…");
+  const [runState, setRunState] = useState<RunState>("not_started");
+  const [runMessage, setRunMessage] = useState("No live run yet. Your first saved answer will create one.");
+  const [runId, setRunId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<DbQuestion[]>([]);
   const [answerOptions, setAnswerOptions] = useState<DbAnswerOption[]>([]);
   const [variants, setVariants] = useState<DbVariant[]>([]);
@@ -394,7 +428,7 @@ const FirstConversation = () => {
             .order("sequence"),
           supabase
             .from("answer_options")
-            .select("question_id,score_value,label")
+            .select("id,question_id,score_value,label")
             .eq("is_active", true)
             .order("score_value"),
           supabase
@@ -443,7 +477,9 @@ const FirstConversation = () => {
         if (cancelled) return;
         console.error("Failed to load First Conversation overlays", error);
         setLoadState("fallback");
+        setRunState("local_only");
         setLoadMessage("Supabase overlay load failed. Using local fallback so the prototype remains usable.");
+        setRunMessage("Local-only mode. Answers are not being written to Supabase.");
       }
     };
 
@@ -464,16 +500,105 @@ const FirstConversation = () => {
   const conversationGroups = useMemo(() => buildGroups(dimensions), [dimensions]);
   const totalDimensions = dimensions.length;
   const activeGroup = conversationGroups.find((group) => group.id === activeGroupId) ?? conversationGroups[0];
-  const stageLabel = stageOptions.find((item) => item.value === stage)?.label ?? "Startup";
-  const experienceLabel = experienceOptions.find((item) => item.value === experience)?.label ?? experienceOptions[0]?.label ?? "Not captured";
+  const stageOption = stageOptions.find((item) => item.value === stage);
+  const stageLabel = stageOption?.label ?? "Startup";
+  const stageDisplay = stageOption?.helper ?? stageLabel;
+  const rawExperienceLabel = experienceOptions.find((item) => item.value === experience)?.label ?? experienceOptions[0]?.label ?? "Not captured";
+  const experienceDisplay = displayExperience(experience, rawExperienceLabel);
   const answeredCount = Object.keys(answers).length;
   const score = Object.values(answers).reduce((sum, value) => sum + value, 0);
   const verdict = getVerdict(score, totalDimensions, answeredCount);
+  const canPersist = loadState === "live" && runState !== "local_only";
+
+  const ensureRun = async () => {
+    if (!canPersist) return null;
+    if (runId) return runId;
+
+    setRunState("creating");
+    setRunMessage("Creating Autopsy run…");
+
+    const industryValue = industry.trim() || "Unspecified";
+    const created = await createAutopsyRun({
+      industry: industryValue,
+      scenario: scenarioForRun(stage),
+      run_name: `${stageLabel} · ${industryValue} · Stage 0 Conversation`,
+      tester_email: user?.email ?? "conversation@autopsy.local",
+      operator_class: operatorClassForExperience(experience),
+    });
+
+    const createdRunId = extractRunId(created);
+    if (!createdRunId) throw new Error("The Autopsy run was created but no run id was returned.");
+
+    await supabase
+      .from("autopsy_runs")
+      .update({
+        business_stage: stage,
+        industry_context: industry.trim() || null,
+        ownership_experience: experience,
+        conversation_variant_version: "stage0_v1",
+      })
+      .eq("id", createdRunId);
+
+    setRunId(createdRunId);
+    setRunState("live");
+    setRunMessage(`Live run created. Answers are saving to Supabase. Run: ${createdRunId.slice(0, 8)}…`);
+    return createdRunId;
+  };
+
+  const saveAnswer = async (dimension: ConversationDimension, option: AnswerOption) => {
+    setAnswers((current) => ({ ...current, [dimension.qid]: option.score }));
+    if (option.id != null) setSelectedOptions((current) => ({ ...current, [dimension.qid]: option.id as string | number }));
+
+    if (!canPersist || !dimension.id || option.id == null) {
+      if (loadState === "live") {
+        setRunState("local_only");
+        setRunMessage("This answer is local only because it is missing a canonical question or option id.");
+      }
+      return;
+    }
+
+    try {
+      const activeRunId = await ensureRun();
+      if (!activeRunId) return;
+      setRunState("saving");
+      setRunMessage(`Saving ${dimension.qid}…`);
+      await recordAutopsyAnswer({
+        run_id: activeRunId,
+        question_id: dimension.id,
+        selected_option: option.id,
+      });
+      setRunState("live");
+      setRunMessage(`Saved ${dimension.qid}. Run: ${activeRunId.slice(0, 8)}…`);
+    } catch (error) {
+      console.error("Failed to save conversational answer", error);
+      setRunState("error");
+      setRunMessage(error instanceof Error ? error.message : "Failed to save answer to Supabase.");
+    }
+  };
+
+  const finaliseRun = async () => {
+    if (!runId) {
+      setRunState("error");
+      setRunMessage("No live run exists yet. Answer at least one dimension first.");
+      return;
+    }
+    try {
+      setRunState("finalising");
+      setRunMessage("Finalising Autopsy run…");
+      await finalizeAutopsyRun(runId);
+      setRunState("finalised");
+      setRunMessage(`Run finalised. Verdict is now database-derived for run ${runId.slice(0, 8)}…`);
+    } catch (error) {
+      console.error("Failed to finalise conversational run", error);
+      setRunState("error");
+      setRunMessage(error instanceof Error ? error.message : "Failed to finalise run.");
+    }
+  };
 
   const contextSummary = useMemo(() => {
-    const industryText = industry.trim() || "Industry not captured yet";
-    return `${stageLabel} · ${industryText} · ${experienceLabel}`;
-  }, [stageLabel, industry, experienceLabel]);
+    const industryText = industry.trim() || "Not selected yet";
+    return { stage: stageDisplay, industry: industryText, experience: experienceDisplay };
+  }, [stageDisplay, industry, experienceDisplay]);
 
   const groupScore = (group: ConversationGroup) =>
     group.dimensions.reduce((sum, dimension) => sum + (answers[dimension.qid] ?? 0), 0);
@@ -489,7 +614,7 @@ const FirstConversation = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Autopsy</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight">Stage 0 Maturity Spine</h1>
             <p className="mt-3 text-sm leading-6 text-[#625744]">
-              Context capture first. Maturity assessment second. No business viability judgement.
+              Context first. Maturity second. No business viability judgement.
             </p>
           </div>
 
@@ -500,8 +625,20 @@ const FirstConversation = () => {
           </div>
 
           <div className="rounded-2xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">Run status</p>
+            <p className="mt-2 font-semibold text-[#2f2a21]">
+              {runState === "finalised" ? "Finalised" : runId ? "Live run" : runState === "local_only" ? "Local only" : "Not started"}
+            </p>
+            <p className="mt-1 text-[#625744]">{runMessage}</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">Context</p>
-            <p className="mt-2 text-[#625744]">{contextSummary}</p>
+            <div className="mt-2 space-y-1 text-[#625744]">
+              <p><span className="font-semibold text-[#2f2a21]">Stage:</span> {contextSummary.stage}</p>
+              <p><span className="font-semibold text-[#2f2a21]">Industry:</span> {contextSummary.industry}</p>
+              <p><span className="font-semibold text-[#2f2a21]">Experience:</span> {contextSummary.experience}</p>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -543,7 +680,7 @@ const FirstConversation = () => {
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Context capture</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight">So you’re thinking about building or operating a business?</h2>
               <p className="mt-4 text-base leading-7 text-[#625744]">
-                This first part is not scored. It only sets the overlay so the conversation sounds relevant without corrupting the maturity assessment.
+                This first part is not scored. It only sets the conversation so it sounds relevant without corrupting the maturity assessment.
               </p>
             </div>
 
@@ -556,18 +693,21 @@ const FirstConversation = () => {
                       key={item.value}
                       type="button"
                       onClick={() => {
+                        if (runId) return;
                         setStage(item.value);
                         setAnswers({});
+                        setSelectedOptions({});
                       }}
                       className={`rounded-2xl border p-4 text-left transition ${
                         stage === item.value ? "border-[#8a5f2e] bg-[#efe2cb]" : "border-[#dfd1bb] bg-white hover:bg-[#fff7e8]"
-                      }`}
+                      } ${runId ? "cursor-not-allowed opacity-70" : ""}`}
                     >
                       <span className="font-semibold">{item.label}</span>
                       <span className="mt-1 block text-sm text-[#625744]">{item.helper}</span>
                     </button>
                   ))}
                 </div>
+                {runId ? <p className="mt-2 text-xs text-[#8c806b]">Stage is locked after the run starts.</p> : null}
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -576,11 +716,12 @@ const FirstConversation = () => {
                   <input
                     value={industry}
                     onChange={(event) => setIndustry(event.target.value)}
-                    className="mt-3 w-full rounded-2xl border border-[#dfd1bb] bg-white px-4 py-3 text-base outline-none focus:border-[#8a5f2e]"
+                    disabled={!!runId}
+                    className="mt-3 w-full rounded-2xl border border-[#dfd1bb] bg-white px-4 py-3 text-base outline-none focus:border-[#8a5f2e] disabled:cursor-not-allowed disabled:opacity-70"
                     placeholder="Cleaning, bookkeeping, consulting, café, trades..."
                   />
                   <span className="mt-2 block text-xs leading-5 text-[#8c806b]">
-                    Stored as context only. It does not change the Stage 0 maturity score.
+                    Context only. It does not change the Stage 0 maturity score.
                   </span>
                 </label>
 
@@ -591,15 +732,18 @@ const FirstConversation = () => {
                       <button
                         key={item.value}
                         type="button"
-                        onClick={() => setExperience(item.value)}
+                        onClick={() => {
+                          if (!runId) setExperience(item.value);
+                        }}
                         className={`w-full rounded-2xl border p-3 text-left text-sm transition ${
                           experience === item.value ? "border-[#8a5f2e] bg-[#efe2cb]" : "border-[#dfd1bb] bg-white hover:bg-[#fff7e8]"
-                        }`}
+                        } ${runId ? "cursor-not-allowed opacity-70" : ""}`}
                       >
                         {item.label}
                       </button>
                     ))}
                   </div>
+                  {runId ? <p className="mt-2 text-xs text-[#8c806b]">Experience is locked after the run starts.</p> : null}
                 </div>
               </div>
 
@@ -639,12 +783,12 @@ const FirstConversation = () => {
 
                   <div className="mt-5 grid gap-3">
                     {dimension.options.map((option) => {
-                      const active = answers[dimension.qid] === option.score;
+                      const active = answers[dimension.qid] === option.score && selectedOptions[dimension.qid] === option.id;
                       return (
                         <button
                           type="button"
-                          key={`${dimension.qid}-${option.score}`}
-                          onClick={() => setAnswers((current) => ({ ...current, [dimension.qid]: option.score }))}
+                          key={`${dimension.qid}-${option.id ?? option.score}`}
+                          onClick={() => void saveAnswer(dimension, option)}
                           className={`rounded-2xl border p-4 text-left text-base leading-7 transition ${
                             active
                               ? "border-[#8a5f2e] bg-[#efe2cb] shadow-sm"
@@ -677,10 +821,11 @@ const FirstConversation = () => {
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Conversation readout</p>
                 <h2 className="mt-3 text-2xl font-semibold tracking-tight">The verdict should fall out of the maturity evidence.</h2>
                 <p className="mt-4 text-base leading-7 text-[#625744]">
-                  This screen now reads the Stage 0 context, dimensions, answer options, and candidate conversation overlays from Supabase where available.
+                  This screen now reads Stage 0 overlays from Supabase and writes selected answers into a live Autopsy run when possible.
                 </p>
                 <div className="mt-5 rounded-3xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6 text-[#625744]">
-                  <p><span className="font-semibold text-[#2f2a21]">Still prototype:</span> answer selections are local only. The next wiring step is persisting context and selected answers into an Autopsy run.</p>
+                  <p><span className="font-semibold text-[#2f2a21]">Current run:</span> {runId ?? "Not created yet"}</p>
+                  <p className="mt-2"><span className="font-semibold text-[#2f2a21]">Save status:</span> {runMessage}</p>
                 </div>
               </div>
               <div className="rounded-3xl bg-[#2f2a21] p-5 text-white">
@@ -691,6 +836,14 @@ const FirstConversation = () => {
                     ? `${totalDimensions - answeredCount} maturity dimensions remain.`
                     : "All Stage 0 maturity dimensions answered."}
                 </p>
+                <button
+                  type="button"
+                  disabled={answeredCount < totalDimensions || !runId || runState === "finalising" || runState === "finalised"}
+                  onClick={() => void finaliseRun()}
+                  className="mt-5 w-full rounded-full bg-white px-4 py-3 text-sm font-semibold text-[#2f2a21] transition hover:bg-[#fff7e8] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {runState === "finalised" ? "Finalised" : "Finalise run"}
+                </button>
               </div>
             </div>
 
@@ -701,6 +854,10 @@ const FirstConversation = () => {
                 setIndustry("");
                 setExperience(experienceOptions[0]?.value ?? "never");
                 setAnswers({});
+                setSelectedOptions({});
+                setRunId(null);
+                setRunState(loadState === "live" ? "not_started" : "local_only");
+                setRunMessage(loadState === "live" ? "No live run yet. Your first saved answer will create one." : "Local-only mode. Answers are not being written to Supabase.");
                 setActiveGroupId(groupDefinitions[0].id);
               }}
               className="mt-6 rounded-full border border-[#8a5f2e] px-5 py-3 text-sm font-semibold text-[#8a5f2e] transition hover:bg-[#fff7e8]"
@@ -710,7 +867,7 @@ const FirstConversation = () => {
           </div>
 
           <p className="text-center text-xs leading-6 text-[#8c806b]">
-            Legacy Autopsy remains available at /autopsy. This route is the conversation-first Stage 0 prototype.
+            Legacy Autopsy remains available at /autopsy. This route is the conversation-first Stage 0 engine.
           </p>
         </section>
       </section>
