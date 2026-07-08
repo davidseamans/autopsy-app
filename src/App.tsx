@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
+import { AuthGate } from "@/components/AuthGate";
 import AppShell from "@/components/AppShell";
 import { Autopsy, AutopsyRunRoute } from "@/components/autopsy/Autopsy";
 import AutopsyHistory from "@/pages/AutopsyHistory";
@@ -25,6 +26,11 @@ import BusinessSetup from "@/pages/BusinessSetup";
 import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
 
 const queryClient = new QueryClient();
+const FirstConversationRoute = () => (
+  <AuthGate>
+    <FirstConversation />
+  </AuthGate>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -37,7 +43,7 @@ const App = () => (
             <Route element={<AppShell />}>
               <Route path="/" element={<Navigate to="/orientation" replace />} />
               <Route path="/orientation" element={<MorningOrientation />} />
-              <Route path="/first-conversation" element={<FirstConversation />} />
+              <Route path="/first-conversation" element={<FirstConversationRoute />} />
               <Route path="/owner-cockpit" element={<OwnerCockpit />} />
               <Route path="/staff-cockpit" element={<StaffCockpit />} />
               <Route path="/autopsy" element={<Autopsy />} />
