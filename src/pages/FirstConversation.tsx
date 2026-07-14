@@ -1,695 +1,411 @@
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/lib/auth";
-import {
-  createAutopsyRun,
-  extractRunId,
-  finalizeAutopsyRun,
-  recordAutopsyAnswer,
-} from "@/components/autopsy/rpc";
 
-type BusinessStage = string;
-type ExperienceLevel = string;
-type LoadState = "loading" | "live" | "error";
-type RunState = "not_started" | "creating" | "live" | "saving" | "finalising" | "finalised" | "error";
-
-type StageOption = { value: BusinessStage; label: string; helper: string };
-type ExperienceOption = { value: ExperienceLevel; label: string };
-type AnswerOption = { id: string | number; score: 0 | 1 | 2 | 3; label: string };
-type Answers = Record<string, number>;
-type SelectedOptions = Record<string, string | number>;
-
-type DbQuestion = {
-  id: string;
-  q_id: string;
-  prompt: string | null;
-  dimension_code: string | null;
-  sequence: number | null;
-};
-
-type DbAnswerOption = {
-  id: string | number;
-  question_id: string;
-  score_value: number;
-  label: string;
-};
-
+type StageOption = { value: string; label: string; helper: string };
+type ExperienceOption = { value: string; label: string };
+type DbQuestion = { id: string; q_id: string; prompt: string | null; sequence: number | null };
 type DbVariant = {
   question_id: string;
   stage_code: string;
   conversational_prompt: string;
   follow_up_text: string | null;
-  guardrail_text: string | null;
 };
-
-type ConversationDimension = {
+type ConversationQuestion = {
   id: string;
   qid: string;
-  canonicalDimension: string;
-  canonicalPrompt: string;
   prompt: string;
-  followUp: string;
-  guardrail: string;
-  options: AnswerOption[];
+  clarification: string;
+  reflection: string;
+  transition: string;
+};
+type Message = {
+  id: string;
+  speaker: "john" | "candidate" | "system";
+  text: string;
 };
 
-type ConversationGroup = {
-  id: string;
-  title: string;
-  bridge: string;
-  dimensions: ConversationDimension[];
-};
-
-type FinalVerdict = {
-  id: string;
-  score_total: number | null;
-  verdict_name: string | null;
-  final_verdict: string | null;
-  verdict_body: string | null;
-  primary_risk: string | null;
-  permission_level: string | null;
-  progression_state: string | null;
-  next_step_customer_wording: string | null;
-  completed_at: string | null;
-};
+type Phase = "context" | "conversation" | "complete";
+type ResponseState = "primary" | "clarifying" | "reflecting";
 
 const fallbackStages: StageOption[] = [
-  { value: "startup", label: "Startup", helper: "Starting from scratch." },
-  { value: "acquisition", label: "Acquisition", helper: "Buying an existing business." },
-  { value: "franchise", label: "Franchise", helper: "Buying into a franchise system." },
-  { value: "existing", label: "Existing business", helper: "Already operating and looking at maturity." },
+  { value: "startup", label: "Starting from scratch", helper: "You are considering or preparing a new business." },
+  { value: "acquisition", label: "Buying a business", helper: "You are considering taking over an existing operation." },
+  { value: "franchise", label: "Buying a franchise", helper: "You are considering operating within a franchise system." },
+  { value: "existing", label: "Already operating", helper: "You already own or run the business." },
 ];
 
-const fallbackExperienceLevels: ExperienceOption[] = [
-  { value: "never", label: "I have never owned or run a business before." },
+const fallbackExperiences: ExperienceOption[] = [
+  { value: "never", label: "This would be my first business." },
   { value: "some", label: "I have some business or management experience." },
   { value: "experienced", label: "I have owned, run, or led businesses before." },
 ];
 
-const dimensionNames: Record<string, string> = {
-  CR_01: "Cash runway",
-  CR_02: "Minimum resources",
-  EL_01: "Economic literacy",
-  EL_02: "Cost driver awareness",
-  MR_01: "Evidence before commitment",
-  MR_02: "Customer clarity",
-  OP_01: "Consistent delivery capability",
-  OP_02: "Repeatable process",
-  EX_01: "Concrete action",
-  EX_02: "Execution rhythm",
-  PR_01: "Persistence under uncertainty",
-  PR_02: "Consistency under discomfort",
-};
-
-const groupDefinitions: Omit<ConversationGroup, "dimensions">[] = [
-  {
-    id: "money",
-    title: "Money reality",
-    bridge: "Let’s start with the part that usually exposes maturity first: cash pressure and economic literacy.",
+const behaviourByQid: Record<string, Pick<ConversationQuestion, "clarification" | "reflection" | "transition">> = {
+  CR_01: {
+    clarification: "Let me make that more concrete. If the business paid you nothing for longer than expected, what would keep your household and the business afloat?",
+    reflection: "So the real issue is not optimism. It is how much pressure you can absorb before your decisions start being driven by fear. Does that fairly describe it?",
+    transition: "That gives me a clearer view of the pressure around you. Let us look at what the business would actually need to begin safely.",
   },
-  {
-    id: "market",
-    title: "Customer reality",
-    bridge: "Now we test whether the candidate can separate evidence from optimism.",
+  CR_02: {
+    clarification: "Strip away the wishlist. What are the few things you must have before you can operate without creating an avoidable mess?",
+    reflection: "You appear to distinguish between what would be useful and what is genuinely necessary. Is that how you see it?",
+    transition: "Good. Now I want to understand how you think about money once it starts moving through the business.",
   },
-  {
-    id: "delivery",
-    title: "Delivery reality",
-    bridge: "Now test whether the candidate can deliver consistently, not just once on a good day.",
+  EL_01: {
+    clarification: "Suppose a customer pays you $1,000 today. What parts of that money are already committed before you can treat any of it as yours?",
+    reflection: "What I hear is that cash in the account and money available to spend are not the same thing. Is that your view?",
+    transition: "That distinction matters. The next question is about the costs that can quietly destroy it.",
   },
-  {
-    id: "execution",
-    title: "Execution reality",
-    bridge: "Now stop listening to the story and look at behaviour. What has the candidate actually done?",
+  EL_02: {
+    clarification: "Which expenses are easiest to overlook because they arrive later, vary from job to job, or do not feel urgent today?",
+    reflection: "You are identifying the costs that do not announce themselves until the margin has already disappeared. Have I understood you correctly?",
+    transition: "Now let us leave the spreadsheet and look at the customer.",
   },
-  {
-    id: "resilience",
-    title: "Founder reality",
-    bridge: "Last pass: the human operator. This is not motivation theatre. It is whether the work survives pressure.",
+  MR_02: {
+    clarification: "Describe one real person or business. What are they trying to get rid of, fix, avoid, or achieve by paying you?",
+    reflection: "So the value is not the service itself. It is the problem the customer no longer has to carry. Is that accurate?",
+    transition: "That tells me who you believe the customer is. Now I want to know what reality has confirmed.",
   },
-];
-
-const normaliseAnswerScore = (score: number): 0 | 1 | 2 | 3 => {
-  if (score <= 0) return 0;
-  if (score === 1) return 1;
-  if (score === 2) return 2;
-  return 3;
+  MR_01: {
+    clarification: "What has a real customer actually done—paid, booked, returned, referred, signed, or changed behaviour—that you can point to?",
+    reflection: "You are separating encouragement from evidence. The useful part is what people did, not what they said. Fair?",
+    transition: "Good. Demand is only half the question. The other half is whether you can deliver what you promise.",
+  },
+  OP_01: {
+    clarification: "Think about an ordinary week, not your best day. What makes you confident the required standard can be delivered repeatedly?",
+    reflection: "Your answer depends less on personal effort at the last minute and more on a reliable way of working. Is that true?",
+    transition: "Let us test how much of that reliability exists outside your head.",
+  },
+  OP_02: {
+    clarification: "Could another capable person follow the work from your instructions and produce roughly the same result? What would still be missing?",
+    reflection: "It sounds as though some of the method is repeatable, while some still depends on memory or judgement that has not been captured. Is that fair?",
+    transition: "That tells me about the operating method. Now I want to look at what you have actually done.",
+  },
+  EX_01: {
+    clarification: "What action put your idea in contact with reality and produced information you did not have before?",
+    reflection: "The important distinction is between thinking about the work and doing something that could prove you wrong. Is that what happened?",
+    transition: "One action can produce evidence. The next question is whether there is a rhythm behind it.",
+  },
+  EX_02: {
+    clarification: "Look at your real calendar. What time can you protect during the next month without relying on motivation or spare time appearing?",
+    reflection: "You are naming time that already has a place, rather than making a promise that competes with everything else. Correct?",
+    transition: "That gives me the structure. The last part is how that structure behaves when the work becomes uncomfortable.",
+  },
+  PR_01: {
+    clarification: "Tell me about a time when progress slowed or the evidence disappointed you. What did you do next?",
+    reflection: "The pattern I am listening for is whether uncertainty makes you investigate and adjust, or abandon the direction before you learn from it. Does that distinction fit?",
+    transition: "That helps. One final question: not what you intend to do, but what tends to happen when energy and confidence are low.",
+  },
+  PR_02: {
+    clarification: "When you are tired, unsure, or seeing slow results, what important work do you still complete—and what usually slips?",
+    reflection: "So consistency is not absolute. The useful evidence is which commitments survive discomfort and which do not. Is that a fair reading?",
+    transition: "Thank you. I understand more than I did when we began, and I also know where the evidence is still incomplete.",
+  },
 };
 
-const groupForQid = (qid: string) => {
-  if (qid.startsWith("CR") || qid.startsWith("EL")) return "money";
-  if (qid.startsWith("MR")) return "market";
-  if (qid.startsWith("OP")) return "delivery";
-  if (qid.startsWith("EX")) return "execution";
-  return "resilience";
-};
-
-const buildGroups = (dimensions: ConversationDimension[]): ConversationGroup[] =>
-  groupDefinitions.map((group) => ({
-    ...group,
-    dimensions: dimensions.filter((dimension) => groupForQid(dimension.qid) === group.id),
-  }));
-
-const scenarioForRun = (stage: BusinessStage) => {
-  if (stage === "existing" || stage === "acquisition") return "existing_business";
-  return stage;
-};
-
-const operatorClassForExperience = (experience: ExperienceLevel) => {
-  if (experience === "experienced") return "experienced";
-  if (experience === "some") return "developing";
-  return "unproven";
-};
-
-const displayExperience = (experience: ExperienceLevel, fallback: string) => {
-  if (experience === "never") return "First business";
-  if (experience === "some") return "Some experience";
-  if (experience === "experienced") return "Experienced operator";
-  return fallback;
-};
-
-const getLocalVerdict = (score: number, totalDimensions: number, answered: number) => {
-  if (answered < totalDimensions) return "Verdict not ready";
-  if (score <= 11) return "High risk / likely fail";
-  if (score <= 20) return "Caution";
-  if (score <= 29) return "Viable but exposed";
-  return "Strong readiness";
-};
-
-const buildDimensions = (
-  questions: DbQuestion[],
-  answerOptions: DbAnswerOption[],
-  variants: DbVariant[],
-  stage: BusinessStage,
-): ConversationDimension[] => {
-  const variantByQuestionId = new Map(
-    variants.filter((variant) => variant.stage_code === stage).map((variant) => [variant.question_id, variant]),
-  );
-
-  const answersByQuestionId = answerOptions.reduce<Record<string, AnswerOption[]>>((acc, option) => {
-    const list = acc[option.question_id] ?? [];
-    list.push({ id: option.id, score: normaliseAnswerScore(option.score_value), label: option.label });
-    acc[option.question_id] = list;
-    return acc;
-  }, {});
-
-  return questions.map((question) => {
-    const variant = variantByQuestionId.get(question.id);
-    const qid = question.q_id;
-    return {
-      id: question.id,
-      qid,
-      canonicalDimension: dimensionNames[qid] ?? question.dimension_code ?? qid,
-      canonicalPrompt: question.prompt ?? qid,
-      prompt: variant?.conversational_prompt ?? question.prompt ?? qid,
-      followUp: variant?.follow_up_text ?? "Select the answer that can be honestly defended today.",
-      guardrail: variant?.guardrail_text ?? "Do not assess business viability.",
-      options: (answersByQuestionId[question.id] ?? []).sort((a, b) => a.score - b.score),
-    };
-  });
-};
+const makeMessage = (speaker: Message["speaker"], text: string): Message => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  speaker,
+  text,
+});
 
 const FirstConversation = () => {
-  const { user } = useAuth();
   const [stageOptions, setStageOptions] = useState<StageOption[]>(fallbackStages);
-  const [experienceOptions, setExperienceOptions] = useState<ExperienceOption[]>(fallbackExperienceLevels);
-  const [stage, setStage] = useState<BusinessStage>(fallbackStages[0].value);
+  const [experienceOptions, setExperienceOptions] = useState<ExperienceOption[]>(fallbackExperiences);
+  const [stage, setStage] = useState("startup");
+  const [experience, setExperience] = useState("never");
   const [industry, setIndustry] = useState("");
-  const [experience, setExperience] = useState<ExperienceLevel>(fallbackExperienceLevels[0].value);
-  const [activeGroupId, setActiveGroupId] = useState(groupDefinitions[0].id);
-  const [answers, setAnswers] = useState<Answers>({});
-  const [selectedOptions, setSelectedOptions] = useState<SelectedOptions>({});
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [loadMessage, setLoadMessage] = useState("Loading Stage 0 overlays from Supabase…");
-  const [runState, setRunState] = useState<RunState>("not_started");
-  const [runMessage, setRunMessage] = useState("No live run yet. Your first saved answer will create one.");
-  const [runId, setRunId] = useState<string | null>(null);
-  const [finalVerdict, setFinalVerdict] = useState<FinalVerdict | null>(null);
   const [questions, setQuestions] = useState<DbQuestion[]>([]);
-  const [answerOptions, setAnswerOptions] = useState<DbAnswerOption[]>([]);
   const [variants, setVariants] = useState<DbVariant[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("context");
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [responseState, setResponseState] = useState<ResponseState>("primary");
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [paused, setPaused] = useState(false);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const load = async () => {
+      const [stagesResult, experienceResult, questionsResult, variantsResult] = await Promise.all([
+        supabase.from("autopsy_context_stage_options").select("code,label,description,display_order").eq("is_active", true).order("display_order"),
+        supabase.from("autopsy_context_experience_options").select("code,label,display_order").eq("is_active", true).order("display_order"),
+        supabase.from("questions").select("id,q_id,prompt,sequence").eq("is_active", true).order("sequence"),
+        supabase
+          .from("autopsy_dimension_conversation_variants")
+          .select("question_id,stage_code,conversational_prompt,follow_up_text")
+          .eq("is_active", true)
+          .eq("variant_role", "candidate_conversation")
+          .eq("version", "stage0_v1"),
+      ]);
 
-    const loadConversation = async () => {
-      try {
-        const [stagesResult, experienceResult, questionsResult, answerOptionsResult, variantsResult] = await Promise.all([
-          supabase
-            .from("autopsy_context_stage_options")
-            .select("code,label,description,display_order")
-            .eq("is_active", true)
-            .order("display_order"),
-          supabase
-            .from("autopsy_context_experience_options")
-            .select("code,label,display_order")
-            .eq("is_active", true)
-            .order("display_order"),
-          supabase
-            .from("questions")
-            .select("id,q_id,prompt,dimension_code,sequence")
-            .eq("is_active", true)
-            .order("sequence"),
-          supabase
-            .from("answer_options")
-            .select("id,question_id,score_value,label")
-            .eq("is_active", true)
-            .order("score_value"),
-          supabase
-            .from("autopsy_dimension_conversation_variants")
-            .select("question_id,stage_code,conversational_prompt,follow_up_text,guardrail_text")
-            .eq("is_active", true)
-            .eq("variant_role", "candidate_conversation")
-            .eq("version", "stage0_v1"),
-        ]);
-
-        const firstError =
-          stagesResult.error ??
-          experienceResult.error ??
-          questionsResult.error ??
-          answerOptionsResult.error ??
-          variantsResult.error;
-
-        if (firstError) throw firstError;
-        if (cancelled) return;
-
-        const liveStages =
-          stagesResult.data?.map((item) => ({
-            value: item.code,
-            label: item.label,
-            helper: item.description,
-          })) ?? fallbackStages;
-        const liveExperiences =
-          experienceResult.data?.map((item) => ({ value: item.code, label: item.label })) ?? fallbackExperienceLevels;
-
-        setStageOptions(liveStages.length > 0 ? liveStages : fallbackStages);
-        setExperienceOptions(liveExperiences.length > 0 ? liveExperiences : fallbackExperienceLevels);
-        setStage((current) => (liveStages.some((item) => item.value === current) ? current : liveStages[0]?.value ?? "startup"));
-        setExperience((current) =>
-          liveExperiences.some((item) => item.value === current) ? current : liveExperiences[0]?.value ?? "never",
-        );
-        setQuestions((questionsResult.data ?? []) as DbQuestion[]);
-        setAnswerOptions((answerOptionsResult.data ?? []) as DbAnswerOption[]);
-        setVariants((variantsResult.data ?? []) as DbVariant[]);
-        setLoadState("live");
-        setLoadMessage("Live from Supabase: stages, experience options, dimensions, answer options, and overlays.");
-      } catch (error) {
-        if (cancelled) return;
-        console.error("Failed to load First Conversation overlays", error);
-        setLoadState("error");
-        setLoadMessage(error instanceof Error ? error.message : "Supabase overlay load failed.");
-        setRunState("error");
-        setRunMessage("Stage 0 overlays could not be loaded, so run creation is blocked.");
+      const error = stagesResult.error ?? experienceResult.error ?? questionsResult.error ?? variantsResult.error;
+      if (cancelled) return;
+      if (error) {
+        setLoadError(error.message);
+        return;
       }
-    };
 
-    void loadConversation();
+      const liveStages = (stagesResult.data ?? []).map((item) => ({ value: item.code, label: item.label, helper: item.description }));
+      const liveExperiences = (experienceResult.data ?? []).map((item) => ({ value: item.code, label: item.label }));
+      if (liveStages.length) setStageOptions(liveStages);
+      if (liveExperiences.length) setExperienceOptions(liveExperiences);
+      setQuestions((questionsResult.data ?? []) as DbQuestion[]);
+      setVariants((variantsResult.data ?? []) as DbVariant[]);
+    };
+    void load();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const dimensions = useMemo(
-    () => (loadState === "live" ? buildDimensions(questions, answerOptions, variants, stage) : []),
-    [answerOptions, loadState, questions, stage, variants],
-  );
-  const conversationGroups = useMemo(() => buildGroups(dimensions), [dimensions]);
-  const totalDimensions = dimensions.length;
-  const activeGroup = conversationGroups.find((group) => group.id === activeGroupId) ?? conversationGroups[0] ?? groupDefinitions[0];
-  const stageOption = stageOptions.find((item) => item.value === stage);
-  const stageLabel = stageOption?.label ?? "Startup";
-  const stageDisplay = stageOption?.helper ?? stageLabel;
-  const rawExperienceLabel = experienceOptions.find((item) => item.value === experience)?.label ?? experienceOptions[0]?.label ?? "Not captured";
-  const experienceDisplay = displayExperience(experience, rawExperienceLabel);
-  const answeredCount = Object.keys(answers).length;
-  const score = Object.values(answers).reduce((sum, value) => sum + value, 0);
-  const localVerdict = getLocalVerdict(score, totalDimensions, answeredCount);
-  const displayVerdict = finalVerdict?.verdict_name ?? finalVerdict?.final_verdict ?? localVerdict;
-  const displayScore = finalVerdict?.score_total ?? score;
-  const maxScore = totalDimensions * 3;
-  const canPersist = loadState === "live" && runState !== "error";
-
-  const fetchFinalVerdict = async (activeRunId: string) => {
-    const { data, error } = await supabase
-      .from("autopsy_runs")
-      .select(
-        "id,score_total,verdict_name,final_verdict,verdict_body,primary_risk,permission_level,progression_state,next_step_customer_wording,completed_at",
-      )
-      .eq("id", activeRunId)
-      .single();
-    if (error) throw error;
-    return data as FinalVerdict;
-  };
-
-  const ensureRun = async () => {
-    if (!canPersist) return null;
-    if (runId) return runId;
-
-    setRunState("creating");
-    setRunMessage("Creating Autopsy run…");
-
-    const industryValue = industry.trim() || "Unspecified";
-    const created = await createAutopsyRun({
-      industry: industryValue,
-      scenario: scenarioForRun(stage),
-      run_name: `${stageLabel} · ${industryValue} · Stage 0 Conversation`,
-      tester_email: user?.email ?? "conversation@autopsy.local",
-      operator_class: operatorClassForExperience(experience),
+  const conversationQuestions = useMemo<ConversationQuestion[]>(() => {
+    const variantMap = new Map(
+      variants.filter((variant) => variant.stage_code === stage).map((variant) => [variant.question_id, variant]),
+    );
+    return questions.map((question) => {
+      const behaviour = behaviourByQid[question.q_id] ?? {
+        clarification: "Could you make that more concrete with an example from your own situation?",
+        reflection: "Let me check that I have understood you fairly. Is that an accurate description?",
+        transition: "Thank you. Let us look at the next part.",
+      };
+      const variant = variantMap.get(question.id);
+      return {
+        id: question.id,
+        qid: question.q_id,
+        prompt: variant?.conversational_prompt ?? question.prompt ?? "Tell me what is true in your situation today.",
+        clarification: behaviour.clarification,
+        reflection: behaviour.reflection,
+        transition: behaviour.transition,
+      };
     });
-    const createdRunId = extractRunId(created);
-    if (!createdRunId) throw new Error("The Autopsy run was created but no run id was returned.");
+  }, [questions, stage, variants]);
 
-    const updateResult = await supabase
-      .from("autopsy_runs")
-      .update({
-        business_stage: stage,
-        industry_context: industry.trim() || null,
-        ownership_experience: experience,
-        conversation_variant_version: "stage0_v1",
-      })
-      .eq("id", createdRunId);
-    if (updateResult.error) throw updateResult.error;
+  const currentQuestion = conversationQuestions[questionIndex];
 
-    setRunId(createdRunId);
-    setRunState("live");
-    setRunMessage(`Live run created. Answers are saving to Supabase. Run: ${createdRunId.slice(0, 8)}…`);
-    return createdRunId;
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
+
+  const startConversation = () => {
+    if (!conversationQuestions.length) return;
+    const stageLabel = stageOptions.find((item) => item.value === stage)?.label ?? "your business";
+    const experienceLabel = experienceOptions.find((item) => item.value === experience)?.label ?? "your experience";
+    setMessages([
+      makeMessage("john", "Let us keep this simple. This is a conversation, not an examination. You may pause, decline, correct me, or ask me to put a question differently."),
+      makeMessage("john", `I understand that we are talking about ${stageLabel.toLowerCase()}${industry.trim() ? ` in ${industry.trim()}` : ""}, and that ${experienceLabel.toLowerCase()}`),
+      makeMessage("john", conversationQuestions[0].prompt),
+    ]);
+    setPhase("conversation");
+    setResponseState("primary");
   };
 
-  const saveAnswer = async (dimension: ConversationDimension, option: AnswerOption) => {
-    if (runState === "finalised") return;
-    setAnswers((current) => ({ ...current, [dimension.qid]: option.score }));
-    setSelectedOptions((current) => ({ ...current, [dimension.qid]: option.id }));
-    setFinalVerdict(null);
-
-    try {
-      const activeRunId = await ensureRun();
-      if (!activeRunId) return;
-      setRunState("saving");
-      setRunMessage(`Saving ${dimension.qid}…`);
-      await recordAutopsyAnswer({ run_id: activeRunId, question_id: dimension.id, selected_option: option.id });
-      setRunState("live");
-      setRunMessage(`Saved ${dimension.qid}. Run: ${activeRunId.slice(0, 8)}…`);
-    } catch (error) {
-      console.error("Failed to save conversational answer", error);
-      setRunState("error");
-      setRunMessage(error instanceof Error ? error.message : "Failed to save answer to Supabase.");
-    }
-  };
-
-  const finaliseRun = async () => {
-    if (!runId) {
-      setRunState("error");
-      setRunMessage("No live run exists yet. Answer at least one dimension first.");
+  const advance = () => {
+    if (!currentQuestion) return;
+    const isLast = questionIndex >= conversationQuestions.length - 1;
+    setMessages((current) => [...current, makeMessage("john", currentQuestion.transition)]);
+    if (isLast) {
+      setMessages((current) => [
+        ...current,
+        makeMessage("john", "I am not going to manufacture certainty from a first conversation. I understand a little more about where you are trying to go. Some things are clear; others would need more evidence before any responsible conclusion."),
+        makeMessage("john", "For now, tell me this: did the conversation help you notice anything you had not stated clearly before?"),
+      ]);
+      setPhase("complete");
       return;
     }
-    try {
-      setRunState("finalising");
-      setRunMessage("Finalising Autopsy run…");
-      await finalizeAutopsyRun(runId);
-      const dbVerdict = await fetchFinalVerdict(runId);
-      setFinalVerdict(dbVerdict);
-      setRunState("finalised");
-      setRunMessage(`Run finalised. Database verdict loaded for run ${runId.slice(0, 8)}…`);
-    } catch (error) {
-      console.error("Failed to finalise conversational run", error);
-      setRunState("error");
-      setRunMessage(error instanceof Error ? error.message : "Failed to finalise run.");
-    }
+    const nextIndex = questionIndex + 1;
+    setQuestionIndex(nextIndex);
+    setResponseState("primary");
+    setMessages((current) => [...current, makeMessage("john", conversationQuestions[nextIndex].prompt)]);
   };
 
-  const contextSummary = useMemo(() => {
-    const industryText = industry.trim() || "Not selected yet";
-    return { stage: stageDisplay, industry: industryText, experience: experienceDisplay };
-  }, [stageDisplay, industry, experienceDisplay]);
+  const submitResponse = (event: FormEvent) => {
+    event.preventDefault();
+    const response = draft.trim();
+    if (!response || paused || !currentQuestion) return;
+    setDraft("");
+    setMessages((current) => [...current, makeMessage("candidate", response)]);
 
-  const groupScore = (group: ConversationGroup) =>
-    group.dimensions.reduce((sum, dimension) => sum + (answers[dimension.qid] ?? 0), 0);
-  const groupAnswered = (group: ConversationGroup) =>
-    group.dimensions.filter((dimension) => answers[dimension.qid] !== undefined).length;
+    if (responseState === "primary") {
+      if (response.length < 24 || /^(yes|no|maybe|not sure|i don't know|dont know)$/i.test(response)) {
+        setResponseState("clarifying");
+        setMessages((current) => [...current, makeMessage("john", currentQuestion.clarification)]);
+      } else {
+        setResponseState("reflecting");
+        setMessages((current) => [...current, makeMessage("john", currentQuestion.reflection)]);
+      }
+      return;
+    }
+
+    advance();
+  };
+
+  const rephrase = () => {
+    if (!currentQuestion) return;
+    setResponseState("clarifying");
+    setMessages((current) => [...current, makeMessage("candidate", "Could you put that another way?"), makeMessage("john", currentQuestion.clarification)]);
+  };
+
+  const decline = () => {
+    if (!currentQuestion) return;
+    setMessages((current) => [
+      ...current,
+      makeMessage("candidate", "I would rather not answer that now."),
+      makeMessage("john", "That is your decision. I will not force an answer or treat the pause as a personal failure."),
+    ]);
+    advance();
+  };
+
+  const restart = () => {
+    setPhase("context");
+    setQuestionIndex(0);
+    setResponseState("primary");
+    setMessages([]);
+    setDraft("");
+    setPaused(false);
+  };
 
   return (
-    <main className="min-h-screen bg-[#f7f3ea] px-4 py-8 text-[#221f1a] sm:px-6 lg:px-8">
-      <section className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[300px_1fr]">
-        <aside className="space-y-4 rounded-[2rem] border border-[#dfd1bb] bg-[#fffaf0] p-5 shadow-xl shadow-[#7b5a2c]/10">
+    <main className="min-h-screen bg-[#f4efe6] px-4 py-6 text-[#211f1b] sm:px-6 sm:py-10">
+      <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#d9cbb8] bg-[#fffdf8] shadow-2xl shadow-[#4e3f2d]/10">
+        <header className="flex items-center justify-between gap-4 border-b border-[#e5dbcc] px-5 py-4 sm:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Autopsy</p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">Stage 0 Maturity Spine</h1>
-            <p className="mt-3 text-sm leading-6 text-[#625744]">Context first. Maturity second. No business viability judgement.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8a6335]">Autopsy</p>
+            <h1 className="mt-1 text-lg font-semibold sm:text-xl">A conversation with John Galt</h1>
           </div>
+          {phase !== "context" ? (
+            <button
+              type="button"
+              onClick={() => setPaused((value) => !value)}
+              className="rounded-full border border-[#cdbb9f] px-4 py-2 text-sm font-semibold transition hover:bg-[#f5ede1]"
+            >
+              {paused ? "Resume" : "Pause"}
+            </button>
+          ) : null}
+        </header>
 
-          <div className="rounded-2xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">Data source</p>
-            <p className="mt-2 font-semibold text-[#2f2a21]">{loadState === "live" ? "Supabase live" : loadState === "loading" ? "Loading" : "Load error"}</p>
-            <p className="mt-1 text-[#625744]">{loadMessage}</p>
-          </div>
+        {phase === "context" ? (
+          <section className="flex flex-1 items-center px-5 py-8 sm:px-10 sm:py-12">
+            <div className="mx-auto w-full max-w-2xl">
+              <p className="text-sm font-semibold text-[#8a6335]">Before we begin</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Give me enough context to ask the questions properly.</h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-[#685f52]">This is a role-play prototype. Nothing here changes the scoring engine, creates a verdict, or adds assessment questions.</p>
 
-          <div className="rounded-2xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">Run status</p>
-            <p className="mt-2 font-semibold text-[#2f2a21]">
-              {runState === "finalised" ? "Finalised" : runId ? "Live run" : runState === "error" ? "Error" : "Not started"}
-            </p>
-            <p className="mt-1 text-[#625744]">{runMessage}</p>
-          </div>
-
-          <div className="rounded-2xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">Context</p>
-            <div className="mt-2 space-y-1 text-[#625744]">
-              <p><span className="font-semibold text-[#2f2a21]">Stage:</span> {contextSummary.stage}</p>
-              <p><span className="font-semibold text-[#2f2a21]">Industry:</span> {contextSummary.industry}</p>
-              <p><span className="font-semibold text-[#2f2a21]">Experience:</span> {contextSummary.experience}</p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {conversationGroups.map((group) => {
-              const active = group.id === activeGroup.id;
-              const answered = groupAnswered(group);
-              return (
-                <button
-                  key={group.id}
-                  type="button"
-                  onClick={() => setActiveGroupId(group.id)}
-                  className={`w-full rounded-2xl border p-3 text-left transition ${
-                    active ? "border-[#8a5f2e] bg-[#efe2cb]" : "border-[#dfd1bb] bg-white hover:bg-[#fff7e8]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold">{group.title}</span>
-                    <span className="rounded-full border border-[#dfd1bb] px-2 py-0.5 text-xs text-[#625744]">{answered}/{group.dimensions.length}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-[#8c806b]">Score {groupScore(group)} / {group.dimensions.length * 3}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="rounded-2xl bg-[#2f2a21] p-4 text-white">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
-              {finalVerdict ? "Database verdict" : "Running read"}
-            </p>
-            <p className="mt-3 text-2xl font-semibold">{displayScore} / {maxScore}</p>
-            <p className="mt-1 text-sm text-white/70">{answeredCount} of {totalDimensions} dimensions answered</p>
-            <p className="mt-4 text-base font-semibold">{displayVerdict}</p>
-          </div>
-        </aside>
-
-        <section className="space-y-6">
-          <div className="rounded-[2rem] border border-[#dfd1bb] bg-[#fffaf0] p-5 shadow-xl shadow-[#7b5a2c]/10 sm:p-8">
-            <div className="mb-6 max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Context capture</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight">So you’re thinking about building or operating a business?</h2>
-              <p className="mt-4 text-base leading-7 text-[#625744]">
-                This first part is not scored. It only sets the conversation so it sounds relevant without corrupting the maturity assessment.
-              </p>
-            </div>
-
-            <div className="grid gap-5">
-              <div>
-                <p className="mb-3 text-sm font-semibold">What stage are we talking about?</p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {stageOptions.map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => {
-                        if (runId) return;
-                        setStage(item.value);
-                        setAnswers({});
-                        setSelectedOptions({});
-                      }}
-                      className={`rounded-2xl border p-4 text-left transition ${
-                        stage === item.value ? "border-[#8a5f2e] bg-[#efe2cb]" : "border-[#dfd1bb] bg-white hover:bg-[#fff7e8]"
-                      } ${runId ? "cursor-not-allowed opacity-70" : ""}`}
-                    >
-                      <span className="font-semibold">{item.label}</span>
-                      <span className="mt-1 block text-sm text-[#625744]">{item.helper}</span>
-                    </button>
-                  ))}
-                </div>
-                {runId ? <p className="mt-2 text-xs text-[#8c806b]">Stage is locked after the run starts.</p> : null}
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <label className="block">
-                  <span className="text-sm font-semibold">What specific industry?</span>
-                  <input
-                    value={industry}
-                    onChange={(event) => setIndustry(event.target.value)}
-                    disabled={!!runId}
-                    className="mt-3 w-full rounded-2xl border border-[#dfd1bb] bg-white px-4 py-3 text-base outline-none focus:border-[#8a5f2e] disabled:cursor-not-allowed disabled:opacity-70"
-                    placeholder="Cleaning, bookkeeping, consulting, café, trades..."
-                  />
-                  <span className="mt-2 block text-xs leading-5 text-[#8c806b]">Context only. It does not change the Stage 0 maturity score.</span>
-                </label>
-
+              <div className="mt-8 space-y-7">
                 <div>
-                  <p className="text-sm font-semibold">Have you owned or run a business before?</p>
-                  <div className="mt-3 space-y-2">
-                    {experienceOptions.map((item) => (
+                  <p className="text-sm font-semibold">What situation are we discussing?</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {stageOptions.map((option) => (
                       <button
-                        key={item.value}
+                        key={option.value}
                         type="button"
-                        onClick={() => {
-                          if (!runId) setExperience(item.value);
-                        }}
-                        className={`w-full rounded-2xl border p-3 text-left text-sm transition ${
-                          experience === item.value ? "border-[#8a5f2e] bg-[#efe2cb]" : "border-[#dfd1bb] bg-white hover:bg-[#fff7e8]"
-                        } ${runId ? "cursor-not-allowed opacity-70" : ""}`}
+                        onClick={() => setStage(option.value)}
+                        className={`rounded-2xl border p-4 text-left transition ${stage === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}
                       >
-                        {item.label}
+                        <span className="block font-semibold">{option.label}</span>
+                        <span className="mt-1 block text-sm leading-5 text-[#756b5d]">{option.helper}</span>
                       </button>
                     ))}
                   </div>
-                  {runId ? <p className="mt-2 text-xs text-[#8c806b]">Experience is locked after the run starts.</p> : null}
+                </div>
+
+                <label className="block">
+                  <span className="text-sm font-semibold">What kind of business?</span>
+                  <input
+                    value={industry}
+                    onChange={(event) => setIndustry(event.target.value)}
+                    placeholder="Cleaning, bookkeeping, café, consulting..."
+                    className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3 outline-none transition focus:border-[#8a6335]"
+                  />
+                </label>
+
+                <div>
+                  <p className="text-sm font-semibold">What experience are you bringing?</p>
+                  <div className="mt-3 space-y-2">
+                    {experienceOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setExperience(option.value)}
+                        className={`w-full rounded-2xl border p-4 text-left text-sm transition ${experience === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-3xl bg-[#2f2a21] p-5 text-white">
-                <p className="text-lg leading-8">Good. The business itself is not what we are assessing today.</p>
-                <p className="mt-3 text-lg leading-8">Today we are looking at whether the candidate is ready to build or operate one.</p>
-              </div>
-            </div>
-          </div>
+              {loadError ? <p className="mt-5 rounded-2xl bg-[#fff0ed] p-4 text-sm text-[#8f2f24]">The production questions could not be loaded: {loadError}</p> : null}
 
-          <div className="rounded-[2rem] border border-[#dfd1bb] bg-[#fffaf0] p-5 shadow-xl shadow-[#7b5a2c]/10 sm:p-8">
-            <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">{activeGroup.title}</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight">{activeGroup.bridge}</h2>
-              <p className="mt-3 text-sm leading-6 text-[#625744]">
-                Stage overlay active: <span className="font-semibold">{stageLabel}</span>. Canonical scoring remains bound to the same Stage 0 maturity dimensions.
-              </p>
+              <button
+                type="button"
+                onClick={startConversation}
+                disabled={!conversationQuestions.length}
+                className="mt-8 rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#403b34] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {conversationQuestions.length ? "Begin the conversation" : "Loading the conversation…"}
+              </button>
             </div>
-
-            <div className="space-y-6">
-              {activeGroup.dimensions.map((dimension) => (
-                <article key={dimension.qid} className="rounded-3xl border border-[#dfd1bb] bg-white p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8a5f2e]">{dimension.qid} · {dimension.canonicalDimension}</p>
-                      <h3 className="mt-2 text-xl font-semibold leading-8">{dimension.prompt}</h3>
-                      <p className="mt-2 text-sm leading-6 text-[#625744]">{dimension.followUp}</p>
+          </section>
+        ) : (
+          <>
+            <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8">
+              <div className="mx-auto max-w-2xl space-y-5">
+                {messages.map((message) => (
+                  <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${
+                        message.speaker === "candidate"
+                          ? "rounded-br-md bg-[#2b2823] text-white"
+                          : message.speaker === "system"
+                            ? "bg-[#f3eee6] text-[#6d6356]"
+                            : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"
+                      }`}
+                    >
+                      {message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">John</p> : null}
+                      <p>{message.text}</p>
                     </div>
-                    <span className="rounded-full border border-[#dfd1bb] px-3 py-1 text-xs text-[#625744]">Score {answers[dimension.qid] ?? "—"}</span>
                   </div>
+                ))}
+                {paused ? <div className="rounded-2xl bg-[#f3eee6] p-4 text-center text-sm text-[#6d6356]">Conversation paused. Nothing advances until you resume.</div> : null}
+                <div ref={transcriptEndRef} />
+              </div>
+            </section>
 
-                  <div className="mt-5 grid gap-3">
-                    {dimension.options.map((option) => {
-                      const active = answers[dimension.qid] === option.score && selectedOptions[dimension.qid] === option.id;
-                      return (
-                        <button
-                          type="button"
-                          key={`${dimension.qid}-${option.id}`}
-                          onClick={() => void saveAnswer(dimension, option)}
-                          disabled={runState === "finalised"}
-                          className={`rounded-2xl border p-4 text-left text-base leading-7 transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                            active
-                              ? "border-[#8a5f2e] bg-[#efe2cb] shadow-sm"
-                              : "border-[#dfd1bb] bg-[#fffaf0] hover:border-[#b58b57] hover:bg-[#fff7e8]"
-                          }`}
-                        >
-                          <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#dfd1bb] text-sm font-semibold">{option.score}</span>
-                          {option.label}
-                        </button>
-                      );
-                    })}
+            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5">
+              <div className="mx-auto max-w-2xl">
+                {phase === "complete" ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-[#6d6356]">Prototype conversation complete. No score or verdict has been created.</p>
+                    <button type="button" onClick={restart} className="rounded-full border border-[#bfa985] px-4 py-2 text-sm font-semibold hover:bg-white">Start again</button>
                   </div>
-
-                  <details className="mt-4 rounded-2xl bg-[#f7f3ea] p-4 text-sm leading-6 text-[#625744]">
-                    <summary className="cursor-pointer font-semibold text-[#2f2a21]">Canonical binding</summary>
-                    <p className="mt-2"><span className="font-semibold">Canonical prompt:</span> {dimension.canonicalPrompt}</p>
-                    <p className="mt-2"><span className="font-semibold">Guardrail:</span> {dimension.guardrail}</p>
-                    <p className="mt-2"><span className="font-semibold">Rule:</span> Wording may change by stage. Score and dimension do not.</p>
-                  </details>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-[#dfd1bb] bg-[#fffaf0] p-5 shadow-xl shadow-[#7b5a2c]/10 sm:p-8">
-            <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a5f2e]">Conversation readout</p>
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight">The verdict should fall out of the maturity evidence.</h2>
-                <p className="mt-4 text-base leading-7 text-[#625744]">
-                  This screen reads Stage 0 overlays from Supabase, writes answers into a live Autopsy run, and loads the database verdict after finalisation.
-                </p>
-                <div className="mt-5 rounded-3xl border border-[#dfd1bb] bg-white p-4 text-sm leading-6 text-[#625744]">
-                  <p><span className="font-semibold text-[#2f2a21]">Current run:</span> {runId ?? "Not created yet"}</p>
-                  <p className="mt-2"><span className="font-semibold text-[#2f2a21]">Save status:</span> {runMessage}</p>
-                  {finalVerdict?.verdict_body ? (
-                    <p className="mt-3"><span className="font-semibold text-[#2f2a21]">Verdict body:</span> {finalVerdict.verdict_body}</p>
-                  ) : null}
-                  {finalVerdict?.next_step_customer_wording ? (
-                    <p className="mt-3"><span className="font-semibold text-[#2f2a21]">Next step:</span> {finalVerdict.next_step_customer_wording}</p>
-                  ) : null}
-                </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={rephrase} disabled={paused} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">Put that another way</button>
+                      <button type="button" onClick={() => setDraft("I am not sure yet.")} disabled={paused} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">I’m not sure</button>
+                      <button type="button" onClick={decline} disabled={paused} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">Rather not answer now</button>
+                    </div>
+                    <form onSubmit={submitResponse} className="flex items-end gap-3">
+                      <textarea
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        disabled={paused}
+                        rows={2}
+                        placeholder="Answer in your own words…"
+                        className="min-h-[58px] flex-1 resize-none rounded-2xl border border-[#d5c6b1] bg-white px-4 py-3 text-base outline-none transition focus:border-[#8a6335] disabled:opacity-55"
+                      />
+                      <button type="submit" disabled={paused || !draft.trim()} className="rounded-full bg-[#2b2823] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#403b34] disabled:cursor-not-allowed disabled:opacity-40">Send</button>
+                    </form>
+                  </>
+                )}
               </div>
-              <div className="rounded-3xl bg-[#2f2a21] p-5 text-white">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">{finalVerdict ? "Database verdict" : "Provisional verdict"}</p>
-                <p className="mt-3 text-xl font-semibold">{displayVerdict}</p>
-                <p className="mt-3 text-sm leading-6 text-white/70">
-                  {finalVerdict
-                    ? `Final score: ${displayScore} / ${maxScore}`
-                    : answeredCount < totalDimensions
-                      ? `${totalDimensions - answeredCount} maturity dimensions remain.`
-                      : "All Stage 0 maturity dimensions answered."}
-                </p>
-                {finalVerdict?.permission_level ? <p className="mt-3 text-sm text-white/70">Permission: {finalVerdict.permission_level}</p> : null}
-                {finalVerdict?.primary_risk ? <p className="mt-3 text-sm text-white/70">Primary risk: {finalVerdict.primary_risk}</p> : null}
-                <button
-                  type="button"
-                  disabled={answeredCount < totalDimensions || !runId || runState === "finalising" || runState === "finalised"}
-                  onClick={() => void finaliseRun()}
-                  className="mt-5 w-full rounded-full bg-white px-4 py-3 text-sm font-semibold text-[#2f2a21] transition hover:bg-[#fff7e8] disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {runState === "finalised" ? "Finalised" : runState === "finalising" ? "Finalising…" : "Finalise run"}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStage(stageOptions[0]?.value ?? "startup");
-                setIndustry("");
-                setExperience(experienceOptions[0]?.value ?? "never");
-                setAnswers({});
-                setSelectedOptions({});
-                setRunId(null);
-                setFinalVerdict(null);
-                setRunState(loadState === "live" ? "not_started" : "error");
-                setRunMessage(loadState === "live" ? "No live run yet. Your first saved answer will create one." : "Stage 0 overlays could not be loaded.");
-                setActiveGroupId(groupDefinitions[0].id);
-              }}
-              className="mt-6 rounded-full border border-[#8a5f2e] px-5 py-3 text-sm font-semibold text-[#8a5f2e] transition hover:bg-[#fff7e8]"
-            >
-              Start again
-            </button>
-          </div>
-
-          <p className="text-center text-xs leading-6 text-[#8c806b]">Legacy Autopsy remains available at /autopsy. This route is the conversation-first Stage 0 engine.</p>
-        </section>
+            </footer>
+          </>
+        )}
       </section>
     </main>
   );
