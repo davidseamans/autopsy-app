@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type StageOption = { value: string; label: string; helper: string };
@@ -26,6 +26,7 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 const TRANSCRIPT_KEY = "autopsy-first-conversation-roleplay-v1";
 const VOICE_KEY = "autopsy-john-voice-v1";
+const SILENCE_MS = 1450;
 
 const fallbackStages: StageOption[] = [
   { value: "startup", label: "Starting from scratch", helper: "You are considering or preparing a new business." },
@@ -109,6 +110,17 @@ const makeMessage = (speaker: Message["speaker"], text: string): Message => ({
   text,
 });
 
+const normalise = (value: string) => value.replace(/\s+/g, " ").trim();
+
+const voiceRank = (voice: SpeechSynthesisVoice) => {
+  const name = voice.name.toLowerCase();
+  let score = voice.lang === "en-AU" ? 100 : voice.lang.startsWith("en") ? 30 : 0;
+  if (/natural|neural|premium|enhanced/.test(name)) score += 80;
+  if (/william|lee|james|daniel|alex|google/.test(name)) score += 35;
+  if (/karen/.test(name)) score -= 20;
+  return score;
+};
+
 const FirstConversation = () => {
   const [stageOptions, setStageOptions] = useState<StageOption[]>(fallbackStages);
   const [experienceOptions, setExperienceOptions] = useState<ExperienceOption[]>(fallbackExperiences);
@@ -130,7 +142,11 @@ const FirstConversation = () => {
   const [speaking, setSpeaking] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState(() => window.localStorage.getItem(VOICE_KEY) ?? "");
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const stableTranscriptRef = useRef("");
+  const pendingAutoSendRef = useRef(false);
   const spokenIdsRef = useRef<Set<string>>(new Set());
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -162,14 +178,11 @@ const FirstConversation = () => {
 
   useEffect(() => {
     const loadVoices = () => {
-      const available = window.speechSynthesis?.getVoices() ?? [];
+      const available = (window.speechSynthesis?.getVoices() ?? [])
+        .filter((voice) => voice.lang.startsWith("en"))
+        .sort((a, b) => voiceRank(b) - voiceRank(a));
       setVoices(available);
-      if (!voiceName && available.length) {
-        const preferred = available.find((voice) => voice.lang === "en-AU" && /male|lee|james|daniel/i.test(voice.name))
-          ?? available.find((voice) => voice.lang === "en-AU")
-          ?? available.find((voice) => voice.lang.startsWith("en"));
-        if (preferred) setVoiceName(preferred.name);
-      }
+      if (!voiceName && available[0]) setVoiceName(available[0].name);
     };
     loadVoices();
     window.speechSynthesis?.addEventListener("voiceschanged", loadVoices);
@@ -181,7 +194,9 @@ const FirstConversation = () => {
       const stored = window.localStorage.getItem(TRANSCRIPT_KEY);
       if (!stored) return;
       const parsed = JSON.parse(stored) as { messages?: Message[] };
-      if (Array.isArray(parsed.messages) && parsed.messages.length) setMicrophoneMessage("A previous role-play transcript is stored on this device. Starting again will replace it.");
+      if (Array.isArray(parsed.messages) && parsed.messages.length) {
+        setMicrophoneMessage("A previous conversation is stored on this device. Starting again will replace it.");
+      }
     } catch {
       window.localStorage.removeItem(TRANSCRIPT_KEY);
     }
@@ -189,16 +204,25 @@ const FirstConversation = () => {
 
   useEffect(() => {
     if (!messages.length) return;
-    window.localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, messages }));
+    window.localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      stage,
+      experience,
+      industry,
+      messages,
+    }));
   }, [experience, industry, messages, stage]);
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
+    if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
   }, []);
 
   const conversationQuestions = useMemo<ConversationQuestion[]>(() => {
-    const variantMap = new Map(variants.filter((variant) => variant.stage_code === stage).map((variant) => [variant.question_id, variant]));
+    const variantMap = new Map(
+      variants.filter((variant) => variant.stage_code === stage).map((variant) => [variant.question_id, variant]),
+    );
     return questions.map((question) => {
       const behaviour = behaviourByQid[question.q_id] ?? {
         clarification: "Could you make that more concrete with an example from your own situation?",
@@ -219,60 +243,22 @@ const FirstConversation = () => {
 
   const currentQuestion = conversationQuestions[questionIndex];
   const speechRecognitionConstructor = useMemo(() => {
-    const speechWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
     return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
   }, []);
 
-  const speakText = (text: string) => {
-    if (!voiceEnabled || paused || listening || !window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-AU";
-    utterance.rate = 0.94;
-    utterance.pitch = 0.92;
-    const selected = voices.find((voice) => voice.name === voiceName);
-    if (selected) utterance.voice = selected;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-  };
-
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    if (!voiceEnabled || paused || listening) return;
-    const unsaid = messages.filter((message) => message.speaker === "john" && !spokenIdsRef.current.has(message.id));
-    unsaid.forEach((message) => {
-      spokenIdsRef.current.add(message.id);
-      speakText(message.text);
-    });
-  }, [messages, voiceEnabled, paused, listening]);
-
-  const startConversation = () => {
-    if (!conversationQuestions.length) return;
-    window.localStorage.removeItem(TRANSCRIPT_KEY);
-    window.speechSynthesis?.cancel();
-    spokenIdsRef.current.clear();
-    const stageLabel = stageOptions.find((item) => item.value === stage)?.label ?? "your business";
-    const experienceLabel = experienceOptions.find((item) => item.value === experience)?.label ?? "your experience";
-    setMessages([
-      makeMessage("john", "Let us keep this simple. This is a conversation, not an examination. You may pause, decline, correct me, or ask me to put a question differently."),
-      makeMessage("john", `I understand that we are talking about ${stageLabel.toLowerCase()}${industry.trim() ? ` in ${industry.trim()}` : ""}, and that ${experienceLabel.toLowerCase()}`),
-      makeMessage("john", conversationQuestions[0].prompt),
-    ]);
-    setPhase("conversation");
-    setResponseState("primary");
-    setMicrophoneMessage(null);
-  };
-
-  const advance = () => {
+  const advance = useCallback(() => {
     if (!currentQuestion) return;
     const isLast = questionIndex >= conversationQuestions.length - 1;
     if (isLast) {
       setMessages((current) => [
         ...current,
         makeMessage("john", currentQuestion.transition),
-        makeMessage("john", "I am not going to manufacture certainty from a first conversation. I understand a little more about where you are trying to go. Some things are clear; others would need more evidence before any responsible conclusion."),
-        makeMessage("john", "For now, tell me this: did the conversation help you notice anything you had not stated clearly before?"),
+        makeMessage("john", "I am not going to manufacture certainty from a first conversation. I understand more about where you are trying to go, and I also know where the evidence is incomplete."),
+        makeMessage("john", "Did this conversation help you notice anything you had not stated clearly before?"),
       ]);
       setPhase("complete");
       return;
@@ -280,14 +266,18 @@ const FirstConversation = () => {
     const nextIndex = questionIndex + 1;
     setQuestionIndex(nextIndex);
     setResponseState("primary");
-    setMessages((current) => [...current, makeMessage("john", currentQuestion.transition), makeMessage("john", conversationQuestions[nextIndex].prompt)]);
-  };
+    setMessages((current) => [
+      ...current,
+      makeMessage("john", currentQuestion.transition),
+      makeMessage("john", conversationQuestions[nextIndex].prompt),
+    ]);
+  }, [conversationQuestions, currentQuestion, questionIndex]);
 
-  const submitResponse = (event: FormEvent) => {
-    event.preventDefault();
-    const response = draft.trim();
+  const acceptResponse = useCallback((rawResponse: string) => {
+    const response = normalise(rawResponse);
     if (!response || paused || !currentQuestion) return;
     setDraft("");
+    setMicrophoneMessage(null);
     setMessages((current) => [...current, makeMessage("candidate", response)]);
     if (responseState === "primary") {
       if (response.length < 24 || /^(yes|no|maybe|not sure|i don't know|dont know)$/i.test(response)) {
@@ -300,54 +290,154 @@ const FirstConversation = () => {
       return;
     }
     advance();
+  }, [advance, currentQuestion, paused, responseState]);
+
+  const submitResponse = (event: FormEvent) => {
+    event.preventDefault();
+    acceptResponse(draft);
   };
 
-  const toggleMicrophone = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+  const startListening = useCallback(() => {
+    if (paused || listening || speaking || phase === "complete") return;
     window.speechSynthesis?.cancel();
     setSpeaking(false);
+
     if (!speechRecognitionConstructor) {
-      setMicrophoneMessage("Voice transcription is not supported by this browser. Chrome on desktop is recommended for this prototype.");
+      setMicrophoneMessage("Voice transcription is not supported by this browser. You can still type your response.");
       return;
     }
+
     try {
       const recognition = new speechRecognitionConstructor();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = "en-AU";
+
+      stableTranscriptRef.current = "";
+      pendingAutoSendRef.current = false;
       const originalDraft = draft.trim();
-      let finalTranscript = "";
+
+      const scheduleStop = () => {
+        if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = window.setTimeout(() => {
+          pendingAutoSendRef.current = true;
+          recognition.stop();
+        }, SILENCE_MS);
+      };
+
       recognition.onstart = () => {
         setListening(true);
-        setMicrophoneMessage("Listening… speak naturally, then press Stop.");
+        setMicrophoneMessage("Listening…");
       };
+
       recognition.onresult = (event) => {
-        let interimTranscript = "";
+        let stable = stableTranscriptRef.current;
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index];
-          const transcript = result[0].transcript;
-          if (result.isFinal) finalTranscript += transcript;
-          else interimTranscript += transcript;
+          if (result.isFinal) stable = normalise(`${stable} ${result[0].transcript}`);
         }
-        setDraft([originalDraft, finalTranscript, interimTranscript].filter(Boolean).join(" ").replace(/\s+/g, " ").trim());
+        stableTranscriptRef.current = stable;
+        if (stable) setDraft(normalise(`${originalDraft} ${stable}`));
+        scheduleStop();
       };
+
       recognition.onerror = (event) => {
+        if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
         setListening(false);
-        setMicrophoneMessage(event.error === "not-allowed" ? "Microphone permission was declined. Allow microphone access in the browser and try again." : "The microphone stopped unexpectedly. Your captured text remains editable.");
+        pendingAutoSendRef.current = false;
+        setMicrophoneMessage(
+          event.error === "not-allowed"
+            ? "Microphone permission was declined. Allow microphone access and try again."
+            : event.error === "no-speech"
+              ? "I did not catch that. Tap the microphone and try again."
+              : "The microphone stopped unexpectedly. Any captured text remains editable.",
+        );
       };
+
       recognition.onend = () => {
+        if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
         setListening(false);
-        setMicrophoneMessage("Voice capture stopped. Review the transcript, correct anything necessary, then send it.");
+        const response = normalise(`${originalDraft} ${stableTranscriptRef.current}`);
+        if (pendingAutoSendRef.current && response) {
+          pendingAutoSendRef.current = false;
+          setMicrophoneMessage("Got it.");
+          window.setTimeout(() => acceptResponse(response), 180);
+        } else if (response) {
+          setMicrophoneMessage("Captured. You can edit it or send it.");
+        } else {
+          setMicrophoneMessage("I did not catch that. Tap the microphone and try again.");
+        }
       };
+
       recognitionRef.current = recognition;
       recognition.start();
     } catch {
       setListening(false);
       setMicrophoneMessage("The microphone could not start. Refresh the page and confirm browser microphone permission.");
     }
+  }, [acceptResponse, draft, listening, paused, phase, speaking, speechRecognitionConstructor]);
+
+  const stopListening = () => {
+    if (!listening) return;
+    pendingAutoSendRef.current = true;
+    recognitionRef.current?.stop();
+  };
+
+  const speakText = useCallback((text: string, listenAfter = false) => {
+    if (!voiceEnabled || paused || listening || !window.speechSynthesis) {
+      if (listenAfter) window.setTimeout(startListening, 150);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-AU";
+    utterance.rate = 0.98;
+    utterance.pitch = 1;
+    const selected = voices.find((voice) => voice.name === voiceName) ?? voices[0];
+    if (selected) utterance.voice = selected;
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => {
+      setSpeaking(false);
+      if (listenAfter) window.setTimeout(startListening, 220);
+    };
+    utterance.onerror = () => {
+      setSpeaking(false);
+      if (listenAfter) window.setTimeout(startListening, 220);
+    };
+    window.speechSynthesis.speak(utterance);
+  }, [listening, paused, startListening, voiceEnabled, voiceName, voices]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!voiceEnabled || paused || listening || !messages.length) return;
+    const unsaid = messages.filter((message) =>
+      message.speaker === "john" && !spokenIdsRef.current.has(message.id),
+    );
+    if (!unsaid.length) return;
+    unsaid.forEach((message) => spokenIdsRef.current.add(message.id));
+    speakText(unsaid.map((message) => message.text).join(" "), phase === "conversation");
+  }, [listening, messages, paused, phase, speakText, voiceEnabled]);
+
+  const startConversation = () => {
+    if (!conversationQuestions.length) return;
+    window.localStorage.removeItem(TRANSCRIPT_KEY);
+    window.speechSynthesis?.cancel();
+    spokenIdsRef.current.clear();
+
+    const stageLabel = stageOptions.find((item) => item.value === stage)?.label ?? "your business";
+    const context = industry.trim()
+      ? `${stageLabel.toLowerCase()} in ${industry.trim()}`
+      : stageLabel.toLowerCase();
+
+    setMessages([
+      makeMessage(
+        "john",
+        `Good morning. Thanks for sitting down with me. There is no script you need to perform against. I understand that we are discussing ${context}. I would like to understand what you are trying to build and what is true for you today.`,
+      ),
+      makeMessage("john", conversationQuestions[0].prompt),
+    ]);
+    setPhase("conversation");
+    setResponseState("primary");
+    setMicrophoneMessage("John is speaking. I will listen when he finishes.");
   };
 
   const togglePause = () => {
@@ -364,18 +454,26 @@ const FirstConversation = () => {
   const replayLatest = () => {
     window.speechSynthesis?.cancel();
     const latest = [...messages].reverse().find((message) => message.speaker === "john");
-    if (latest) speakText(latest.text);
+    if (latest) speakText(latest.text, false);
   };
 
   const rephrase = () => {
     if (!currentQuestion) return;
     setResponseState("clarifying");
-    setMessages((current) => [...current, makeMessage("candidate", "Could you put that another way?"), makeMessage("john", currentQuestion.clarification)]);
+    setMessages((current) => [
+      ...current,
+      makeMessage("candidate", "Could you put that another way?"),
+      makeMessage("john", currentQuestion.clarification),
+    ]);
   };
 
   const decline = () => {
     if (!currentQuestion) return;
-    setMessages((current) => [...current, makeMessage("candidate", "I would rather not answer that now."), makeMessage("john", "That is your decision. I will not force an answer or treat the pause as a personal failure.")]);
+    setMessages((current) => [
+      ...current,
+      makeMessage("candidate", "I would rather not answer that now."),
+      makeMessage("john", "That is your decision. We can leave it there and move on."),
+    ]);
     advance();
   };
 
@@ -404,29 +502,135 @@ const FirstConversation = () => {
     <main className="min-h-screen bg-[#f4efe6] px-4 py-6 text-[#211f1b] sm:px-6 sm:py-10">
       <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#d9cbb8] bg-[#fffdf8] shadow-2xl shadow-[#4e3f2d]/10">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5dbcc] px-5 py-4 sm:px-8">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8a6335]">Autopsy</p><h1 className="mt-1 text-lg font-semibold sm:text-xl">A conversation with John Galt</h1></div>
-          {phase !== "context" ? <div className="flex flex-wrap gap-2"><button type="button" onClick={() => { window.speechSynthesis?.cancel(); setVoiceEnabled((value) => !value); setSpeaking(false); }} className="rounded-full border border-[#cdbb9f] px-3 py-2 text-sm font-semibold hover:bg-[#f5ede1]">{voiceEnabled ? "Mute John" : "Unmute John"}</button><button type="button" onClick={replayLatest} disabled={!voiceEnabled || listening} className="rounded-full border border-[#cdbb9f] px-3 py-2 text-sm font-semibold hover:bg-[#f5ede1] disabled:opacity-45">Replay</button><button type="button" onClick={togglePause} className="rounded-full border border-[#cdbb9f] px-4 py-2 text-sm font-semibold hover:bg-[#f5ede1]">{paused ? "Resume" : "Pause"}</button></div> : null}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8a6335]">Autopsy</p>
+            <h1 className="mt-1 text-lg font-semibold sm:text-xl">A conversation with John Galt</h1>
+          </div>
+          {phase !== "context" ? (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => {
+                window.speechSynthesis?.cancel();
+                setVoiceEnabled((value) => !value);
+                setSpeaking(false);
+              }} className="rounded-full border border-[#cdbb9f] px-3 py-2 text-sm font-semibold hover:bg-[#f5ede1]">
+                {voiceEnabled ? "Mute John" : "Unmute John"}
+              </button>
+              <button type="button" onClick={replayLatest} disabled={!voiceEnabled || listening} className="rounded-full border border-[#cdbb9f] px-3 py-2 text-sm font-semibold hover:bg-[#f5ede1] disabled:opacity-45">
+                Replay
+              </button>
+              <button type="button" onClick={togglePause} className="rounded-full border border-[#cdbb9f] px-4 py-2 text-sm font-semibold hover:bg-[#f5ede1]">
+                {paused ? "Resume" : "Pause"}
+              </button>
+            </div>
+          ) : null}
         </header>
 
         {phase === "context" ? (
-          <section className="flex flex-1 items-center px-5 py-8 sm:px-10 sm:py-12"><div className="mx-auto w-full max-w-2xl">
-            <p className="text-sm font-semibold text-[#8a6335]">Before we begin</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Give me enough context to ask the questions properly.</h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-[#685f52]">John will speak. You can answer through your selected microphone or type. The transcript stays on this device. Nothing is scored.</p>
-            <div className="mt-8 space-y-7">
-              <div><p className="text-sm font-semibold">What situation are we discussing?</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{stageOptions.map((option) => <button key={option.value} type="button" onClick={() => setStage(option.value)} className={`rounded-2xl border p-4 text-left transition ${stage === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}><span className="block font-semibold">{option.label}</span><span className="mt-1 block text-sm leading-5 text-[#756b5d]">{option.helper}</span></button>)}</div></div>
-              <label className="block"><span className="text-sm font-semibold">What kind of business?</span><input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Cleaning, bookkeeping, café, consulting..." className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3 outline-none transition focus:border-[#8a6335]" /></label>
-              <div><p className="text-sm font-semibold">What experience are you bringing?</p><div className="mt-3 space-y-2">{experienceOptions.map((option) => <button key={option.value} type="button" onClick={() => setExperience(option.value)} className={`w-full rounded-2xl border p-4 text-left text-sm transition ${experience === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}>{option.label}</button>)}</div></div>
-              {voices.length ? <label className="block"><span className="text-sm font-semibold">John's voice</span><select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3 outline-none focus:border-[#8a6335]">{voices.filter((voice) => voice.lang.startsWith("en")).map((voice) => <option key={voice.name} value={voice.name}>{voice.name} — {voice.lang}</option>)}</select></label> : null}
+          <section className="flex flex-1 items-center px-5 py-8 sm:px-10 sm:py-12">
+            <div className="mx-auto w-full max-w-2xl">
+              <p className="text-sm font-semibold text-[#8a6335]">Before we begin</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                Tell me enough about your situation so we can have a worthwhile conversation.
+              </h2>
+              <p className="mt-4 max-w-xl text-base leading-7 text-[#685f52]">
+                John will speak, then listen automatically. You may also type. The transcript stays on this device. Nothing is scored.
+              </p>
+
+              <div className="mt-8 space-y-7">
+                <div>
+                  <p className="text-sm font-semibold">What situation are we discussing?</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {stageOptions.map((option) => (
+                      <button key={option.value} type="button" onClick={() => setStage(option.value)} className={`rounded-2xl border p-4 text-left transition ${stage === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}>
+                        <span className="block font-semibold">{option.label}</span>
+                        <span className="mt-1 block text-sm leading-5 text-[#756b5d]">{option.helper}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="text-sm font-semibold">What kind of business?</span>
+                  <input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Cleaning, bookkeeping, café, consulting..." className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3 outline-none transition focus:border-[#8a6335]" />
+                </label>
+
+                <div>
+                  <p className="text-sm font-semibold">What experience are you bringing?</p>
+                  <div className="mt-3 space-y-2">
+                    {experienceOptions.map((option) => (
+                      <button key={option.value} type="button" onClick={() => setExperience(option.value)} className={`w-full rounded-2xl border p-4 text-left text-sm transition ${experience === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white hover:bg-[#faf5ed]"}`}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {voices.length ? (
+                  <label className="block">
+                    <span className="text-sm font-semibold">John's voice</span>
+                    <select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3 outline-none focus:border-[#8a6335]">
+                      {voices.map((voice) => (
+                        <option key={voice.name} value={voice.name}>{voice.name} — {voice.lang}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+
+              {loadError ? <p className="mt-5 rounded-2xl bg-[#fff0ed] p-4 text-sm text-[#8f2f24]">The production questions could not be loaded: {loadError}</p> : null}
+              {microphoneMessage ? <p className="mt-5 rounded-2xl bg-[#f3eee6] p-4 text-sm text-[#6d6356]">{microphoneMessage}</p> : null}
+
+              <button type="button" onClick={startConversation} disabled={!conversationQuestions.length} className="mt-8 rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#403b34] disabled:cursor-not-allowed disabled:opacity-45">
+                {conversationQuestions.length ? "Begin spoken conversation" : "Loading the conversation…"}
+              </button>
             </div>
-            {loadError ? <p className="mt-5 rounded-2xl bg-[#fff0ed] p-4 text-sm text-[#8f2f24]">The production questions could not be loaded: {loadError}</p> : null}
-            {microphoneMessage ? <p className="mt-5 rounded-2xl bg-[#f3eee6] p-4 text-sm text-[#6d6356]">{microphoneMessage}</p> : null}
-            <button type="button" onClick={startConversation} disabled={!conversationQuestions.length} className="mt-8 rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#403b34] disabled:cursor-not-allowed disabled:opacity-45">{conversationQuestions.length ? "Begin spoken conversation" : "Loading the conversation…"}</button>
-          </div></section>
+          </section>
         ) : (
           <>
-            <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"><div className="mx-auto max-w-2xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#f3eee6] text-[#6d6356]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>{message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">John {speaking && message.id === [...messages].reverse().find((item) => item.speaker === "john")?.id ? "· speaking" : ""}</p> : null}<p>{message.text}</p></div></div>)}{paused ? <div className="rounded-2xl bg-[#f3eee6] p-4 text-center text-sm text-[#6d6356]">Conversation paused. Nothing advances until you resume.</div> : null}<div ref={transcriptEndRef} /></div></section>
-            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl">{phase === "complete" ? <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-[#6d6356]">Conversation complete. The transcript remains stored on this device for review.</p><button type="button" onClick={restart} className="rounded-full border border-[#bfa985] px-4 py-2 text-sm font-semibold hover:bg-white">Start again</button></div> : <><div className="mb-3 flex flex-wrap gap-2"><button type="button" onClick={rephrase} disabled={paused || listening || speaking} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">Put that another way</button><button type="button" onClick={() => setDraft("I am not sure yet.")} disabled={paused || listening || speaking} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">I’m not sure</button><button type="button" onClick={decline} disabled={paused || listening || speaking} className="rounded-full border border-[#d5c6b1] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-45">Rather not answer now</button></div><form onSubmit={submitResponse} className="flex items-end gap-3"><button type="button" onClick={toggleMicrophone} disabled={paused} aria-pressed={listening} className={`shrink-0 rounded-full px-4 py-3 text-sm font-semibold transition disabled:opacity-45 ${listening ? "bg-[#9a3f35] text-white" : "border border-[#bfa985] bg-white text-[#2b2823] hover:bg-[#f5ede1]"}`}>{listening ? "Stop" : "🎤 Speak"}</button><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused} rows={2} placeholder="Speak or type your response…" className="min-h-[58px] flex-1 resize-none rounded-2xl border border-[#d5c6b1] bg-white px-4 py-3 text-base outline-none transition focus:border-[#8a6335] disabled:opacity-55" /><button type="submit" disabled={paused || listening || speaking || !draft.trim()} className="rounded-full bg-[#2b2823] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#403b34] disabled:cursor-not-allowed disabled:opacity-40">Send</button></form>{microphoneMessage ? <p className="mt-2 text-xs leading-5 text-[#756b5d]">{microphoneMessage}</p> : null}</>}</div></footer>
+            <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8">
+              <div className="mx-auto max-w-2xl space-y-5">
+                {messages.map((message) => (
+                  <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#f3eee6] text-[#6d6356]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>
+                      {message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">John</p> : null}
+                      <p>{message.text}</p>
+                    </div>
+                  </div>
+                ))}
+                {paused ? <div className="rounded-2xl bg-[#f3eee6] p-4 text-center text-sm text-[#6d6356]">Conversation paused. Nothing advances until you resume.</div> : null}
+                <div ref={transcriptEndRef} />
+              </div>
+            </section>
+
+            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5">
+              <div className="mx-auto max-w-2xl">
+                {phase === "complete" ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-[#6d6356]">Conversation complete. The transcript remains stored on this device.</p>
+                    <button type="button" onClick={restart} className="rounded-full bg-[#2b2823] px-5 py-2.5 text-sm font-semibold text-white">Start again</button>
+                  </div>
+                ) : (
+                  <>
+                    <form onSubmit={submitResponse} className="flex items-end gap-2">
+                      <textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening} rows={2} placeholder={listening ? "Listening…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm outline-none focus:border-[#8a6335] disabled:bg-[#f3eee6]" />
+                      <button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking} aria-label={listening ? "Finish speaking" : "Start speaking"} className={`h-12 rounded-full px-4 text-sm font-semibold text-white transition disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>
+                        {listening ? "Finish" : "Speak"}
+                      </button>
+                      <button type="submit" disabled={!draft.trim() || paused || listening} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">
+                        Send
+                      </button>
+                    </form>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[#6d6356]">
+                      <span>{speaking ? "John is speaking…" : listening ? "Listening. I will finish after you pause." : microphoneMessage ?? "Ready when you are."}</span>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={rephrase} disabled={paused || listening || speaking} className="underline underline-offset-4 disabled:opacity-45">Put that another way</button>
+                        <button type="button" onClick={decline} disabled={paused || listening || speaking} className="underline underline-offset-4 disabled:opacity-45">Leave this question</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </footer>
           </>
         )}
       </section>
