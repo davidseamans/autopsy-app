@@ -1,0 +1,40 @@
+name: Constitutional Guardrails
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "src/test/constitutional-guardrails.test.ts"
+      - ".github/workflows/constitutional-guardrails.yml"
+  pull_request:
+    paths:
+      - "api/**"
+      - "src/test/constitutional-guardrails.test.ts"
+      - ".github/workflows/constitutional-guardrails.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  guardrail-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run constitutional regression suite
+        run: npx vitest run src/test/constitutional-guardrails.test.ts
+
+      - name: Verify production build
+        run: npm run build
