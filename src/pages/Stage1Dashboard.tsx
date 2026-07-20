@@ -655,6 +655,7 @@ function KpiCard({
   primary,
   secondaries,
   icon: Icon,
+  accent,
   tone,
   onClick,
 }: {
@@ -662,14 +663,40 @@ function KpiCard({
   primary: React.ReactNode;
   secondaries?: { k: string; v: React.ReactNode }[];
   icon: React.ComponentType<{ className?: string }>;
+  accent: "blue" | "green" | "violet" | "amber";
   tone?: string;
   onClick?: () => void;
 }) {
+  const accentStyles = {
+    blue: {
+      card: "border-t-[#1769d4] bg-gradient-to-br from-white to-[#eef5ff]",
+      label: "text-[#1769d4]",
+      icon: "bg-[#e7f0ff] text-[#1769d4] ring-[#cfe0fb]",
+    },
+    green: {
+      card: "border-t-[#218348] bg-gradient-to-br from-white to-[#edf8f1]",
+      label: "text-[#218348]",
+      icon: "bg-[#e5f6eb] text-[#218348] ring-[#ccebd7]",
+    },
+    violet: {
+      card: "border-t-[#7351c8] bg-gradient-to-br from-white to-[#f2effb]",
+      label: "text-[#7351c8]",
+      icon: "bg-[#eee9fa] text-[#7351c8] ring-[#ddd3f4]",
+    },
+    amber: {
+      card: "border-t-[#d46a16] bg-gradient-to-br from-white to-[#fff4e9]",
+      label: "text-[#d46a16]",
+      icon: "bg-[#fff0df] text-[#d46a16] ring-[#f5d8bc]",
+    },
+  }[accent];
+
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span className={`text-xs font-semibold uppercase tracking-wide ${accentStyles.label}`}>{label}</span>
+        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ring-1 ${accentStyles.icon}`}>
+          <Icon className="h-4 w-4" />
+        </span>
       </div>
       <div className={`mt-2 text-3xl font-semibold ${tone ?? ""}`}>{primary}</div>
       {secondaries && (
@@ -689,7 +716,7 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div className="text-left rounded-lg border bg-white p-4">
+      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card}`}>
         {content}
       </div>
     );
@@ -697,7 +724,7 @@ function KpiCard({
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-lg border bg-white p-4 hover:border-foreground/40 hover:shadow-sm transition-all"
+      className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card}`}
     >
       {content}
     </button>
@@ -4448,7 +4475,7 @@ function Stage1DashboardInner() {
         )}
 
       {units.length === 0 && !ledgerLoading && !ledgerError && (
-        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+        <div className="rounded-md border border-[#cfe0fb] bg-gradient-to-r from-[#eef5ff] to-[#edf8f1] px-3 py-2 text-sm shadow-sm">
           <div className="font-medium text-foreground">
             Stage 1 is ready. Add your first quote or job to begin proof tracking.
           </div>
@@ -4463,6 +4490,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Leads"
           icon={Users}
+          accent="blue"
           primary={totalLeads}
           secondaries={[{ k: "Total leads", v: totalLeads }]}
           onClick={() => setDrill("leads")}
@@ -4470,6 +4498,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Conversions"
           icon={FileText}
+          accent="green"
           primary={`${quoteConvPct}%`}
           secondaries={[
             { k: "Quotes sent", v: quotesSent },
@@ -4480,6 +4509,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Active Jobs"
           icon={Briefcase}
+          accent="violet"
           primary={activeJobs}
           secondaries={[
             { k: "Active jobs", v: activeJobs },
@@ -4490,6 +4520,7 @@ function Stage1DashboardInner() {
         <KpiCard
           label="Gross Margin"
           icon={TrendingUp}
+          accent="amber"
           tone={displayMarginTone}
           primary={displayMarginText}
         />
@@ -4509,8 +4540,8 @@ function Stage1DashboardInner() {
 
       {/* ---- Bottom: report switcher ---- */}
       <section className="space-y-3">
-          <Card>
-            <CardHeader className="pb-2">
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="text-base">
