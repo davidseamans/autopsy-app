@@ -3203,21 +3203,21 @@ function Stage1DashboardInner() {
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10">
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Stage 1 command centre</p>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">First 5 Jobs</h1>
-          <p className="text-xs text-muted-foreground mt-1">Track leads, quotes, jobs, margin, and money owing.</p>
+          <p className="text-xs uppercase tracking-widest text-[#52d8c2]">Stage 1 command centre</p>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">First 5 Jobs</h1>
+          <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
           {bd.loaded && !bd.complete && (
-            <Button onClick={() => setBdOpen(true)} className="gap-2">
+            <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
             </Button>
           )}
           {bd.loaded && bd.complete && (
-            <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 gap-1.5 py-1.5 px-3">
+            <Badge variant="outline" className="gap-1.5 border-emerald-300/60 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Business Registration Ready
             </Badge>
