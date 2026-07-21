@@ -1,5 +1,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
+import { AutopsyCheckoutPanel } from "@/components/autopsy/AutopsyCheckoutPanel";
+import { useSearchParams } from "react-router-dom";
 
 type StageOption = { value: string; label: string; helper: string };
 type ExperienceOption = { value: string; label: string };
@@ -47,6 +50,9 @@ const makeMessage = (speaker: Message["speaker"], text: string): Message => ({
 const normalise = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const FirstConversation = () => {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const transcriptKey = `${TRANSCRIPT_KEY}:${user?.id ?? "anonymous"}`;
   const [stageOptions, setStageOptions] = useState(fallbackStages);
   const [experienceOptions, setExperienceOptions] = useState(fallbackExperiences);
   const [stage, setStage] = useState("startup");
@@ -62,11 +68,44 @@ const FirstConversation = () => {
   const [status, setStatus] = useState("Ready when you are.");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState(() => window.localStorage.getItem(VOICE_KEY) ?? "");
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stableTranscriptRef = useRef("");
   const silenceTimerRef = useRef<number | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  const turnNumberRef = useRef(0);
+
+  const persistTurn = useCallback(async (id: string, speaker: "john" | "candidate", content: string) => {
+    if (!user) return;
+    turnNumberRef.current += 1;
+    const { error } = await supabase.from("initial_conversation_turns").insert({
+      conversation_id: id,
+      user_id: user.id,
+      turn_number: turnNumberRef.current,
+      speaker,
+      content,
+      is_canonical_evidence: false,
+    });
+    if (error) throw error;
+  }, [user]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(transcriptKey) ?? "null");
+      if (saved?.messages?.length) {
+        setStage(saved.stage ?? "startup");
+        setExperience(saved.experience ?? "never");
+        setIndustry(saved.industry ?? "");
+        setMessages(saved.messages);
+        setConversationId(saved.conversationId ?? null);
+        turnNumberRef.current = saved.messages.filter((message: Message) => message.speaker !== "system").length;
+        setStarted(true);
+      }
+    } catch {
+      window.localStorage.removeItem(transcriptKey);
+    }
+  }, [transcriptKey]);
 
   useEffect(() => {
     void Promise.all([
@@ -98,10 +137,10 @@ const FirstConversation = () => {
 
   useEffect(() => {
     if (messages.length) {
-      window.localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, messages }));
+      window.localStorage.setItem(transcriptKey, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, conversationId, messages }));
       transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [experience, industry, messages, stage]);
+  }, [conversationId, experience, industry, messages, stage, transcriptKey]);
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
@@ -133,13 +172,13 @@ const FirstConversation = () => {
     window.speechSynthesis.speak(utterance);
   }, [paused, voiceName, voices]);
 
-  const conversationHistory = (nextUserText?: string) => {
+  const conversationHistory = useCallback((nextUserText?: string) => {
     const history = messages
       .filter((message) => message.speaker !== "system")
       .map((message) => ({ role: message.speaker === "john" ? "assistant" : "user", content: message.text }));
     if (nextUserText) history.push({ role: "user", content: nextUserText });
     return history;
-  };
+  }, [messages]);
 
   const sendTurn = useCallback(async (rawText: string) => {
     const text = normalise(rawText);
@@ -150,6 +189,7 @@ const FirstConversation = () => {
     setMessages((current) => [...current, makeMessage("candidate", text)]);
 
     try {
+      if (conversationId) await persistTurn(conversationId, "candidate", text);
       const response = await fetch("/api/conversation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,6 +199,7 @@ const FirstConversation = () => {
       if (!response.ok || !payload.reply) throw new Error(payload.error || "No reply");
       const reply = normalise(payload.reply);
       setMessages((current) => [...current, makeMessage("john", reply)]);
+      if (conversationId) await persistTurn(conversationId, "john", reply);
       setThinking(false);
       speak(reply, true);
     } catch (error) {
@@ -167,7 +208,7 @@ const FirstConversation = () => {
       setDraft(text);
       setMessages((current) => [...current, makeMessage("system", error instanceof Error ? error.message : "Conversation service failed")]);
     }
-  }, [experience, industry, messages, paused, speak, stage, thinking]);
+  }, [conversationHistory, conversationId, experience, industry, paused, persistTurn, speak, stage, thinking]);
 
   const startListening = useCallback(() => {
     if (!speechRecognitionConstructor || listening || speaking || thinking || paused) return;
@@ -216,13 +257,28 @@ const FirstConversation = () => {
   const startListeningRef = useRef<(() => void) | null>(null);
   useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
 
-  const startConversation = () => {
+  const startConversation = async () => {
+    if (!user) return;
     const stageLabel = stageOptions.find((item) => item.value === stage)?.label.toLowerCase() ?? "your situation";
     const context = industry.trim() ? `${stageLabel} in ${industry.trim()}` : stageLabel;
     const opening = `Good morning. Thanks for sitting down with me. This is a conversation, not a quiz, and there is no script you have to perform against. I understand we are talking about ${context}. What is occupying your mind about it today?`;
-    window.localStorage.removeItem(TRANSCRIPT_KEY);
+    const { data: conversation, error } = await supabase.from("initial_conversations").insert({
+      user_id: user.id,
+      business_stage: stage,
+      ownership_experience: experience,
+      industry_context: industry.trim() || null,
+      is_assessment_context: false,
+    }).select("id").single();
+    if (error || !conversation) {
+      setStatus("The private conversation record could not be opened. Please try again.");
+      return;
+    }
+    window.localStorage.removeItem(transcriptKey);
+    turnNumberRef.current = 0;
+    setConversationId(conversation.id);
     setMessages([makeMessage("john", opening)]);
     setStarted(true);
+    try { await persistTurn(conversation.id, "john", opening); } catch { setStatus("The opening was not saved. Please start again before purchasing Autopsy."); }
     speak(opening, true);
   };
 
@@ -231,8 +287,8 @@ const FirstConversation = () => {
   const restart = () => {
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
-    window.localStorage.removeItem(TRANSCRIPT_KEY);
-    setMessages([]); setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
+    window.localStorage.removeItem(transcriptKey);
+    setMessages([]); setConversationId(null); turnNumberRef.current = 0; setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
   };
 
   return (
@@ -259,7 +315,7 @@ const FirstConversation = () => {
         ) : (
           <>
             <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"><div className="mx-auto max-w-2xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#fff0ed] text-[#8f2f24]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>{message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">John</p> : null}<p>{message.text}</p></div></div>)}<div ref={transcriptEndRef} /></div></section>
-            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "John is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p></div></footer>
+            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "John is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p>{messages.filter((message) => message.speaker !== "system").length >= 3 || searchParams.has("checkout") ? <AutopsyCheckoutPanel conversationId={conversationId} /> : null}</div></footer>
           </>
         )}
       </section>
