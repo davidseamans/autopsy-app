@@ -13,6 +13,7 @@ import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
 import Stage1Dashboard from "@/pages/Stage1Dashboard";
 import MorningOrientation from "@/pages/MorningOrientation";
 import FirstConversation from "@/pages/FirstConversation";
+import PaidAutopsyEntry from "@/pages/PaidAutopsyEntry";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
 import Leads from "@/pages/crm/Leads";
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/owner-cockpit" element={<OwnerCockpit />} />
               <Route path="/staff-cockpit" element={<StaffCockpit />} />
               <Route path="/autopsy" element={<Autopsy />} />
+              <Route path="/autopsy/paid" element={<AuthGate><PaidAutopsyEntry /></AuthGate>} />
               <Route path="/autopsy/history" element={<AutopsyHistory />} />
               <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
               <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
