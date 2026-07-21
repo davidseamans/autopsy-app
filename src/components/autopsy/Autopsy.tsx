@@ -1894,6 +1894,23 @@ function VerdictView({
       })()
     : null;
 
+  // Candidate-facing Verdict. The diagnostic/governance cockpit below is
+  // retained temporarily for internal development, but it is not suitable for
+  // a person reading the result on a phone. Autopsy must answer three plain
+  // questions: what did we find, what does it mean, and what happens next?
+  return (
+    <CandidateVerdict
+      runId={runId}
+      verdictName={verdictName}
+      verdictBody={effectiveVerdictBody}
+      score={scoreNumeric}
+      dimensions={dimensionScores}
+      primaryArea={primaryConstraint}
+      completedLabel={completedLabel}
+      onReset={onReset}
+    />
+  );
+
   return (
     <div className="space-y-6">
       {/* 1. Verdict Header */}
@@ -2378,6 +2395,137 @@ function VerdictView({
           audit={selectedAnswerAudit}
         />
       )}
+    </div>
+  );
+}
+
+const CANDIDATE_DIMENSION_LABELS: Record<string, string> = {
+  cash_reality: "Can you carry the start-up costs?",
+  economic_literacy: "Do you understand the numbers?",
+  market_reality: "Have you tested real customer demand?",
+  operational_capacity: "Can you deliver the work reliably?",
+  execution_discipline: "Do you follow through?",
+  psychological_resilience: "Can you handle the pressure?",
+};
+
+function CandidateVerdict({
+  runId,
+  verdictName,
+  verdictBody,
+  score,
+  dimensions,
+  primaryArea,
+  completedLabel,
+  onReset,
+}: {
+  runId: string | null;
+  verdictName: string;
+  verdictBody: string;
+  score: number | null;
+  dimensions: Array<{ code: string; label: string; score: number }>;
+  primaryArea?: string | null;
+  completedLabel: string;
+  onReset: () => void;
+}) {
+  const band = deriveBand(verdictName);
+  const ready = band === "structurally_viable";
+  const provisional = band === "viable";
+  const stopped = band === "critical_stop" || band === "not_viable";
+  const colour = ready
+    ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+    : provisional
+      ? "border-blue-600 bg-blue-50 text-blue-950"
+      : stopped
+        ? "border-red-600 bg-red-50 text-red-950"
+        : "border-amber-500 bg-amber-50 text-amber-950";
+
+  const meaning = ready
+    ? "You have shown enough readiness to try your first five jobs with guidance. This is permission to test yourself in the real world—not a promise that running a business will be easy."
+    : provisional
+      ? "You may be ready to continue, but there are still some things we need to clarify before you take on your first five jobs."
+      : band === "high_risk"
+        ? "There are promising signs, but too much still depends on assumptions. Starting now would expose you to risks you have not yet shown you can handle."
+        : band === "not_viable"
+          ? "Your answers do not yet show that you are ready to take responsibility for real customers, real costs and real problems. That is useful to know before money is at risk."
+          : "Your answers show that starting now would put you under pressure you have not yet shown you can safely handle. Stopping here is a successful result—it may prevent an expensive mistake.";
+
+  const next = ready
+    ? "Next, we help you quote, complete and cost your first five jobs. You will learn from real work while the numbers are still small and manageable."
+    : provisional
+      ? "Talk the result through with John. We will clarify the weak area and decide whether a small, controlled test is sensible."
+      : "Do not rush into starting. Talk the result through with John. If you choose to work on the weak area, come back to Autopsy only when something has genuinely changed.";
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-5 pb-10">
+      <section className={cn("rounded-2xl border-2 p-6 text-center shadow-sm sm:p-8", colour)}>
+        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider opacity-70">
+          <span>Your Autopsy result</span>
+          <span>{completedLabel}</span>
+        </div>
+        <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{verdictName}</h1>
+        {score != null && Number.isFinite(score) && (
+          <p className="mt-3 text-sm opacity-75">Your answers scored {score} out of 36</p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">What we found</h2>
+        <p className="mt-3 leading-7 text-muted-foreground">{verdictBody}</p>
+        <h2 className="mt-6 text-xl font-semibold">What that means for you</h2>
+        <p className="mt-3 leading-7 text-muted-foreground">{meaning}</p>
+      </section>
+
+      {dimensions.length > 0 && (
+        <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-semibold">How your answers looked</h2>
+          <p className="mt-1 text-sm text-muted-foreground">These are the six practical areas Autopsy considered.</p>
+          <div className="mt-5 space-y-4">
+            {dimensions.map((dimension) => {
+              const code = String(dimension.code ?? "").toLowerCase();
+              const label = CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+              const value = Number(dimension.score ?? 0);
+              return (
+                <div key={code || label}>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="font-medium">{label}</span>
+                    <span className="shrink-0 text-muted-foreground">{value} / 6</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn("h-full rounded-full", value >= 5 ? "bg-emerald-600" : value >= 3 ? "bg-amber-500" : "bg-red-500")}
+                      style={{ width: `${Math.max(0, Math.min(100, (value / 6) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!ready && primaryArea && primaryArea !== "No Active Readiness Gap" && (
+            <p className="mt-5 rounded-xl bg-muted px-4 py-3 text-sm">
+              <span className="font-semibold">First thing to discuss:</span> {primaryArea}
+            </p>
+          )}
+        </section>
+      )}
+
+      <section className="rounded-2xl border bg-[#092540] p-5 text-white shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">What happens next</h2>
+        <p className="mt-3 leading-7 text-slate-200">{next}</p>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          {ready && runId ? (
+            <Button asChild className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Link to={`/stage-1?runId=${runId}`}>Start First 5 Jobs</Link>
+            </Button>
+          ) : (
+            <Button asChild className="bg-sky-500 text-slate-950 hover:bg-sky-400">
+              <Link to="/first-conversation">Talk it through with John</Link>
+            </Button>
+          )}
+          <Button variant="outline" onClick={onReset} className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white">
+            Start a new Autopsy
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
