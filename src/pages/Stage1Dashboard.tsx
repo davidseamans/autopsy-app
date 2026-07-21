@@ -3241,13 +3241,13 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
-          {bd.loaded && !bd.complete && (
+          {!isDemo && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
             </Button>
           )}
-          {bd.loaded && bd.complete && (
+          {(isDemo || (bd.loaded && bd.complete)) && (
             <Badge variant="outline" className="gap-1.5 border-emerald-300/60 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Business Registration Ready
@@ -3256,13 +3256,13 @@ function Stage1DashboardInner() {
         </div>
       </header>
 
-      {bd.loaded && bd.complete && (
+      {(isDemo || (bd.loaded && bd.complete)) && (
         <p className="text-xs text-muted-foreground -mt-2">
           Business registration is ready. You can now create quotes and record Stage 1 transactions. Business details can be updated if required.
         </p>
       )}
 
-      {bd.loaded && !bd.canOperate && (
+      {!isDemo && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Complete Business Registration</CardTitle>
@@ -4896,6 +4896,10 @@ function Stage1DashboardInner() {
 // Stage 1 RPCs run only while authenticated: the inner component (which fires
 // all Stage 1 Supabase RPCs in its effects) is mounted only behind AuthGate.
 export default function Stage1Dashboard() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("demo") === "1") {
+    return <Stage1DashboardInner />;
+  }
   return (
     <AuthGate>
       <Stage1DashboardInner />
