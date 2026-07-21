@@ -80,10 +80,14 @@ export interface ProgressionState {
 export function deriveBand(verdictName: string | undefined | null): VerdictBand {
   const v = String(verdictName ?? "").trim();
   if (!v) return "unknown";
-  if (/not[\s_-]?viable/i.test(v)) return "not_viable";
-  if (/structurally[\s_-]?viable/i.test(v)) return "structurally_viable";
-  if (/high[\s_-]?risk/i.test(v)) return "high_risk";
-  if (/viable/i.test(v)) return "viable";
+  // These are backend-owned candidate-readiness labels. Do not infer a band
+  // from the score in the browser and do not accept the retired business-
+  // viability vocabulary.
+  if (/^stop$/i.test(v)) return "critical_stop";
+  if (/^not ready$/i.test(v)) return "not_viable";
+  if (/^high risk candidate$/i.test(v)) return "high_risk";
+  if (/^provisionally ready$/i.test(v)) return "viable";
+  if (/^ready for test run$/i.test(v)) return "structurally_viable";
   return "unknown";
 }
 
@@ -349,18 +353,18 @@ export interface RoutingCopy {
 
 export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
   critical_stop: {
-    title: "Critical Stop",
+    title: "Stop — readiness not demonstrated",
     body:
-      "This is not ready to become a business. Your answers show the current idea is missing too many basic controls — demand, cash, costs, delivery, execution, or record discipline. Autopsy is not opening Stage 1 from this result. The next step is not repair inside this system. The next step is education, advice, or a complete rethink before retesting. This result is outside the safe progression pathway.",
+      "The candidate has not yet demonstrated enough evidence, discipline or capability to continue safely. This is a successful Autopsy outcome: stop here, address the identified readiness gap, and retest only when new evidence exists.",
     primaryCta: {
       label: "Retest Later",
       to: (id) => `/autopsy/run/${id}`,
     },
   },
   not_viable: {
-    title: "Stage 1 is locked",
+    title: "Not ready — preparation comes next",
     body:
-      "This is not ready to become a business system yet. The next step is not launch — it is repair. Complete the Repair Worksheet and satisfy the retest condition before progression can continue.",
+      "The present evidence does not yet support admission to a controlled test run. Complete the preparation worksheet, produce the missing evidence and then retest.",
     primaryCta: {
       label: "Start Repair Worksheet",
       to: (id) => `/autopsy/run/${id}/readiness`,
@@ -371,27 +375,27 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
     },
   },
   high_risk: {
-    title: "Conditional progression",
+    title: "High-risk candidate — narrow test only",
     body:
-      "There is enough signal to continue carefully, but not enough proof to scale or commit serious money. Complete the Readiness Worksheet and provide minimum proof that the primary risk is being addressed before Stage 1.",
+      "Some capability is present, but the evidence is not yet dependable under pressure. Continue only through a tightly bounded preparation step with clear evidence requirements.",
     primaryCta: {
       label: "Start Readiness Worksheet",
       to: (id) => `/autopsy/run/${id}/readiness`,
     },
   },
   viable: {
-    title: "Viable — confirm and proceed",
+    title: "Provisionally ready",
     body:
-      "There is enough structure to test in the real world, but Stage 1 must prove customers, margin, and record discipline. Complete the readiness checklist and confirm your first proof actions before entering Stage 1.",
+      "There is enough demonstrated readiness to continue cautiously. Complete the readiness checklist before a bounded test run; repeatability and discipline still have to be proven.",
     primaryCta: {
       label: "Continue to Readiness Checklist",
       to: (id) => `/autopsy/run/${id}/readiness`,
     },
   },
   structurally_viable: {
-    title: "Structurally viable",
+    title: "Ready for a controlled test run",
     body:
-      "This has enough structure to enter Stage 1 — the commercial proof cockpit. The next test is whether real customers, real costs, and real evidence confirm it.",
+      "The candidate has demonstrated enough current readiness to enter the First 5 Jobs test. That stage will test the evidence through real customers, real costs and disciplined records.",
     primaryCta: {
       label: "Open Stage 1 Dashboard",
       to: (id) => `/stage-1?runId=${id}`,

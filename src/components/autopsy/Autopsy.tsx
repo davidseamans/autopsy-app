@@ -256,7 +256,7 @@ function translatePermissionState(value: any): string {
   const map: Record<string, string> = {
     PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
     STOP: "Stop. Do not proceed.",
-    STOP_UNLESS_REBUILT: "Stop until the business is rebuilt and retested.",
+    STOP_UNLESS_REBUILT: "Stop until the readiness gap is addressed and new evidence is available.",
     STOP_PROOF_REQUIRED: "Stop until the required proof is produced.",
     PROCEED_WITH_CONSTRAINTS: "Proceed with controls in place.",
     CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
@@ -1743,20 +1743,12 @@ function VerdictView({
     hasSelectedHardFail ||
     backendHardFailTriggered ||
     backendHardFailText;
-  const isScoreBandCriticalStop =
-    !isHardFail &&
-    Number.isFinite(scoreNumeric) &&
-    (scoreNumeric as number) >= 0 &&
-    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.criticalStopMax;
+  const backendBand = deriveBand(verdictName);
+  const isScoreBandCriticalStop = !isHardFail && backendBand === "critical_stop";
   // A hard-fail always routes to Critical Stop regardless of score band.
   const isHardFailCriticalStop = isHardFail;
   const isCriticalStop = isScoreBandCriticalStop || isHardFailCriticalStop;
-  const isScoreBandNotViable =
-    !isHardFail &&
-    !isCriticalStop &&
-    Number.isFinite(scoreNumeric) &&
-    (scoreNumeric as number) > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax &&
-    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.notViableMax;
+  const isScoreBandNotViable = !isHardFail && backendBand === "not_viable";
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
@@ -1805,7 +1797,7 @@ function VerdictView({
   const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
   const displayScore = scoreNumeric;
   const effectiveVerdictBody = isPerfectScore
-    ? "Structurally viable. No primary constraint or repair worksheet is required. Maintain telemetry and review cadence under operating load."
+    ? "The candidate is ready for a controlled test run. Current evidence shows useful discipline and capability; the First 5 Jobs stage will test that evidence in practice."
     : tiedWatchpointNotice
       ? `${tiedWatchpointNotice} No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.`
       : verdictBody;
@@ -1889,7 +1881,7 @@ function VerdictView({
         const copy = isHardFail
           ? {
               ...baseCopy,
-              title: "Critical Stop — hard-fail repair required",
+              title: "Readiness stop — preparation required",
               body:
                 "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
               primaryCta: {
@@ -1914,9 +1906,9 @@ function VerdictView({
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFailCriticalStop
-              ? "Status: Completed · Critical Stop · Hard-fail condition triggered"
+              ? "Status: Completed · Readiness stop · Explicit stop condition"
                 : isScoreBandCriticalStop
-                  ? "Status: Completed · Critical Stop (Score-Band)"
+                  ? "Status: Completed · Stop"
                   : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
@@ -1934,9 +1926,10 @@ function VerdictView({
           >
             {(() => {
               const vn = (run.verdict_name as string) ?? "";
-              if (isCriticalStop) return "Critical Stop";
+              if (isCriticalStop && !vn.trim()) return "Stop";
               if (vn.trim() && !isCriticalStop) return vn;
-              if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
+              if (isHardFail) return "Stop";
+              if (isScoreBandNotViable || isProgressionLocked) return "Not Ready";
               return "Verdict";
             })()}
           </h1>
@@ -2426,7 +2419,31 @@ const OPERATIONAL_STATE_STYLES: Record<
     text: "text-green-700",
   },
   scalable: {
-    label: "SCALABLE",
+    label: "READY FOR TEST RUN",
+    container: "border-emerald-600/60 bg-emerald-500/5",
+    dot: "bg-emerald-600",
+    text: "text-emerald-700",
+  },
+  preparation_required: {
+    label: "PREPARATION REQUIRED",
+    container: "border-red-600/60 bg-red-500/5",
+    dot: "bg-red-600",
+    text: "text-red-700",
+  },
+  bounded_preparation: {
+    label: "BOUNDED PREPARATION",
+    container: "border-orange-500/60 bg-orange-500/5",
+    dot: "bg-orange-500",
+    text: "text-orange-700",
+  },
+  provisional: {
+    label: "PROVISIONALLY READY",
+    container: "border-blue-500/60 bg-blue-500/5",
+    dot: "bg-blue-500",
+    text: "text-blue-700",
+  },
+  test_ready: {
+    label: "READY FOR TEST RUN",
     container: "border-emerald-600/60 bg-emerald-500/5",
     dot: "bg-emerald-600",
     text: "text-emerald-700",
@@ -2481,13 +2498,13 @@ function OperationalStatePanel({
   const progressionDisplay = isHardFail
     ? "Blocked by hard-fail condition"
     : isPerfectScore
-    ? "Scalable"
+    ? "Ready for Test Run"
     : isStructurallyViable
       ? "Controlled progression"
     : isHardFailCriticalStop
     ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
-      ? "Blocked by Critical Stop score band"
+      ? "Stopped by the candidate-readiness outcome"
     : isBlocked
       ? "PROGRESSION BLOCKED"
     : isProgressionLocked
@@ -2592,6 +2609,9 @@ function PressureCollapsePanel({
   primaryRiskLabel?: string | null;
   microcopy?: string;
 }) {
+  // A fully evidenced profile has no failure or collapse diagnosis. Showing a
+  // watchpoint card here contradicted the governed readiness outcome.
+  if (isPerfectScore) return null;
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isHardFail
     ? "HARD-FAIL TRIGGERED"
@@ -2622,13 +2642,13 @@ function PressureCollapsePanel({
     : isHardFailCriticalStop
     ? "Hard-fail override"
     : isScoreBandCriticalStop
-    ? "Score-band Critical Stop"
+    ? "Readiness Stop"
     : isCriticalStop
-    ? "Critical Stop"
+    ? "Readiness Stop"
     : isBlocked && !hasContent(run.failure_type)
       ? "HARD FAIL"
       : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
-        ? "Score-band Not Viable"
+        ? "Not Ready"
         : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const hardFailCollapseText = isHardFail
@@ -2971,7 +2991,7 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
     .replace(
       /A hard[-\s]?fail condition was triggered(?:\s+by\s+a\s+selected\s+answer\s+during\s+this\s+assessment)?\.?/gi,
-      "The assessment score is below the minimum viability threshold.",
+      "The current evidence does not meet the readiness threshold for progression.",
     )
     .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
     .replace(/selected hard[-\s]?fail answer/gi, "selected answer")
@@ -3098,21 +3118,10 @@ export function getVerdictBand(opts: {
   score: number | null | undefined;
   isCriticalStop?: boolean;
 }): VerdictBand {
-  const { verdictName, isBlocked, score, isCriticalStop } = opts;
+  const { verdictName, isBlocked, isCriticalStop } = opts;
   if (isCriticalStop) return "critical_stop";
-  if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
-  if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
-  if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
-  if (/viable/i.test(verdictName)) return "viable";
-  const s = typeof score === "number" ? score : Number(score);
-  if (Number.isFinite(s)) {
-    if (s >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin) return "structurally_viable";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.highRiskMax) return "viable";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.notViableMax) return "high_risk";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax) return "not_viable";
-    return "critical_stop";
-  }
-  return "high_risk";
+  if (isBlocked) return "not_viable";
+  return deriveBand(verdictName) === "unknown" ? "high_risk" : deriveBand(verdictName) as VerdictBand;
 }
 
 export interface BandFraming {
@@ -3136,14 +3145,14 @@ export interface BandFraming {
 
 export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
   critical_stop: {
-    rankPrimary: "Critical Stop",
+    rankPrimary: "Readiness Stop",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Pressures present at the time of assessment. A Critical Stop indicates the foundation is missing across multiple dimensions.",
-    chainTitle: "Failure Chain",
-    pathLabel: "Failure Path",
+      "Current readiness gaps ranked by the strength of the evidence available today.",
+    chainTitle: "Readiness Evidence Chain",
+    pathLabel: "Evidence Gap",
     proofLabel: "Required Before Retest",
     outcomeLabel: "Outside Safe Progression Pathway",
     decisionStatusOverride: "Stop. Outside safe progression pathway.",
@@ -3155,12 +3164,12 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     failureOriented: true,
   },
   not_viable: {
-    rankPrimary: "Main Blocker",
+    rankPrimary: "Primary Readiness Gap",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
+      "Candidate-readiness gaps ranked by their effect on safe progression.",
     chainTitle: "Pressure Topology",
     pathLabel: "Failure Path",
     proofLabel: "Proof Required Before Proceeding",
@@ -3171,12 +3180,12 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     failureOriented: true,
   },
   high_risk: {
-    rankPrimary: "Main Blocker",
+    rankPrimary: "Primary Readiness Gap",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
+      "Candidate-readiness gaps ranked by their effect on safe progression.",
     chainTitle: "Pressure Topology",
     pathLabel: "Pressure Path",
     proofLabel: "Evidence Required",
@@ -3800,15 +3809,15 @@ function PressureTopology({
     cash_reality:
       "Cash runway is exposed. Limited buffer increases pressure and reduces room for mistakes.",
     economic_literacy:
-      "The business economics are not clear enough. Pricing, margin, or cost drivers may be hiding the real risk.",
+      "The candidate has not yet demonstrated a dependable grasp of pricing, margin, or the main cost drivers.",
     market_reality:
       "Demand is not yet proven strongly enough. Interest is not the same as reliable paying customers.",
     operational_capacity:
-      "Delivery reliability is still weak. The business has not proven it can perform consistently under real operating pressure.",
+      "Delivery reliability is still weak. The candidate has not yet demonstrated consistent delivery under real operating pressure.",
     execution_discipline:
-      "Execution rhythm is not yet reliable. The business may depend too heavily on intention rather than completed action.",
+      "Execution rhythm is not yet reliable. The candidate has not yet demonstrated dependable follow-through through completed action.",
     psychological_resilience:
-      "Pressure tolerance is not yet proven. Stress, uncertainty, or setbacks may distort decisions before the business stabilises.",
+      "Pressure tolerance is not yet proven. Stress, uncertainty, or setbacks may distort the candidate's decisions under operating pressure.",
   };
   const publicNameFor = (data: any): string => {
     const code = String(data?.dimension_code ?? "").toLowerCase().trim();
