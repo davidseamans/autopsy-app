@@ -215,5 +215,97 @@ begin
 end;
 $function$;
 
+create or replace function public.apply_hard_fail(p_run_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = 'public', 'pg_temp'
+as $function$
+declare
+  v_check jsonb;
+begin
+  v_check := public.check_hard_fail(p_run_id);
+
+  update public.autopsy_runs
+  set hard_fail_triggered = coalesce((v_check ->> 'hard_fail_triggered')::boolean, false),
+      hard_fail_question_id = nullif(v_check ->> 'hard_fail_question_id', '')::uuid,
+      hard_fail_reason = v_check ->> 'hard_fail_message'
+  where id = p_run_id;
+
+  insert into public.system_mutations (
+    mutation_type, target_system, target_object, mutation_summary,
+    mutation_payload, initiated_by
+  ) values (
+    'hard_fail_evaluation', 'autopsy-canonical', 'autopsy_runs',
+    case when coalesce((v_check ->> 'hard_fail_triggered')::boolean, false)
+      then 'Explicit selected-option readiness stop applied to run'
+      else 'Selected-option readiness stop evaluation passed'
+    end,
+    v_check, 'system'
+  );
+end;
+$function$;
+
+create or replace function public.finalize_autopsy_run(p_run_id uuid)
+returns public.autopsy_runs
+language plpgsql
+security definer
+set search_path = 'public', 'pg_temp'
+as $function$
+declare
+  v_run public.autopsy_runs;
+  v_stage_progress_id uuid;
+begin
+  select * into v_run from public.autopsy_runs where id = p_run_id;
+  if not found then
+    raise exception 'Autopsy run not found: %', p_run_id;
+  end if;
+
+  if v_run.status not in ('completed', 'finalized') then
+    select * into v_run from public.finalize_autopsy_run_internal(p_run_id);
+    perform public.apply_hard_fail(p_run_id);
+
+    update public.autopsy_runs
+    set status = 'completed', completed_at = now()
+    where id = p_run_id;
+
+    select * into v_run from public.autopsy_runs where id = p_run_id;
+  end if;
+
+  -- Completion is not admission. Only the governed Ready for Test Run outcome
+  -- may automatically open the First 5 Jobs controlled test.
+  if v_run.verdict_name = 'Ready for Test Run'
+     and v_run.permission_level = 'granted'
+     and coalesce(v_run.hard_fail_triggered, false) is false then
+    select a.stage_progress_id into v_stage_progress_id
+    from public.activate_stage1_from_autopsy_run(p_run_id) a
+    limit 1;
+
+    if v_stage_progress_id is null then
+      raise exception 'Stage 1 activation did not return a linked stage progress row.'
+        using errcode = '23502';
+    end if;
+  end if;
+
+  insert into public.system_mutations (
+    mutation_type, target_system, target_object, mutation_summary,
+    mutation_payload, initiated_by
+  ) values (
+    'candidate_readiness_finalized', 'autopsy-canonical', 'autopsy_runs',
+    'Autopsy finalized from governed candidate-readiness band',
+    jsonb_build_object(
+      'run_id', p_run_id,
+      'outcome', v_run.verdict_name,
+      'score_total', v_run.score_total,
+      'stage1_activated', v_stage_progress_id is not null,
+      'stage_progress_id', v_stage_progress_id
+    ),
+    'system'
+  );
+
+  return v_run;
+end;
+$function$;
+
 -- The legacy question-level and answer_options.hard_fail fields remain for
 -- audit compatibility only. They no longer trigger a stop.
