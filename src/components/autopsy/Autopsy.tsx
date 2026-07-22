@@ -193,6 +193,7 @@ function buildSelectedAnswersFromPayload(
         question_id: q.question_id ?? q.q_id ?? null,
         question_number: Number.isFinite(Number(q.position)) ? Number(q.position) : i + 1,
         dimension_code: q.dimension_code ?? null,
+        question_prompt: q.prompt ?? null,
         selected_option_id: selectedId,
         selected_option_label:
           selectedOpt && typeof selectedOpt === "object"
@@ -1656,7 +1657,16 @@ function VerdictView({
     if (dbRows.length > 0) {
       const byQuestion = new Map<string, SelectedAnswerAuditRow>();
       for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
-      for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
+      for (const row of dbRows) {
+        const key = auditQuestionKey(row);
+        const gatewayRow = byQuestion.get(key);
+        byQuestion.set(key, {
+          ...gatewayRow,
+          ...row,
+          dimension_code: row.dimension_code ?? gatewayRow?.dimension_code ?? null,
+          question_prompt: row.question_prompt ?? gatewayRow?.question_prompt ?? null,
+        });
+      }
       const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
       const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
       return {
@@ -1905,6 +1915,12 @@ function VerdictView({
       verdictBody={effectiveVerdictBody}
       score={scoreNumeric}
       dimensions={dimensionScores}
+      answerEvidence={selectedAnswerAudit.selectedAnswers.map((answer) => ({
+        questionNumber: answer.question_number,
+        dimensionCode: answer.dimension_code ?? null,
+        prompt: answer.question_prompt ?? null,
+        score: answer.score_value,
+      }))}
       completedLabel={completedLabel}
     />
   );
@@ -2502,6 +2518,7 @@ function CandidateVerdict({
   verdictBody,
   score,
   dimensions,
+  answerEvidence,
   completedLabel,
 }: {
   runId: string | null;
@@ -2509,6 +2526,12 @@ function CandidateVerdict({
   verdictBody: string;
   score: number | null;
   dimensions: Array<{ code: string; label: string; score: number }>;
+  answerEvidence: Array<{
+    questionNumber: number | null;
+    dimensionCode: string | null;
+    prompt: string | null;
+    score: number | null;
+  }>;
   completedLabel: string;
 }) {
   const band = deriveBand(verdictName);
@@ -2600,7 +2623,22 @@ function CandidateVerdict({
             ? "You are approaching test readiness. The remaining task is not more enthusiasm or information; it is convincing evidence in the few areas that still weaken the whole picture."
             : "You are closer, but readiness is still uneven. A small number of weaknesses must be proven rather than explained before First 5 Jobs becomes sensible.";
 
-  const orderedDimensions = [...dimensions].sort((a, b) => a.score - b.score);
+  const evidenceForDimension = (code: string) => answerEvidence
+    .filter((answer) => String(answer.dimensionCode ?? "").toLowerCase() === code)
+    .filter((answer) => Number.isFinite(Number(answer.score)))
+    .sort((a, b) => Number(a.score) - Number(b.score) || Number(a.questionNumber ?? 99) - Number(b.questionNumber ?? 99));
+  const orderedDimensions = [...dimensions].sort((a, b) => {
+    const aggregateDifference = a.score - b.score;
+    if (aggregateDifference !== 0) return aggregateDifference;
+    const aEvidence = evidenceForDimension(String(a.code ?? "").toLowerCase());
+    const bEvidence = evidenceForDimension(String(b.code ?? "").toLowerCase());
+    const minimumDifference = Number(aEvidence[0]?.score ?? 99) - Number(bEvidence[0]?.score ?? 99);
+    if (minimumDifference !== 0) return minimumDifference;
+    const aLowCount = aEvidence.filter((answer) => Number(answer.score) <= 1).length;
+    const bLowCount = bEvidence.filter((answer) => Number(answer.score) <= 1).length;
+    if (aLowCount !== bLowCount) return bLowCount - aLowCount;
+    return Number(aEvidence[0]?.questionNumber ?? 99) - Number(bEvidence[0]?.questionNumber ?? 99);
+  });
   const allScoresEqual = orderedDimensions.length > 0
     && orderedDimensions.every((dimension) => dimension.score === orderedDimensions[0].score);
   const explanatoryDimensions = ready || allScoresEqual ? orderedDimensions : orderedDimensions.slice(0, 3);
@@ -2618,9 +2656,14 @@ function CandidateVerdict({
   const workPriorities = !ready && band !== "critical_stop"
     ? orderedDimensions.slice(0, 2).map((dimension) => {
         const code = String(dimension.code ?? "").toLowerCase();
+        const evidenceFocus = evidenceForDimension(code)
+          .filter((answer) => answer.prompt)
+          .slice(0, 2)
+          .map((answer) => String(answer.prompt));
         return {
           code,
           label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+          evidenceFocus,
           ...CANDIDATE_DIMENSION_WORK[code],
         };
       })
@@ -2643,6 +2686,7 @@ function CandidateVerdict({
       <section class="work">
         <p class="small">PRIORITY ${index + 1}</p>
         <h3>${escapeExplanation(priority.label)}</h3>
+        ${priority.evidenceFocus.length > 0 ? `<p><strong>What in your answers brought this forward:</strong> ${priority.evidenceFocus.map(escapeExplanation).join("; ")}</p>` : ""}
         <p><strong>Work on:</strong> ${escapeExplanation(priority.work ?? "Build genuine practical experience in this area.")}</p>
         <p><strong>Evidence worth bringing back:</strong> ${escapeExplanation(priority.evidence ?? "A real and sustained change in your circumstances or behaviour.")}</p>
         <p><strong>Do not:</strong> ${escapeExplanation(priority.caution ?? "Make a serious commitment before the evidence changes.")}</p>
