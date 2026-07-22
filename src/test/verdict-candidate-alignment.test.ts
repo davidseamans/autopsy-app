@@ -44,4 +44,18 @@ describe("candidate-readiness verdict contract", () => {
     expect(sql).not.toContain("q.is_hard_fail = true or");
     expect(sql).not.toMatch(/This business is|business is structurally|business is not yet viable/i);
   });
+
+  it("keeps the apprentice verdict explanatory without exposing the answer key or an appeal path", () => {
+    const source = readFileSync(resolve("src/components/autopsy/Autopsy.tsx"), "utf8");
+    const candidateView = source.slice(
+      source.indexOf("function CandidateVerdict"),
+      source.indexOf("/* --------------------------------- helpers"),
+    );
+
+    expect(candidateView).toContain("Why Autopsy reached this decision");
+    expect(candidateView).toContain("What this result does not mean");
+    expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
+    expect(candidateView).toContain("Print or save as PDF");
+    expect(candidateView).not.toMatch(/Talk it through with John|Start a new Autopsy|out of 36|\/ 6/);
+  });
 });
