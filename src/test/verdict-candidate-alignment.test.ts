@@ -52,7 +52,9 @@ describe("candidate-readiness verdict contract", () => {
       source.indexOf("/* --------------------------------- helpers"),
     );
 
-    expect(candidateView).toContain("Why Autopsy reached this decision");
+    expect(candidateView).toContain("Why this matters in the real world");
+    expect(candidateView).toContain("This is not the same result as Stop");
+    expect(candidateView).toContain("A Ready for Test Run result is deliberately conditional");
     expect(candidateView).toContain("What this result does not mean");
     expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
     expect(candidateView).toContain("Print or save as PDF");
