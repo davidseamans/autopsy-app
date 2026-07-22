@@ -1903,11 +1903,8 @@ function VerdictView({
       runId={runId}
       verdictName={verdictName}
       verdictBody={effectiveVerdictBody}
-      score={scoreNumeric}
       dimensions={dimensionScores}
-      primaryArea={primaryConstraint}
       completedLabel={completedLabel}
-      onReset={onReset}
     />
   );
 
@@ -2408,24 +2405,75 @@ const CANDIDATE_DIMENSION_LABELS: Record<string, string> = {
   psychological_resilience: "Can you handle the pressure?",
 };
 
+const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: string; consequence: string }> = {
+  cash_reality: {
+    positive: "You showed that you have thought about how you would carry the early costs while the work is still uncertain.",
+    concern: "Your answers did not yet show a dependable financial buffer for the early months.",
+    consequence: "A shortfall can force rushed decisions, personal borrowing, or abandoning the venture before it has had a fair test.",
+  },
+  economic_literacy: {
+    positive: "You showed a useful understanding of prices, job costs and the numbers that make work worthwhile.",
+    concern: "Your answers did not yet show that you can reliably connect price, job costs and the money left over.",
+    consequence: "You can stay busy while losing money, quote too cheaply, or mistake cash in the bank for profit.",
+  },
+  market_reality: {
+    positive: "You showed evidence that real customers—not only friends or enthusiasm—may pay for the service.",
+    concern: "Your answers did not yet show enough evidence that real customers will choose and pay you.",
+    consequence: "Buying equipment or leaving steady work before demand is proven can turn an idea into an expensive guess.",
+  },
+  operational_capacity: {
+    positive: "You showed that you have considered how the work will be delivered reliably and to an acceptable standard.",
+    concern: "Your answers did not yet show a reliable way to deliver the work when customers, timing and problems become real.",
+    consequence: "Late arrivals, uneven quality or work that takes too long can damage trust before the business has established itself.",
+  },
+  execution_discipline: {
+    positive: "You showed evidence that you can turn intentions into completed actions and follow through consistently.",
+    concern: "Your answers did not yet show dependable follow-through when the work becomes repetitive or uncomfortable.",
+    consequence: "Quotes go unanswered, records fall behind and small promises to customers are missed—the ordinary failures that quietly sink new operators.",
+  },
+  psychological_resilience: {
+    positive: "You showed that you can remain responsible and make considered decisions when the pressure rises.",
+    concern: "Your answers did not yet show how you would respond to uncertainty, rejection, complaints or uneven income.",
+    consequence: "Pressure can lead to impulsive pricing, avoidance, poor customer decisions or giving up at exactly the wrong time.",
+  },
+};
+
+function evidenceLabel(score: number): string {
+  if (score >= 5) return "Demonstrated";
+  if (score >= 3) return "Some evidence";
+  if (score >= 2) return "Limited evidence";
+  return "Not demonstrated";
+}
+
+function evidenceWidth(score: number): string {
+  if (score >= 5) return "100%";
+  if (score >= 3) return "68%";
+  if (score >= 2) return "40%";
+  return "15%";
+}
+
+function escapeExplanation(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] ?? character);
+}
+
 function CandidateVerdict({
   runId,
   verdictName,
   verdictBody,
-  score,
   dimensions,
-  primaryArea,
   completedLabel,
-  onReset,
 }: {
   runId: string | null;
   verdictName: string;
   verdictBody: string;
-  score: number | null;
   dimensions: Array<{ code: string; label: string; score: number }>;
-  primaryArea?: string | null;
   completedLabel: string;
-  onReset: () => void;
 }) {
   const band = deriveBand(verdictName);
   const ready = band === "structurally_viable";
@@ -2452,8 +2500,49 @@ function CandidateVerdict({
   const next = ready
     ? "Next, we help you quote, complete and cost your first five jobs. You will learn from real work while the numbers are still small and manageable."
     : provisional
-      ? "Talk the result through with John. We will clarify the weak area and decide whether a small, controlled test is sensible."
-      : "Do not rush into starting. Talk the result through with John. If you choose to work on the weak area, come back to Autopsy only when something has genuinely changed.";
+      ? "Do not commit serious money or leave secure work yet. The sensible next step is to gain real exposure in the weaker areas and reconsider a small, controlled test only when the evidence changes."
+      : "Do not rush into starting and do not immediately repeat Autopsy. Keep the security of regular work while you gain practical exposure and reconsider the commitment. Return only after your circumstances or real-world evidence have genuinely changed.";
+
+  const orderedDimensions = [...dimensions].sort((a, b) => a.score - b.score);
+  const allScoresEqual = orderedDimensions.length > 0
+    && orderedDimensions.every((dimension) => dimension.score === orderedDimensions[0].score);
+  const explanatoryDimensions = ready || allScoresEqual
+    ? orderedDimensions
+    : orderedDimensions.slice(0, 3);
+  const findings = explanatoryDimensions.map((dimension) => {
+    const code = String(dimension.code ?? "").toLowerCase();
+    const copy = CANDIDATE_DIMENSION_FINDINGS[code];
+    return {
+      code,
+      label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+      evidence: evidenceLabel(Number(dimension.score ?? 0)),
+      finding: Number(dimension.score ?? 0) >= 4 ? copy?.positive : copy?.concern,
+      consequence: copy?.consequence,
+    };
+  });
+
+  const printExplanation = () => {
+    const popup = window.open("", "_blank");
+    if (!popup) return;
+    popup.opener = null;
+    const findingHtml = findings.map((finding) => `
+      <section>
+        <h3>${escapeExplanation(finding.label)} — ${escapeExplanation(finding.evidence)}</h3>
+        <p>${escapeExplanation(finding.finding ?? "This area contributed to the decision.")}</p>
+        ${finding.consequence ? `<p><strong>Why it matters:</strong> ${escapeExplanation(finding.consequence)}</p>` : ""}
+      </section>`).join("");
+    popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p{color:#43556d}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}@media print{button{display:none}body{margin:0 auto}}</style>
+      </head><body><p class="small">PRE-BUSINESS AUTOPSY™ · OUTCOME AND EXPLANATION</p>
+      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(verdictBody)}</p></div>
+      <h2>What this means for you</h2><p>${escapeExplanation(meaning)}</p>
+      <h2>Why Autopsy reached this decision</h2>${findingHtml}
+      <h2>What this result does not mean</h2><p>This is not a judgment of your worth or a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for customers, costs and work under pressure.</p>
+      <h2>The next sensible step</h2><p>${escapeExplanation(next)}</p>
+      <p class="small">This explanation does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.</p>
+      <button onclick="window.print()">Print or save as PDF</button></body></html>`);
+    popup.document.close();
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 pb-10">
@@ -2463,9 +2552,30 @@ function CandidateVerdict({
           <span>{completedLabel}</span>
         </div>
         <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{verdictName}</h1>
-        {score != null && Number.isFinite(score) && (
-          <p className="mt-3 text-sm opacity-75">Your answers scored {score} out of 36</p>
-        )}
+        <p className="mt-3 text-sm opacity-75">A decision based on the evidence in your answers today</p>
+      </section>
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">Why Autopsy reached this decision</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {ready
+            ? "These were the clearest signs that you may be ready for a controlled test."
+            : "These were the areas that most affected the decision. They are not an answer key; they show why starting now could expose you to avoidable harm."}
+        </p>
+        <div className="mt-5 space-y-5">
+          {findings.map((finding) => (
+            <div key={finding.code} className="rounded-xl bg-muted/60 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="font-semibold">{finding.label}</h3>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{finding.evidence}</span>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{finding.finding}</p>
+              {finding.consequence && (
+                <p className="mt-2 text-sm leading-6"><span className="font-semibold">Why it matters:</span> {finding.consequence}</p>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
@@ -2488,25 +2598,27 @@ function CandidateVerdict({
                 <div key={code || label}>
                   <div className="flex items-center justify-between gap-4 text-sm">
                     <span className="font-medium">{label}</span>
-                    <span className="shrink-0 text-muted-foreground">{value} / 6</span>
+                    <span className="shrink-0 font-medium text-muted-foreground">{evidenceLabel(value)}</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className={cn("h-full rounded-full", value >= 5 ? "bg-emerald-600" : value >= 3 ? "bg-amber-500" : "bg-red-500")}
-                      style={{ width: `${Math.max(0, Math.min(100, (value / 6) * 100))}%` }}
+                      style={{ width: evidenceWidth(value) }}
                     />
                   </div>
                 </div>
               );
             })}
           </div>
-          {!ready && primaryArea && primaryArea !== "No Active Readiness Gap" && (
-            <p className="mt-5 rounded-xl bg-muted px-4 py-3 text-sm">
-              <span className="font-semibold">First thing to discuss:</span> {primaryArea}
-            </p>
-          )}
         </section>
       )}
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">What this result does not mean</h2>
+        <p className="mt-3 leading-7 text-muted-foreground">
+          This is not a judgment of your worth and it is not a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for real customers, real costs and real work under pressure.
+        </p>
+      </section>
 
       <section className="rounded-2xl border bg-[#092540] p-5 text-white shadow-sm sm:p-6">
         <h2 className="text-xl font-semibold">What happens next</h2>
@@ -2516,13 +2628,9 @@ function CandidateVerdict({
             <Button asChild className="bg-emerald-600 text-white hover:bg-emerald-700">
               <Link to={`/stage-1?runId=${runId}`}>Start First 5 Jobs</Link>
             </Button>
-          ) : (
-            <Button asChild className="bg-sky-500 text-slate-950 hover:bg-sky-400">
-              <Link to="/first-conversation">Talk it through with John</Link>
-            </Button>
-          )}
-          <Button variant="outline" onClick={onReset} className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white">
-            Start a new Autopsy
+          ) : null}
+          <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">
+            View and save your explanation
           </Button>
         </div>
       </section>
