@@ -2503,12 +2503,54 @@ function CandidateVerdict({
       ? "Do not commit serious money or leave secure work yet. The sensible next step is to gain real exposure in the weaker areas and reconsider a small, controlled test only when the evidence changes."
       : "Do not rush into starting and do not immediately repeat Autopsy. Keep the security of regular work while you gain practical exposure and reconsider the commitment. Return only after your circumstances or real-world evidence have genuinely changed.";
 
+  const explanationProfile = ready
+    ? {
+        decision: "Your answers showed enough practical awareness, discipline and personal readiness to justify a controlled real-world test. This is a doorway into evidence gathering—not a declaration that you are already a competent business owner.",
+        distinction: "A Ready for Test Run result is deliberately conditional. Autopsy has assessed what you understand and what you say you will do. The First 5 Jobs stage tests whether that understanding survives real customers, real deadlines, real costs and real pressure.",
+        risk: "The main danger now is confidence running ahead of evidence. Do not scale, make large commitments or assume that early revenue proves the model. The purpose of five jobs is to discover what is true while the consequences are still small.",
+        questions: [
+          "Can you quote each job using real costs rather than instinct?",
+          "Can you deliver what was promised and record what actually happened?",
+          "Will the first five jobs confirm that customers will pay and that the work leaves enough money to continue?",
+        ],
+      }
+    : band === "not_viable"
+      ? {
+          decision: "This is not the same result as Stop. Your answers showed some useful signs, but the evidence was too thin or uneven to rely on when customers, money and pressure become real. Autopsy cannot responsibly recommend a test run yet.",
+          distinction: "Not Ready means the potential has not been ruled out; it means readiness has not been demonstrated. Enthusiasm, intention and a plausible idea cannot substitute for dependable follow-through, financial room and evidence from the real world.",
+          risk: "Starting from this position can create a chain reaction: weak assumptions lead to poor commitments, pressure narrows your choices, and ordinary setbacks become personal financial problems. The result is designed to interrupt that chain before money and reputation are exposed.",
+          questions: [
+            "Which weak area can you strengthen through genuine experience rather than a better-sounding answer?",
+            "What would have to change before leaving secure work or spending serious money became sensible?",
+            "What real evidence could you bring back that does not exist today?",
+          ],
+        }
+      : band === "critical_stop"
+        ? {
+            decision: "Your answers did not demonstrate the basic conditions needed to begin safely. This is not a narrow weakness or a near miss. Too many foundations are presently unproven for Autopsy to recommend putting money, employment or reputation at risk.",
+            distinction: "Stop is a successful Autopsy outcome. Its value is the mistake it may prevent. It does not say you can never become a capable owner; it says the responsible decision, on the evidence available today, is not to proceed.",
+            risk: "When several foundations are missing at once, the risks compound. Limited cash makes mistakes harder to absorb; weak numbers hide those mistakes; untested demand and unreliable follow-through then make recovery less likely. Starting first and learning later would be the expensive version of this test.",
+            questions: [
+              "What steady work, practical responsibility or supervised experience would let you see business ownership without carrying the full risk?",
+              "Which personal or financial commitments must remain protected for now?",
+              "What would need to change materially—not cosmetically—before another Autopsy would be worthwhile?",
+            ],
+          }
+        : {
+            decision: "Your answers contain some encouraging evidence, but important assumptions remain unresolved. Autopsy is not yet recommending an unrestricted move into business ownership.",
+            distinction: "This result sits between an outright stop and readiness for a controlled test. It calls for caution, clarification and evidence before serious commitments are made.",
+            risk: "The danger is treating promising signs as proof. Any next step should remain small, reversible and protective of your present income and obligations.",
+            questions: [
+              "Which assumption most needs real-world proof?",
+              "What is the smallest safe way to obtain that proof?",
+              "What commitment should wait until the evidence is clearer?",
+            ],
+          };
+
   const orderedDimensions = [...dimensions].sort((a, b) => a.score - b.score);
   const allScoresEqual = orderedDimensions.length > 0
     && orderedDimensions.every((dimension) => dimension.score === orderedDimensions[0].score);
-  const explanatoryDimensions = ready || allScoresEqual
-    ? orderedDimensions
-    : orderedDimensions.slice(0, 3);
+  const explanatoryDimensions = ready || allScoresEqual ? orderedDimensions : orderedDimensions.slice(0, 3);
   const findings = explanatoryDimensions.map((dimension) => {
     const code = String(dimension.code ?? "").toLowerCase();
     const copy = CANDIDATE_DIMENSION_FINDINGS[code];
@@ -2531,15 +2573,20 @@ function CandidateVerdict({
         <p>${escapeExplanation(finding.finding ?? "This area contributed to the decision.")}</p>
         ${finding.consequence ? `<p><strong>Why it matters:</strong> ${escapeExplanation(finding.consequence)}</p>` : ""}
       </section>`).join("");
+    const questionHtml = explanationProfile.questions
+      .map((question) => `<li>${escapeExplanation(question)}</li>`)
+      .join("");
     popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
-      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p{color:#43556d}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}@media print{button{display:none}body{margin:0 auto}}</style>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:10px}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:16px 18px;border-left:4px solid #2b89c9;background:#eef6fb}@media print{button{display:none}body{margin:0 auto}}</style>
       </head><body><p class="small">PRE-BUSINESS AUTOPSY™ · OUTCOME AND EXPLANATION</p>
-      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(verdictBody)}</p></div>
-      <h2>What this means for you</h2><p>${escapeExplanation(meaning)}</p>
-      <h2>Why Autopsy reached this decision</h2>${findingHtml}
+      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>
+      <h2>How to understand this result</h2><p>${escapeExplanation(explanationProfile.distinction)}</p>
+      <h2>Why this matters in the real world</h2><p>${escapeExplanation(explanationProfile.risk)}</p>
+      <h2>What your answers demonstrated</h2>${findingHtml}
+      <h2>Questions to carry forward</h2><ul>${questionHtml}</ul>
       <h2>What this result does not mean</h2><p>This is not a judgment of your worth or a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for customers, costs and work under pressure.</p>
-      <h2>The next sensible step</h2><p>${escapeExplanation(next)}</p>
-      <p class="small">This explanation does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.</p>
+      <h2>The next sensible step</h2><p class="note">${escapeExplanation(next)}</p>
+      <p class="small">This fuller explanation supports the decision shown on screen. It does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.</p>
       <button onclick="window.print()">Print or save as PDF</button></body></html>`);
     popup.document.close();
   };
@@ -2553,29 +2600,6 @@ function CandidateVerdict({
         </div>
         <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{verdictName}</h1>
         <p className="mt-3 text-sm opacity-75">A decision based on the evidence in your answers today</p>
-      </section>
-
-      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <h2 className="text-xl font-semibold">Why Autopsy reached this decision</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {ready
-            ? "These were the clearest signs that you may be ready for a controlled test."
-            : "These were the areas that most affected the decision. They are not an answer key; they show why starting now could expose you to avoidable harm."}
-        </p>
-        <div className="mt-5 space-y-5">
-          {findings.map((finding) => (
-            <div key={finding.code} className="rounded-xl bg-muted/60 p-4">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="font-semibold">{finding.label}</h3>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{finding.evidence}</span>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{finding.finding}</p>
-              {finding.consequence && (
-                <p className="mt-2 text-sm leading-6"><span className="font-semibold">Why it matters:</span> {finding.consequence}</p>
-              )}
-            </div>
-          ))}
-        </div>
       </section>
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
@@ -2613,13 +2637,6 @@ function CandidateVerdict({
         </section>
       )}
 
-      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <h2 className="text-xl font-semibold">What this result does not mean</h2>
-        <p className="mt-3 leading-7 text-muted-foreground">
-          This is not a judgment of your worth and it is not a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for real customers, real costs and real work under pressure.
-        </p>
-      </section>
-
       <section className="rounded-2xl border bg-[#092540] p-5 text-white shadow-sm sm:p-6">
         <h2 className="text-xl font-semibold">What happens next</h2>
         <p className="mt-3 leading-7 text-slate-200">{next}</p>
@@ -2630,7 +2647,7 @@ function CandidateVerdict({
             </Button>
           ) : null}
           <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">
-            View and save your explanation
+            Read your full explanation
           </Button>
         </div>
       </section>
