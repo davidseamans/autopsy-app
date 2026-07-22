@@ -1903,6 +1903,7 @@ function VerdictView({
       runId={runId}
       verdictName={verdictName}
       verdictBody={effectiveVerdictBody}
+      score={scoreNumeric}
       dimensions={dimensionScores}
       completedLabel={completedLabel}
     />
@@ -2438,6 +2439,39 @@ const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: 
   },
 };
 
+const CANDIDATE_DIMENSION_WORK: Record<string, { work: string; evidence: string; caution: string }> = {
+  cash_reality: {
+    work: "Prepare a truthful household survival budget and identify how regular living costs would be paid while work is uncertain.",
+    evidence: "A protected cash buffer and a written limit on what you can afford to risk without borrowing or missing personal commitments.",
+    caution: "Do not resign, borrow for equipment or use money already needed by your household.",
+  },
+  economic_literacy: {
+    work: "Cost several realistic cleaning jobs from start to finish, including labour time, supplies, travel and the mistakes that make a job run over.",
+    evidence: "Completed job-cost records showing the quoted price, actual cost and money left after delivering the work.",
+    caution: "Do not rely on bank balance, turnover or a competitor's price as proof that a job is worthwhile.",
+  },
+  market_reality: {
+    work: "Test demand with real prospective customers who are free to say no; distinguish polite interest from a genuine request for a quote.",
+    evidence: "A small record of real enquiries, quotes requested and buying decisions from people outside your immediate circle.",
+    caution: "Do not buy equipment or leave secure work because friends say the idea sounds good.",
+  },
+  operational_capacity: {
+    work: "Practise the complete delivery routine: arrive, assess, clean, check quality, communicate with the customer and record what happened.",
+    evidence: "Repeated timed trials or supervised work completed to a consistent standard without relying on memory or improvisation.",
+    caution: "Do not promise customers a service, standard or timetable you have not repeatedly demonstrated.",
+  },
+  execution_discipline: {
+    work: "Use a simple daily routine to finish small commitments on time—calls returned, quotes completed, records updated and promises closed out.",
+    evidence: "A sustained record of completed commitments over several weeks, especially when the tasks were repetitive or uncomfortable.",
+    caution: "Do not mistake planning, researching or buying tools for dependable follow-through.",
+  },
+  psychological_resilience: {
+    work: "Gain low-risk exposure to rejection, complaints, changed plans and time pressure while keeping your present income secure.",
+    evidence: "Specific examples showing that you stayed responsible, communicated clearly and made considered decisions when something went wrong.",
+    caution: "Do not make large commitments in order to force yourself to become ready under pressure.",
+  },
+};
+
 function evidenceLabel(score: number): string {
   if (score >= 5) return "Demonstrated";
   if (score >= 3) return "Some evidence";
@@ -2466,12 +2500,14 @@ function CandidateVerdict({
   runId,
   verdictName,
   verdictBody,
+  score,
   dimensions,
   completedLabel,
 }: {
   runId: string | null;
   verdictName: string;
   verdictBody: string;
+  score: number | null;
   dimensions: Array<{ code: string; label: string; score: number }>;
   completedLabel: string;
 }) {
@@ -2479,6 +2515,7 @@ function CandidateVerdict({
   const ready = band === "structurally_viable";
   const provisional = band === "viable";
   const stopped = band === "critical_stop" || band === "not_viable";
+  const scoreValue = Number.isFinite(Number(score)) ? Number(score) : null;
   const colour = ready
     ? "border-emerald-600 bg-emerald-50 text-emerald-900"
     : provisional
@@ -2547,6 +2584,22 @@ function CandidateVerdict({
             ],
           };
 
+  const readinessPosition = ready
+    ? "Move forward into First 5 Jobs. Your next evidence must come from controlled delivery, not more preparation on paper."
+    : band === "critical_stop"
+      ? "The responsible outcome is closure for now. Autopsy is not prescribing a repair programme or encouraging you to chase a different answer."
+      : band === "not_viable"
+        ? scoreValue != null && scoreValue >= 9
+          ? "Some early foundations are visible, but they are not yet dependable enough to carry customers, costs and pressure. Your task is to turn intention into sustained evidence."
+          : "Most of the essential foundations remain unproven. Keep your present security and build practical exposure before treating ownership as an immediate plan."
+        : band === "high_risk"
+          ? scoreValue != null && scoreValue >= 18
+            ? "You have a developing base, but the remaining gaps could still undo the stronger areas under pressure. Concentrated proof-building is more useful than broad preparation now."
+            : "There is genuine potential, but it remains fragile. Several assumptions still need to become observable habits or real-world evidence before a test run is responsible."
+          : scoreValue != null && scoreValue >= 27
+            ? "You are approaching test readiness. The remaining task is not more enthusiasm or information; it is convincing evidence in the few areas that still weaken the whole picture."
+            : "You are closer, but readiness is still uneven. A small number of weaknesses must be proven rather than explained before First 5 Jobs becomes sensible.";
+
   const orderedDimensions = [...dimensions].sort((a, b) => a.score - b.score);
   const allScoresEqual = orderedDimensions.length > 0
     && orderedDimensions.every((dimension) => dimension.score === orderedDimensions[0].score);
@@ -2562,6 +2615,16 @@ function CandidateVerdict({
       consequence: copy?.consequence,
     };
   });
+  const workPriorities = !ready && band !== "critical_stop"
+    ? orderedDimensions.slice(0, 2).map((dimension) => {
+        const code = String(dimension.code ?? "").toLowerCase();
+        return {
+          code,
+          label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+          ...CANDIDATE_DIMENSION_WORK[code],
+        };
+      })
+    : [];
 
   const printExplanation = () => {
     const popup = window.open("", "_blank");
@@ -2576,13 +2639,27 @@ function CandidateVerdict({
     const questionHtml = explanationProfile.questions
       .map((question) => `<li>${escapeExplanation(question)}</li>`)
       .join("");
+    const workHtml = workPriorities.map((priority, index) => `
+      <section class="work">
+        <p class="small">PRIORITY ${index + 1}</p>
+        <h3>${escapeExplanation(priority.label)}</h3>
+        <p><strong>Work on:</strong> ${escapeExplanation(priority.work ?? "Build genuine practical experience in this area.")}</p>
+        <p><strong>Evidence worth bringing back:</strong> ${escapeExplanation(priority.evidence ?? "A real and sustained change in your circumstances or behaviour.")}</p>
+        <p><strong>Do not:</strong> ${escapeExplanation(priority.caution ?? "Make a serious commitment before the evidence changes.")}</p>
+      </section>`).join("");
+    const workOrderHtml = workPriorities.length > 0
+      ? `<h2>Your personal readiness work order</h2><p>These are the two areas that most need real-world strengthening. They are not questions to rehearse; they are conditions to make true.</p>${workHtml}
+         <h2>When another Autopsy is worthwhile</h2><p>Return when you can point to genuine experience, completed work or changed circumstances in these priorities. A better explanation alone is not a reason to retest.</p>`
+      : "";
     popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
-      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:10px}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:16px 18px;border-left:4px solid #2b89c9;background:#eef6fb}@media print{button{display:none}body{margin:0 auto}}</style>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:10px}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:16px 18px;border-left:4px solid #2b89c9;background:#eef6fb}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}@media print{button{display:none}body{margin:0 auto}.work{break-inside:avoid}}</style>
       </head><body><p class="small">PRE-BUSINESS AUTOPSY™ · OUTCOME AND EXPLANATION</p>
       <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>
+      <h2>Your readiness position</h2><p class="note">${escapeExplanation(readinessPosition)}</p>
       <h2>How to understand this result</h2><p>${escapeExplanation(explanationProfile.distinction)}</p>
       <h2>Why this matters in the real world</h2><p>${escapeExplanation(explanationProfile.risk)}</p>
       <h2>What your answers demonstrated</h2>${findingHtml}
+      ${workOrderHtml}
       <h2>Questions to carry forward</h2><ul>${questionHtml}</ul>
       <h2>What this result does not mean</h2><p>This is not a judgment of your worth or a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for customers, costs and work under pressure.</p>
       <h2>The next sensible step</h2><p class="note">${escapeExplanation(next)}</p>
