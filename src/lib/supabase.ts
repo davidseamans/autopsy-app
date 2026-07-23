@@ -13,7 +13,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export const isDebug = () => {
   try {
-    return localStorage.getItem("autopsy_debug") === "1";
+    const queryDebug = new URLSearchParams(window.location.search).get("debug") === "1";
+    if (queryDebug) localStorage.setItem("autopsy_debug", "1");
+    return queryDebug || localStorage.getItem("autopsy_debug") === "1";
   } catch {
     return false;
   }
