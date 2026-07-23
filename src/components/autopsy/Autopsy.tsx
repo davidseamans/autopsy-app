@@ -293,6 +293,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [savedScoreOverride, setSavedScoreOverride] = useState<number | null>(null);
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
+  const [finalizationRequested, setFinalizationRequested] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
   const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
   // Optimistic-save tracking. saveStatus drives subtle per-question micro-status
@@ -559,9 +560,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }
       if (status === "completed" || hasVerdict) {
         setLoadingStuck(false);
+        setFinalizationRequested(false);
         setView("verdict");
       } else {
-        setView("verdict");
+        setFinalizationRequested(false);
+        setLoadingStuck(true);
       }
     },
     onError: async (e: any) => {
@@ -583,6 +586,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             } catch { /* noop */ }
             setError(null);
             setLoadingStuck(false);
+            setFinalizationRequested(false);
             setView("verdict");
             return;
           }
@@ -596,6 +600,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           step: "question",
           runId,
         });
+        setFinalizationRequested(false);
         return;
       }
       setError({
@@ -604,6 +609,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         step: "question",
         runId,
       });
+      setFinalizationRequested(false);
     },
   });
 
@@ -666,17 +672,20 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     if (!run) return;
     if ((run.status === "completed" || !!run.verdict_name) && view !== "verdict") {
       setLoadingStuck(false);
+      setFinalizationRequested(false);
       setView("verdict");
     }
   }, [payloadQuery.data, view]);
 
-  // 8s timeout fallback when sitting on the post-Q10 spinner.
+  // Timeout only after the user has explicitly requested finalisation.
+  // Having all questions answered is not the same thing: the candidate may
+  // legitimately move back through completed questions to revise an answer.
   useEffect(() => {
     if (view !== "question") {
       setLoadingStuck(false);
       return;
     }
-    if (!allAnswered && !finalizeMutation.isPending) {
+    if (!finalizationRequested) {
       setLoadingStuck(false);
       return;
     }
@@ -691,6 +700,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         if (run?.status === "completed" || run?.verdict_name) {
           setView("verdict");
           setLoadingStuck(false);
+          setFinalizationRequested(false);
         } else {
           setLoadingStuck(true);
         }
@@ -699,7 +709,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }
     }, 8000);
     return () => window.clearTimeout(t);
-  }, [view, allAnswered, finalizeMutation.isPending, runId, qc]);
+  }, [view, finalizationRequested, runId, qc]);
 
   // Score so far (display only — sums numeric option values when available)
   const { scoreSoFar, scoreMax, scoreNumeric } = useMemo(() => {
@@ -802,6 +812,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   async function handleSelect(value: string | number) {
     if (!runId || !currentQuestion) return;
+    // A changed answer is an editing action, never a finalisation action.
+    setLoadingStuck(false);
+    if (!finalizeMutation.isPending) setFinalizationRequested(false);
     const qid = String(currentQuestion.question_id);
     // Validate the option belongs to the current question's active option set
     // before any state mutation or RPC. Prevents "Invalid answer option for
@@ -920,6 +933,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    setLoadingStuck(false);
+    setFinalizationRequested(true);
     // Wait for any in-flight optimistic saves to finish before reading the
     // authoritative answer audit. Optimistic UI must never produce a final
     // score that races ahead of the persisted backend state.
@@ -938,6 +953,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         step: "question",
         runId,
       });
+      setFinalizationRequested(false);
       return;
     }
     // Authoritative pre-finalize guard: re-fetch saved answers and require
@@ -972,6 +988,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           step: "question",
           runId,
         });
+        setFinalizationRequested(false);
         return;
       }
     } catch {
@@ -992,6 +1009,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           localStorage.removeItem("autopsy_current_run_id");
         } catch { /* noop */ }
         setLoadingStuck(false);
+        setFinalizationRequested(false);
         setView("verdict");
         return;
       }
@@ -1017,8 +1035,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       return;
     }
     // Fallback / loading state on question screen: clear and go to History.
-    if (view === "question" && (loadingStuck || allAnswered || finalizeMutation.isPending)) {
+    if (view === "question" && (loadingStuck || finalizationRequested || finalizeMutation.isPending)) {
       setLoadingStuck(false);
+      setFinalizationRequested(false);
       setError(null);
       navigate("/autopsy/history");
       return;
@@ -1060,6 +1079,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
+    setFinalizationRequested(false);
     setManualIndex(null);
     setSaveStatus({});
     pendingSavesRef.current = new Map();
@@ -1173,7 +1193,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
-            allAnswered={allAnswered && (finalizeMutation.isPending || loadingStuck)}
+            allAnswered={allAnswered && (finalizationRequested || finalizeMutation.isPending || loadingStuck)}
             pendingSelection={pendingSelection}
             onSelect={handleSelect}
             onNext={handleNext}
@@ -1398,9 +1418,9 @@ function QuestionView(props: {
     if (props.loadingStuck) {
       return (
         <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 space-y-4 text-center">
-          <h2 className="text-lg font-semibold">Run may have completed.</h2>
+          <h2 className="text-lg font-semibold">Finalisation did not complete.</h2>
           <p className="text-sm text-muted-foreground">
-            We didn't receive the verdict in time. Please check History to confirm.
+            Your saved answers are safe. Retry finalisation, or return to History.
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Button
