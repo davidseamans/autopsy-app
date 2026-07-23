@@ -1919,8 +1919,10 @@ function VerdictView({
         questionNumber: answer.question_number,
         dimensionCode: answer.dimension_code ?? null,
         prompt: answer.question_prompt ?? null,
+        selectedAnswer: answer.selected_option_label ?? null,
         score: answer.score_value,
       }))}
+      showAuditAppendix={isDebug()}
       completedLabel={completedLabel}
     />
   );
@@ -2519,6 +2521,7 @@ function CandidateVerdict({
   score,
   dimensions,
   answerEvidence,
+  showAuditAppendix,
   completedLabel,
 }: {
   runId: string | null;
@@ -2530,8 +2533,10 @@ function CandidateVerdict({
     questionNumber: number | null;
     dimensionCode: string | null;
     prompt: string | null;
+    selectedAnswer: string | null;
     score: number | null;
   }>;
+  showAuditAppendix: boolean;
   completedLabel: string;
 }) {
   const band = deriveBand(verdictName);
@@ -2695,9 +2700,36 @@ function CandidateVerdict({
       ? `<h2>Your personal readiness work order</h2><p>These are the two areas that most need real-world strengthening. They are not questions to rehearse; they are conditions to make true.</p>${workHtml}
          <h2>When another Autopsy is worthwhile</h2><p>Return when you can point to genuine experience, completed work or changed circumstances in these priorities. A better explanation alone is not a reason to retest.</p>`
       : "";
+    const dimensionHtml = dimensions.map((dimension) => {
+      const code = String(dimension.code ?? "").toLowerCase();
+      const label = CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+      return `<li><strong>${escapeExplanation(label)}</strong><span>${escapeExplanation(evidenceLabel(Number(dimension.score ?? 0)))}</span></li>`;
+    }).join("");
+    const answerAuditHtml = showAuditAppendix
+      ? `<section class="audit"><h2>Test audit — answers and points</h2>
+          <p class="small">INTERNAL TESTING APPENDIX · NOT PART OF THE CANDIDATE PDF</p>
+          <table><thead><tr><th>Question</th><th>Selected answer</th><th>Points</th></tr></thead><tbody>
+          ${answerEvidence
+            .slice()
+            .sort((a, b) => Number(a.questionNumber ?? 99) - Number(b.questionNumber ?? 99))
+            .map((answer) => `<tr><td><strong>Q${escapeExplanation(String(answer.questionNumber ?? "—"))}</strong><br>${escapeExplanation(answer.prompt ?? "Question text unavailable")}</td><td>${escapeExplanation(answer.selectedAnswer ?? "Answer recorded")}</td><td>${escapeExplanation(String(answer.score ?? "—"))}</td></tr>`)
+            .join("")}
+          </tbody><tfoot><tr><td colspan="2">Total</td><td>${escapeExplanation(String(scoreValue ?? "—"))}</td></tr></tfoot></table></section>`
+      : "";
+    const disclosureNote = showAuditAppendix
+      ? "This internal testing copy includes answer points so the product team can verify personalisation. Remove debug mode before candidate use."
+      : "This fuller explanation supports the decision shown on screen. It does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.";
     popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
-      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:40px auto;padding:0 24px;line-height:1.6}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:10px}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:16px 18px;border-left:4px solid #2b89c9;background:#eef6fb}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}@media print{button{display:none}body{margin:0 auto}.work{break-inside:avoid}}</style>
-      </head><body><p class="small">PRE-BUSINESS AUTOPSY™ · OUTCOME AND EXPLANATION</p>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:28px auto;padding:0 24px;line-height:1.6}.toolbar{position:sticky;top:0;display:flex;justify-content:space-between;gap:12px;padding:10px 0;background:white;z-index:2}.toolbar button{border:1px solid #9db0c2;border-radius:8px;background:white;color:#10223a;padding:10px 14px;font-weight:700;cursor:pointer}.toolbar .primary{background:#168ecb;color:white;border-color:#168ecb}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:32px;border-top:1px solid #dbe3ec;padding-top:24px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:10px}.result{padding:22px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:16px 18px;border-left:4px solid #2b89c9;background:#eef6fb}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}.snapshot{list-style:none;padding:0}.snapshot li{display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid #e4eaf0}.audit table{width:100%;border-collapse:collapse;font-size:12px}.audit th,.audit td{padding:9px 7px;border:1px solid #dbe3ec;text-align:left;vertical-align:top}.audit th{background:#eef4f8}.audit tfoot{font-weight:700}.detail-page{break-before:page;page-break-before:always}@media print{.toolbar{display:none}body{margin:0 auto}.work,.audit tr{break-inside:avoid}.summary-page{break-after:page;page-break-after:always}.detail-page{break-before:auto;page-break-before:auto}}</style>
+      </head><body>
+      <div class="toolbar"><button onclick="window.close()">← Back to Verdict</button><button class="primary" onclick="window.print()">Print / save both pages</button></div>
+      <section class="summary-page"><p class="small">PRE-BUSINESS AUTOPSY™ · VERDICT SUMMARY</p>
+      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(verdictBody)}</p></div>
+      <h2>What this means for you</h2><p>${escapeExplanation(meaning)}</p>
+      <h2>How your answers looked</h2><ul class="snapshot">${dimensionHtml}</ul>
+      <h2>What happens next</h2><p class="note">${escapeExplanation(next)}</p>
+      ${answerAuditHtml}</section>
+      <section class="detail-page"><p class="small">PRE-BUSINESS AUTOPSY™ · DETAILED EXPLANATION</p>
       <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>
       <h2>Your readiness position</h2><p class="note">${escapeExplanation(readinessPosition)}</p>
       <h2>How to understand this result</h2><p>${escapeExplanation(explanationProfile.distinction)}</p>
@@ -2707,8 +2739,8 @@ function CandidateVerdict({
       <h2>Questions to carry forward</h2><ul>${questionHtml}</ul>
       <h2>What this result does not mean</h2><p>This is not a judgment of your worth or a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for customers, costs and work under pressure.</p>
       <h2>The next sensible step</h2><p class="note">${escapeExplanation(next)}</p>
-      <p class="small">This fuller explanation supports the decision shown on screen. It does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.</p>
-      <button onclick="window.print()">Print or save as PDF</button></body></html>`);
+      <p class="small">${escapeExplanation(disclosureNote)}</p>
+      </section></body></html>`);
     popup.document.close();
   };
 
