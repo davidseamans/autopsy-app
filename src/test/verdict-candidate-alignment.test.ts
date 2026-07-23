@@ -65,6 +65,9 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("← Back to Verdict");
     expect(candidateView).toContain("Print / save both pages");
     expect(candidateView).toContain("Test audit — answers and points");
+    expect(candidateView).toContain("<strong>Run ID:</strong>");
+    expect(candidateView).toContain("<strong>Completed:</strong>");
+    expect(candidateView).toContain("<strong>Internal total:</strong>");
     expect(candidateView).not.toMatch(/Talk it through with John|Start a new Autopsy|out of 36|\/ 6/);
   });
 });
