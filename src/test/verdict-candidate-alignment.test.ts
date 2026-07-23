@@ -70,4 +70,17 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("<strong>Internal total:</strong>");
     expect(candidateView).not.toMatch(/Talk it through with John|Start a new Autopsy|out of 36|\/ 6/);
   });
+
+  it("does not treat completed answers as an active finalisation request", () => {
+    const source = readFileSync(resolve("src/components/autopsy/Autopsy.tsx"), "utf8");
+
+    expect(source).toContain("const [finalizationRequested, setFinalizationRequested]");
+    expect(source).toContain("if (!finalizationRequested)");
+    expect(source).toContain(
+      "allAnswered={allAnswered && (finalizationRequested || finalizeMutation.isPending || loadingStuck)}",
+    );
+    expect(source).not.toContain("if (!allAnswered && !finalizeMutation.isPending)");
+    expect(source).toContain("Finalisation did not complete.");
+    expect(source).toContain("Your saved answers are safe.");
+  });
 });
