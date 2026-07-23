@@ -41,6 +41,10 @@ import { useAuth } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
 import {
+  buildCandidateNuance,
+  type CandidateAnswerEvidence,
+} from "@/lib/candidate-nuance";
+import {
   GatewayPayload,
   GatewayQuestion,
   createAutopsyRun,
@@ -2552,13 +2556,7 @@ function CandidateVerdict({
   score: number | null;
   testLabel: string;
   dimensions: Array<{ code: string; label: string; score: number }>;
-  answerEvidence: Array<{
-    questionNumber: number | null;
-    dimensionCode: string | null;
-    prompt: string | null;
-    selectedAnswer: string | null;
-    score: number | null;
-  }>;
+  answerEvidence: CandidateAnswerEvidence[];
   showAuditAppendix: boolean;
   completedLabel: string;
 }) {
@@ -2673,26 +2671,37 @@ function CandidateVerdict({
   const findings = explanatoryDimensions.map((dimension) => {
     const code = String(dimension.code ?? "").toLowerCase();
     const copy = CANDIDATE_DIMENSION_FINDINGS[code];
+    const nuance = buildCandidateNuance(code, evidenceForDimension(code));
     return {
       code,
       label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
       evidence: evidenceLabel(Number(dimension.score ?? 0)),
-      finding: Number(dimension.score ?? 0) >= 4 ? copy?.positive : copy?.concern,
-      consequence: copy?.consequence,
+      finding:
+        nuance?.finding ??
+        (Number(dimension.score ?? 0) >= 4 ? copy?.positive : copy?.concern),
+      consequence: nuance?.consequence ?? copy?.consequence,
     };
   });
   const workPriorities = !ready && band !== "critical_stop"
     ? orderedDimensions.slice(0, 2).map((dimension) => {
         const code = String(dimension.code ?? "").toLowerCase();
-        const evidenceFocus = evidenceForDimension(code)
-          .filter((answer) => answer.prompt)
+        const dimensionEvidence = evidenceForDimension(code);
+        const nuance = buildCandidateNuance(code, dimensionEvidence);
+        const evidenceFocus = dimensionEvidence
+          .filter((answer) => answer.prompt && Number(answer.score) < 3)
           .slice(0, 2)
           .map((answer) => String(answer.prompt));
         return {
           code,
-          label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+          label:
+            nuance?.title ??
+            CANDIDATE_DIMENSION_LABELS[code] ??
+            dimension.label ??
+            humanize(code),
           evidenceFocus,
-          ...CANDIDATE_DIMENSION_WORK[code],
+          pattern: nuance?.finding ?? null,
+          consequence: nuance?.consequence ?? null,
+          ...(nuance ?? CANDIDATE_DIMENSION_WORK[code]),
         };
       })
     : [];
@@ -2715,6 +2724,8 @@ function CandidateVerdict({
         <p class="small">PRIORITY ${index + 1}</p>
         <h3>${escapeExplanation(priority.label)}</h3>
         ${priority.evidenceFocus.length > 0 ? `<p><strong>What in your answers brought this forward:</strong> ${priority.evidenceFocus.map(escapeExplanation).join("; ")}</p>` : ""}
+        ${priority.pattern ? `<p><strong>What this pattern suggests:</strong> ${escapeExplanation(priority.pattern)}</p>` : ""}
+        ${priority.consequence ? `<p><strong>Why this matters:</strong> ${escapeExplanation(priority.consequence)}</p>` : ""}
         <p><strong>Work on:</strong> ${escapeExplanation(priority.work ?? "Build genuine practical experience in this area.")}</p>
         <p><strong>Evidence worth bringing back:</strong> ${escapeExplanation(priority.evidence ?? "A real and sustained change in your circumstances or behaviour.")}</p>
         <p><strong>Do not:</strong> ${escapeExplanation(priority.caution ?? "Make a serious commitment before the evidence changes.")}</p>
