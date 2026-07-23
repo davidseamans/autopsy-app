@@ -62,7 +62,9 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("A better explanation alone is not a reason to retest");
     expect(candidateView).toContain("What this result does not mean");
     expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
-    expect(candidateView).toContain("Print or save as PDF");
+    expect(candidateView).toContain("← Back to Verdict");
+    expect(candidateView).toContain("Print / save both pages");
+    expect(candidateView).toContain("Test audit — answers and points");
     expect(candidateView).not.toMatch(/Talk it through with John|Start a new Autopsy|out of 36|\/ 6/);
   });
 });
