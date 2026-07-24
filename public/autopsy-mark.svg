@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Autopsy</title>
+  <rect width="64" height="64" rx="14" fill="#082844"/>
+  <path d="M18 47 29.5 16h5L46 47h-7l-2.2-6.8h-10L24.6 47H18Zm10.6-12.5H35L31.8 24l-3.2 10.5Z" fill="#fff"/>
+  <path d="M16 52h32" stroke="#3cab6f" stroke-width="4" stroke-linecap="round"/>
+</svg>
