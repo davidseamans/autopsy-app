@@ -13,6 +13,7 @@ export type CandidateNuance = {
   work: string;
   evidence: string;
   caution: string;
+  carryQuestion?: string;
 };
 
 type SubjectNuance = Omit<CandidateNuance, "finding"> & {
@@ -178,6 +179,33 @@ const SUBJECT_NUANCE: Record<string, SubjectNuance> = {
   },
 };
 
+const SUBJECT_CARRY_QUESTION: Record<string, string> = {
+  "have you estimated how long you can operate without income?":
+    "How many weeks could your household manage if cleaning income starts slowly?",
+  "do you know the minimum resources required to start?":
+    "What do you actually need before the first job—and what can safely wait?",
+  "can you clearly explain how this business makes money?":
+    "After paying the direct costs of one job, how much money is really left?",
+  "have you identified your main cost drivers?":
+    "Which costs could turn a good-looking cleaning job into a poor one?",
+  "what evidence do you have that customers will pay for this?":
+    "Will a real customer accept your price—not merely say the idea sounds good?",
+  "have you clearly defined your target customer?":
+    "Which type of customer is most likely to say yes to your offer first?",
+  "do you have the operational ability to deliver your product or service consistently?":
+    "Can you complete the promised job on time, to standard and without expensive surprises?",
+  "can you write down the steps, tools, and supplies needed to do the job the same way each time?":
+    "Can you use the same simple checklist and achieve the same result again?",
+  "have you taken any concrete action toward this business?":
+    "What real step will you take next that can teach you something useful?",
+  "can you commit consistent time to this for the next 30 days?":
+    "What small work routine can you genuinely keep for the next 30 days?",
+  "are you prepared to persist through uncertainty and repeated failure without changing direction prematurely?":
+    "When something goes wrong, can you pause, learn and continue without reacting too quickly?",
+  "can you keep doing the important work even when you are tired, unsure, or not getting quick results?":
+    "Will the calls, quotes and records still get done on an ordinary difficult day?",
+};
+
 const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   cash_reality: {
     title: "Both start-up preparation and cash runway need proof",
@@ -186,6 +214,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Price the smallest complete start-up requirement, then place that amount inside a household runway calculation with a firm stop-loss point.",
     evidence: "One joined plan showing essential start-up costs, protected household money, available working cash and the date at which continuing would become unsafe.",
     caution: "Do not buy equipment, resign or borrow until the start-up requirement and survival runway can be seen together.",
+    carryQuestion: "Can the start-up list fit safely inside your household runway without putting essential commitments at risk?",
   },
   economic_literacy: {
     title: "Both the profit mechanism and job costs need proof",
@@ -194,6 +223,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Build several complete job examples showing price, labour, every direct cost, gross margin and the effect of a job running over.",
     evidence: "Job-cost records whose arithmetic explains both how profit is created and which costs can destroy it.",
     caution: "Do not use turnover, a competitor's price or cash received as a substitute for job-level economics.",
+    carryQuestion: "After every direct job cost is counted, is there still enough money left to make the work worthwhile?",
   },
   market_reality: {
     title: "Both the target customer and willingness to pay need proof",
@@ -202,6 +232,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Define one first customer and one priced cleaning offer, then present it to genuine prospects who can freely decline.",
     evidence: "A record linking a clearly defined customer group to enquiries, quote requests, accepted quotes or payments.",
     caution: "Do not expand the audience or count friendly encouragement when the specific offer fails to produce buying behaviour.",
+    carryQuestion: "Will the particular customer you are targeting accept the particular offer and price you put forward?",
   },
   operational_capacity: {
     title: "Both delivery capability and repeatability need proof",
@@ -210,6 +241,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Write the cleaning sequence, then use it on repeated timed trials with a defined quality check and correction record.",
     evidence: "A tested checklist plus repeated work completed to a consistent standard within a credible time.",
     caution: "Do not sell work based on a method that has not survived repeated use.",
+    carryQuestion: "Can your cleaning method produce the promised result repeatedly, within the time allowed?",
   },
   execution_discipline: {
     title: "Both concrete action and sustained follow-through need proof",
@@ -218,6 +250,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Choose a small weekly set of customer, job and record commitments and complete them through a protected 30-day rhythm.",
     evidence: "A dated four-week record of actions completed, evidence produced and promises closed out.",
     caution: "Do not replace execution with more planning, branding, research or an unsustainable burst of effort.",
+    carryQuestion: "Can you turn a small real action into a routine you keep for a full month?",
   },
   psychological_resilience: {
     title: "Both setback response and everyday persistence need proof",
@@ -226,6 +259,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
     work: "Use a modest operating routine alongside a written setback-review rule during a low-risk period of real or representative work.",
     evidence: "Examples showing calm review after problems and continued completion of important commitments during uncomfortable periods.",
     caution: "Do not create financial pressure in an attempt to manufacture commitment or resilience.",
+    carryQuestion: "Can you respond calmly to setbacks and still complete the ordinary work that customers are relying on?",
   },
 };
 
@@ -271,5 +305,6 @@ export function buildCandidateNuance(
     work: focus.subject.work,
     evidence: focus.subject.evidence,
     caution: focus.subject.caution,
+    carryQuestion: SUBJECT_CARRY_QUESTION[normalizePrompt(focus.answer.prompt)],
   };
 }
