@@ -2671,10 +2671,15 @@ function CandidateVerdict({
   const findings = explanatoryDimensions.map((dimension) => {
     const code = String(dimension.code ?? "").toLowerCase();
     const copy = CANDIDATE_DIMENSION_FINDINGS[code];
-    const nuance = buildCandidateNuance(code, evidenceForDimension(code));
+    const dimensionEvidence = evidenceForDimension(code);
+    const nuance = buildCandidateNuance(code, dimensionEvidence);
+    const hasWeakSubject = dimensionEvidence.some((answer) => Number(answer.score) < 3);
     return {
       code,
-      label: CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+      label:
+        hasWeakSubject && nuance?.title
+          ? nuance.title
+          : CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
       evidence: evidenceLabel(Number(dimension.score ?? 0)),
       finding:
         nuance?.finding ??
@@ -2682,8 +2687,17 @@ function CandidateVerdict({
       consequence: nuance?.consequence ?? copy?.consequence,
     };
   });
-  const workPriorities = !ready && band !== "critical_stop"
-    ? orderedDimensions.slice(0, 2).map((dimension) => {
+  const dimensionsWithWeakSubjects = orderedDimensions.filter((dimension) =>
+    evidenceForDimension(String(dimension.code ?? "").toLowerCase())
+      .some((answer) => Number(answer.score) < 3),
+  );
+  const priorityDimensions = dimensionsWithWeakSubjects.length > 0
+    ? dimensionsWithWeakSubjects.slice(0, 2)
+    : ready
+      ? []
+      : orderedDimensions.slice(0, 2);
+  const workPriorities = band !== "critical_stop"
+    ? priorityDimensions.map((dimension) => {
         const code = String(dimension.code ?? "").toLowerCase();
         const dimensionEvidence = evidenceForDimension(code);
         const nuance = buildCandidateNuance(code, dimensionEvidence);
@@ -2716,23 +2730,31 @@ function CandidateVerdict({
         <p>${escapeExplanation(finding.finding ?? "This area contributed to the decision.")}</p>
         ${finding.consequence ? `<p><strong>Why it matters:</strong> ${escapeExplanation(finding.consequence)}</p>` : ""}
       </section>`).join("");
-    const questionHtml = explanationProfile.questions
+    const personalisedQuestions = workPriorities
+      .map((priority) => priority.carryQuestion)
+      .filter((question): question is string => Boolean(question));
+    const questionsToCarry = personalisedQuestions.length > 0
+      ? personalisedQuestions
+      : explanationProfile.questions;
+    const questionHtml = questionsToCarry
       .map((question) => `<li>${escapeExplanation(question)}</li>`)
       .join("");
     const workHtml = workPriorities.map((priority, index) => `
       <section class="work">
         <p class="small">PRIORITY ${index + 1}</p>
         <h3>${escapeExplanation(priority.label)}</h3>
-        ${priority.evidenceFocus.length > 0 ? `<p><strong>What in your answers brought this forward:</strong> ${priority.evidenceFocus.map(escapeExplanation).join("; ")}</p>` : ""}
-        ${priority.pattern ? `<p><strong>What this pattern suggests:</strong> ${escapeExplanation(priority.pattern)}</p>` : ""}
+        ${priority.evidenceFocus.length > 0 ? `<p><strong>Why this came up:</strong> ${priority.evidenceFocus.map(escapeExplanation).join("; ")}</p>` : ""}
+        ${priority.pattern ? `<p><strong>What we noticed:</strong> ${escapeExplanation(priority.pattern)}</p>` : ""}
         ${priority.consequence ? `<p><strong>Why this matters:</strong> ${escapeExplanation(priority.consequence)}</p>` : ""}
-        <p><strong>Work on:</strong> ${escapeExplanation(priority.work ?? "Build genuine practical experience in this area.")}</p>
-        <p><strong>Evidence worth bringing back:</strong> ${escapeExplanation(priority.evidence ?? "A real and sustained change in your circumstances or behaviour.")}</p>
-        <p><strong>Do not:</strong> ${escapeExplanation(priority.caution ?? "Make a serious commitment before the evidence changes.")}</p>
+        <p><strong>What to do:</strong> ${escapeExplanation(priority.work ?? "Build some practical experience in this area.")}</p>
+        <p><strong>What would show progress:</strong> ${escapeExplanation(priority.evidence ?? "Something real that has changed in your circumstances or actions.")}</p>
+        <p><strong>Avoid:</strong> ${escapeExplanation(priority.caution ?? "Making a serious commitment before something has genuinely changed.")}</p>
       </section>`).join("");
     const workOrderHtml = workPriorities.length > 0
-      ? `<h2>Your personal readiness work order</h2><p>These are the two areas that most need real-world strengthening. They are not questions to rehearse; they are conditions to make true.</p>${workHtml}
-         <h2>When another Autopsy is worthwhile</h2><p>Return when you can point to genuine experience, completed work or changed circumstances in these priorities. A better explanation alone is not a reason to retest.</p>`
+      ? ready
+        ? `<h2>Your First 5 Jobs focus</h2><p>You are ready to test yourself. These are the particular things to watch while the jobs are still small and we can learn from them.</p>${workHtml}`
+        : `<h2>What to work on next</h2><p>These are the areas that most need practical strengthening. The point is not to learn a better answer—it is to make something real change.</p>${workHtml}
+           <h2>When another Autopsy is worthwhile</h2><p>Come back when you have done something real, gained practical experience or changed the circumstances behind these answers.</p>`
       : "";
     const dimensionHtml = dimensions.map((dimension) => {
       const code = String(dimension.code ?? "").toLowerCase();
