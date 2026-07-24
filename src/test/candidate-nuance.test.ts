@@ -34,9 +34,11 @@ describe("candidate verdict nuance", () => {
     ]);
 
     expect(runwayGap?.title).toContain("cash runway");
+    expect(runwayGap?.fieldTitle).toContain("household money");
     expect(runwayGap?.work).toContain("household survival budget");
     expect(runwayGap?.carryQuestion).toContain("household");
     expect(startupGap?.title).toContain("start-up requirement");
+    expect(startupGap?.fieldTitle).toContain("first job");
     expect(startupGap?.work).toContain("start-up list");
     expect(startupGap?.carryQuestion).toContain("first job");
     expect(runwayGap).not.toEqual(startupGap);
@@ -49,6 +51,7 @@ describe("candidate verdict nuance", () => {
     ]);
 
     expect(result?.title).toBe("Both start-up preparation and cash runway need proof");
+    expect(result?.fieldTitle).toContain("household safety money");
     expect(result?.consequence).toContain("compound");
     expect(result?.evidence).toContain("One joined plan");
     expect(result?.carryQuestion).toContain("start-up list");
