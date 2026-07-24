@@ -8,6 +8,7 @@ export type CandidateAnswerEvidence = {
 
 export type CandidateNuance = {
   title: string;
+  fieldTitle?: string;
   finding: string;
   consequence: string;
   work: string;
@@ -206,9 +207,25 @@ const SUBJECT_CARRY_QUESTION: Record<string, string> = {
     "Will the calls, quotes and records still get done on an ordinary difficult day?",
 };
 
+const SUBJECT_FIELD_TITLE: Record<string, string> = {
+  "have you estimated how long you can operate without income?": "Know how long your household money will last",
+  "do you know the minimum resources required to start?": "Know what you need before your first job",
+  "can you clearly explain how this business makes money?": "Know what each job actually leaves behind",
+  "have you identified your main cost drivers?": "Know which costs can swallow a cleaning job",
+  "what evidence do you have that customers will pay for this?": "Find out whether a real customer will pay",
+  "have you clearly defined your target customer?": "Know who your first likely customer is",
+  "do you have the operational ability to deliver your product or service consistently?": "Make sure you can deliver what you promise",
+  "can you write down the steps, tools, and supplies needed to do the job the same way each time?": "Make the cleaning work repeatable",
+  "have you taken any concrete action toward this business?": "Turn intention into one real step",
+  "can you commit consistent time to this for the next 30 days?": "Build a work routine you can genuinely keep",
+  "are you prepared to persist through uncertainty and repeated failure without changing direction prematurely?": "Do not let one setback change your direction",
+  "can you keep doing the important work even when you are tired, unsure, or not getting quick results?": "Keep the important promises on difficult days",
+};
+
 const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   cash_reality: {
     title: "Both start-up preparation and cash runway need proof",
+    fieldTitle: "Do not let starting costs consume your household safety money",
     finding: "Your answers leave both the cost of beginning and the household's ability to survive slow income insufficiently proven.",
     consequence: "These weaknesses compound: underestimated setup costs consume the same cash buffer needed to withstand a slow start.",
     work: "Price the smallest complete start-up requirement, then place that amount inside a household runway calculation with a firm stop-loss point.",
@@ -218,6 +235,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   },
   economic_literacy: {
     title: "Both the profit mechanism and job costs need proof",
+    fieldTitle: "Make sure a busy cleaning job still leaves money behind",
     finding: "Your answers do not yet connect how the service makes money with the costs most likely to consume that money.",
     consequence: "These weaknesses compound: an unclear profit model cannot expose a missing cost, and missing costs make an apparently profitable model unreliable.",
     work: "Build several complete job examples showing price, labour, every direct cost, gross margin and the effect of a job running over.",
@@ -227,6 +245,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   },
   market_reality: {
     title: "Both the target customer and willingness to pay need proof",
+    fieldTitle: "Put one clear offer in front of one likely customer",
     finding: "Your answers do not yet identify a precise first customer or demonstrate that such customers will pay for the offer.",
     consequence: "These weaknesses compound: vague targeting produces weak demand tests, and weak demand tests provide no reason to sharpen the target.",
     work: "Define one first customer and one priced cleaning offer, then present it to genuine prospects who can freely decline.",
@@ -236,6 +255,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   },
   operational_capacity: {
     title: "Both delivery capability and repeatability need proof",
+    fieldTitle: "Make sure your cleaning method works more than once",
     finding: "Your answers do not yet show either dependable practical delivery or a method capable of producing the same result repeatedly.",
     consequence: "These weaknesses compound: an unproven method hides delivery problems, while inconsistent delivery prevents the method from being improved.",
     work: "Write the cleaning sequence, then use it on repeated timed trials with a defined quality check and correction record.",
@@ -245,6 +265,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   },
   execution_discipline: {
     title: "Both concrete action and sustained follow-through need proof",
+    fieldTitle: "Turn one real action into a routine you can keep",
     finding: "Your answers do not yet show enough real-world action or a dependable rhythm capable of carrying that action for a month.",
     consequence: "These weaknesses compound: occasional action produces little evidence, while an unproven routine cannot convert lessons into consistent progress.",
     work: "Choose a small weekly set of customer, job and record commitments and complete them through a protected 30-day rhythm.",
@@ -254,6 +275,7 @@ const COMPOUND_NUANCE: Record<string, CandidateNuance> = {
   },
   psychological_resilience: {
     title: "Both setback response and everyday persistence need proof",
+    fieldTitle: "Stay steady when the work becomes difficult",
     finding: "Your answers do not yet show that you can remain deliberate after setbacks or dependable when the work becomes tiring and unrewarding.",
     consequence: "These weaknesses compound: setbacks disturb judgement, then broken routine prevents the steady action needed to learn and recover.",
     work: "Use a modest operating routine alongside a written setback-review rule during a low-risk period of real or representative work.",
@@ -300,6 +322,7 @@ export function buildCandidateNuance(
 
   return {
     title: focus.subject.title,
+    fieldTitle: SUBJECT_FIELD_TITLE[normalizePrompt(focus.answer.prompt)],
     finding: focus.subject.findings[scoreIndex(focus.answer.score)],
     consequence: focus.subject.consequence,
     work: focus.subject.work,
