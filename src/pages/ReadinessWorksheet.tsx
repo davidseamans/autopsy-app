@@ -178,7 +178,7 @@ export default function ReadinessWorksheet() {
           <CardDescription>Pulled from the Autopsy result for this run.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm">
-          <Row label="Final Verdict" value={humanize(verdictName) || (isNotViableBand ? "Not Viable" : "—")} />
+          <Row label="Readiness outcome" value={humanize(verdictName) || (isNotViableBand ? "Not Ready" : "—")} />
           <Row label="Primary Risk" value={primaryRisk || "—"} />
           <Row label="Failure Condition" value={failureCondition} multiline />
           <Row label="Requirement to Proceed" value={requirement} multiline />

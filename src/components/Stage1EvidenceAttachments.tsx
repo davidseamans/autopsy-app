@@ -31,7 +31,7 @@ function fmtSize(bytes: number): string {
 /**
  * Attach supporting paperwork to a single transaction line. Maturity-oriented:
  * paperwork is recommended, never required, and missing paperwork never blocks
- * the job. Attachments persist in Lovable Cloud (private `stage1-evidence`
+ * the job. Attachments persist in private object storage (`stage1-evidence`
  * storage bucket + `stage1_evidence` metadata), survive refresh and sign-out,
  * are available on any device, and can be re-opened / downloaded.
  */
