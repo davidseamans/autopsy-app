@@ -2458,6 +2458,15 @@ const CANDIDATE_SNAPSHOT_LABELS: Record<string, string> = {
   psychological_resilience: "Handling pressure",
 };
 
+const CANDIDATE_SNAPSHOT_DESCRIPTIONS: Record<string, string> = {
+  cash_reality: "Carrying your living and start-up costs while the work is still uncertain.",
+  economic_literacy: "Connecting the price, the job costs and the money left over.",
+  market_reality: "Finding out whether real customers will choose you and pay.",
+  operational_capacity: "Completing the work you promised, reliably and to standard.",
+  execution_discipline: "Turning intentions into finished quotes, records, jobs and promises.",
+  psychological_resilience: "Staying responsible when plans, customers or income become difficult.",
+};
+
 const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: string; consequence: string }> = {
   cash_reality: {
     positive: "You showed that you have thought about how you would carry the early costs while the work is still uncertain.",
@@ -2799,7 +2808,8 @@ function CandidateVerdict({
     const dimensionHtml = dimensions.map((dimension) => {
       const code = String(dimension.code ?? "").toLowerCase();
       const label = CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
-      return `<li><strong>${escapeExplanation(label)}</strong><span>${escapeExplanation(candidateSnapshotStatus(Number(dimension.score ?? 0)))}</span></li>`;
+      const description = CANDIDATE_SNAPSHOT_DESCRIPTIONS[code] ?? "One of the practical areas considered in your result.";
+      return `<li><div><strong>${escapeExplanation(label)}</strong><small>${escapeExplanation(description)}</small></div><span>${escapeExplanation(candidateSnapshotStatus(Number(dimension.score ?? 0)))}</span></li>`;
     }).join("");
     const answerAuditHtml = showAuditAppendix
       ? `<section class="audit"><h2>Test audit — answers and points</h2>
@@ -2822,7 +2832,7 @@ function CandidateVerdict({
       ${showAuditAppendix ? `<span><strong>Internal total:</strong> ${escapeExplanation(String(scoreValue ?? "—"))}</span>` : ""}
     </div>`;
     popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
-      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:28px auto;padding:0 24px;line-height:1.55}.toolbar{position:sticky;top:0;display:flex;justify-content:space-between;gap:12px;padding:10px 0;background:white;z-index:2}.toolbar button{border:1px solid #9db0c2;border-radius:8px;background:white;color:#10223a;padding:10px 14px;font-weight:700;cursor:pointer}.toolbar .primary{background:#168ecb;color:white;border-color:#168ecb}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:26px;border-top:1px solid #dbe3ec;padding-top:20px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:8px}.identity{display:grid;gap:3px;margin:8px 0 16px;padding:9px 12px;border:1px solid #dbe3ec;border-radius:8px;background:#f8fafc;font-size:11px;color:#43556d;overflow-wrap:anywhere}.result{padding:18px 20px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:14px 17px;border-left:4px solid #2b89c9;background:#eef6fb}.field-note{padding:16px 18px;border:1px solid #9dc5df;border-left:5px solid #168ecb;border-radius:10px;background:#f1f8fc}.field-note p:last-child{margin-bottom:0}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}.snapshot{list-style:none;padding:0}.snapshot li{display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid #e4eaf0}.audit table{width:100%;border-collapse:collapse;font-size:12px}.audit th,.audit td{padding:9px 7px;border:1px solid #dbe3ec;text-align:left;vertical-align:top}.audit th{background:#eef4f8}.audit tfoot{font-weight:700}.detail-page,.audit-page{break-before:page;page-break-before:always}@media print{.toolbar{display:none}body{margin:0 auto}.field-note,.work,.audit tr{break-inside:avoid}.summary-page{break-after:page;page-break-after:always}.detail-page{break-before:auto;page-break-before:auto}.audit-page{break-before:page;page-break-before:always}}</style>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:28px auto;padding:0 24px;line-height:1.55}.toolbar{position:sticky;top:0;display:flex;justify-content:space-between;gap:12px;padding:10px 0;background:white;z-index:2}.toolbar button{border:1px solid #9db0c2;border-radius:8px;background:white;color:#10223a;padding:10px 14px;font-weight:700;cursor:pointer}.toolbar .primary{background:#168ecb;color:white;border-color:#168ecb}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:26px;border-top:1px solid #dbe3ec;padding-top:20px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:8px}.identity{display:grid;gap:3px;margin:8px 0 16px;padding:9px 12px;border:1px solid #dbe3ec;border-radius:8px;background:#f8fafc;font-size:11px;color:#43556d;overflow-wrap:anywhere}.result{padding:18px 20px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:14px 17px;border-left:4px solid #2b89c9;background:#eef6fb}.field-note{padding:16px 18px;border:1px solid #9dc5df;border-left:5px solid #168ecb;border-radius:10px;background:#f1f8fc}.field-note p:last-child{margin-bottom:0}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}.snapshot{list-style:none;padding:0}.snapshot li{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid #e4eaf0}.snapshot li div{min-width:0}.snapshot li small{display:block;margin-top:2px;color:#66768a;font-size:12px;line-height:1.4}.snapshot li span{flex-shrink:0;text-align:right;font-weight:700}.audit table{width:100%;border-collapse:collapse;font-size:12px}.audit th,.audit td{padding:9px 7px;border:1px solid #dbe3ec;text-align:left;vertical-align:top}.audit th{background:#eef4f8}.audit tfoot{font-weight:700}.detail-page,.audit-page{break-before:page;page-break-before:always}@media print{.toolbar{display:none}body{margin:0 auto}.field-note,.work,.audit tr{break-inside:avoid}.summary-page{break-after:page;page-break-after:always}.detail-page{break-before:auto;page-break-before:auto}.audit-page{break-before:page;page-break-before:always}}</style>
       </head><body>
       <div class="toolbar"><button onclick="window.close()">← Back to Verdict</button><button class="primary" onclick="window.print()">Print / save report</button></div>
       <section class="summary-page"><p class="small">PRE-BUSINESS AUTOPSY™ · YOUR FIELD NOTE</p>
@@ -2878,11 +2888,17 @@ function CandidateVerdict({
               const label = showAuditAppendix
                 ? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code)
                 : CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+              const description = CANDIDATE_SNAPSHOT_DESCRIPTIONS[code] ?? "One of the practical areas considered in your result.";
               const value = Number(dimension.score ?? 0);
               return (
-                <div key={code || label} className={cn(!showAuditAppendix && "flex items-center justify-between gap-4 px-4 py-3")}>
+                <div key={code || label} className={cn(!showAuditAppendix && "flex items-start justify-between gap-4 px-4 py-3")}>
                   <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="font-medium">{label}</span>
+                    <div>
+                      <span className="font-medium">{label}</span>
+                      {!showAuditAppendix ? (
+                        <p className="mt-0.5 max-w-lg text-xs leading-5 text-muted-foreground">{description}</p>
+                      ) : null}
+                    </div>
                     {showAuditAppendix ? (
                       <span className="shrink-0 font-medium text-muted-foreground">{evidenceLabel(value)}</span>
                     ) : null}
