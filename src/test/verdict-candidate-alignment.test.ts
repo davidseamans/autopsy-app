@@ -56,6 +56,11 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("This is not the same result as Stop");
     expect(candidateView).toContain("A Ready for Test Run result is deliberately conditional");
     expect(candidateView).toContain("Your First 5 Jobs focus");
+    expect(candidateView).toContain("YOUR FIELD NOTE");
+    expect(candidateView).toContain("The one thing to watch");
+    expect(candidateView).toContain("Questions to carry forward");
+    expect(candidateView).toContain("SUPPORTING EXPLANATION");
+    expect(candidateView).toContain("audit-page");
     expect(candidateView).toContain("What would show progress");
     expect(candidateView).toContain("Why this came up");
     expect(candidateView).toContain("personalisedQuestions");
@@ -67,7 +72,7 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("What this result does not mean");
     expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
     expect(candidateView).toContain("← Back to Verdict");
-    expect(candidateView).toContain("Print / save both pages");
+    expect(candidateView).toContain("Print / save report");
     expect(candidateView).toContain("Test audit — answers and points");
     expect(candidateView).toContain("<strong>Run ID:</strong>");
     expect(candidateView).toContain("<strong>Completed:</strong>");
