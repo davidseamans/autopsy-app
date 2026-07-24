@@ -55,11 +55,12 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("Why this matters in the real world");
     expect(candidateView).toContain("This is not the same result as Stop");
     expect(candidateView).toContain("A Ready for Test Run result is deliberately conditional");
-    expect(candidateView).toContain("Your personal readiness work order");
-    expect(candidateView).toContain("Evidence worth bringing back");
-    expect(candidateView).toContain("What in your answers brought this forward");
+    expect(candidateView).toContain("Your First 5 Jobs focus");
+    expect(candidateView).toContain("What would show progress");
+    expect(candidateView).toContain("Why this came up");
+    expect(candidateView).toContain("personalisedQuestions");
     expect(candidateView).toContain("evidenceForDimension");
-    expect(candidateView).toContain("A better explanation alone is not a reason to retest");
+    expect(candidateView).toContain("The point is not to learn a better answer");
     expect(candidateView).toContain("What this result does not mean");
     expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
     expect(candidateView).toContain("← Back to Verdict");
