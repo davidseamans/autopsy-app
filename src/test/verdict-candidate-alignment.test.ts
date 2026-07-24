@@ -60,6 +60,9 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("Why this came up");
     expect(candidateView).toContain("personalisedQuestions");
     expect(candidateView).toContain("evidenceForDimension");
+    expect(candidateView).toContain("CANDIDATE_SNAPSHOT_LABELS");
+    expect(candidateView).toContain("candidateSnapshotStatus(value)");
+    expect(candidateView).toContain("showAuditAppendix ? \"space-y-4\"");
     expect(candidateView).toContain("The point is not to learn a better answer");
     expect(candidateView).toContain("What this result does not mean");
     expect(candidateView).toContain("does not disclose Autopsy scoring rules or provide an answer key");
