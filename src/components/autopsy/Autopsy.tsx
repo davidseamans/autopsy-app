@@ -2449,6 +2449,15 @@ const CANDIDATE_DIMENSION_LABELS: Record<string, string> = {
   psychological_resilience: "Can you handle the pressure?",
 };
 
+const CANDIDATE_SNAPSHOT_LABELS: Record<string, string> = {
+  cash_reality: "Household money",
+  economic_literacy: "Understanding the numbers",
+  market_reality: "Finding customers",
+  operational_capacity: "Delivering the work",
+  execution_discipline: "Following through",
+  psychological_resilience: "Handling pressure",
+};
+
 const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: string; consequence: string }> = {
   cash_reality: {
     positive: "You showed that you have thought about how you would carry the early costs while the work is still uncertain.",
@@ -2520,6 +2529,12 @@ function evidenceLabel(score: number): string {
   if (score >= 3) return "Some evidence";
   if (score >= 2) return "Limited evidence";
   return "Not demonstrated";
+}
+
+function candidateSnapshotStatus(score: number): string {
+  if (score >= 5) return "Strong enough to test";
+  if (score >= 3) return "One thing to clarify";
+  return "Not ready to rely on yet";
 }
 
 function evidenceWidth(score: number): string {
@@ -2758,8 +2773,8 @@ function CandidateVerdict({
       : "";
     const dimensionHtml = dimensions.map((dimension) => {
       const code = String(dimension.code ?? "").toLowerCase();
-      const label = CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
-      return `<li><strong>${escapeExplanation(label)}</strong><span>${escapeExplanation(evidenceLabel(Number(dimension.score ?? 0)))}</span></li>`;
+      const label = CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+      return `<li><strong>${escapeExplanation(label)}</strong><span>${escapeExplanation(candidateSnapshotStatus(Number(dimension.score ?? 0)))}</span></li>`;
     }).join("");
     const answerAuditHtml = showAuditAppendix
       ? `<section class="audit"><h2>Test audit — answers and points</h2>
@@ -2830,23 +2845,33 @@ function CandidateVerdict({
         <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-semibold">How your answers looked</h2>
           <p className="mt-1 text-sm text-muted-foreground">These are the six practical areas Autopsy considered.</p>
-          <div className="mt-5 space-y-4">
+          <div className={cn("mt-5", showAuditAppendix ? "space-y-4" : "divide-y rounded-xl border")}>
             {dimensions.map((dimension) => {
               const code = String(dimension.code ?? "").toLowerCase();
-              const label = CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+              const label = showAuditAppendix
+                ? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code)
+                : CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
               const value = Number(dimension.score ?? 0);
               return (
-                <div key={code || label}>
+                <div key={code || label} className={cn(!showAuditAppendix && "flex items-center justify-between gap-4 px-4 py-3")}>
                   <div className="flex items-center justify-between gap-4 text-sm">
                     <span className="font-medium">{label}</span>
-                    <span className="shrink-0 font-medium text-muted-foreground">{evidenceLabel(value)}</span>
+                    {showAuditAppendix ? (
+                      <span className="shrink-0 font-medium text-muted-foreground">{evidenceLabel(value)}</span>
+                    ) : null}
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={cn("h-full rounded-full", value >= 5 ? "bg-emerald-600" : value >= 3 ? "bg-amber-500" : "bg-red-500")}
-                      style={{ width: evidenceWidth(value) }}
-                    />
-                  </div>
+                  {showAuditAppendix ? (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn("h-full rounded-full", value >= 5 ? "bg-emerald-600" : value >= 3 ? "bg-amber-500" : "bg-red-500")}
+                        style={{ width: evidenceWidth(value) }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="shrink-0 text-right text-sm font-medium text-muted-foreground">
+                      {candidateSnapshotStatus(value)}
+                    </span>
+                  )}
                 </div>
               );
             })}
