@@ -8,6 +8,7 @@ describe("conversational Autopsy boundary", () => {
     "utf8",
   );
   const endpoint = readFileSync(resolve("api/autopsy-assessment-turn.ts"), "utf8");
+  const speechEndpoint = readFileSync(resolve("api/autopsy-speech.ts"), "utf8");
   const conversation = readFileSync(resolve("src/pages/FirstConversation.tsx"), "utf8");
   const paidEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
 
@@ -19,8 +20,8 @@ describe("conversational Autopsy boundary", () => {
 
   it("requires operator confirmation before persisting an interpreted answer", () => {
     expect(component).toContain("Have I understood you correctly?");
-    expect(component).toContain("Yes, that is right");
-    expect(component).toContain("Nothing is saved as an Autopsy answer until you confirm");
+    expect(component).toContain("YES, THAT IS RIGHT");
+    expect(component).toContain("Nothing becomes an Autopsy answer until you confirm");
   });
 
   it("does not expose scoring language or values to the candidate", () => {
@@ -51,8 +52,13 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("handleSpokenTurnRef.current?.(captured)");
     expect(component).toContain("void confirm()");
     expect(component).toContain("correct()");
-    expect(component).toContain("Answer by voice");
+    expect(component).toContain("ANSWER BY VOICE");
     expect(component).toContain("Listening…");
     expect(component).toContain("John is speaking…");
+    expect(component).toContain("/api/autopsy-speech");
+    expect(component).not.toContain("SpeechSynthesisUtterance");
+    expect(speechEndpoint).toContain("authenticateRequest");
+    expect(speechEndpoint).toContain('voice: "marin"');
+    expect(speechEndpoint).toContain('model: "gpt-4o-mini-tts"');
   });
 });

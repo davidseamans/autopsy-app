@@ -28,7 +28,7 @@ export default function PaidAutopsyEntry() {
   if (state === "authorised") return (
     <>
       {previewTestPayment ? (
-        <div className="bg-amber-50 px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.16em] text-amber-900">
+        <div className="fixed inset-x-0 top-0 z-20 border-b border-[#6f531d] bg-[#071d35] px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.16em] text-[#e4bd78]">
           Test mode · payment phrase accepted · no Stripe transaction
         </div>
       ) : null}

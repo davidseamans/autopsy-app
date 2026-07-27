@@ -48,7 +48,6 @@ const App = () => (
               <Route path="/owner-cockpit" element={<OwnerCockpit />} />
               <Route path="/staff-cockpit" element={<StaffCockpit />} />
               <Route path="/autopsy" element={<Autopsy />} />
-              <Route path="/autopsy/paid" element={<AuthGate><PaidAutopsyEntry /></AuthGate>} />
               <Route path="/autopsy/history" element={<AutopsyHistory />} />
               <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
               <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
@@ -65,6 +64,7 @@ const App = () => (
               <Route path="/quotes" element={<Quotes />} />
               <Route path="/jobs" element={<Jobs />} />
             </Route>
+            <Route path="/autopsy/paid" element={<AuthGate><PaidAutopsyEntry /></AuthGate>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

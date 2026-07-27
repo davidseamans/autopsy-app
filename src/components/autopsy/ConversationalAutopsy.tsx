@@ -76,6 +76,8 @@ export function ConversationalAutopsy() {
   const transcriptRef = useRef("");
   const startListeningRef = useRef<(() => void) | null>(null);
   const handleSpokenTurnRef = useRef<((text: string) => void) | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastSpokenTextRef = useRef("");
 
   const recognitionConstructor = useMemo(() => {
     const w = window as typeof window & {
@@ -85,23 +87,40 @@ export function ConversationalAutopsy() {
     return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
   }, []);
 
-  const speak = useCallback((text: string, listenAfter = true) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-AU";
-    utterance.rate = 0.98;
-    utterance.onstart = () => {
-      setSpeaking(true);
-      setStatus("John is speaking…");
-    };
-    utterance.onend = () => {
+  const speak = useCallback(async (text: string, listenAfter = true) => {
+    lastSpokenTextRef.current = text;
+    audioRef.current?.pause();
+    setSpeaking(true);
+    setStatus("John is speaking…");
+    try {
+      const response = await fetch("/api/autopsy-speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) throw new Error("voice");
+      const url = URL.createObjectURL(await response.blob());
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setSpeaking(false);
+        if (listenAfter) window.setTimeout(() => startListeningRef.current?.(), 180);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        setSpeaking(false);
+        setStatus("John's words are on screen. Use Hear John to try the voice again.");
+      };
+      await audio.play();
+    } catch {
       setSpeaking(false);
-      if (listenAfter) window.setTimeout(() => startListeningRef.current?.(), 180);
-    };
-    utterance.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-  }, []);
+      setStatus("John's words are on screen. Use Hear John to try the voice again.");
+    }
+  }, [session?.access_token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +158,7 @@ export function ConversationalAutopsy() {
     return () => {
       cancelled = true;
       recognitionRef.current?.abort();
-      window.speechSynthesis?.cancel();
+      audioRef.current?.pause();
     };
   }, [speak, user?.email]);
 
@@ -301,71 +320,97 @@ export function ConversationalAutopsy() {
   };
 
   if (error && !questions.length) {
-    return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">Autopsy could not start</h1><p className="mt-3 text-muted-foreground">{error}</p></main>;
+    return <main className="min-h-screen bg-[#06111c] p-8 text-[#edf8fb]"><div className="mx-auto max-w-xl border border-[#1c3547] bg-[#091925] p-8"><h1 className="text-2xl font-semibold">Autopsy could not start</h1><p className="mt-3 text-[#9aafbd]">{error}</p></div></main>;
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <section className="overflow-hidden rounded-[2rem] border bg-card shadow-sm">
-        <header className="border-b bg-[#0b2f4d] px-6 py-5 text-white">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-300">Autopsy · conversation</p>
-          <div className="mt-2 flex items-end justify-between gap-4">
-            <h1 className="text-2xl font-semibold">Talk it through with John</h1>
-            <span className="text-sm text-slate-300">{questions.length ? `${index + 1} of 12` : "Preparing"}</span>
-          </div>
-        </header>
-        <div className="space-y-6 p-6 sm:p-8">
-          {busy && !questions.length ? <p>{status}</p> : null}
-          {currentPrompt ? (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">John</p>
-              <h2 className="mt-3 text-2xl font-semibold leading-snug">{currentPrompt}</h2>
+    <main
+      className="relative min-h-screen overflow-hidden bg-[#06111c] px-4 pb-10 pt-20 text-[#edf8fb] sm:px-8"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(56,170,250,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(56,170,250,.05) 1px,transparent 1px)",
+        backgroundSize: "70px 70px",
+      }}
+    >
+      <div className="absolute inset-x-0 top-14 h-px bg-gradient-to-r from-transparent via-[#38aafa] to-transparent shadow-[0_0_20px_#38aafa]" />
+      <nav className="relative mx-auto flex max-w-7xl items-center gap-4 font-mono text-[10px] tracking-[0.16em] text-[#556c7c]">
+        <span className="text-[#b78525]">LANDING</span><i className="h-px w-14 bg-[#1c3547]" />
+        <span className="text-[#38aafa]">AUTOPSY</span><i className="h-px w-14 bg-[#1c3547]" />
+        <span>5JD</span><i className="h-px w-14 bg-[#1c3547]" /><span>CORE</span>
+      </nav>
+
+      <section className="relative mx-auto mt-10 grid min-h-[690px] max-w-7xl border border-[#1c3547] bg-[#091925]/95 lg:grid-cols-[34%_66%]">
+        <aside className="flex min-h-[270px] flex-col border-b border-[#1c3547] p-8 lg:border-b-0 lg:border-r lg:p-14">
+          <p className="text-[10px] font-bold tracking-[0.2em] text-[#b78525]">AUTOPSY · TEST CONVERSATION</p>
+          <blockquote className="my-auto font-serif text-3xl leading-snug text-[#dce8ec]">
+            “Speak naturally. John will listen, clarify and keep the twelve subjects in the background.”
+          </blockquote>
+          <small className="text-sm leading-6 text-[#718796]">
+            Nothing becomes an Autopsy answer until you confirm that John has understood you correctly.
+          </small>
+        </aside>
+
+        <article className="flex min-h-[600px] flex-col p-8 lg:p-14">
+          <header className="flex items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <i className="grid h-12 w-12 place-items-center rounded-full border border-[#38aafa] not-italic text-[#38aafa] shadow-[0_0_28px_rgba(56,170,250,.18)]">J</i>
+              <p className="text-[11px] font-bold tracking-[0.18em]">JOHN<small className="mt-1 block font-normal text-[#7f95a7]">Autopsy · listening and guiding</small></p>
             </div>
-          ) : null}
+            <span className="font-mono text-xs text-[#7f95a7]">{questions.length ? `${index + 1} OF 12` : "PREPARING"}</span>
+          </header>
+
+          <div className="mt-12">
+            <p className="text-[10px] font-bold tracking-[0.2em] text-[#54c5ff]">CURRENT SUBJECT</p>
+            <h1 className="mt-5 max-w-4xl font-serif text-4xl font-normal leading-[1.12] tracking-[-0.035em] text-[#edf8fb] sm:text-5xl">
+              {currentPrompt || status}
+            </h1>
+          </div>
 
           {interpretation ? (
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+            <div className="mt-8 border border-[#24475e] bg-[#0d2637] p-5">
               {interpretation.selected_option_id && !interpretation.clarifying_question ? (
                 <>
-                  <p className="text-lg leading-8">{interpretation.plain_summary}</p>
-                  <p className="mt-3 font-semibold">Have I understood you correctly?</p>
+                  <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
+                  <p className="mt-3 font-semibold text-[#54c5ff]">Have I understood you correctly?</p>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={confirm} disabled={busy} className="rounded-full bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50">Yes, that is right</button>
-                    <button type="button" onClick={correct} disabled={busy} className="rounded-full border px-5 py-3 font-semibold disabled:opacity-50">No, let me correct it</button>
-                    <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="rounded-full bg-sky-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
-                      {listening ? "Finish speaking" : "Answer by voice"}
+                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT IS RIGHT</button>
+                    <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
+                    <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+                      {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
                     </button>
                   </div>
                 </>
               ) : (
-                <p className="text-lg leading-8">{interpretation.clarifying_question}</p>
+                <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.clarifying_question}</p>
               )}
             </div>
           ) : null}
 
           {(!interpretation || interpretation.clarifying_question) ? (
-            <form onSubmit={submit} className="space-y-3">
+            <form onSubmit={submit} className="mt-auto pt-9">
+              <label htmlFor="autopsy-conversation-answer" className="text-[10px] font-bold tracking-[0.2em] text-[#54c5ff]">YOUR RESPONSE</label>
               <textarea
+                id="autopsy-conversation-answer"
                 value={answer}
                 onChange={(event) => setAnswer(event.target.value)}
-                rows={4}
+                rows={3}
                 disabled={busy || listening}
-                placeholder="Speak naturally, or type your answer here."
-                className="w-full resize-none rounded-2xl border bg-background px-4 py-3"
+                placeholder="Speak naturally, or type here."
+                className="mt-3 w-full resize-none border-0 border-t border-[#244052] bg-transparent px-0 py-4 text-lg text-white outline-none placeholder:text-[#6d8393]"
               />
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="rounded-full bg-sky-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
-                  {listening ? "Finish answer" : "Use microphone"}
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-6 py-3 text-sm font-bold text-white disabled:opacity-40">
+                  {listening ? "FINISH ANSWER" : "USE MICROPHONE"}
                 </button>
-                <button type="submit" disabled={busy || listening || !answer.trim()} className="rounded-full bg-[#0b2f4d] px-5 py-3 font-semibold text-white disabled:opacity-50">Continue</button>
+                <button type="submit" disabled={busy || listening || !answer.trim()} className="border border-[#38aafa] px-6 py-3 text-sm font-bold text-[#edf8fb] disabled:opacity-30">CONTINUE</button>
+                <button type="button" onClick={() => void speak(lastSpokenTextRef.current || currentPrompt)} disabled={busy || speaking || !lastSpokenTextRef.current} className="ml-auto border-0 bg-transparent text-xs font-bold tracking-[0.12em] text-[#7f95a7] disabled:opacity-30">HEAR JOHN AGAIN</button>
               </div>
             </form>
           ) : null}
 
-          <p className="text-sm text-muted-foreground">{busy ? "John is working…" : status}</p>
-          {error ? <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
-          <p className="border-t pt-4 text-xs text-muted-foreground">Nothing is saved as an Autopsy answer until you confirm John’s understanding.</p>
-        </div>
+          <p className="mt-5 text-sm text-[#8ea5b4]">{busy ? "John is considering what you said…" : status}</p>
+          {error ? <p className="mt-3 border border-[#7b3434] bg-[#2b171b] p-3 text-sm text-[#ffb7b7]">{error}</p> : null}
+        </article>
       </section>
     </main>
   );
