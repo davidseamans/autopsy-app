@@ -74,6 +74,8 @@ export function ConversationalAutopsy() {
   const [error, setError] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptRef = useRef("");
+  const startListeningRef = useRef<(() => void) | null>(null);
+  const handleSpokenTurnRef = useRef<((text: string) => void) | null>(null);
 
   const recognitionConstructor = useMemo(() => {
     const w = window as typeof window & {
@@ -83,14 +85,20 @@ export function ConversationalAutopsy() {
     return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
   }, []);
 
-  const speak = useCallback((text: string) => {
+  const speak = useCallback((text: string, listenAfter = true) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-AU";
     utterance.rate = 0.98;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
+    utterance.onstart = () => {
+      setSpeaking(true);
+      setStatus("John is speaking…");
+    };
+    utterance.onend = () => {
+      setSpeaking(false);
+      if (listenAfter) window.setTimeout(() => startListeningRef.current?.(), 180);
+    };
     utterance.onerror = () => setSpeaking(false);
     window.speechSynthesis.speak(utterance);
   }, []);
@@ -194,7 +202,7 @@ export function ConversationalAutopsy() {
       if (index === 11) {
         setStatus("Your answers are saved. John is preparing your Verdict…");
         await finalizeAutopsyRun(runId);
-        speak("That completes Autopsy. Your answers have been saved and your Verdict is ready.");
+        speak("That completes Autopsy. Your answers have been saved and your Verdict is ready.", false);
         window.setTimeout(() => navigate(`/autopsy/run/${runId}`), 1400);
         return;
       }
@@ -222,11 +230,14 @@ export function ConversationalAutopsy() {
   const startListening = () => {
     if (!recognitionConstructor || listening || speaking || busy) return;
     const recognition = new recognitionConstructor();
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-AU";
     transcriptRef.current = "";
-    recognition.onstart = () => setListening(true);
+    recognition.onstart = () => {
+      setListening(true);
+      setStatus("Listening…");
+    };
     recognition.onresult = (event) => {
       let stable = transcriptRef.current;
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
@@ -242,11 +253,47 @@ export function ConversationalAutopsy() {
     recognition.onend = () => {
       setListening(false);
       const captured = transcriptRef.current.trim();
-      if (captured) void interpret(captured);
+      if (captured) {
+        setStatus("John is thinking…");
+        handleSpokenTurnRef.current?.(captured);
+      } else {
+        setStatus("I did not catch that. Use the microphone or type your answer.");
+      }
     };
     recognitionRef.current = recognition;
     recognition.start();
   };
+
+  const handleSpokenTurn = useCallback((text: string) => {
+    const normalised = text
+      .toLowerCase()
+      .replace(/[’']/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const awaitingConfirmation =
+      Boolean(interpretation?.selected_option_id) &&
+      !interpretation?.clarifying_question;
+
+    if (!awaitingConfirmation) {
+      void interpret(text);
+      return;
+    }
+    if (/^(yes|yeah|yep|correct|exactly|right|thats right|that is right)\b/.test(normalised)) {
+      void confirm();
+      return;
+    }
+    if (/^(no|nope|not quite|thats not right|that is not right)\b/.test(normalised)) {
+      correct();
+      return;
+    }
+    setStatus("Please say yes, or tell John you would like to correct it.");
+    speak("Please say yes if I have understood, or say no and we will correct it.");
+  }, [confirm, correct, interpretation, speak]);
+
+  useEffect(() => {
+    startListeningRef.current = startListening;
+    handleSpokenTurnRef.current = handleSpokenTurn;
+  }, [handleSpokenTurn]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -285,6 +332,9 @@ export function ConversationalAutopsy() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button type="button" onClick={confirm} disabled={busy} className="rounded-full bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50">Yes, that is right</button>
                     <button type="button" onClick={correct} disabled={busy} className="rounded-full border px-5 py-3 font-semibold disabled:opacity-50">No, let me correct it</button>
+                    <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="rounded-full bg-sky-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+                      {listening ? "Finish speaking" : "Answer by voice"}
+                    </button>
                   </div>
                 </>
               ) : (

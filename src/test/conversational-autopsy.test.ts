@@ -45,4 +45,14 @@ describe("conversational Autopsy boundary", () => {
     expect(paidEntry).toContain('get("test_payment") === "accepted"');
     expect(paidEntry).toContain("no Stripe transaction");
   });
+
+  it("continues the paid assessment as a spoken conversation", () => {
+    expect(component).toContain("if (listenAfter) window.setTimeout(() => startListeningRef.current?.()");
+    expect(component).toContain("handleSpokenTurnRef.current?.(captured)");
+    expect(component).toContain("void confirm()");
+    expect(component).toContain("correct()");
+    expect(component).toContain("Answer by voice");
+    expect(component).toContain("Listening…");
+    expect(component).toContain("John is speaking…");
+  });
 });
