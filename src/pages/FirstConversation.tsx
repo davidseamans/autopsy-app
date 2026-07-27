@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AutopsyCheckoutPanel } from "@/components/autopsy/AutopsyCheckoutPanel";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 type StageOption = { value: string; label: string; helper: string };
 type ExperienceOption = { value: string; label: string };
@@ -27,6 +27,8 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 const TRANSCRIPT_KEY = "autopsy-first-conversation-ai-v1";
 const VOICE_KEY = "autopsy-john-voice-v3";
 const SILENCE_MS = 1250;
+const INTEGRATION_PREVIEW_HOST =
+  "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app";
 
 const fallbackStages: StageOption[] = [
   { value: "startup", label: "Starting from scratch", helper: "You are considering or preparing a new business." },
@@ -48,9 +50,20 @@ const makeMessage = (speaker: Message["speaker"], text: string): Message => ({
 });
 
 const normalise = (value: string) => value.replace(/\s+/g, " ").trim();
+const isTestPaymentPhrase = (value: string) =>
+  /(^|\s)(i have paid|ive paid)(\s|$)/.test(
+    value
+      .toLowerCase()
+      .replace(/[’']/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim(),
+  );
+const canUsePreviewPaymentBypass = () =>
+  window.location.hostname === INTEGRATION_PREVIEW_HOST;
 
 const FirstConversation = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const transcriptKey = `${TRANSCRIPT_KEY}:${user?.id ?? "anonymous"}`;
   const [stageOptions, setStageOptions] = useState(fallbackStages);
@@ -183,6 +196,12 @@ const FirstConversation = () => {
   const sendTurn = useCallback(async (rawText: string) => {
     const text = normalise(rawText);
     if (!text || thinking || paused) return;
+    if (canUsePreviewPaymentBypass() && isTestPaymentPhrase(text)) {
+      recognitionRef.current?.abort();
+      window.speechSynthesis?.cancel();
+      navigate("/autopsy/paid?test_payment=accepted");
+      return;
+    }
     setDraft("");
     setThinking(true);
     setStatus("John is thinking…");
@@ -208,7 +227,7 @@ const FirstConversation = () => {
       setDraft(text);
       setMessages((current) => [...current, makeMessage("system", error instanceof Error ? error.message : "Conversation service failed")]);
     }
-  }, [conversationHistory, conversationId, experience, industry, paused, persistTurn, speak, stage, thinking]);
+  }, [conversationHistory, conversationId, experience, industry, navigate, paused, persistTurn, speak, stage, thinking]);
 
   const startListening = useCallback(() => {
     if (!speechRecognitionConstructor || listening || speaking || thinking || paused) return;

@@ -8,6 +8,8 @@ describe("conversational Autopsy boundary", () => {
     "utf8",
   );
   const endpoint = readFileSync(resolve("api/autopsy-assessment-turn.ts"), "utf8");
+  const conversation = readFileSync(resolve("src/pages/FirstConversation.tsx"), "utf8");
+  const paidEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
 
   it("uses the canonical run, answer and finalisation RPC path", () => {
     expect(component).toContain("createAutopsyRun");
@@ -33,5 +35,14 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("A valid session is required");
     expect(endpoint).toContain("Do not invent an option, score, weight, threshold or verdict");
     expect(endpoint).toContain("allowed.has");
+  });
+
+  it("permits the payment phrase only on the named integration preview", () => {
+    expect(conversation).toContain("isTestPaymentPhrase");
+    expect(conversation).toContain("canUsePreviewPaymentBypass");
+    expect(conversation).toContain("/autopsy/paid?test_payment=accepted");
+    expect(paidEntry).toContain("window.location.hostname === INTEGRATION_PREVIEW_HOST");
+    expect(paidEntry).toContain('get("test_payment") === "accepted"');
+    expect(paidEntry).toContain("no Stripe transaction");
   });
 });
