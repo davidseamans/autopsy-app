@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Autopsy } from "@/components/autopsy/Autopsy";
+import { ConversationalAutopsy } from "@/components/autopsy/ConversationalAutopsy";
 import { supabase } from "@/lib/supabase";
 
 export default function PaidAutopsyEntry() {
@@ -16,7 +16,7 @@ export default function PaidAutopsyEntry() {
       .then(({ data }) => setState(data ? "authorised" : "blocked"));
   }, []);
 
-  if (state === "authorised") return <Autopsy />;
+  if (state === "authorised") return <ConversationalAutopsy />;
   if (state === "loading") return <main className="p-8 text-center">Confirming your Autopsy entitlement…</main>;
   return (
     <main className="mx-auto max-w-xl p-8 text-center">
@@ -26,4 +26,3 @@ export default function PaidAutopsyEntry() {
     </main>
   );
 }
-
