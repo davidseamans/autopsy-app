@@ -7,6 +7,14 @@ function requireServerEnv(name: string): string {
   return value;
 }
 
+function requireFirstServerEnv(names: string[]): string {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  throw new Error(`Missing server environment variable: ${names.join(" or ")}`);
+}
+
 export function createServiceClient() {
   return createClient(
     requireServerEnv("SUPABASE_URL"),
@@ -20,6 +28,11 @@ export async function authenticateRequest(req: ApiRequest): Promise<User | null>
   if (!authorization?.startsWith("Bearer ")) return null;
   const token = authorization.slice("Bearer ".length).trim();
   if (!token) return null;
-  const { data, error } = await createServiceClient().auth.getUser(token);
+  const authClient = createClient(
+    requireFirstServerEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"]),
+    requireFirstServerEnv(["SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"]),
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data, error } = await authClient.auth.getUser(token);
   return error ? null : data.user;
 }

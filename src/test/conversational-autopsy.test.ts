@@ -9,6 +9,7 @@ describe("conversational Autopsy boundary", () => {
   );
   const endpoint = readFileSync(resolve("api/autopsy-assessment-turn.ts"), "utf8");
   const speechEndpoint = readFileSync(resolve("api/autopsy-speech.ts"), "utf8");
+  const serverAuth = readFileSync(resolve("api/_lib/supabase-server.ts"), "utf8");
   const conversation = readFileSync(resolve("src/pages/FirstConversation.tsx"), "utf8");
   const paidEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
 
@@ -36,6 +37,9 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("A valid session is required");
     expect(endpoint).toContain("Do not invent an option, score, weight, threshold or verdict");
     expect(endpoint).toContain("allowed.has");
+    expect(serverAuth).toContain('["SUPABASE_URL", "VITE_SUPABASE_URL"]');
+    expect(serverAuth).toContain('["SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"]');
+    expect(serverAuth).not.toContain("createServiceClient().auth.getUser");
   });
 
   it("permits the payment phrase only on the named integration preview", () => {
