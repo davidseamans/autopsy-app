@@ -185,6 +185,7 @@ export interface SelectedAnswerAuditRow {
   question_id: string | number | null;
   question_number: number | null;
   dimension_code?: string | null;
+  question_prompt?: string | null;
   selected_option_id: string | number | null;
   selected_option_label: string | null;
   score_value: number | null;

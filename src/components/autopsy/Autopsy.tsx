@@ -41,6 +41,10 @@ import { useAuth } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
 import {
+  buildCandidateNuance,
+  type CandidateAnswerEvidence,
+} from "@/lib/candidate-nuance";
+import {
   GatewayPayload,
   GatewayQuestion,
   createAutopsyRun,
@@ -193,6 +197,7 @@ function buildSelectedAnswersFromPayload(
         question_id: q.question_id ?? q.q_id ?? null,
         question_number: Number.isFinite(Number(q.position)) ? Number(q.position) : i + 1,
         dimension_code: q.dimension_code ?? null,
+        question_prompt: q.prompt ?? null,
         selected_option_id: selectedId,
         selected_option_label:
           selectedOpt && typeof selectedOpt === "object"
@@ -256,7 +261,7 @@ function translatePermissionState(value: any): string {
   const map: Record<string, string> = {
     PROCEED_ONLY_IF: "Proceed only if the required proof is produced.",
     STOP: "Stop. Do not proceed.",
-    STOP_UNLESS_REBUILT: "Stop until the business is rebuilt and retested.",
+    STOP_UNLESS_REBUILT: "Stop until the readiness gap is addressed and new evidence is available.",
     STOP_PROOF_REQUIRED: "Stop until the required proof is produced.",
     PROCEED_WITH_CONSTRAINTS: "Proceed with controls in place.",
     CONTROLLED_PROGRESSION: "Proceed under controlled conditions.",
@@ -292,6 +297,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   const [savedScoreOverride, setSavedScoreOverride] = useState<number | null>(null);
   const [pendingSelection, setPendingSelection] = useState<string | number | null>(null);
   const [loadingStuck, setLoadingStuck] = useState(false);
+  const [finalizationRequested, setFinalizationRequested] = useState(false);
   const [manualIndex, setManualIndex] = useState<number | null>(null);
   const [staleAnswerWarning, setStaleAnswerWarning] = useState<string | null>(null);
   // Optimistic-save tracking. saveStatus drives subtle per-question micro-status
@@ -558,9 +564,11 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }
       if (status === "completed" || hasVerdict) {
         setLoadingStuck(false);
+        setFinalizationRequested(false);
         setView("verdict");
       } else {
-        setView("verdict");
+        setFinalizationRequested(false);
+        setLoadingStuck(true);
       }
     },
     onError: async (e: any) => {
@@ -582,6 +590,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             } catch { /* noop */ }
             setError(null);
             setLoadingStuck(false);
+            setFinalizationRequested(false);
             setView("verdict");
             return;
           }
@@ -595,6 +604,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           step: "question",
           runId,
         });
+        setFinalizationRequested(false);
         return;
       }
       setError({
@@ -603,6 +613,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         step: "question",
         runId,
       });
+      setFinalizationRequested(false);
     },
   });
 
@@ -665,17 +676,20 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     if (!run) return;
     if ((run.status === "completed" || !!run.verdict_name) && view !== "verdict") {
       setLoadingStuck(false);
+      setFinalizationRequested(false);
       setView("verdict");
     }
   }, [payloadQuery.data, view]);
 
-  // 8s timeout fallback when sitting on the post-Q10 spinner.
+  // Timeout only after the user has explicitly requested finalisation.
+  // Having all questions answered is not the same thing: the candidate may
+  // legitimately move back through completed questions to revise an answer.
   useEffect(() => {
     if (view !== "question") {
       setLoadingStuck(false);
       return;
     }
-    if (!allAnswered && !finalizeMutation.isPending) {
+    if (!finalizationRequested) {
       setLoadingStuck(false);
       return;
     }
@@ -690,6 +704,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         if (run?.status === "completed" || run?.verdict_name) {
           setView("verdict");
           setLoadingStuck(false);
+          setFinalizationRequested(false);
         } else {
           setLoadingStuck(true);
         }
@@ -698,7 +713,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       }
     }, 8000);
     return () => window.clearTimeout(t);
-  }, [view, allAnswered, finalizeMutation.isPending, runId, qc]);
+  }, [view, finalizationRequested, runId, qc]);
 
   // Score so far (display only — sums numeric option values when available)
   const { scoreSoFar, scoreMax, scoreNumeric } = useMemo(() => {
@@ -801,6 +816,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
 
   async function handleSelect(value: string | number) {
     if (!runId || !currentQuestion) return;
+    // A changed answer is an editing action, never a finalisation action.
+    setLoadingStuck(false);
+    if (!finalizeMutation.isPending) setFinalizationRequested(false);
     const qid = String(currentQuestion.question_id);
     // Validate the option belongs to the current question's active option set
     // before any state mutation or RPC. Prevents "Invalid answer option for
@@ -919,6 +937,8 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
   async function finalizeAndLoad() {
     if (!runId) return;
     setError(null);
+    setLoadingStuck(false);
+    setFinalizationRequested(true);
     // Wait for any in-flight optimistic saves to finish before reading the
     // authoritative answer audit. Optimistic UI must never produce a final
     // score that races ahead of the persisted backend state.
@@ -937,6 +957,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
         step: "question",
         runId,
       });
+      setFinalizationRequested(false);
       return;
     }
     // Authoritative pre-finalize guard: re-fetch saved answers and require
@@ -971,6 +992,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           step: "question",
           runId,
         });
+        setFinalizationRequested(false);
         return;
       }
     } catch {
@@ -991,6 +1013,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
           localStorage.removeItem("autopsy_current_run_id");
         } catch { /* noop */ }
         setLoadingStuck(false);
+        setFinalizationRequested(false);
         setView("verdict");
         return;
       }
@@ -1016,8 +1039,9 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
       return;
     }
     // Fallback / loading state on question screen: clear and go to History.
-    if (view === "question" && (loadingStuck || allAnswered || finalizeMutation.isPending)) {
+    if (view === "question" && (loadingStuck || finalizationRequested || finalizeMutation.isPending)) {
       setLoadingStuck(false);
+      setFinalizationRequested(false);
       setError(null);
       navigate("/autopsy/history");
       return;
@@ -1059,6 +1083,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
     setPendingSelection(null);
     setRunName("");
     setLoadingStuck(false);
+    setFinalizationRequested(false);
     setManualIndex(null);
     setSaveStatus({});
     pendingSavesRef.current = new Map();
@@ -1172,7 +1197,7 @@ export function Autopsy({ initialRunId }: { initialRunId?: string } = {}) {
             currentQuestion={currentQuestion}
             currentIndex={currentIndex}
             total={questions.length}
-            allAnswered={allAnswered && (finalizeMutation.isPending || loadingStuck)}
+            allAnswered={allAnswered && (finalizationRequested || finalizeMutation.isPending || loadingStuck)}
             pendingSelection={pendingSelection}
             onSelect={handleSelect}
             onNext={handleNext}
@@ -1397,9 +1422,9 @@ function QuestionView(props: {
     if (props.loadingStuck) {
       return (
         <div className="rounded-2xl border bg-[hsl(var(--autopsy-surface))] shadow-sm p-8 space-y-4 text-center">
-          <h2 className="text-lg font-semibold">Run may have completed.</h2>
+          <h2 className="text-lg font-semibold">Finalisation did not complete.</h2>
           <p className="text-sm text-muted-foreground">
-            We didn't receive the verdict in time. Please check History to confirm.
+            Your saved answers are safe. Retry finalisation, or return to History.
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Button
@@ -1656,7 +1681,16 @@ function VerdictView({
     if (dbRows.length > 0) {
       const byQuestion = new Map<string, SelectedAnswerAuditRow>();
       for (const row of payloadRows) byQuestion.set(auditQuestionKey(row), row);
-      for (const row of dbRows) byQuestion.set(auditQuestionKey(row), row);
+      for (const row of dbRows) {
+        const key = auditQuestionKey(row);
+        const gatewayRow = byQuestion.get(key);
+        byQuestion.set(key, {
+          ...gatewayRow,
+          ...row,
+          dimension_code: row.dimension_code ?? gatewayRow?.dimension_code ?? null,
+          question_prompt: row.question_prompt ?? gatewayRow?.question_prompt ?? null,
+        });
+      }
       const selectedAnswers = [...byQuestion.values()].sort(sortAuditRows);
       const selectedHardFails = selectedAnswers.filter((r) => deriveHardFailFromSelectedAnswers([r]));
       return {
@@ -1743,20 +1777,12 @@ function VerdictView({
     hasSelectedHardFail ||
     backendHardFailTriggered ||
     backendHardFailText;
-  const isScoreBandCriticalStop =
-    !isHardFail &&
-    Number.isFinite(scoreNumeric) &&
-    (scoreNumeric as number) >= 0 &&
-    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.criticalStopMax;
+  const backendBand = deriveBand(verdictName);
+  const isScoreBandCriticalStop = !isHardFail && backendBand === "critical_stop";
   // A hard-fail always routes to Critical Stop regardless of score band.
   const isHardFailCriticalStop = isHardFail;
   const isCriticalStop = isScoreBandCriticalStop || isHardFailCriticalStop;
-  const isScoreBandNotViable =
-    !isHardFail &&
-    !isCriticalStop &&
-    Number.isFinite(scoreNumeric) &&
-    (scoreNumeric as number) > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax &&
-    (scoreNumeric as number) <= QUICK_GATE_CONFIG.bandThresholds.notViableMax;
+  const isScoreBandNotViable = !isHardFail && backendBand === "not_viable";
   const isProgressionLocked =
     opStateKey === "blocked" ||
     isNotViableVerdict ||
@@ -1805,7 +1831,7 @@ function VerdictView({
   const suppressPrimaryWatchpoint = isPerfectScore || hasTiedWatchpoint || allDomainsTied;
   const displayScore = scoreNumeric;
   const effectiveVerdictBody = isPerfectScore
-    ? "Structurally viable. No primary constraint or repair worksheet is required. Maintain telemetry and review cadence under operating load."
+    ? "The candidate is ready for a controlled test run. Current evidence shows useful discipline and capability; the First 5 Jobs stage will test that evidence in practice."
     : tiedWatchpointNotice
       ? `${tiedWatchpointNotice} No repair worksheet required. Maintain telemetry and monitor all tied watchpoints under operating load.`
       : verdictBody;
@@ -1889,7 +1915,7 @@ function VerdictView({
         const copy = isHardFail
           ? {
               ...baseCopy,
-              title: "Critical Stop — hard-fail repair required",
+              title: "Readiness stop — preparation required",
               body:
                 "The score does not override this result. A non-negotiable blocker was triggered. Correct it, prove the correction, and retest before Stage 1 can reopen.",
               primaryCta: {
@@ -1901,6 +1927,30 @@ function VerdictView({
         return { copy };
       })()
     : null;
+
+  // Candidate-facing Verdict. The diagnostic/governance cockpit below is
+  // retained temporarily for internal development, but it is not suitable for
+  // a person reading the result on a phone. Autopsy must answer three plain
+  // questions: what did we find, what does it mean, and what happens next?
+  return (
+    <CandidateVerdict
+      runId={runId}
+      verdictName={verdictName}
+      verdictBody={effectiveVerdictBody}
+      score={scoreNumeric}
+      testLabel={String(run.run_name ?? run.test_name ?? "")}
+      dimensions={dimensionScores}
+      answerEvidence={selectedAnswerAudit.selectedAnswers.map((answer) => ({
+        questionNumber: answer.question_number,
+        dimensionCode: answer.dimension_code ?? null,
+        prompt: answer.question_prompt ?? null,
+        selectedAnswer: answer.selected_option_label ?? null,
+        score: answer.score_value,
+      }))}
+      showAuditAppendix={isDebug()}
+      completedLabel={completedLabel}
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -1914,9 +1964,9 @@ function VerdictView({
         <div className="flex items-center justify-between mb-8">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {isHardFailCriticalStop
-              ? "Status: Completed · Critical Stop · Hard-fail condition triggered"
+              ? "Status: Completed · Readiness stop · Explicit stop condition"
                 : isScoreBandCriticalStop
-                  ? "Status: Completed · Critical Stop (Score-Band)"
+                  ? "Status: Completed · Stop"
                   : isScoreBandNotViable
                   ? "Status: Completed · Score-Band Failure"
                   : isProgressionBlocked
@@ -1934,9 +1984,10 @@ function VerdictView({
           >
             {(() => {
               const vn = (run.verdict_name as string) ?? "";
-              if (isCriticalStop) return "Critical Stop";
+              if (isCriticalStop && !vn.trim()) return "Stop";
               if (vn.trim() && !isCriticalStop) return vn;
-              if (isHardFail || isScoreBandNotViable || isProgressionLocked) return "Not Viable";
+              if (isHardFail) return "Stop";
+              if (isScoreBandNotViable || isProgressionLocked) return "Not Ready";
               return "Verdict";
             })()}
           </h1>
@@ -2389,6 +2440,506 @@ function VerdictView({
   );
 }
 
+const CANDIDATE_DIMENSION_LABELS: Record<string, string> = {
+  cash_reality: "Can you carry the start-up costs?",
+  economic_literacy: "Do you understand the numbers?",
+  market_reality: "Have you tested real customer demand?",
+  operational_capacity: "Can you deliver the work reliably?",
+  execution_discipline: "Do you follow through?",
+  psychological_resilience: "Can you handle the pressure?",
+};
+
+const CANDIDATE_SNAPSHOT_LABELS: Record<string, string> = {
+  cash_reality: "Household money",
+  economic_literacy: "Understanding the numbers",
+  market_reality: "Finding customers",
+  operational_capacity: "Delivering the work",
+  execution_discipline: "Following through",
+  psychological_resilience: "Handling pressure",
+};
+
+const CANDIDATE_SNAPSHOT_DESCRIPTIONS: Record<string, string> = {
+  cash_reality: "Carrying your living and start-up costs while the work is still uncertain.",
+  economic_literacy: "Connecting the price, the job costs and the money left over.",
+  market_reality: "Finding out whether real customers will choose you and pay.",
+  operational_capacity: "Completing the work you promised, reliably and to standard.",
+  execution_discipline: "Turning intentions into finished quotes, records, jobs and promises.",
+  psychological_resilience: "Staying responsible when plans, customers or income become difficult.",
+};
+
+const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: string; consequence: string }> = {
+  cash_reality: {
+    positive: "You showed that you have thought about how you would carry the early costs while the work is still uncertain.",
+    concern: "Your answers did not yet show a dependable financial buffer for the early months.",
+    consequence: "A shortfall can force rushed decisions, personal borrowing, or abandoning the venture before it has had a fair test.",
+  },
+  economic_literacy: {
+    positive: "You showed a useful understanding of prices, job costs and the numbers that make work worthwhile.",
+    concern: "Your answers did not yet show that you can reliably connect price, job costs and the money left over.",
+    consequence: "You can stay busy while losing money, quote too cheaply, or mistake cash in the bank for profit.",
+  },
+  market_reality: {
+    positive: "You showed evidence that real customers—not only friends or enthusiasm—may pay for the service.",
+    concern: "Your answers did not yet show enough evidence that real customers will choose and pay you.",
+    consequence: "Buying equipment or leaving steady work before demand is proven can turn an idea into an expensive guess.",
+  },
+  operational_capacity: {
+    positive: "You showed that you have considered how the work will be delivered reliably and to an acceptable standard.",
+    concern: "Your answers did not yet show a reliable way to deliver the work when customers, timing and problems become real.",
+    consequence: "Late arrivals, uneven quality or work that takes too long can damage trust before the business has established itself.",
+  },
+  execution_discipline: {
+    positive: "You showed evidence that you can turn intentions into completed actions and follow through consistently.",
+    concern: "Your answers did not yet show dependable follow-through when the work becomes repetitive or uncomfortable.",
+    consequence: "Quotes go unanswered, records fall behind and small promises to customers are missed—the ordinary failures that quietly sink new operators.",
+  },
+  psychological_resilience: {
+    positive: "You showed that you can remain responsible and make considered decisions when the pressure rises.",
+    concern: "Your answers did not yet show how you would respond to uncertainty, rejection, complaints or uneven income.",
+    consequence: "Pressure can lead to impulsive pricing, avoidance, poor customer decisions or giving up at exactly the wrong time.",
+  },
+};
+
+const CANDIDATE_DIMENSION_WORK: Record<string, { work: string; evidence: string; caution: string }> = {
+  cash_reality: {
+    work: "Prepare a truthful household survival budget and identify how regular living costs would be paid while work is uncertain.",
+    evidence: "A protected cash buffer and a written limit on what you can afford to risk without borrowing or missing personal commitments.",
+    caution: "Do not resign, borrow for equipment or use money already needed by your household.",
+  },
+  economic_literacy: {
+    work: "Cost several realistic cleaning jobs from start to finish, including labour time, supplies, travel and the mistakes that make a job run over.",
+    evidence: "Completed job-cost records showing the quoted price, actual cost and money left after delivering the work.",
+    caution: "Do not rely on bank balance, turnover or a competitor's price as proof that a job is worthwhile.",
+  },
+  market_reality: {
+    work: "Test demand with real prospective customers who are free to say no; distinguish polite interest from a genuine request for a quote.",
+    evidence: "A small record of real enquiries, quotes requested and buying decisions from people outside your immediate circle.",
+    caution: "Do not buy equipment or leave secure work because friends say the idea sounds good.",
+  },
+  operational_capacity: {
+    work: "Practise the complete delivery routine: arrive, assess, clean, check quality, communicate with the customer and record what happened.",
+    evidence: "Repeated timed trials or supervised work completed to a consistent standard without relying on memory or improvisation.",
+    caution: "Do not promise customers a service, standard or timetable you have not repeatedly demonstrated.",
+  },
+  execution_discipline: {
+    work: "Use a simple daily routine to finish small commitments on time—calls returned, quotes completed, records updated and promises closed out.",
+    evidence: "A sustained record of completed commitments over several weeks, especially when the tasks were repetitive or uncomfortable.",
+    caution: "Do not mistake planning, researching or buying tools for dependable follow-through.",
+  },
+  psychological_resilience: {
+    work: "Gain low-risk exposure to rejection, complaints, changed plans and time pressure while keeping your present income secure.",
+    evidence: "Specific examples showing that you stayed responsible, communicated clearly and made considered decisions when something went wrong.",
+    caution: "Do not make large commitments in order to force yourself to become ready under pressure.",
+  },
+};
+
+function evidenceLabel(score: number): string {
+  if (score >= 5) return "Demonstrated";
+  if (score >= 3) return "Some evidence";
+  if (score >= 2) return "Limited evidence";
+  return "Not demonstrated";
+}
+
+function candidateSnapshotStatus(score: number): string {
+  if (score >= 5) return "Strong enough to test";
+  if (score >= 3) return "One thing to clarify";
+  return "Not ready to rely on yet";
+}
+
+function evidenceWidth(score: number): string {
+  if (score >= 5) return "100%";
+  if (score >= 3) return "68%";
+  if (score >= 2) return "40%";
+  return "15%";
+}
+
+function escapeExplanation(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[character] ?? character);
+}
+
+function CandidateVerdict({
+  runId,
+  verdictName,
+  verdictBody,
+  score,
+  testLabel,
+  dimensions,
+  answerEvidence,
+  showAuditAppendix,
+  completedLabel,
+}: {
+  runId: string | null;
+  verdictName: string;
+  verdictBody: string;
+  score: number | null;
+  testLabel: string;
+  dimensions: Array<{ code: string; label: string; score: number }>;
+  answerEvidence: CandidateAnswerEvidence[];
+  showAuditAppendix: boolean;
+  completedLabel: string;
+}) {
+  const band = deriveBand(verdictName);
+  const ready = band === "structurally_viable";
+  const provisional = band === "viable";
+  const stopped = band === "critical_stop" || band === "not_viable";
+  const scoreValue = Number.isFinite(Number(score)) ? Number(score) : null;
+  const colour = ready
+    ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+    : provisional
+      ? "border-blue-600 bg-blue-50 text-blue-950"
+      : stopped
+        ? "border-red-600 bg-red-50 text-red-950"
+        : "border-amber-500 bg-amber-50 text-amber-950";
+
+  const meaning = ready
+    ? "You have shown enough readiness to try your first five jobs with guidance. This is permission to test yourself in the real world—not a promise that running a business will be easy."
+    : provisional
+      ? "You may be ready to continue, but there are still some things we need to clarify before you take on your first five jobs."
+      : band === "high_risk"
+        ? "There are promising signs, but too much still depends on assumptions. Starting now would expose you to risks you have not yet shown you can handle."
+        : band === "not_viable"
+          ? "Your answers do not yet show that you are ready to take responsibility for real customers, real costs and real problems. That is useful to know before money is at risk."
+          : "Your answers show that starting now would put you under pressure you have not yet shown you can safely handle. Stopping here is a successful result—it may prevent an expensive mistake.";
+
+  const next = ready
+    ? "Next, we help you quote, complete and cost your first five jobs. You will learn from real work while the numbers are still small and manageable."
+    : provisional
+      ? "Do not commit serious money or leave secure work yet. The sensible next step is to gain real exposure in the weaker areas and reconsider a small, controlled test only when the evidence changes."
+      : "Do not rush into starting and do not immediately repeat Autopsy. Keep the security of regular work while you gain practical exposure and reconsider the commitment. Return only after your circumstances or real-world evidence have genuinely changed.";
+
+  const explanationProfile = ready
+    ? {
+        decision: "Your answers showed enough practical awareness, discipline and personal readiness to justify a controlled real-world test. This is a doorway into evidence gathering—not a declaration that you are already a competent business owner.",
+        distinction: "A Ready for Test Run result is deliberately conditional. Autopsy has assessed what you understand and what you say you will do. The First 5 Jobs stage tests whether that understanding survives real customers, real deadlines, real costs and real pressure.",
+        risk: "The main danger now is confidence running ahead of evidence. Do not scale, make large commitments or assume that early revenue proves the model. The purpose of five jobs is to discover what is true while the consequences are still small.",
+        questions: [
+          "Can you quote each job using real costs rather than instinct?",
+          "Can you deliver what was promised and record what actually happened?",
+          "Will the first five jobs confirm that customers will pay and that the work leaves enough money to continue?",
+        ],
+      }
+    : band === "not_viable"
+      ? {
+          decision: "This is not the same result as Stop. Your answers showed some useful signs, but the evidence was too thin or uneven to rely on when customers, money and pressure become real. Autopsy cannot responsibly recommend a test run yet.",
+          distinction: "Not Ready means the potential has not been ruled out; it means readiness has not been demonstrated. Enthusiasm, intention and a plausible idea cannot substitute for dependable follow-through, financial room and evidence from the real world.",
+          risk: "Starting from this position can create a chain reaction: weak assumptions lead to poor commitments, pressure narrows your choices, and ordinary setbacks become personal financial problems. The result is designed to interrupt that chain before money and reputation are exposed.",
+          questions: [
+            "Which weak area can you strengthen through genuine experience rather than a better-sounding answer?",
+            "What would have to change before leaving secure work or spending serious money became sensible?",
+            "What real evidence could you bring back that does not exist today?",
+          ],
+        }
+      : band === "critical_stop"
+        ? {
+            decision: "Your answers did not demonstrate the basic conditions needed to begin safely. This is not a narrow weakness or a near miss. Too many foundations are presently unproven for Autopsy to recommend putting money, employment or reputation at risk.",
+            distinction: "Stop is a successful Autopsy outcome. Its value is the mistake it may prevent. It does not say you can never become a capable owner; it says the responsible decision, on the evidence available today, is not to proceed.",
+            risk: "When several foundations are missing at once, the risks compound. Limited cash makes mistakes harder to absorb; weak numbers hide those mistakes; untested demand and unreliable follow-through then make recovery less likely. Starting first and learning later would be the expensive version of this test.",
+            questions: [
+              "What steady work, practical responsibility or supervised experience would let you see business ownership without carrying the full risk?",
+              "Which personal or financial commitments must remain protected for now?",
+              "What would need to change materially—not cosmetically—before another Autopsy would be worthwhile?",
+            ],
+          }
+        : {
+            decision: "Your answers contain some encouraging evidence, but important assumptions remain unresolved. Autopsy is not yet recommending an unrestricted move into business ownership.",
+            distinction: "This result sits between an outright stop and readiness for a controlled test. It calls for caution, clarification and evidence before serious commitments are made.",
+            risk: "The danger is treating promising signs as proof. Any next step should remain small, reversible and protective of your present income and obligations.",
+            questions: [
+              "Which assumption most needs real-world proof?",
+              "What is the smallest safe way to obtain that proof?",
+              "What commitment should wait until the evidence is clearer?",
+            ],
+          };
+
+  const readinessPosition = ready
+    ? "Move forward into First 5 Jobs. Your next evidence must come from controlled delivery, not more preparation on paper."
+    : band === "critical_stop"
+      ? "The responsible outcome is closure for now. Autopsy is not prescribing a repair programme or encouraging you to chase a different answer."
+      : band === "not_viable"
+        ? scoreValue != null && scoreValue >= 9
+          ? "Some early foundations are visible, but they are not yet dependable enough to carry customers, costs and pressure. Your task is to turn intention into sustained evidence."
+          : "Most of the essential foundations remain unproven. Keep your present security and build practical exposure before treating ownership as an immediate plan."
+        : band === "high_risk"
+          ? scoreValue != null && scoreValue >= 18
+            ? "You have a developing base, but the remaining gaps could still undo the stronger areas under pressure. Concentrated proof-building is more useful than broad preparation now."
+            : "There is genuine potential, but it remains fragile. Several assumptions still need to become observable habits or real-world evidence before a test run is responsible."
+          : scoreValue != null && scoreValue >= 27
+            ? "You are approaching test readiness. The remaining task is not more enthusiasm or information; it is convincing evidence in the few areas that still weaken the whole picture."
+            : "You are closer, but readiness is still uneven. A small number of weaknesses must be proven rather than explained before First 5 Jobs becomes sensible.";
+
+  const evidenceForDimension = (code: string) => answerEvidence
+    .filter((answer) => String(answer.dimensionCode ?? "").toLowerCase() === code)
+    .filter((answer) => Number.isFinite(Number(answer.score)))
+    .sort((a, b) => Number(a.score) - Number(b.score) || Number(a.questionNumber ?? 99) - Number(b.questionNumber ?? 99));
+  const orderedDimensions = [...dimensions].sort((a, b) => {
+    const aggregateDifference = a.score - b.score;
+    if (aggregateDifference !== 0) return aggregateDifference;
+    const aEvidence = evidenceForDimension(String(a.code ?? "").toLowerCase());
+    const bEvidence = evidenceForDimension(String(b.code ?? "").toLowerCase());
+    const minimumDifference = Number(aEvidence[0]?.score ?? 99) - Number(bEvidence[0]?.score ?? 99);
+    if (minimumDifference !== 0) return minimumDifference;
+    const aLowCount = aEvidence.filter((answer) => Number(answer.score) <= 1).length;
+    const bLowCount = bEvidence.filter((answer) => Number(answer.score) <= 1).length;
+    if (aLowCount !== bLowCount) return bLowCount - aLowCount;
+    return Number(aEvidence[0]?.questionNumber ?? 99) - Number(bEvidence[0]?.questionNumber ?? 99);
+  });
+  const allScoresEqual = orderedDimensions.length > 0
+    && orderedDimensions.every((dimension) => dimension.score === orderedDimensions[0].score);
+  const dimensionsWithWeakSubjects = orderedDimensions.filter((dimension) =>
+    evidenceForDimension(String(dimension.code ?? "").toLowerCase())
+      .some((answer) => Number(answer.score) < 3),
+  );
+  const explanatoryDimensions = ready
+    ? dimensionsWithWeakSubjects.length > 0
+      ? dimensionsWithWeakSubjects
+      : orderedDimensions
+    : allScoresEqual
+      ? orderedDimensions
+      : orderedDimensions.slice(0, 3);
+  const findings = explanatoryDimensions.map((dimension) => {
+    const code = String(dimension.code ?? "").toLowerCase();
+    const copy = CANDIDATE_DIMENSION_FINDINGS[code];
+    const dimensionEvidence = evidenceForDimension(code);
+    const nuance = buildCandidateNuance(code, dimensionEvidence);
+    const hasWeakSubject = dimensionEvidence.some((answer) => Number(answer.score) < 3);
+    return {
+      code,
+      label:
+        hasWeakSubject && nuance?.title
+          ? nuance.title
+          : CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code),
+      evidence: evidenceLabel(Number(dimension.score ?? 0)),
+      finding:
+        nuance?.finding ??
+        (Number(dimension.score ?? 0) >= 4 ? copy?.positive : copy?.concern),
+      consequence: nuance?.consequence ?? copy?.consequence,
+    };
+  });
+  const priorityDimensions = dimensionsWithWeakSubjects.length > 0
+    ? dimensionsWithWeakSubjects.slice(0, 2)
+    : ready
+      ? []
+      : orderedDimensions.slice(0, 2);
+  const workPriorities = band !== "critical_stop"
+    ? priorityDimensions.map((dimension) => {
+        const code = String(dimension.code ?? "").toLowerCase();
+        const dimensionEvidence = evidenceForDimension(code);
+        const nuance = buildCandidateNuance(code, dimensionEvidence);
+        const evidenceFocus = dimensionEvidence
+          .filter((answer) => answer.prompt && Number(answer.score) < 3)
+          .slice(0, 2)
+          .map((answer) => String(answer.prompt));
+        return {
+          code,
+          label:
+            nuance?.title ??
+            CANDIDATE_DIMENSION_LABELS[code] ??
+            dimension.label ??
+            humanize(code),
+          evidenceFocus,
+          pattern: nuance?.finding ?? null,
+          consequence: nuance?.consequence ?? null,
+          ...(nuance ?? CANDIDATE_DIMENSION_WORK[code]),
+        };
+      })
+    : [];
+
+  const printExplanation = () => {
+    const popup = window.open("", "_blank");
+    if (!popup) return;
+    popup.opener = null;
+    const findingHtml = findings.map((finding) => `
+      <section>
+        <h3>${escapeExplanation(finding.label)} — ${escapeExplanation(finding.evidence)}</h3>
+        <p>${escapeExplanation(finding.finding ?? "This area contributed to the decision.")}</p>
+        ${finding.consequence ? `<p><strong>Why it matters:</strong> ${escapeExplanation(finding.consequence)}</p>` : ""}
+      </section>`).join("");
+    const personalisedQuestions = workPriorities
+      .map((priority) => priority.carryQuestion)
+      .filter((question): question is string => Boolean(question));
+    const questionsToCarry = personalisedQuestions.length > 0
+      ? [
+          ...personalisedQuestions,
+          ...(ready
+            ? [
+                "What happened during the job that you did not expect?",
+                "What will you change before doing the next job?",
+              ]
+            : []),
+        ]
+      : explanationProfile.questions;
+    const questionHtml = questionsToCarry
+      .map((question) => `<li>${escapeExplanation(question)}</li>`)
+      .join("");
+    const workHtml = workPriorities.map((priority, index) => `
+      <section class="work">
+        <p class="small">PRIORITY ${index + 1}</p>
+        <h3>${escapeExplanation(priority.label)}</h3>
+        ${priority.evidenceFocus.length > 0 ? `<p><strong>Why this came up:</strong> ${priority.evidenceFocus.map(escapeExplanation).join("; ")}</p>` : ""}
+        ${priority.pattern ? `<p><strong>What we noticed:</strong> ${escapeExplanation(priority.pattern)}</p>` : ""}
+        ${priority.consequence ? `<p><strong>Why this matters:</strong> ${escapeExplanation(priority.consequence)}</p>` : ""}
+        <p><strong>What to do:</strong> ${escapeExplanation(priority.work ?? "Build some practical experience in this area.")}</p>
+        <p><strong>What would show progress:</strong> ${escapeExplanation(priority.evidence ?? "Something real that has changed in your circumstances or actions.")}</p>
+        <p><strong>Avoid:</strong> ${escapeExplanation(priority.caution ?? "Making a serious commitment before something has genuinely changed.")}</p>
+      </section>`).join("");
+    const workOrderHtml = workPriorities.length > 0
+      ? ready
+        ? `<h2>Your First 5 Jobs focus</h2><p>You are ready to test yourself. These are the particular things to watch while the jobs are still small and we can learn from them.</p>${workHtml}`
+        : `<h2>What to work on next</h2><p>These are the areas that most need practical strengthening. The point is not to learn a better answer—it is to make something real change.</p>${workHtml}
+           <h2>When another Autopsy is worthwhile</h2><p>Come back when you have done something real, gained practical experience or changed the circumstances behind these answers.</p>`
+      : "";
+    const leadPriority = workPriorities[0] ?? null;
+    const fieldNoteHtml = leadPriority
+      ? `<h2>The one thing to watch</h2>
+         <section class="field-note">
+           <h3>${escapeExplanation(leadPriority.fieldTitle ?? leadPriority.label)}</h3>
+           ${leadPriority.consequence ? `<p><strong>Why it matters:</strong> ${escapeExplanation(leadPriority.consequence)}</p>` : ""}
+           <p><strong>What to do:</strong> ${escapeExplanation(leadPriority.work ?? "Pay particular attention to this during your first jobs.")}</p>
+           <p><strong>Keep in mind:</strong> ${escapeExplanation(leadPriority.caution ?? "Keep commitments small while you learn what the work is really like.")}</p>
+         </section>`
+      : `<h2>The one thing to watch</h2>
+         <p class="note">Do not let confidence run ahead of what the first five jobs actually show you.</p>`;
+    const dimensionHtml = dimensions.map((dimension) => {
+      const code = String(dimension.code ?? "").toLowerCase();
+      const label = CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+      const description = CANDIDATE_SNAPSHOT_DESCRIPTIONS[code] ?? "One of the practical areas considered in your result.";
+      return `<li><div><strong>${escapeExplanation(label)}</strong><small>${escapeExplanation(description)}</small></div><span>${escapeExplanation(candidateSnapshotStatus(Number(dimension.score ?? 0)))}</span></li>`;
+    }).join("");
+    const answerAuditHtml = showAuditAppendix
+      ? `<section class="audit"><h2>Test audit — answers and points</h2>
+          <p class="small">INTERNAL TESTING APPENDIX · NOT PART OF THE CANDIDATE PDF</p>
+          <table><thead><tr><th>Question</th><th>Selected answer</th><th>Points</th></tr></thead><tbody>
+          ${answerEvidence
+            .slice()
+            .sort((a, b) => Number(a.questionNumber ?? 99) - Number(b.questionNumber ?? 99))
+            .map((answer) => `<tr><td><strong>Q${escapeExplanation(String(answer.questionNumber ?? "—"))}</strong><br>${escapeExplanation(answer.prompt ?? "Question text unavailable")}</td><td>${escapeExplanation(answer.selectedAnswer ?? "Answer recorded")}</td><td>${escapeExplanation(String(answer.score ?? "—"))}</td></tr>`)
+            .join("")}
+          </tbody><tfoot><tr><td colspan="2">Total</td><td>${escapeExplanation(String(scoreValue ?? "—"))}</td></tr></tfoot></table></section>`
+      : "";
+    const disclosureNote = showAuditAppendix
+      ? "This internal testing copy includes answer points so the product team can verify personalisation. Remove debug mode before candidate use."
+      : "This fuller explanation supports the decision shown on screen. It does not disclose Autopsy scoring rules or provide an answer key. A future result should change only when the underlying experience, circumstances or evidence has genuinely changed.";
+    const reportIdentityHtml = `<div class="identity">
+      <span><strong>Test:</strong> ${escapeExplanation(testLabel || "Unlabelled test run")}</span>
+      <span><strong>Run ID:</strong> ${escapeExplanation(runId ?? "Unavailable")}</span>
+      <span><strong>Completed:</strong> ${escapeExplanation(completedLabel)}</span>
+      ${showAuditAppendix ? `<span><strong>Internal total:</strong> ${escapeExplanation(String(scoreValue ?? "—"))}</span>` : ""}
+    </div>`;
+    popup.document.write(`<!doctype html><html><head><title>Autopsy Outcome and Explanation</title>
+      <style>body{font-family:Arial,sans-serif;color:#10223a;max-width:760px;margin:28px auto;padding:0 24px;line-height:1.55}.toolbar{position:sticky;top:0;display:flex;justify-content:space-between;gap:12px;padding:10px 0;background:white;z-index:2}.toolbar button{border:1px solid #9db0c2;border-radius:8px;background:white;color:#10223a;padding:10px 14px;font-weight:700;cursor:pointer}.toolbar .primary{background:#168ecb;color:white;border-color:#168ecb}h1{font-size:32px;margin-bottom:4px}h2{font-size:21px;margin-top:26px;border-top:1px solid #dbe3ec;padding-top:20px}h3{font-size:17px;margin-bottom:6px}p,li{color:#43556d}li{margin-bottom:8px}.identity{display:grid;gap:3px;margin:8px 0 16px;padding:9px 12px;border:1px solid #dbe3ec;border-radius:8px;background:#f8fafc;font-size:11px;color:#43556d;overflow-wrap:anywhere}.result{padding:18px 20px;border:2px solid #163f64;border-radius:14px;background:#f3f7fa}.small{font-size:12px;color:#66768a}.note{padding:14px 17px;border-left:4px solid #2b89c9;background:#eef6fb}.field-note{padding:16px 18px;border:1px solid #9dc5df;border-left:5px solid #168ecb;border-radius:10px;background:#f1f8fc}.field-note p:last-child{margin-bottom:0}.work{margin:18px 0;padding:18px;border:1px solid #cad7e3;border-radius:12px;background:#f8fafc}.work .small{margin:0;color:#287fb5;font-weight:700;letter-spacing:.08em}.snapshot{list-style:none;padding:0}.snapshot li{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid #e4eaf0}.snapshot li div{min-width:0}.snapshot li small{display:block;margin-top:2px;color:#66768a;font-size:12px;line-height:1.4}.snapshot li span{flex-shrink:0;text-align:right;font-weight:700}.audit table{width:100%;border-collapse:collapse;font-size:12px}.audit th,.audit td{padding:9px 7px;border:1px solid #dbe3ec;text-align:left;vertical-align:top}.audit th{background:#eef4f8}.audit tfoot{font-weight:700}.detail-page,.audit-page{break-before:page;page-break-before:always}@media print{.toolbar{display:none}body{margin:0 auto}.field-note,.work,.audit tr{break-inside:avoid}.summary-page{break-after:page;page-break-after:always}.detail-page{break-before:auto;page-break-before:auto}.audit-page{break-before:page;page-break-before:always}}</style>
+      </head><body>
+      <div class="toolbar"><button onclick="window.close()">← Back to Verdict</button><button class="primary" onclick="window.print()">Print / save report</button></div>
+      <section class="summary-page"><p class="small">PRE-BUSINESS AUTOPSY™ · YOUR FIELD NOTE</p>
+      ${reportIdentityHtml}
+      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(verdictBody)}</p></div>
+      <h2>What this means for you</h2><p>${escapeExplanation(meaning)}</p>
+      ${fieldNoteHtml}
+      <h2>Questions to carry forward</h2><ul>${questionHtml}</ul>
+      <h2>What happens next</h2><p class="note">${escapeExplanation(next)}</p>
+      </section>
+      <section class="detail-page"><p class="small">PRE-BUSINESS AUTOPSY™ · SUPPORTING EXPLANATION</p>
+      ${reportIdentityHtml}
+      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>
+      <h2>Your readiness position</h2><p class="note">${escapeExplanation(readinessPosition)}</p>
+      <h2>How to understand this result</h2><p>${escapeExplanation(explanationProfile.distinction)}</p>
+      <h2>Why this matters in the real world</h2><p>${escapeExplanation(explanationProfile.risk)}</p>
+      <h2>How your answers looked</h2><ul class="snapshot">${dimensionHtml}</ul>
+      <h2>What we noticed</h2>${findingHtml}
+      ${workOrderHtml}
+      <h2>What this result does not mean</h2><p>This is not a judgment of your worth or a permanent prediction about your future. It records what your answers demonstrated today about taking responsibility for customers, costs and work under pressure.</p>
+      <p class="small">${escapeExplanation(disclosureNote)}</p>
+      </section>
+      ${showAuditAppendix ? `<section class="audit-page">${answerAuditHtml}</section>` : ""}
+      </body></html>`);
+    popup.document.close();
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-5 pb-10">
+      <section className={cn("rounded-2xl border-2 p-6 text-center shadow-sm sm:p-8", colour)}>
+        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider opacity-70">
+          <span>Your Autopsy result</span>
+          <span>{completedLabel}</span>
+        </div>
+        <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{verdictName}</h1>
+        <p className="mt-3 text-sm opacity-75">A decision based on the evidence in your answers today</p>
+      </section>
+
+      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">What we found</h2>
+        <p className="mt-3 leading-7 text-muted-foreground">{verdictBody}</p>
+        <h2 className="mt-6 text-xl font-semibold">What that means for you</h2>
+        <p className="mt-3 leading-7 text-muted-foreground">{meaning}</p>
+      </section>
+
+      {dimensions.length > 0 && (
+        <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-semibold">How your answers looked</h2>
+          <p className="mt-1 text-sm text-muted-foreground">These are the six practical areas Autopsy considered.</p>
+          <div className={cn("mt-5", showAuditAppendix ? "space-y-4" : "divide-y rounded-xl border")}>
+            {dimensions.map((dimension) => {
+              const code = String(dimension.code ?? "").toLowerCase();
+              const label = showAuditAppendix
+                ? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code)
+                : CANDIDATE_SNAPSHOT_LABELS[code] ?? CANDIDATE_DIMENSION_LABELS[code] ?? dimension.label ?? humanize(code);
+              const description = CANDIDATE_SNAPSHOT_DESCRIPTIONS[code] ?? "One of the practical areas considered in your result.";
+              const value = Number(dimension.score ?? 0);
+              return (
+                <div key={code || label} className={cn(!showAuditAppendix && "flex items-start justify-between gap-4 px-4 py-3")}>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">{label}</span>
+                      {!showAuditAppendix ? (
+                        <p className="mt-0.5 max-w-lg text-xs leading-5 text-muted-foreground">{description}</p>
+                      ) : null}
+                    </div>
+                    {showAuditAppendix ? (
+                      <span className="shrink-0 font-medium text-muted-foreground">{evidenceLabel(value)}</span>
+                    ) : null}
+                  </div>
+                  {showAuditAppendix ? (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn("h-full rounded-full", value >= 5 ? "bg-emerald-600" : value >= 3 ? "bg-amber-500" : "bg-red-500")}
+                        style={{ width: evidenceWidth(value) }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="shrink-0 text-right text-sm font-medium text-muted-foreground">
+                      {candidateSnapshotStatus(value)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-2xl border bg-[#092540] p-5 text-white shadow-sm sm:p-6">
+        <h2 className="text-xl font-semibold">What happens next</h2>
+        <p className="mt-3 leading-7 text-slate-200">{next}</p>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          {ready && runId ? (
+            <Button asChild className="bg-emerald-600 text-white hover:bg-emerald-700">
+              <Link to={`/stage-1?runId=${runId}`}>Start First 5 Jobs</Link>
+            </Button>
+          ) : null}
+          <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">
+            Read your full explanation
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 /* --------------------------------- helpers --------------------------------- */
 
 const OPERATIONAL_STATE_STYLES: Record<
@@ -2426,7 +2977,31 @@ const OPERATIONAL_STATE_STYLES: Record<
     text: "text-green-700",
   },
   scalable: {
-    label: "SCALABLE",
+    label: "READY FOR TEST RUN",
+    container: "border-emerald-600/60 bg-emerald-500/5",
+    dot: "bg-emerald-600",
+    text: "text-emerald-700",
+  },
+  preparation_required: {
+    label: "PREPARATION REQUIRED",
+    container: "border-red-600/60 bg-red-500/5",
+    dot: "bg-red-600",
+    text: "text-red-700",
+  },
+  bounded_preparation: {
+    label: "BOUNDED PREPARATION",
+    container: "border-orange-500/60 bg-orange-500/5",
+    dot: "bg-orange-500",
+    text: "text-orange-700",
+  },
+  provisional: {
+    label: "PROVISIONALLY READY",
+    container: "border-blue-500/60 bg-blue-500/5",
+    dot: "bg-blue-500",
+    text: "text-blue-700",
+  },
+  test_ready: {
+    label: "READY FOR TEST RUN",
     container: "border-emerald-600/60 bg-emerald-500/5",
     dot: "bg-emerald-600",
     text: "text-emerald-700",
@@ -2481,13 +3056,13 @@ function OperationalStatePanel({
   const progressionDisplay = isHardFail
     ? "Blocked by hard-fail condition"
     : isPerfectScore
-    ? "Scalable"
+    ? "Ready for Test Run"
     : isStructurallyViable
       ? "Controlled progression"
     : isHardFailCriticalStop
     ? "Blocked by hard-fail condition"
     : isScoreBandCriticalStop
-      ? "Blocked by Critical Stop score band"
+      ? "Stopped by the candidate-readiness outcome"
     : isBlocked
       ? "PROGRESSION BLOCKED"
     : isProgressionLocked
@@ -2592,6 +3167,9 @@ function PressureCollapsePanel({
   primaryRiskLabel?: string | null;
   microcopy?: string;
 }) {
+  // A fully evidenced profile has no failure or collapse diagnosis. Showing a
+  // watchpoint card here contradicted the governed readiness outcome.
+  if (isPerfectScore) return null;
   const rawPressureStage = humanize(run.pressure_stage);
   const stageDisplay = isHardFail
     ? "HARD-FAIL TRIGGERED"
@@ -2622,13 +3200,13 @@ function PressureCollapsePanel({
     : isHardFailCriticalStop
     ? "Hard-fail override"
     : isScoreBandCriticalStop
-    ? "Score-band Critical Stop"
+    ? "Readiness Stop"
     : isCriticalStop
-    ? "Critical Stop"
+    ? "Readiness Stop"
     : isBlocked && !hasContent(run.failure_type)
       ? "HARD FAIL"
       : isScoreBandNotViable || (!isBlocked && /hard\s*fail|existential/i.test(rawFailureType))
-        ? "Score-band Not Viable"
+        ? "Not Ready"
         : sanitizeVerdictCopy(rawFailureType, false);
   const suppressPressureSummary = hasContent(run.narrative_output);
   const hardFailCollapseText = isHardFail
@@ -2971,7 +3549,7 @@ function sanitizeVerdictCopy(value: any, isHardFail: boolean): any {
     .replace(/Failure Type:\s*Hard Fail/gi, "Failure Type: Score-Band Failure")
     .replace(
       /A hard[-\s]?fail condition was triggered(?:\s+by\s+a\s+selected\s+answer\s+during\s+this\s+assessment)?\.?/gi,
-      "The assessment score is below the minimum viability threshold.",
+      "The current evidence does not meet the readiness threshold for progression.",
     )
     .replace(/until the hard[-\s]?fail condition is corrected(?: and retested)?/gi, "until the Repair Worksheet is completed")
     .replace(/selected hard[-\s]?fail answer/gi, "selected answer")
@@ -3098,21 +3676,10 @@ export function getVerdictBand(opts: {
   score: number | null | undefined;
   isCriticalStop?: boolean;
 }): VerdictBand {
-  const { verdictName, isBlocked, score, isCriticalStop } = opts;
+  const { verdictName, isBlocked, isCriticalStop } = opts;
   if (isCriticalStop) return "critical_stop";
-  if (isBlocked || /not[\s_-]?viable/i.test(verdictName)) return "not_viable";
-  if (/structurally[\s_-]?viable/i.test(verdictName)) return "structurally_viable";
-  if (/high[\s_-]?risk/i.test(verdictName)) return "high_risk";
-  if (/viable/i.test(verdictName)) return "viable";
-  const s = typeof score === "number" ? score : Number(score);
-  if (Number.isFinite(s)) {
-    if (s >= QUICK_GATE_CONFIG.bandThresholds.structurallyViableMin) return "structurally_viable";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.highRiskMax) return "viable";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.notViableMax) return "high_risk";
-    if (s > QUICK_GATE_CONFIG.bandThresholds.criticalStopMax) return "not_viable";
-    return "critical_stop";
-  }
-  return "high_risk";
+  if (isBlocked) return "not_viable";
+  return deriveBand(verdictName) === "unknown" ? "high_risk" : deriveBand(verdictName) as VerdictBand;
 }
 
 export interface BandFraming {
@@ -3136,14 +3703,14 @@ export interface BandFraming {
 
 export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
   critical_stop: {
-    rankPrimary: "Critical Stop",
+    rankPrimary: "Readiness Stop",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Pressures present at the time of assessment. A Critical Stop indicates the foundation is missing across multiple dimensions.",
-    chainTitle: "Failure Chain",
-    pathLabel: "Failure Path",
+      "Current readiness gaps ranked by the strength of the evidence available today.",
+    chainTitle: "Readiness Evidence Chain",
+    pathLabel: "Evidence Gap",
     proofLabel: "Required Before Retest",
     outcomeLabel: "Outside Safe Progression Pathway",
     decisionStatusOverride: "Stop. Outside safe progression pathway.",
@@ -3155,12 +3722,12 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     failureOriented: true,
   },
   not_viable: {
-    rankPrimary: "Main Blocker",
+    rankPrimary: "Primary Readiness Gap",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Interacting business pressures, ranked by structural weight. The Main Blocker drives failure; the others compound it.",
+      "Candidate-readiness gaps ranked by their effect on safe progression.",
     chainTitle: "Pressure Topology",
     pathLabel: "Failure Path",
     proofLabel: "Proof Required Before Proceeding",
@@ -3171,12 +3738,12 @@ export const BAND_FRAMING: Record<VerdictBand, BandFraming> = {
     failureOriented: true,
   },
   high_risk: {
-    rankPrimary: "Main Blocker",
+    rankPrimary: "Primary Readiness Gap",
     rankSecondary: "Next Pressure",
     rankTertiary: "Third Pressure",
     topologyTitle: "Pressure Topology",
     topologyIntro:
-      "Interacting business pressures, ranked by structural weight. The Main Blocker dominates; the others compound it.",
+      "Candidate-readiness gaps ranked by their effect on safe progression.",
     chainTitle: "Pressure Topology",
     pathLabel: "Pressure Path",
     proofLabel: "Evidence Required",
@@ -3800,15 +4367,15 @@ function PressureTopology({
     cash_reality:
       "Cash runway is exposed. Limited buffer increases pressure and reduces room for mistakes.",
     economic_literacy:
-      "The business economics are not clear enough. Pricing, margin, or cost drivers may be hiding the real risk.",
+      "The candidate has not yet demonstrated a dependable grasp of pricing, margin, or the main cost drivers.",
     market_reality:
       "Demand is not yet proven strongly enough. Interest is not the same as reliable paying customers.",
     operational_capacity:
-      "Delivery reliability is still weak. The business has not proven it can perform consistently under real operating pressure.",
+      "Delivery reliability is still weak. The candidate has not yet demonstrated consistent delivery under real operating pressure.",
     execution_discipline:
-      "Execution rhythm is not yet reliable. The business may depend too heavily on intention rather than completed action.",
+      "Execution rhythm is not yet reliable. The candidate has not yet demonstrated dependable follow-through through completed action.",
     psychological_resilience:
-      "Pressure tolerance is not yet proven. Stress, uncertainty, or setbacks may distort decisions before the business stabilises.",
+      "Pressure tolerance is not yet proven. Stress, uncertainty, or setbacks may distort the candidate's decisions under operating pressure.",
   };
   const publicNameFor = (data: any): string => {
     const code = String(data?.dimension_code ?? "").toLowerCase().trim();

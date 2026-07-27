@@ -86,6 +86,11 @@ const isoToAU = (iso: string) => {
 // plus a static baseline note. Attempts / contacts / quotes are aggregated from
 // dated activity records on top of this baseline.
 const METHOD_BASELINE: { method: string; attempts: number; contacts: number; leads: number; quotes: number; jobs: number; notes: string }[] = [];
+const DEMO_METHOD_BASELINE: typeof METHOD_BASELINE = [
+  { method: "Referral Request", attempts: 12, contacts: 10, leads: 9, quotes: 4, jobs: 1, notes: "Introductions from established local contacts" },
+  { method: "Phone Outreach", attempts: 30, contacts: 14, leads: 8, quotes: 3, jobs: 1, notes: "Targeted calls to nearby commercial premises" },
+  { method: "Local Flyer", attempts: 250, contacts: 11, leads: 8, quotes: 3, jobs: 1, notes: "Focused distribution around selected business precincts" },
+];
 const METHOD_OPTIONS = [
   "Phone Outreach",
   "Referral Request",
@@ -146,6 +151,24 @@ type Quote = {
 // Seed: the five accepted quotes that produced the five ledger jobs,
 // plus a handful of in-flight / rejected quotes for the conversion board.
 const SEED_QUOTES: Quote[] = [];
+const DEMO_QUOTES: Quote[] = [
+  { number: "Q-1001", client: "Riverstone Dental Centre", site: "Paddington, QLD", value: 2035, status: "Accepted", quoteDate: "2026-07-08", followUp: "", reason: "", converted: true, convertedToN: 1, convertedJobNumber: "J-1", method: "Referral Request" },
+  { number: "Q-1002", client: "Milton Legal Chambers", site: "Milton, QLD", value: 2640, status: "Accepted", quoteDate: "2026-07-09", followUp: "", reason: "", converted: true, convertedToN: 2, convertedJobNumber: "J-2", method: "Phone Outreach" },
+  { number: "Q-1003", client: "Newstead Allied Health", site: "Newstead, QLD", value: 1760, status: "Accepted", quoteDate: "2026-07-10", followUp: "", reason: "", converted: true, convertedToN: 3, convertedJobNumber: "J-3", method: "Local Flyer" },
+  { number: "Q-1004", client: "Paddington Property Group", site: "Paddington, QLD", value: 1450, status: "Sent", quoteDate: "2026-07-11", followUp: "2026-07-22", reason: "", method: "Referral Request" },
+  { number: "Q-1005", client: "Ashgrove Physio Centre", site: "Ashgrove, QLD", value: 1320, status: "Sent", quoteDate: "2026-07-11", followUp: "2026-07-23", reason: "", method: "Phone Outreach" },
+  { number: "Q-1006", client: "West End Studios", site: "West End, QLD", value: 980, status: "Declined", quoteDate: "2026-07-12", followUp: "", reason: "Scope changed", method: "Local Flyer" },
+  { number: "Q-1007", client: "Teneriffe Accountants", site: "Teneriffe, QLD", value: 2100, status: "Sent", quoteDate: "2026-07-13", followUp: "2026-07-24", reason: "", method: "Referral Request" },
+  { number: "Q-1008", client: "Bulimba Veterinary Clinic", site: "Bulimba, QLD", value: 1680, status: "Sent", quoteDate: "2026-07-14", followUp: "2026-07-25", reason: "", method: "Phone Outreach" },
+  { number: "Q-1009", client: "Spring Hill Medical Suites", site: "Spring Hill, QLD", value: 2860, status: "Declined", quoteDate: "2026-07-15", followUp: "", reason: "Timing", method: "Referral Request" },
+  { number: "Q-1010", client: "Bowen Hills Design Co", site: "Bowen Hills, QLD", value: 1150, status: "Sent", quoteDate: "2026-07-16", followUp: "2026-07-26", reason: "", method: "Local Flyer" },
+];
+
+const DEMO_UNITS: ProofUnit[] = [
+  { n: 1, jobNumber: "J-1", jobSequenceNumber: 1, client: "Riverstone Dental Centre", jobSite: "Paddington, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1001", sandboxRevenueAmount: 1850, sandboxTotalDirectCost: 1050, sandboxGrossProfit: 800, sandboxGrossMarginPct: 43 },
+  { n: 2, jobNumber: "J-2", jobSequenceNumber: 2, client: "Milton Legal Chambers", jobSite: "Milton, QLD", proofType: "Recurring Job", status: "In Progress", gm: 45, evidence: true, lifecycle: "active", sourceQuote: "Q-1002", sandboxRevenueAmount: 2400, sandboxTotalDirectCost: 1320, sandboxGrossProfit: 1080, sandboxGrossMarginPct: 45 },
+  { n: 3, jobNumber: "J-3", jobSequenceNumber: 3, client: "Newstead Allied Health", jobSite: "Newstead, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1003", sandboxRevenueAmount: 1600, sandboxTotalDirectCost: 920, sandboxGrossProfit: 680, sandboxGrossMarginPct: 43 },
+];
 
 // Canonical Stage 1 snapshot shape, returned by the read-only Supabase RPC
 // public.get_stage1_progress_snapshot_by_run(p_run_id uuid). Supabase owns
@@ -1854,19 +1877,20 @@ function QuoteDetailDialog({
 
 function Stage1DashboardInner() {
   const [searchParams] = useSearchParams();
+  const isDemo = searchParams.get("demo") === "1";
   const { user, loading: authLoading } = useAuth();
   const bd = useBusinessDetails();
   const [bdOpen, setBdOpen] = useState(false);
   const [drill, setDrill] = useState<DrillKey | null>(null);
-  const [units, setUnits] = useState<ProofUnit[]>(SEED_UNITS);
+  const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [ledgerView, setLedgerView] = useState<"debtors" | "summary">("debtors");
+  const [ledgerView, setLedgerView] = useState<"debtors" | "summary">(isDemo ? "summary" : "debtors");
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
-  const [quotes, setQuotes] = useState<Quote[]>(SEED_QUOTES);
+  const [quotes, setQuotes] = useState<Quote[]>(isDemo ? DEMO_QUOTES : SEED_QUOTES);
   const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
   const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
   const [quoteActivityError, setQuoteActivityError] = useState<string | null>(null);
@@ -2027,6 +2051,7 @@ function Stage1DashboardInner() {
 
   // Read-only hydration through the canonical RPC, keyed by the Stage 1 run id.
   useEffect(() => {
+    if (isDemo) return;
     let active = true;
     (async () => {
       if (!activeRunId) {
@@ -2794,7 +2819,7 @@ function Stage1DashboardInner() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [isDemo]);
 
   // ---- Canonical Stage 1 sandbox hydration (READ-ONLY) ---------------------
   // On load / refresh / re-login / run change, hydrate the job ledger from the
@@ -2803,6 +2828,11 @@ function Stage1DashboardInner() {
   // profit, gross margin) is reloaded here so it survives a browser refresh.
   // Empty (but successful) reads never clear persisted rows.
   useEffect(() => {
+    if (isDemo) {
+      setLedgerError(null);
+      setLedgerLoading(false);
+      return;
+    }
     if (!activeRunId) {
       // No run resolved yet. Keep showing the loading state until auth + run id
       // are available; never fall through to an empty ledger.
@@ -2869,7 +2899,7 @@ function Stage1DashboardInner() {
     return () => {
       cancelled = true;
     };
-  }, [activeRunId, stage1Snapshot?.stage_progress_id, user?.id]);
+  }, [activeRunId, isDemo, stage1Snapshot?.stage_progress_id, user?.id]);
 
   const persistUnitsWithDiagnostics = useCallback(
     async (compute: (prev: ProofUnit[]) => ProofUnit[]): Promise<Stage1CanonicalWriteDiagnostics> => {
@@ -2916,12 +2946,13 @@ function Stage1DashboardInner() {
   );
 
   const methodRows = useMemo(() => {
+    const methodBaseline = isDemo ? DEMO_METHOD_BASELINE : METHOD_BASELINE;
     const methods = new Set<string>();
-    METHOD_BASELINE.forEach((b) => methods.add(b.method));
+    methodBaseline.forEach((b) => methods.add(b.method));
     activities.forEach((a) => a.method && methods.add(a.method));
     quotes.forEach((q) => q.method && methods.add(q.method));
     return Array.from(methods).map((method) => {
-      const baseline = METHOD_BASELINE.find((b) => b.method === method);
+      const baseline = methodBaseline.find((b) => b.method === method);
       const acts = activities.filter((a) => a.method === method);
       const qs = quotes.filter((q) => q.method === method);
       const jobsCount = units.filter((u) => {
@@ -2945,7 +2976,7 @@ function Stage1DashboardInner() {
         notes: noteParts.join(" · "),
       };
     });
-  }, [activities, quotes, units]);
+  }, [activities, isDemo, quotes, units]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -3203,21 +3234,21 @@ function Stage1DashboardInner() {
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10">
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Stage 1 command centre</p>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">First 5 Jobs</h1>
-          <p className="text-xs text-muted-foreground mt-1">Track leads, quotes, jobs, margin, and money owing.</p>
+          <p className="text-xs uppercase tracking-widest text-[#52d8c2]">Stage 1 command centre</p>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">First 5 Jobs</h1>
+          <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
-          {bd.loaded && !bd.complete && (
-            <Button onClick={() => setBdOpen(true)} className="gap-2">
+          {!isDemo && bd.loaded && !bd.complete && (
+            <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
             </Button>
           )}
-          {bd.loaded && bd.complete && (
-            <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 gap-1.5 py-1.5 px-3">
+          {(isDemo || (bd.loaded && bd.complete)) && (
+            <Badge variant="outline" className="gap-1.5 border-emerald-300/60 bg-emerald-400/10 px-3 py-1.5 text-emerald-100">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Business Registration Ready
             </Badge>
@@ -3225,13 +3256,13 @@ function Stage1DashboardInner() {
         </div>
       </header>
 
-      {bd.loaded && bd.complete && (
+      {(isDemo || (bd.loaded && bd.complete)) && (
         <p className="text-xs text-muted-foreground -mt-2">
           Business registration is ready. You can now create quotes and record Stage 1 transactions. Business details can be updated if required.
         </p>
       )}
 
-      {bd.loaded && !bd.canOperate && (
+      {!isDemo && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Complete Business Registration</CardTitle>
@@ -4474,17 +4505,6 @@ function Stage1DashboardInner() {
           </div>
         )}
 
-      {units.length === 0 && !ledgerLoading && !ledgerError && (
-        <div className="rounded-md border border-[#cfe0fb] bg-gradient-to-r from-[#eef5ff] to-[#edf8f1] px-3 py-2 text-sm shadow-sm">
-          <div className="font-medium text-foreground">
-            Stage 1 is ready. Add your first quote or job to begin proof tracking.
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Your Autopsy handoff is active; the dashboard will populate once operating records are created.
-          </div>
-        </div>
-      )}
-
       {/* ---- Top half: KPI cards ---- */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
@@ -4876,6 +4896,10 @@ function Stage1DashboardInner() {
 // Stage 1 RPCs run only while authenticated: the inner component (which fires
 // all Stage 1 Supabase RPCs in its effects) is mounted only behind AuthGate.
 export default function Stage1Dashboard() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("demo") === "1") {
+    return <Stage1DashboardInner />;
+  }
   return (
     <AuthGate>
       <Stage1DashboardInner />
