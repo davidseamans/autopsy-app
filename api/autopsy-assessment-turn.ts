@@ -61,11 +61,13 @@ Return JSON only:
 {
   "selected_option_id": "an exact supplied option id, or null",
   "confidence": 0 to 1,
-  "plain_summary": "one short, plain-English statement of what you understood",
+  "plain_summary": "one short, plain-English reflection addressed directly to the person as you",
   "clarifying_question": "one short question, or null"
 }
 
-If the answer is ambiguous, incomplete, contradictory, or confidence is below 0.78, selected_option_id must be null and clarifying_question must ask only for the missing distinction. Otherwise provide the exact option id and no clarifying question. The candidate will separately confirm or correct the interpretation before anything is saved. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
+If the answer is ambiguous, incomplete, contradictory, or confidence is below 0.78, selected_option_id must be null and clarifying_question must ask only for the missing distinction. Otherwise provide the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
+
+The plain_summary is spoken aloud by John. Address the person directly in the second person: for example, "You could manage for about a month, and you have not written down a household cash buffer." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Do not recite the supplied option label verbatim when a shorter natural reflection is possible. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
