@@ -60,6 +60,7 @@ describe("conversational Autopsy boundary", () => {
     expect(previewSession).toContain('body.embedded !== "flight-deck"');
     expect(previewSession).toContain("createServiceClient");
     expect(previewSession).toContain("autopsy_preview: true");
+    expect(serverAuth).toContain('requireFirstServerEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"])');
   });
 
   it("continues the paid assessment as a spoken conversation", () => {
