@@ -2,6 +2,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import {
+  isFlightDeckEmbedded,
+  isFlightDeckInput,
+  postToFlightDeck,
+} from "@/lib/flightDeckBridge";
+import {
   createAutopsyRun,
   extractRunId,
   finalizeAutopsyRun,
@@ -102,6 +107,7 @@ export function ConversationalAutopsy() {
   const handleSpokenTurnRef = useRef<((text: string) => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenTextRef = useRef("");
+  const embeddedFlightDeck = isFlightDeckEmbedded();
 
   const recognitionConstructor = useMemo(() => {
     const w = window as typeof window & {
@@ -179,7 +185,12 @@ export function ConversationalAutopsy() {
         setQuestions(ordered);
         setBusy(false);
         setStatus("John is explaining how Autopsy will work.");
-        void speak(`${AUTOPSY_ORIENTATION} ${SUBJECT_PROMPTS[0]}`);
+        const opening = `${AUTOPSY_ORIENTATION} ${SUBJECT_PROMPTS[0]}`;
+        if (embeddedFlightDeck) {
+          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "ready", text: opening });
+        } else {
+          void speak(opening);
+        }
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : "Autopsy could not start.");
@@ -193,7 +204,7 @@ export function ConversationalAutopsy() {
       recognitionRef.current?.abort();
       audioRef.current?.pause();
     };
-  }, [speak, user?.email]);
+  }, [embeddedFlightDeck, speak, user?.email]);
 
   const currentQuestion = questions[index];
   const currentPrompt = SUBJECT_PROMPTS[index] ?? currentQuestion?.prompt ?? "";
@@ -228,11 +239,19 @@ export function ConversationalAutopsy() {
       if (next.selected_option_id && !next.clarifying_question) {
         const words = `${next.plain_summary} Is that a fair reading?`;
         setStatus("Please confirm or correct what John understood.");
-        void speak(words);
+        if (embeddedFlightDeck) {
+          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
+        } else {
+          void speak(words);
+        }
       } else {
         const words = next.clarifying_question || "Could you tell me a little more about that?";
         setStatus("John needs one point clarified before anything is saved.");
-        void speak(words);
+        if (embeddedFlightDeck) {
+          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
+        } else {
+          void speak(words);
+        }
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be interpreted.");
@@ -254,8 +273,10 @@ export function ConversationalAutopsy() {
       if (index === 11) {
         setStatus("Your answers are saved. John is preparing your Verdict…");
         await finalizeAutopsyRun(runId);
-        sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");
-        navigate(`/autopsy/run/${runId}`);
+        if (!embeddedFlightDeck) {
+          sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");
+        }
+        navigate(`/autopsy/run/${runId}${embeddedFlightDeck ? "?embedded=flight-deck" : ""}`);
         return;
       }
       const nextIndex = index + 1;
@@ -263,7 +284,12 @@ export function ConversationalAutopsy() {
       setCombinedAnswer("");
       setInterpretation(null);
       setStatus("Answer in your own words.");
-      void speak(`${SUBJECT_TRANSITIONS[nextIndex]} ${SUBJECT_PROMPTS[nextIndex]}`);
+      const nextWords = `${SUBJECT_TRANSITIONS[nextIndex]} ${SUBJECT_PROMPTS[nextIndex]}`;
+      if (embeddedFlightDeck) {
+        postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: nextWords });
+      } else {
+        void speak(nextWords);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be saved.");
     } finally {
@@ -276,7 +302,15 @@ export function ConversationalAutopsy() {
     setCombinedAnswer("");
     setAnswer("");
     setStatus("No problem. Say it again in your own words.");
-    void speak("No problem. Say it again in your own words.");
+    if (embeddedFlightDeck) {
+      postToFlightDeck({
+        type: "BUILDOS_AUTOPSY_EVENT",
+        event: "speak",
+        text: "No problem. Say it again in your own words.",
+      });
+    } else {
+      void speak("No problem. Say it again in your own words.");
+    }
   };
 
   const startListening = () => {
@@ -339,13 +373,32 @@ export function ConversationalAutopsy() {
       return;
     }
     setStatus("Please say yes, or tell John you would like to correct it.");
-    void speak("Please say yes if that is a fair reading, or say no and we will correct it.");
-  }, [confirm, correct, interpretation, speak]);
+    const words = "Please say yes if that is a fair reading, or say no and we will correct it.";
+    if (embeddedFlightDeck) {
+      postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
+    } else {
+      void speak(words);
+    }
+  }, [confirm, correct, embeddedFlightDeck, interpretation, speak]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
     handleSpokenTurnRef.current = handleSpokenTurn;
   }, [handleSpokenTurn]);
+
+  useEffect(() => {
+    if (!embeddedFlightDeck) return;
+    const receiveFlightDeckAnswer = (event: MessageEvent<unknown>) => {
+      if (!isFlightDeckInput(event)) return;
+      const text = event.data.text.trim();
+      if (!text) return;
+      setAnswer(text);
+      setStatus("John is considering what you said…");
+      handleSpokenTurnRef.current?.(text);
+    };
+    window.addEventListener("message", receiveFlightDeckAnswer);
+    return () => window.removeEventListener("message", receiveFlightDeckAnswer);
+  }, [embeddedFlightDeck]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -408,9 +461,11 @@ export function ConversationalAutopsy() {
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
                     <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
-                    <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-                      {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
-                    </button>
+                    {!embeddedFlightDeck ? (
+                      <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+                        {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
+                      </button>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -432,11 +487,15 @@ export function ConversationalAutopsy() {
                 className="mt-3 w-full resize-none border-0 border-t border-[#244052] bg-transparent px-0 py-4 text-lg text-white outline-none placeholder:text-[#6d8393]"
               />
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-6 py-3 text-sm font-bold text-white disabled:opacity-40">
-                  {listening ? "FINISH ANSWER" : "USE MICROPHONE"}
-                </button>
+                {!embeddedFlightDeck ? (
+                  <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-6 py-3 text-sm font-bold text-white disabled:opacity-40">
+                    {listening ? "FINISH ANSWER" : "USE MICROPHONE"}
+                  </button>
+                ) : null}
                 <button type="submit" disabled={busy || listening || !answer.trim()} className="border border-[#38aafa] px-6 py-3 text-sm font-bold text-[#edf8fb] disabled:opacity-30">CONTINUE</button>
-                <button type="button" onClick={() => void speak(lastSpokenTextRef.current || currentPrompt)} disabled={busy || speaking || !lastSpokenTextRef.current} className="ml-auto border-0 bg-transparent text-xs font-bold tracking-[0.12em] text-[#7f95a7] disabled:opacity-30">HEAR JOHN AGAIN</button>
+                {!embeddedFlightDeck ? (
+                  <button type="button" onClick={() => void speak(lastSpokenTextRef.current || currentPrompt)} disabled={busy || speaking || !lastSpokenTextRef.current} className="ml-auto border-0 bg-transparent text-xs font-bold tracking-[0.12em] text-[#7f95a7] disabled:opacity-30">HEAR JOHN AGAIN</button>
+                ) : null}
               </div>
             </form>
           ) : null}
