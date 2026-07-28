@@ -12,6 +12,8 @@ describe("conversational Autopsy boundary", () => {
   const serverAuth = readFileSync(resolve("api/_lib/supabase-server.ts"), "utf8");
   const conversation = readFileSync(resolve("src/pages/FirstConversation.tsx"), "utf8");
   const paidEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
+  const app = readFileSync(resolve("src/App.tsx"), "utf8");
+  const previewSession = readFileSync(resolve("api/autopsy-preview-session.ts"), "utf8");
   const verdict = readFileSync(resolve("src/components/autopsy/Autopsy.tsx"), "utf8");
 
   it("uses the canonical run, answer and finalisation RPC path", () => {
@@ -50,6 +52,14 @@ describe("conversational Autopsy boundary", () => {
     expect(paidEntry).toContain("window.location.hostname === INTEGRATION_PREVIEW_HOST");
     expect(paidEntry).toContain('get("test_payment") === "accepted"');
     expect(paidEntry).toContain("no Stripe transaction");
+    expect(app).toContain('params.get("embedded") === "flight-deck"');
+    expect(app).toContain("<AuthGate>");
+    expect(paidEntry).toContain("/api/autopsy-preview-session");
+    expect(paidEntry).toContain("supabase.auth.setSession");
+    expect(previewSession).toContain('host !== PREVIEW_HOST');
+    expect(previewSession).toContain('body.embedded !== "flight-deck"');
+    expect(previewSession).toContain("createServiceClient");
+    expect(previewSession).toContain("autopsy_preview: true");
   });
 
   it("continues the paid assessment as a spoken conversation", () => {
