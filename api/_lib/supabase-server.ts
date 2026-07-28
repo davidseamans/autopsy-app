@@ -17,7 +17,7 @@ function requireFirstServerEnv(names: string[]): string {
 
 export function createServiceClient() {
   return createClient(
-    requireServerEnv("SUPABASE_URL"),
+    requireFirstServerEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"]),
     requireServerEnv("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
