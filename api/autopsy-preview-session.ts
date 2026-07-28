@@ -30,8 +30,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const id = randomUUID();
-    const email = `flight-deck-${id}@preview.autopsy.invalid`;
-    const password = `${randomUUID()}-${randomUUID()}`;
+    const email = `flight-deck+${id}@davidseamans.com.au`;
+    const password = randomUUID();
     const service = createServiceClient();
     const { error: createError } = await service.auth.admin.createUser({
       email,
