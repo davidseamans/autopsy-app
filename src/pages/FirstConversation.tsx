@@ -280,7 +280,7 @@ const FirstConversation = () => {
     if (!user) return;
     const stageLabel = stageOptions.find((item) => item.value === stage)?.label.toLowerCase() ?? "your situation";
     const context = industry.trim() ? `${stageLabel} in ${industry.trim()}` : stageLabel;
-    const opening = `Good morning. Thanks for sitting down with me. This is a conversation, not a quiz, and there is no script you have to perform against. I understand we are talking about ${context}. What is occupying your mind about it today?`;
+    const opening = `Good morning. Thanks for sitting down with me. This is a private conversation, not a quiz, and there is no script you have to perform against. I understand we are talking about ${context}. Before we go any further, what should I call you, and roughly where are you based?`;
     const { data: conversation, error } = await supabase.from("initial_conversations").insert({
       user_id: user.id,
       business_stage: stage,
