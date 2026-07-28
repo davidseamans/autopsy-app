@@ -52,6 +52,30 @@ const SUBJECT_PROMPTS = [
   "What shows you can continue important, repetitive work after the initial enthusiasm fades?",
 ];
 
+const AUTOPSY_ORIENTATION = [
+  "Your test payment is acknowledged, so we are now beginning Autopsy.",
+  "I will take you through twelve practical areas, one at a time, as a conversation.",
+  "Answer honestly in your own words. There is no answer you are expected to perform, and I may pause to check that I have understood you before anything is saved.",
+  "At the end, you will receive a Verdict. It may open First 5 Jobs, identify something to deal with first, or say that stopping for now is the sensible result.",
+  "You will also be able to open a fuller explanation and print it or save it as a PDF.",
+  "Let us begin.",
+].join(" ");
+
+const SUBJECT_TRANSITIONS = [
+  "",
+  "All right. Now let us look at what you believe it will take to start properly.",
+  "Thank you. Next, let us look at how you would treat money coming in.",
+  "All right. Staying with the numbers for a moment, let us look at the costs that are easy to miss.",
+  "Thank you. Now let us move from preparation to what the market has actually shown you.",
+  "All right. Let us make that customer picture more specific.",
+  "Thank you. Now let us look at whether the work can be delivered reliably.",
+  "All right. Staying with delivery, let us look at how repeatable the work would be.",
+  "Thank you. Now let us look at what you have already learned by doing.",
+  "All right. Let us turn to the time you have actually made available.",
+  "Thank you. Now let us look at how you respond when progress becomes difficult.",
+  "All right. One final area: what happens after the early excitement wears off.",
+];
+
 const normaliseOption = (option: any, index: number) => ({
   id: option?.id ?? option?.option_id ?? option?.value ?? index,
   label: typeof option === "string" ? option : option?.label ?? String(option?.value ?? index),
@@ -105,17 +129,26 @@ export function ConversationalAutopsy() {
       const url = URL.createObjectURL(await response.blob());
       const audio = new Audio(url);
       audioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        setSpeaking(false);
-        if (listenAfter) window.setTimeout(() => startListeningRef.current?.(), 180);
-      };
-      audio.onerror = () => {
-        URL.revokeObjectURL(url);
-        setSpeaking(false);
-        setStatus("John's words are on screen. Use Hear John to try the voice again.");
-      };
-      await audio.play();
+      await new Promise<void>((resolve) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          setSpeaking(false);
+          if (listenAfter) window.setTimeout(() => startListeningRef.current?.(), 180);
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          setSpeaking(false);
+          setStatus("John's words are on screen. Use Hear John to try the voice again.");
+          resolve();
+        };
+        void audio.play().catch(() => {
+          URL.revokeObjectURL(url);
+          setSpeaking(false);
+          setStatus("John's words are on screen. Use Hear John to try the voice again.");
+          resolve();
+        });
+      });
     } catch {
       setSpeaking(false);
       setStatus("John's words are on screen. Use Hear John to try the voice again.");
@@ -145,8 +178,8 @@ export function ConversationalAutopsy() {
         setRunId(id);
         setQuestions(ordered);
         setBusy(false);
-        setStatus("Take your time and answer in your own words.");
-        speak(`We can continue straight into Autopsy. Take your time and answer in your own words. ${SUBJECT_PROMPTS[0]}`);
+        setStatus("John is explaining how Autopsy will work.");
+        void speak(`${AUTOPSY_ORIENTATION} ${SUBJECT_PROMPTS[0]}`);
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : "Autopsy could not start.");
@@ -193,13 +226,13 @@ export function ConversationalAutopsy() {
       setAnswer("");
       setInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
-        const words = `${next.plain_summary} Have I understood you correctly?`;
+        const words = `${next.plain_summary} Is that a fair reading?`;
         setStatus("Please confirm or correct what John understood.");
-        speak(words);
+        void speak(words);
       } else {
         const words = next.clarifying_question || "Could you tell me a little more about that?";
         setStatus("John needs one point clarified before anything is saved.");
-        speak(words);
+        void speak(words);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be interpreted.");
@@ -221,8 +254,11 @@ export function ConversationalAutopsy() {
       if (index === 11) {
         setStatus("Your answers are saved. John is preparing your Verdict…");
         await finalizeAutopsyRun(runId);
-        speak("That completes Autopsy. Your answers have been saved and your Verdict is ready.", false);
-        window.setTimeout(() => navigate(`/autopsy/run/${runId}`), 1400);
+        await speak(
+          "That completes Autopsy. Your answers have been saved and your Verdict is ready. I will open the short Verdict now. Read that decision first, then choose Open printable explanation for the fuller report. At the top of that report, choose Print or save report to print it on paper or save it as a PDF.",
+          false,
+        );
+        navigate(`/autopsy/run/${runId}`);
         return;
       }
       const nextIndex = index + 1;
@@ -230,7 +266,7 @@ export function ConversationalAutopsy() {
       setCombinedAnswer("");
       setInterpretation(null);
       setStatus("Answer in your own words.");
-      speak(SUBJECT_PROMPTS[nextIndex]);
+      void speak(`${SUBJECT_TRANSITIONS[nextIndex]} ${SUBJECT_PROMPTS[nextIndex]}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be saved.");
     } finally {
@@ -243,7 +279,7 @@ export function ConversationalAutopsy() {
     setCombinedAnswer("");
     setAnswer("");
     setStatus("No problem. Say it again in your own words.");
-    speak("No problem. Say it again in your own words.");
+    void speak("No problem. Say it again in your own words.");
   };
 
   const startListening = () => {
@@ -306,7 +342,7 @@ export function ConversationalAutopsy() {
       return;
     }
     setStatus("Please say yes, or tell John you would like to correct it.");
-    speak("Please say yes if I have understood, or say no and we will correct it.");
+    void speak("Please say yes if that is a fair reading, or say no and we will correct it.");
   }, [confirm, correct, interpretation, speak]);
 
   useEffect(() => {
@@ -371,9 +407,9 @@ export function ConversationalAutopsy() {
               {interpretation.selected_option_id && !interpretation.clarifying_question ? (
                 <>
                   <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
-                  <p className="mt-3 font-semibold text-[#54c5ff]">Have I understood you correctly?</p>
+                  <p className="mt-3 font-semibold text-[#54c5ff]">Is that a fair reading?</p>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT IS RIGHT</button>
+                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
                     <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
                     <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
                       {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
