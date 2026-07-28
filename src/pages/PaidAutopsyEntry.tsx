@@ -1,21 +1,51 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConversationalAutopsy } from "@/components/autopsy/ConversationalAutopsy";
+import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 
 const INTEGRATION_PREVIEW_HOST =
   "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app";
 
 export default function PaidAutopsyEntry() {
+  const { loading: authLoading, session } = useAuth();
+  const embeddedFlightDeck =
+    new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
   const previewTestPayment =
     window.location.hostname === INTEGRATION_PREVIEW_HOST &&
-    new URLSearchParams(window.location.search).get("test_payment") === "accepted";
+    new URLSearchParams(window.location.search).get("test_payment") === "accepted" &&
+    embeddedFlightDeck;
   const [state, setState] = useState<"loading" | "authorised" | "blocked">(
-    previewTestPayment ? "authorised" : "loading",
+    "loading",
   );
 
   useEffect(() => {
-    if (previewTestPayment) return;
+    if (authLoading) return;
+    if (previewTestPayment) {
+      if (session) {
+        setState("authorised");
+        return;
+      }
+      void fetch("/api/autopsy-preview-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embedded: "flight-deck", test_payment: "accepted" }),
+      })
+        .then(async (response) => {
+          const payload = await response.json();
+          if (!response.ok || !payload.access_token || !payload.refresh_token) {
+            throw new Error(payload.error || "Preview session unavailable.");
+          }
+          const { error } = await supabase.auth.setSession({
+            access_token: payload.access_token,
+            refresh_token: payload.refresh_token,
+          });
+          if (error) throw error;
+          setState("authorised");
+        })
+        .catch(() => setState("blocked"));
+      return;
+    }
     void supabase
       .from("autopsy_entitlements")
       .select("id")
@@ -23,7 +53,7 @@ export default function PaidAutopsyEntry() {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => setState(data ? "authorised" : "blocked"));
-  }, [previewTestPayment]);
+  }, [authLoading, previewTestPayment, session]);
 
   if (state === "authorised") return (
     <>
@@ -35,7 +65,7 @@ export default function PaidAutopsyEntry() {
       <ConversationalAutopsy />
     </>
   );
-  if (state === "loading") return <main className="p-8 text-center">Confirming your Autopsy entitlement…</main>;
+  if (state === "loading") return <main className="min-h-screen bg-[#06111c] p-8 pt-24 text-center text-[#dce8ec]">Opening your governed Autopsy…</main>;
   return (
     <main className="mx-auto max-w-xl p-8 text-center">
       <h1 className="text-2xl font-semibold">No paid Autopsy is ready yet.</h1>
