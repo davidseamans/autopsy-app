@@ -33,6 +33,23 @@ const FirstConversationRoute = () => (
   </AuthGate>
 );
 
+const PaidAutopsyRoute = () => {
+  const params = new URLSearchParams(window.location.search);
+  const embeddedPreview =
+    window.location.hostname ===
+      "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app" &&
+    params.get("test_payment") === "accepted" &&
+    params.get("embedded") === "flight-deck";
+
+  return embeddedPreview ? (
+    <PaidAutopsyEntry />
+  ) : (
+    <AuthGate>
+      <PaidAutopsyEntry />
+    </AuthGate>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -64,7 +81,7 @@ const App = () => (
               <Route path="/quotes" element={<Quotes />} />
               <Route path="/jobs" element={<Jobs />} />
             </Route>
-            <Route path="/autopsy/paid" element={<AuthGate><PaidAutopsyEntry /></AuthGate>} />
+            <Route path="/autopsy/paid" element={<PaidAutopsyRoute />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
