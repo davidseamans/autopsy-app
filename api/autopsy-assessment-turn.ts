@@ -8,6 +8,7 @@ type Option = {
 };
 
 type Body = {
+  question_id?: string | number;
   prompt?: string;
   answer?: string;
   options?: Option[];
@@ -41,11 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!apiKey) return res.status(503).json({ error: "Assessment conversation is not configured." });
 
   const body = (req.body ?? {}) as Body;
+  const questionId = body.question_id == null ? "" : String(body.question_id).trim();
   const prompt = body.prompt?.trim();
   const answer = body.answer?.trim();
   const options = Array.isArray(body.options) ? body.options : [];
-  if (!prompt || !answer || options.length < 2) {
-    return res.status(400).json({ error: "A question, answer and governed options are required." });
+  if (!questionId || !prompt || !answer || options.length < 2) {
+    return res.status(400).json({ error: "A question identity, question, answer and governed options are required." });
   }
 
   const governedOptions = options.map((option) => ({
@@ -67,7 +69,7 @@ Return JSON only:
 
 If the answer is ambiguous, incomplete, contradictory, or confidence is below 0.78, selected_option_id must be null and clarifying_question must ask only for the missing distinction. Otherwise provide the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
 
-The plain_summary is spoken aloud by John. Address the person directly in the second person: for example, "You could manage for about a month, and you have not written down a household cash buffer." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Do not recite the supplied option label verbatim when a shorter natural reflection is possible. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
+The plain_summary is spoken aloud by John. It must be a natural reflection of what the person actually said, not a governed option label, criterion, answer menu or new question. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -132,7 +134,7 @@ The plain_summary is spoken aloud by John. Address the person directly in the se
     if (parsed.selected_option_id != null && !allowed.has(String(parsed.selected_option_id))) {
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });
     }
-    return res.status(200).json(parsed);
+    return res.status(200).json({ ...parsed, question_id: questionId });
   } catch {
     return res.status(502).json({ error: "John could not form a reliable interpretation. Please try again." });
   }

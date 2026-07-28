@@ -23,9 +23,25 @@ describe("conversational Autopsy boundary", () => {
   });
 
   it("requires operator confirmation before persisting an interpreted answer", () => {
-    expect(component).toContain("Is that a fair reading?");
+    expect(component).toContain("Have I got that right?");
     expect(component).toContain("YES, THAT'S RIGHT");
-    expect(component).toContain("Nothing becomes an Autopsy answer until you confirm");
+    expect(component).toContain("briefly check only the meaning he is about to save");
+  });
+
+  it("binds every interpretation and saved answer to the displayed governed question", () => {
+    expect(component).toContain("currentQuestion?.prompt ?? SUBJECT_PROMPTS[index]");
+    expect(component).toContain("question_id: questionId");
+    expect(component).toContain("currentQuestionIdRef.current !== questionId");
+    expect(component).toContain("interpretation.question_id !== String(currentQuestion.question_id)");
+    expect(endpoint).toContain("question_id?: string | number");
+    expect(endpoint).toContain("{ ...parsed, question_id: questionId }");
+  });
+
+  it("keeps spoken confirmation short and conversational", () => {
+    expect(endpoint).toContain("Use no more than 18 words");
+    expect(endpoint).toContain('Never include slashes, a list of alternatives, "which of these", or a question mark');
+    expect(component).toContain("Have I got that right?");
+    expect(component).not.toContain("SUBJECT_TRANSITIONS");
   });
 
   it("does not expose scoring language or values to the candidate", () => {

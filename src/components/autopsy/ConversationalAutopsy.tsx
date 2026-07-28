@@ -16,6 +16,7 @@ import {
 } from "./rpc";
 
 type Interpretation = {
+  question_id: string;
   selected_option_id: string | null;
   confidence: number;
   plain_summary: string;
@@ -66,20 +67,12 @@ const AUTOPSY_ORIENTATION = [
   "Let us begin.",
 ].join(" ");
 
-const SUBJECT_TRANSITIONS = [
-  "",
-  "All right. Now let us look at what you believe it will take to start properly.",
-  "Thank you. Next, let us look at how you would treat money coming in.",
-  "All right. Staying with the numbers for a moment, let us look at the costs that are easy to miss.",
-  "Thank you. Now let us move from preparation to what the market has actually shown you.",
-  "All right. Let us make that customer picture more specific.",
-  "Thank you. Now let us look at whether the work can be delivered reliably.",
-  "All right. Staying with delivery, let us look at how repeatable the work would be.",
-  "Thank you. Now let us look at what you have already learned by doing.",
-  "All right. Let us turn to the time you have actually made available.",
-  "Thank you. Now let us look at how you respond when progress becomes difficult.",
-  "All right. One final area: what happens after the early excitement wears off.",
-];
+const transitionFor = (nextIndex: number) =>
+  nextIndex === 11
+    ? "All right. One final practical area."
+    : nextIndex % 2 === 0
+      ? "Thank you. Let us look at the next practical area."
+      : "All right. Let us move to the next practical area.";
 
 const normaliseOption = (option: any, index: number) => ({
   id: option?.id ?? option?.option_id ?? option?.value ?? index,
@@ -107,6 +100,7 @@ export function ConversationalAutopsy() {
   const handleSpokenTurnRef = useRef<((text: string) => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenTextRef = useRef("");
+  const currentQuestionIdRef = useRef("");
   const embeddedFlightDeck = isFlightDeckEmbedded();
 
   const recognitionConstructor = useMemo(() => {
@@ -207,7 +201,8 @@ export function ConversationalAutopsy() {
   }, [embeddedFlightDeck, speak, user?.email]);
 
   const currentQuestion = questions[index];
-  const currentPrompt = SUBJECT_PROMPTS[index] ?? currentQuestion?.prompt ?? "";
+  const currentPrompt = currentQuestion?.prompt ?? SUBJECT_PROMPTS[index] ?? "";
+  currentQuestionIdRef.current = currentQuestion ? String(currentQuestion.question_id) : "";
 
   const interpret = async (rawAnswer: string) => {
     const text = rawAnswer.trim();
@@ -215,6 +210,7 @@ export function ConversationalAutopsy() {
     setBusy(true);
     setError("");
     const candidateAnswer = combinedAnswer ? `${combinedAnswer}\nClarification: ${text}` : text;
+    const questionId = String(currentQuestion.question_id);
     try {
       const options = (currentQuestion.options ?? []).map(normaliseOption);
       const response = await fetch("/api/autopsy-assessment-turn", {
@@ -224,6 +220,7 @@ export function ConversationalAutopsy() {
           Authorization: `Bearer ${session?.access_token ?? ""}`,
         },
         body: JSON.stringify({
+          question_id: questionId,
           prompt: currentQuestion.prompt,
           answer: candidateAnswer,
           options,
@@ -233,12 +230,18 @@ export function ConversationalAutopsy() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "John could not interpret that answer.");
       const next = payload as Interpretation;
+      if (
+        String(next.question_id ?? "") !== questionId ||
+        currentQuestionIdRef.current !== questionId
+      ) {
+        throw new Error("That answer did not remain attached to its question. Please answer this question again.");
+      }
       setCombinedAnswer(candidateAnswer);
       setAnswer("");
       setInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
-        const words = `${next.plain_summary} Is that a fair reading?`;
-        setStatus("Please confirm or correct what John understood.");
+        const words = `${next.plain_summary} Have I got that right?`;
+        setStatus("John has reflected what he heard. Say yes, or correct it in your own words.");
         if (embeddedFlightDeck) {
           postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
         } else {
@@ -261,7 +264,13 @@ export function ConversationalAutopsy() {
   };
 
   const confirm = async () => {
-    if (!runId || !currentQuestion || !interpretation?.selected_option_id || busy) return;
+    if (
+      !runId ||
+      !currentQuestion ||
+      !interpretation?.selected_option_id ||
+      interpretation.question_id !== String(currentQuestion.question_id) ||
+      busy
+    ) return;
     setBusy(true);
     setError("");
     try {
@@ -284,7 +293,8 @@ export function ConversationalAutopsy() {
       setCombinedAnswer("");
       setInterpretation(null);
       setStatus("Answer in your own words.");
-      const nextWords = `${SUBJECT_TRANSITIONS[nextIndex]} ${SUBJECT_PROMPTS[nextIndex]}`;
+      const nextQuestion = questions[nextIndex];
+      const nextWords = `${transitionFor(nextIndex)} ${nextQuestion?.prompt ?? SUBJECT_PROMPTS[nextIndex]}`;
       if (embeddedFlightDeck) {
         postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: nextWords });
       } else {
@@ -432,7 +442,7 @@ export function ConversationalAutopsy() {
             “Speak naturally. John will listen, clarify and keep the twelve subjects in the background.”
           </blockquote>
           <small className="text-sm leading-6 text-[#718796]">
-            Nothing becomes an Autopsy answer until you confirm that John has understood you correctly.
+            John keeps the twelve subjects in order. He will briefly check only the meaning he is about to save.
           </small>
         </aside>
 
@@ -457,7 +467,7 @@ export function ConversationalAutopsy() {
               {interpretation.selected_option_id && !interpretation.clarifying_question ? (
                 <>
                   <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
-                  <p className="mt-3 font-semibold text-[#54c5ff]">Is that a fair reading?</p>
+                  <p className="mt-3 font-semibold text-[#54c5ff]">Have I got that right?</p>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
                     <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
