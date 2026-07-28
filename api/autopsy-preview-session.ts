@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (createError) throw createError;
 
     const auth = createClient(
-      requireEnv("SUPABASE_URL"),
+      process.env.SUPABASE_URL ?? requireEnv("VITE_SUPABASE_URL"),
       process.env.SUPABASE_ANON_KEY ?? requireEnv("VITE_SUPABASE_ANON_KEY"),
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
