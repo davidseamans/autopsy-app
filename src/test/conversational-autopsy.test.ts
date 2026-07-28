@@ -69,8 +69,11 @@ describe("conversational Autopsy boundary", () => {
 
   it("continues from the final answer into a governed spoken Verdict handover", () => {
     expect(component).toContain('sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending")');
-    expect(component).toContain("navigate(`/autopsy/run/${runId}`)");
+    expect(component).toContain('embeddedFlightDeck ? "?embedded=flight-deck" : ""');
+    expect(component).toContain("BUILDOS_AUTOPSY_EVENT");
+    expect(component).toContain("isFlightDeckInput");
     expect(verdict).toContain("buildVerdictVoiceScript");
+    expect(verdict).toContain('event: "verdict"');
     expect(verdict).toContain("John · Verdict handover");
     expect(verdict).toContain("Hear John explain this result");
     expect(verdict).toContain("/api/autopsy-speech");
