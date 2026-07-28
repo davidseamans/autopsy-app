@@ -158,6 +158,13 @@ Where the available evidence cannot support a defensible option mapping, do not 
 
 The existing `finalizeAutopsyRun` path remains the scoring authority. The conversational layer translates the resulting database verdict into one of the authorised admission outcomes without exposing internal score bands or maturity labels.
 
+The relationship does not end when the twelfth subject is confirmed. Once the
+existing finalisation path has produced its governed result, the Verdict screen
+opens and John gives a short spoken handover in the same established voice. The
+handover may state only the persisted Verdict, its candidate-facing explanation
+and the next action already permitted by the existing routing rules. It may not
+invent, soften, appeal or widen the Verdict.
+
 ## Response handling rules
 
 ### Clear response

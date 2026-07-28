@@ -254,10 +254,7 @@ export function ConversationalAutopsy() {
       if (index === 11) {
         setStatus("Your answers are saved. John is preparing your Verdict…");
         await finalizeAutopsyRun(runId);
-        await speak(
-          "That completes Autopsy. Your answers have been saved and your Verdict is ready. I will open the short Verdict now. Read that decision first, then choose Open printable explanation for the fuller report. At the top of that report, choose Print or save report to print it on paper or save it as a PDF.",
-          false,
-        );
+        sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");
         navigate(`/autopsy/run/${runId}`);
         return;
       }

@@ -12,6 +12,7 @@ describe("conversational Autopsy boundary", () => {
   const serverAuth = readFileSync(resolve("api/_lib/supabase-server.ts"), "utf8");
   const conversation = readFileSync(resolve("src/pages/FirstConversation.tsx"), "utf8");
   const paidEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
+  const verdict = readFileSync(resolve("src/components/autopsy/Autopsy.tsx"), "utf8");
 
   it("uses the canonical run, answer and finalisation RPC path", () => {
     expect(component).toContain("createAutopsyRun");
@@ -20,8 +21,8 @@ describe("conversational Autopsy boundary", () => {
   });
 
   it("requires operator confirmation before persisting an interpreted answer", () => {
-    expect(component).toContain("Have I understood you correctly?");
-    expect(component).toContain("YES, THAT IS RIGHT");
+    expect(component).toContain("Is that a fair reading?");
+    expect(component).toContain("YES, THAT'S RIGHT");
     expect(component).toContain("Nothing becomes an Autopsy answer until you confirm");
   });
 
@@ -64,5 +65,14 @@ describe("conversational Autopsy boundary", () => {
     expect(speechEndpoint).toContain("authenticateRequest");
     expect(speechEndpoint).toContain('voice: "marin"');
     expect(speechEndpoint).toContain('model: "gpt-4o-mini-tts"');
+  });
+
+  it("continues from the final answer into a governed spoken Verdict handover", () => {
+    expect(component).toContain('sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending")');
+    expect(component).toContain("navigate(`/autopsy/run/${runId}`)");
+    expect(verdict).toContain("buildVerdictVoiceScript");
+    expect(verdict).toContain("John · Verdict handover");
+    expect(verdict).toContain("Hear John explain this result");
+    expect(verdict).toContain("/api/autopsy-speech");
   });
 });

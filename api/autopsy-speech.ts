@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
-      voice: "cedar",
+      voice: "marin",
       input: text,
       instructions: "Use a warm, mature male voice. Speak in a calm, direct Australian conversational manner. Be unhurried, attentive and natural, as though continuing one private conversation. Never sound theatrical, synthetic, instructional or like an assessor reading a report.",
       response_format: "mp3",

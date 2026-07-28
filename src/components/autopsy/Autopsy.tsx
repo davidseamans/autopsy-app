@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -40,6 +40,7 @@ import { isDebug } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
+import { buildVerdictVoiceScript } from "@/lib/verdictVoice";
 import {
   buildCandidateNuance,
   type CandidateAnswerEvidence,
@@ -2584,6 +2585,7 @@ function CandidateVerdict({
   showAuditAppendix: boolean;
   completedLabel: string;
 }) {
+  const { session } = useAuth();
   const band = deriveBand(verdictName);
   const ready = band === "structurally_viable";
   const provisional = band === "viable";
@@ -2612,6 +2614,60 @@ function CandidateVerdict({
     : provisional
       ? "Do not commit serious money or leave secure work yet. The sensible next step is to gain real exposure in the weaker areas and reconsider a small, controlled test only when the evidence changes."
       : "Do not rush into starting and do not immediately repeat Autopsy. Keep the security of regular work while you gain practical exposure and reconsider the commitment. Return only after your circumstances or real-world evidence have genuinely changed.";
+  const [verdictVoiceState, setVerdictVoiceState] = useState<
+    "idle" | "speaking" | "complete" | "error"
+  >("idle");
+  const verdictAudioRef = useRef<HTMLAudioElement | null>(null);
+  const verdictSpeakingRef = useRef(false);
+  const verdictVoiceScript = useMemo(
+    () => buildVerdictVoiceScript({ verdictName, verdictBody }),
+    [verdictBody, verdictName],
+  );
+
+  const speakVerdict = useCallback(async () => {
+    if (!session?.access_token || verdictSpeakingRef.current) return;
+    verdictSpeakingRef.current = true;
+    setVerdictVoiceState("speaking");
+    verdictAudioRef.current?.pause();
+    try {
+      const response = await fetch("/api/autopsy-speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ text: verdictVoiceScript }),
+      });
+      if (!response.ok) throw new Error("voice");
+      const url = URL.createObjectURL(await response.blob());
+      const audio = new Audio(url);
+      verdictAudioRef.current = audio;
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("audio"));
+        };
+        void audio.play().catch(reject);
+      });
+      if (runId) sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "complete");
+      setVerdictVoiceState("complete");
+    } catch {
+      setVerdictVoiceState("error");
+    } finally {
+      verdictSpeakingRef.current = false;
+    }
+  }, [runId, session?.access_token, verdictVoiceScript]);
+
+  useEffect(() => {
+    if (!runId || !session?.access_token) return;
+    if (sessionStorage.getItem(`autopsy.verdict_voice.${runId}`) !== "pending") return;
+    void speakVerdict();
+    return () => verdictAudioRef.current?.pause();
+  }, [runId, session?.access_token, speakVerdict]);
 
   const explanationProfile = ready
     ? {
@@ -2869,6 +2925,30 @@ function CandidateVerdict({
         </div>
         <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{verdictName}</h1>
         <p className="mt-3 text-sm opacity-75">A decision based on the evidence in your answers today</p>
+      </section>
+
+      <section className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-slate-900 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">John · Verdict handover</p>
+            <p className="mt-2 leading-7 text-slate-700">
+              {verdictVoiceState === "speaking"
+                ? "John is explaining your result and the next option available."
+                : verdictVoiceState === "error"
+                  ? "John’s explanation is written below. You can also hear it again."
+                  : "Your result and next option are ready to review."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void speakVerdict()}
+            disabled={verdictVoiceState === "speaking" || !session?.access_token}
+            className="shrink-0 border-sky-500 bg-white text-sky-800 hover:bg-sky-100"
+          >
+            {verdictVoiceState === "speaking" ? "John is speaking…" : "Hear John explain this result"}
+          </Button>
+        </div>
       </section>
 
       <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
