@@ -41,6 +41,7 @@ import { useAuth } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { cn } from "@/lib/utils";
 import { buildVerdictVoiceScript } from "@/lib/verdictVoice";
+import { isFlightDeckEmbedded, postToFlightDeck } from "@/lib/flightDeckBridge";
 import {
   buildCandidateNuance,
   type CandidateAnswerEvidence,
@@ -2623,6 +2624,7 @@ function CandidateVerdict({
     () => buildVerdictVoiceScript({ verdictName, verdictBody }),
     [verdictBody, verdictName],
   );
+  const embeddedFlightDeck = isFlightDeckEmbedded();
 
   const speakVerdict = useCallback(async () => {
     if (!session?.access_token || verdictSpeakingRef.current) return;
@@ -2663,11 +2665,22 @@ function CandidateVerdict({
   }, [runId, session?.access_token, verdictVoiceScript]);
 
   useEffect(() => {
+    if (embeddedFlightDeck) return;
     if (!runId || !session?.access_token) return;
     if (sessionStorage.getItem(`autopsy.verdict_voice.${runId}`) !== "pending") return;
     void speakVerdict();
     return () => verdictAudioRef.current?.pause();
-  }, [runId, session?.access_token, speakVerdict]);
+  }, [embeddedFlightDeck, runId, session?.access_token, speakVerdict]);
+
+  useEffect(() => {
+    if (!embeddedFlightDeck) return;
+    postToFlightDeck({
+      type: "BUILDOS_AUTOPSY_EVENT",
+      event: "verdict",
+      text: verdictVoiceScript,
+      runId,
+    });
+  }, [embeddedFlightDeck, runId, verdictVoiceScript]);
 
   const explanationProfile = ready
     ? {
@@ -2939,15 +2952,17 @@ function CandidateVerdict({
                   : "Your result and next option are ready to review."}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void speakVerdict()}
-            disabled={verdictVoiceState === "speaking" || !session?.access_token}
-            className="shrink-0 border-sky-500 bg-white text-sky-800 hover:bg-sky-100"
-          >
-            {verdictVoiceState === "speaking" ? "John is speaking…" : "Hear John explain this result"}
-          </Button>
+          {!embeddedFlightDeck ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void speakVerdict()}
+              disabled={verdictVoiceState === "speaking" || !session?.access_token}
+              className="shrink-0 border-sky-500 bg-white text-sky-800 hover:bg-sky-100"
+            >
+              {verdictVoiceState === "speaking" ? "John is speaking…" : "Hear John explain this result"}
+            </Button>
+          ) : null}
         </div>
       </section>
 
