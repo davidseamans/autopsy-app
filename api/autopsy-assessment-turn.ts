@@ -112,7 +112,7 @@ For a repeat_request, repeat the locked question in plain language. For a digres
 
 Treat "I don't know", "probably", "maybe" and similar uncertainty as honest conversational answers, not as a reason to read out the governed answer menu. On the first ambiguous answer, selected_option_id must be null and clarifying_question must ask one natural, narrow follow-up about what makes the person lean that way or what they have actually done. Never list, quote, paraphrase or compare the supplied options.
 
-If clarification_count is at least 1, do not ask another clarifying question. Select the supplied option that most accurately represents the accumulated answer at its currently supportable strength, including unknown, untested or not demonstrated where appropriate. Do not strengthen the answer. Return the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
+If clarification_count is at least 1, do not ask another clarifying question. Select the supplied option that most accurately represents the accumulated answer at its currently supportable strength, including unknown, untested or not demonstrated where appropriate. Do not strengthen the answer. Return the exact option id and no clarifying question. The selection is saved silently; never ask the person to confirm the machine's option mapping.
 
 Selection accuracy is more important than conversational optimism. A detailed, direct answer that fully and specifically satisfies the strongest supplied option must map to that option. Do not downgrade it merely because the person has not used the option's exact wording. Conversely, do not upgrade intention, confidence, plans or general positivity into completed action, tested understanding or demonstrated reliability.
 
@@ -122,7 +122,7 @@ For every answer, silently separate:
 3. surrounding detail that is irrelevant to this subject.
 Map the decisive and supporting facts together. Do not let a long answer, conversational wording, or irrelevant detail dilute a clear answer. A quantified outcome supported by the person's described inputs, method, household resources, allowance or contingency can satisfy an option that says the position is known or can be shown. Do not ask the person to repeat a decisive fact already supplied.
 
-The plain_summary is spoken aloud by John. It must describe the exact governed option selected, while remaining faithful to what the person said. It must never sound stronger or weaker than selected_option_id. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
+The plain_summary is an internal audit note and is never spoken to the person. Keep it factual and under 18 words. Never use specialist shorthand such as cash runway, evidence, score, dimension, hard fail, maturity or assessment engine.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -133,7 +133,7 @@ The plain_summary is spoken aloud by John. It must describe the exact governed o
     body: JSON.stringify({
       model: process.env.OPENAI_CONVERSATION_MODEL || "gpt-5-mini",
       reasoning: { effort: "low" },
-      max_output_tokens: 500,
+      max_output_tokens: 1200,
       text: {
         format: {
           type: "json_schema",
