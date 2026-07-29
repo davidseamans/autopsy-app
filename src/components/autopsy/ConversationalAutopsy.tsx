@@ -57,7 +57,7 @@ type InputMode = "voice" | "text";
 const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
   CR_01: {
     prompt: "If the cleaning work produced little or delayed income, how long could your household keep going safely?",
-    boundary: "Household survival runway while cleaning income is uncertain. Exclude business setup purchases and job costs.",
+    boundary: "Household survival runway while cleaning income is uncertain. A stated duration supported by reviewed household expenses, available household income, or a contingency allowance is an inspectable runway. A partner's income is a legitimate household resource and must not cause a downgrade. Exclude business setup purchases and job costs.",
   },
   CR_02: {
     prompt: "Before taking the first cleaning job, what must you have paid for, organised or kept available?",
@@ -728,7 +728,7 @@ export function ConversationalAutopsy() {
             </div>
           ) : null}
 
-          {(!interpretation || interpretation.clarifying_question) ? (
+          {!embeddedFlightDeck && (!interpretation || interpretation.clarifying_question) ? (
             <form onSubmit={submit} className="mt-auto pt-6">
               <label htmlFor="autopsy-conversation-answer" className="text-[10px] font-bold tracking-[0.2em] text-[#54c5ff]">YOUR RESPONSE</label>
               <textarea

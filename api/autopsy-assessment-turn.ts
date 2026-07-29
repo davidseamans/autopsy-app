@@ -116,6 +116,12 @@ If clarification_count is at least 1 and the person remains genuinely uncertain,
 
 Selection accuracy is more important than conversational optimism. A detailed, direct answer that fully and specifically satisfies the strongest supplied option must map to that option. Do not downgrade it merely because the person has not used the option's exact wording. Conversely, do not upgrade intention, confidence, plans or general positivity into completed action, tested understanding or demonstrated reliability.
 
+For every answer, silently separate:
+1. the decisive fact that directly answers the locked subject,
+2. supporting facts that make that answer more dependable, and
+3. surrounding detail that is irrelevant to this subject.
+Map the decisive and supporting facts together. Do not let a long answer, conversational wording, or irrelevant detail dilute a clear answer. A quantified outcome supported by the person's described inputs, method, household resources, allowance or contingency can satisfy an option that says the position is known or can be shown. Do not ask the person to repeat a decisive fact already supplied.
+
 The plain_summary is spoken aloud by John. It must describe the exact governed option selected, while remaining faithful to what the person said. It must never sound stronger or weaker than selected_option_id. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {

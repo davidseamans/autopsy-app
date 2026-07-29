@@ -164,6 +164,15 @@ describe("conversational Autopsy boundary", () => {
     expect(speechEndpoint).toContain('model: "gpt-4o-mini-tts"');
   });
 
+  it("extracts decisive facts from long runway answers and leaves embedded typing to the Flight Deck", () => {
+    expect(component).toContain("A partner's income is a legitimate household resource");
+    expect(component).toContain("contingency allowance is an inspectable runway");
+    expect(component).toContain("!embeddedFlightDeck && (!interpretation || interpretation.clarifying_question)");
+    expect(endpoint).toContain("the decisive fact that directly answers the locked subject");
+    expect(endpoint).toContain("Do not let a long answer");
+    expect(endpoint).toContain("Do not ask the person to repeat a decisive fact already supplied");
+  });
+
   it("continues from the final answer into a governed spoken Verdict handover", () => {
     expect(component).toContain('sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending")');
     expect(component).toContain('embeddedFlightDeck ? "?embedded=flight-deck" : ""');
