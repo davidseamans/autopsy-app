@@ -52,6 +52,7 @@ type SpeechRecognitionLike = {
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type InputMode = "voice" | "text";
 
 const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
   CR_01: {
@@ -176,6 +177,7 @@ export function ConversationalAutopsy() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState("");
+  const [lastInputMode, setLastInputMode] = useState<InputMode>("voice");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptRef = useRef("");
   const startListeningRef = useRef<(() => void) | null>(null);
@@ -530,6 +532,7 @@ export function ConversationalAutopsy() {
     recognition.lang = "en-AU";
     transcriptRef.current = "";
     recognition.onstart = () => {
+      setLastInputMode("voice");
       setListening(true);
       setStatus("Listening…");
     };
@@ -608,6 +611,8 @@ export function ConversationalAutopsy() {
         return;
       }
       setAnswer(text);
+      const inputMode = event.data.inputMode === "text" ? "text" : "voice";
+      setLastInputMode(inputMode);
       setStatus("John is considering what you said…");
       handleSpokenTurnRef.current?.(text);
     };
@@ -617,6 +622,7 @@ export function ConversationalAutopsy() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    setLastInputMode("text");
     void interpret(answer);
   };
 
@@ -693,15 +699,28 @@ export function ConversationalAutopsy() {
                 <>
                   <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
                   <p className="mt-3 font-semibold text-[#54c5ff]">Have I got that right?</p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
-                    <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
-                    {!embeddedFlightDeck ? (
+                  {lastInputMode === "text" ? (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
+                      <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
+                      {!embeddedFlightDeck ? (
+                        <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+                          {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm leading-6 text-[#8ea5b4]">
+                      Answer naturally: say that it is right, or tell John what needs changing.
+                    </p>
+                  )}
+                  {lastInputMode === "voice" && !embeddedFlightDeck ? (
+                    <div className="mt-4">
                       <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
                         {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
                       </button>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.clarifying_question}</p>

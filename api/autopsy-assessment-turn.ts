@@ -103,7 +103,7 @@ Classify current_utterance on its own. Do not let an earlier accumulated answer 
 
 Only an answer or correction may be mapped to a governed option. A question, repeat_request, control_request or digression must return selected_option_id null. Nothing in those turns is assessment material.
 
-For a question, answer only the neutral meaning of the locked subject. You may clarify a term and explain why the subject matters, but must not disclose, quote, paraphrase or imply the governed options and must not tell the person what a strong answer would be. End by returning naturally to the locked subject.
+For a question, do not teach the subject. Do not define a commercial term, explain a calculation, recommend recordkeeping, describe good practice, supply an example, or tell the person how to improve. Acknowledge the question and explain that teaching during Autopsy could shape the answer. Return naturally to what the person currently understands or does.
 
 For a repeat_request, repeat the locked question in plain language. For a digression, acknowledge it briefly and return to the locked subject. For a control_request, state the available control plainly without interpreting an answer.
 
@@ -195,6 +195,18 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
       parsed.selected_option_id = null;
       parsed.clarifying_question = null;
       parsed.plain_summary = "";
+      if (parsed.turn_type === "question") {
+        parsed.conversation_reply =
+          "That is a fair question. I will not teach or improve the answer during Autopsy because that could shape the result. Tell me what you understand or do today.";
+      } else if (parsed.turn_type === "repeat_request") {
+        parsed.conversation_reply = `Of course. ${prompt}`;
+      } else if (parsed.turn_type === "control_request") {
+        parsed.conversation_reply =
+          "Certainly. Use the pause or input control on screen when you need it. We will keep this subject open.";
+      } else {
+        parsed.conversation_reply =
+          `I understand. Let us keep that aside for now and return to this subject. ${prompt}`;
+      }
     }
     if (parsed.selected_option_id != null && !allowed.has(String(parsed.selected_option_id))) {
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });

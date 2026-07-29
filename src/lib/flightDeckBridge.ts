@@ -17,6 +17,7 @@ export type FlightDeckEvent =
 export type FlightDeckInput = {
   type: "BUILDOS_AUTOPSY_INPUT";
   text: string;
+  inputMode?: "voice" | "text";
   subjectId?: string;
   subjectToken?: string;
 };

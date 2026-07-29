@@ -25,6 +25,8 @@ describe("conversational Autopsy boundary", () => {
   it("requires operator confirmation before persisting an interpreted answer", () => {
     expect(component).toContain("Have I got that right?");
     expect(component).toContain("YES, THAT'S RIGHT");
+    expect(component).toContain('lastInputMode === "text"');
+    expect(component).toContain("say that it is right, or tell John what needs changing");
     expect(component).toContain("briefly check only the meaning he is about to save");
   });
 
@@ -59,7 +61,7 @@ describe("conversational Autopsy boundary", () => {
   it("routes questions and interruptions before interpreting assessment material", () => {
     expect(endpoint).toContain('"turn_type": "answer, question, repeat_request, correction, control_request or digression"');
     expect(endpoint).toContain("Only an answer or correction may be mapped to a governed option");
-    expect(endpoint).toContain("must not tell the person what a strong answer would be");
+    expect(endpoint).toContain("Do not define a commercial term");
     expect(endpoint).toContain("Nothing in those turns is assessment material");
     expect(endpoint).toContain("Classify current_utterance on its own");
     expect(endpoint).toContain("accumulated_answer: accumulatedAnswer");
@@ -67,6 +69,21 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain('!["answer", "correction"].includes(next.turn_type)');
     expect(component).toContain("The current subject is still open.");
     expect(component).toContain("setConversationReply(reply)");
+  });
+
+  it("refuses teaching and coaching during the governed assessment", () => {
+    expect(endpoint).toContain("do not teach the subject");
+    expect(endpoint).toContain("Do not define a commercial term");
+    expect(endpoint).toContain("I will not teach or improve the answer during Autopsy");
+    expect(endpoint).toContain("because that could shape the result");
+  });
+
+  it("uses voice-first confirmation and restores manual controls for typed input", () => {
+    expect(component).toContain('type InputMode = "voice" | "text"');
+    expect(component).toContain('setLastInputMode("voice")');
+    expect(component).toContain('setLastInputMode("text")');
+    expect(component).toContain('event.data.inputMode === "text" ? "text" : "voice"');
+    expect(component).toContain('lastInputMode === "text"');
   });
 
   it("separates household runway, startup requirement and recurring job costs", () => {
