@@ -22,12 +22,11 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("finalizeAutopsyRun");
   });
 
-  it("requires operator confirmation before persisting an interpreted answer", () => {
-    expect(component).toContain("Is that right, or should we try again?");
-    expect(component).toContain("YES, THAT'S RIGHT");
-    expect(component).toContain('lastInputMode === "text"');
-    expect(component).toContain("definitely|absolutely|certainly");
-    expect(component).toContain("briefly check only the meaning he is about to save");
+  it("persists a reliable interpretation without exposing the option mapping", () => {
+    expect(component).toContain("await saveSelectionAndAdvance(next)");
+    expect(component).toContain("The analysis stays quietly in the background");
+    expect(component).not.toContain("Is that right, or should we try again?");
+    expect(component).not.toContain("YES, THAT'S RIGHT");
   });
 
   it("binds every interpretation and saved answer to the displayed governed question", () => {
@@ -43,10 +42,10 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("question_id: questionId");
   });
 
-  it("keeps spoken confirmation short and conversational", () => {
-    expect(endpoint).toContain("Use no more than 18 words");
-    expect(endpoint).toContain('Never include slashes, a list of alternatives, "which of these", or a question mark');
-    expect(component).toContain("Is that right, or should we try again?");
+  it("keeps internal interpretation silent and conversational", () => {
+    expect(endpoint).toContain("plain_summary is an internal audit note and is never spoken");
+    expect(endpoint).toContain("never ask the person to confirm the machine's option mapping");
+    expect(component).not.toContain("Is that right, or should we try again?");
     expect(component).not.toContain("SUBJECT_TRANSITIONS");
   });
 
@@ -85,19 +84,18 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("because that could shape the result");
   });
 
-  it("uses voice-first confirmation and restores manual controls for typed input", () => {
+  it("uses voice-first input and shows only genuine clarifications for typed input", () => {
     expect(component).toContain('type InputMode = "voice" | "text"');
     expect(component).toContain('setLastInputMode("voice")');
     expect(component).toContain('setLastInputMode("text")');
     expect(component).toContain('event.data.inputMode === "text" ? "text" : "voice"');
     expect(component).toContain('lastInputMode === "text"');
-    expect(component).toContain("definitely|absolutely|certainly");
-    expect(component).toContain('interpretation && lastInputMode === "text"');
+    expect(component).toContain('interpretation?.clarifying_question && lastInputMode === "text"');
   });
 
-  it("keeps the spoken reflection bound to the exact governed option", () => {
+  it("keeps the internal audit reflection bound to a governed option", () => {
     expect(endpoint).toContain("score_value");
-    expect(endpoint).toContain("must never sound stronger or weaker than selected_option_id");
+    expect(endpoint).toContain("plain_summary is an internal audit note");
     expect(endpoint).toContain(".replace(/^I have\\b/i, \"You have\")");
   });
 
@@ -164,9 +162,8 @@ describe("conversational Autopsy boundary", () => {
   it("continues the paid assessment as a spoken conversation", () => {
     expect(component).toContain("if (listenAfter) window.setTimeout(() => startListeningRef.current?.()");
     expect(component).toContain("handleSpokenTurnRef.current?.(captured)");
-    expect(component).toContain("void confirm()");
-    expect(component).toContain("correct()");
-    expect(component).toContain("ANSWER BY VOICE");
+    expect(component).toContain("await saveSelectionAndAdvance(next)");
+    expect(component).toContain("USE MICROPHONE");
     expect(component).toContain("Listening…");
     expect(component).toContain("John is speaking…");
     expect(component).toContain("/api/autopsy-speech");
