@@ -336,6 +336,60 @@ export function ConversationalAutopsy() {
     activeSubjectRef.current = { id, token, prompt: currentPrompt, boundary: presentation.boundary };
   }
 
+  const saveSelectionAndAdvance = async (chosen: Interpretation) => {
+    if (
+      !runId ||
+      !currentQuestion ||
+      !chosen.selected_option_id ||
+      chosen.question_id !== String(currentQuestion.question_id)
+    ) {
+      throw new Error("John lost the current subject before it could be saved.");
+    }
+    await recordAutopsyAnswer({
+      run_id: runId,
+      question_id: currentQuestion.question_id,
+      selected_option: chosen.selected_option_id,
+    });
+    if (index === 11) {
+      setStatus("Your answers are saved. John is preparing your Verdict…");
+      await finalizeAutopsyRun(runId);
+      if (!embeddedFlightDeck) {
+        sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");
+      }
+      navigate(`/autopsy/run/${runId}${embeddedFlightDeck ? "?embedded=flight-deck" : ""}`);
+      return;
+    }
+    const nextIndex = index + 1;
+    const nextQuestion = questions[nextIndex];
+    const nextPresentation = presentationFor(nextQuestion, nextIndex);
+    const nextId = String(nextQuestion.question_id);
+    const nextToken = `${runId}:${nextIndex}:${nextId}`;
+    activeSubjectRef.current = {
+      id: nextId,
+      token: nextToken,
+      prompt: nextPresentation.prompt,
+      boundary: nextPresentation.boundary,
+    };
+    setIndex(nextIndex);
+    setCombinedAnswer("");
+    setClarificationCount(0);
+    storeInterpretation(null);
+    setConversationReply("");
+    setStatus("Answer in your own words.");
+    const nextWords = `${transitionFor(nextIndex)} ${nextPresentation.prompt}`;
+    if (embeddedFlightDeck) {
+      postToFlightDeck({
+        type: "BUILDOS_AUTOPSY_EVENT",
+        event: "speak",
+        text: nextWords,
+        subjectId: nextId,
+        subjectToken: nextToken,
+      });
+    } else {
+      void speak(nextWords);
+    }
+  };
+
   const interpret = async (rawAnswer: string) => {
     const text = rawAnswer.trim();
     const lockedSubject = activeSubjectRef.current;
@@ -414,22 +468,12 @@ export function ConversationalAutopsy() {
       }
       setConversationReply("");
       setCombinedAnswer(candidateAnswer);
-      storeInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
-        const words = `${next.plain_summary} Is that right, or should we try again?`;
-        setStatus("John is checking the exact meaning before saving it.");
-        if (embeddedFlightDeck) {
-          postToFlightDeck({
-            type: "BUILDOS_AUTOPSY_EVENT",
-            event: "speak",
-            text: words,
-            subjectId: questionId,
-            subjectToken,
-          });
-        } else {
-          void speak(words);
-        }
+        storeInterpretation(null);
+        setStatus("John has understood. Moving to the next subject…");
+        await saveSelectionAndAdvance(next);
       } else {
+        storeInterpretation(next);
         setClarificationCount((count) => Math.min(2, count + 1));
         const words = next.clarifying_question || "Could you tell me a little more about that?";
         setStatus("John needs one point clarified before anything is saved.");
@@ -466,49 +510,7 @@ export function ConversationalAutopsy() {
     setBusy(true);
     setError("");
     try {
-      await recordAutopsyAnswer({
-        run_id: runId,
-        question_id: currentQuestion.question_id,
-        selected_option: confirmedInterpretation.selected_option_id,
-      });
-      if (index === 11) {
-        setStatus("Your answers are saved. John is preparing your Verdict…");
-        await finalizeAutopsyRun(runId);
-        if (!embeddedFlightDeck) {
-          sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");
-        }
-        navigate(`/autopsy/run/${runId}${embeddedFlightDeck ? "?embedded=flight-deck" : ""}`);
-        return;
-      }
-      const nextIndex = index + 1;
-      const nextQuestion = questions[nextIndex];
-      const nextPresentation = presentationFor(nextQuestion, nextIndex);
-      const nextId = String(nextQuestion.question_id);
-      const nextToken = `${runId}:${nextIndex}:${nextId}`;
-      activeSubjectRef.current = {
-        id: nextId,
-        token: nextToken,
-        prompt: nextPresentation.prompt,
-        boundary: nextPresentation.boundary,
-      };
-      setIndex(nextIndex);
-      setCombinedAnswer("");
-      setClarificationCount(0);
-      storeInterpretation(null);
-      setConversationReply("");
-      setStatus("Answer in your own words.");
-      const nextWords = `${transitionFor(nextIndex)} ${nextPresentation.prompt}`;
-      if (embeddedFlightDeck) {
-        postToFlightDeck({
-          type: "BUILDOS_AUTOPSY_EVENT",
-          event: "speak",
-          text: nextWords,
-          subjectId: nextId,
-          subjectToken: nextToken,
-        });
-      } else {
-        void speak(nextWords);
-      }
+      await saveSelectionAndAdvance(confirmedInterpretation);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be saved.");
     } finally {
@@ -681,7 +683,7 @@ export function ConversationalAutopsy() {
             “Speak naturally. John will listen, clarify and keep the twelve subjects in the background.”
           </blockquote>
           <small className="text-sm leading-6 text-[#718796]">
-            John keeps the twelve subjects in order. He will briefly check only the meaning he is about to save.
+            John keeps the twelve subjects in order. The analysis stays quietly in the background.
           </small>
         </aside>
 
@@ -704,32 +706,9 @@ export function ConversationalAutopsy() {
             </h1>
           </div>
 
-          {interpretation && lastInputMode === "text" ? (
+          {interpretation?.clarifying_question && lastInputMode === "text" ? (
             <div className="mt-6 border border-[#24475e] bg-[#0d2637] p-5">
-              {interpretation.selected_option_id && !interpretation.clarifying_question ? (
-                <>
-                  <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
-                  <p className="mt-3 font-semibold text-[#54c5ff]">Is that right, or should we try again?</p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
-                    <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
-                    {!embeddedFlightDeck ? (
-                      <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-                        {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
-                      </button>
-                    ) : null}
-                  </div>
-                  {lastInputMode === "voice" && !embeddedFlightDeck ? (
-                    <div className="mt-4">
-                      <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-                        {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.clarifying_question}</p>
-              )}
+              <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.clarifying_question}</p>
             </div>
           ) : null}
 
