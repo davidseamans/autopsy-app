@@ -29,12 +29,16 @@ describe("conversational Autopsy boundary", () => {
   });
 
   it("binds every interpretation and saved answer to the displayed governed question", () => {
-    expect(component).toContain("currentQuestion?.prompt ?? SUBJECT_PROMPTS[index]");
+    expect(component).toContain("activeSubjectRef");
+    expect(component).toContain("subject_token: subjectToken");
+    expect(component).toContain("next.subject_token !== subjectToken");
+    expect(component).toContain("event.data.subjectToken !== activeSubjectRef.current.token");
+    expect(component).toContain("I lost our place. Let me return to the subject we were discussing.");
     expect(component).toContain("question_id: questionId");
-    expect(component).toContain("currentQuestionIdRef.current !== questionId");
     expect(component).toContain("interpretation.question_id !== String(currentQuestion.question_id)");
     expect(endpoint).toContain("question_id?: string | number");
-    expect(endpoint).toContain("{ ...parsed, question_id: questionId }");
+    expect(endpoint).toContain("subject_token: subjectToken");
+    expect(endpoint).toContain("question_id: questionId");
   });
 
   it("keeps spoken confirmation short and conversational", () => {
@@ -50,6 +54,33 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("clarification_count");
     expect(endpoint).toContain("What makes you lean that way?");
     expect(component).toContain("clarification_count: clarificationCount");
+  });
+
+  it("routes questions and interruptions before interpreting assessment material", () => {
+    expect(endpoint).toContain('"turn_type": "answer, question, repeat_request, correction, control_request or digression"');
+    expect(endpoint).toContain("Only an answer or correction may be mapped to a governed option");
+    expect(endpoint).toContain("must not tell the person what a strong answer would be");
+    expect(endpoint).toContain("Nothing in those turns is assessment material");
+    expect(endpoint).toContain("Classify current_utterance on its own");
+    expect(endpoint).toContain("accumulated_answer: accumulatedAnswer");
+    expect(component).toContain("accumulated_answer: candidateAnswer");
+    expect(component).toContain('!["answer", "correction"].includes(next.turn_type)');
+    expect(component).toContain("The current subject is still open.");
+    expect(component).toContain("setConversationReply(reply)");
+  });
+
+  it("separates household runway, startup requirement and recurring job costs", () => {
+    expect(component).toContain("Household survival runway while cleaning income is uncertain");
+    expect(component).toContain("The minimum one-off setup and working resources required before the first job");
+    expect(component).toContain("Understanding one job's revenue, direct costs, tax and money left");
+    expect(component).toContain("Recurring cost drivers that grow with or repeatedly support jobs");
+    expect(component).toContain("labour time, travel, supplies, rework");
+  });
+
+  it("deduplicates the opening while remaining safe under React effect replay", () => {
+    expect(component).toContain("initializationRef");
+    expect(component).toContain("initializationRef.current.presented");
+    expect(component).toContain("initializationRef.current.presented = true");
   });
 
   it("keeps the embedded assessment controls inside the Flight Deck viewport", () => {

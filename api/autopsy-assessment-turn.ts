@@ -9,18 +9,32 @@ type Option = {
 
 type Body = {
   question_id?: string | number;
+  subject_token?: string;
   prompt?: string;
+  subject_boundary?: string;
   answer?: string;
+  accumulated_answer?: string;
   options?: Option[];
   clarification?: string | null;
   clarification_count?: number;
 };
 
-const extractText = (payload: any): string => {
-  if (typeof payload?.output_text === "string") return payload.output_text.trim();
-  return (payload?.output ?? [])
-    .flatMap((item: any) => item?.content ?? [])
-    .map((part: any) => part?.text ?? part?.output_text ?? "")
+type ResponsePayload = {
+  output_text?: unknown;
+  output?: Array<{
+    content?: Array<{ text?: unknown; output_text?: unknown }>;
+  }>;
+};
+
+const extractText = (rawPayload: unknown): string => {
+  const payload = (rawPayload ?? {}) as ResponsePayload;
+  if (typeof payload.output_text === "string") return payload.output_text.trim();
+  return (payload.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .map((part) => {
+      if (typeof part.text === "string") return part.text;
+      return typeof part.output_text === "string" ? part.output_text : "";
+    })
     .filter(Boolean)
     .join("")
     .trim();
@@ -44,11 +58,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body ?? {}) as Body;
   const questionId = body.question_id == null ? "" : String(body.question_id).trim();
+  const subjectToken = body.subject_token?.trim();
   const prompt = body.prompt?.trim();
+  const subjectBoundary = body.subject_boundary?.trim();
   const answer = body.answer?.trim();
+  const accumulatedAnswer = body.accumulated_answer?.trim() || answer;
   const options = Array.isArray(body.options) ? body.options : [];
-  if (!questionId || !prompt || !answer || options.length < 2) {
-    return res.status(400).json({ error: "A question identity, question, answer and governed options are required." });
+  if (!questionId || !subjectToken || !prompt || !subjectBoundary || !answer || options.length < 2) {
+    return res.status(400).json({ error: "A locked subject, question, answer and governed options are required." });
   }
 
   const governedOptions = options.map((option) => ({
@@ -66,11 +83,29 @@ Map the candidate's natural spoken answer to exactly one of the supplied governe
 
 Return JSON only:
 {
+  "turn_type": "answer, question, repeat_request, correction, control_request or digression",
   "selected_option_id": "an exact supplied option id, or null",
   "confidence": 0 to 1,
   "plain_summary": "one short, plain-English reflection addressed directly to the person as you",
-  "clarifying_question": "one short question, or null"
+  "clarifying_question": "one short question, or null",
+  "conversation_reply": "a brief direct response to a non-answer turn, or null"
 }
+
+First classify what the person is doing.
+- answer: they are answering the locked subject, even if the answer is long, uncertain or indirect.
+- question: they are asking what the subject means, why it matters, or requesting neutral information needed to understand it.
+- repeat_request: they want the locked question repeated.
+- correction: they are correcting a factual detail from an earlier answer.
+- control_request: they want to pause, stop, resume or change input method.
+- digression: they have moved away from the locked subject without answering it.
+
+Classify current_utterance on its own. Do not let an earlier accumulated answer turn a present question, repeat request or control request into an answer.
+
+Only an answer or correction may be mapped to a governed option. A question, repeat_request, control_request or digression must return selected_option_id null. Nothing in those turns is assessment material.
+
+For a question, answer only the neutral meaning of the locked subject. You may clarify a term and explain why the subject matters, but must not disclose, quote, paraphrase or imply the governed options and must not tell the person what a strong answer would be. End by returning naturally to the locked subject.
+
+For a repeat_request, repeat the locked question in plain language. For a digression, acknowledge it briefly and return to the locked subject. For a control_request, state the available control plainly without interpreting an answer.
 
 Treat "I don't know", "probably", "maybe" and similar uncertainty as honest conversational answers, not as a reason to read out the governed answer menu. On the first ambiguous answer, selected_option_id must be null and clarifying_question must ask one natural, narrow follow-up about what makes the person lean that way or what they have actually done. Never list, quote, paraphrase or compare the supplied options.
 
@@ -97,16 +132,30 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
             type: "object",
             additionalProperties: false,
             properties: {
+              turn_type: {
+                type: "string",
+                enum: [
+                  "answer",
+                  "question",
+                  "repeat_request",
+                  "correction",
+                  "control_request",
+                  "digression",
+                ],
+              },
               selected_option_id: { type: ["string", "null"] },
               confidence: { type: "number", minimum: 0, maximum: 1 },
               plain_summary: { type: "string" },
               clarifying_question: { type: ["string", "null"] },
+              conversation_reply: { type: ["string", "null"] },
             },
             required: [
+              "turn_type",
               "selected_option_id",
               "confidence",
               "plain_summary",
               "clarifying_question",
+              "conversation_reply",
             ],
           },
         },
@@ -119,8 +168,10 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
             type: "input_text",
             text: JSON.stringify({
               question: prompt,
+              subject_boundary: subjectBoundary,
               governed_options: governedOptions,
-              candidate_answer: answer,
+              current_utterance: answer,
+              accumulated_answer: accumulatedAnswer,
               earlier_clarification: body.clarification ?? null,
               clarification_count: clarificationCount,
             }),
@@ -139,6 +190,12 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
   try {
     const parsed = JSON.parse(extractText(payload));
     const allowed = new Set(governedOptions.map((option) => option.id));
+    const nonAnswerTurn = !["answer", "correction"].includes(String(parsed.turn_type));
+    if (nonAnswerTurn) {
+      parsed.selected_option_id = null;
+      parsed.clarifying_question = null;
+      parsed.plain_summary = "";
+    }
     if (parsed.selected_option_id != null && !allowed.has(String(parsed.selected_option_id))) {
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });
     }
@@ -156,7 +213,11 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
           ? "What have you actually done or seen that would help you answer?"
           : "That is fair. What makes you lean that way?";
     }
-    return res.status(200).json({ ...parsed, question_id: questionId });
+    return res.status(200).json({
+      ...parsed,
+      question_id: questionId,
+      subject_token: subjectToken,
+    });
   } catch {
     return res.status(502).json({ error: "John could not form a reliable interpretation. Please try again." });
   }

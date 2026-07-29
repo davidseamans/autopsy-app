@@ -5,12 +5,20 @@ export const isFlightDeckEmbedded = () =>
   new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
 
 export type FlightDeckEvent =
-  | { type: "BUILDOS_AUTOPSY_EVENT"; event: "ready" | "speak"; text: string }
+  | {
+      type: "BUILDOS_AUTOPSY_EVENT";
+      event: "ready" | "speak";
+      text: string;
+      subjectId?: string;
+      subjectToken?: string;
+    }
   | { type: "BUILDOS_AUTOPSY_EVENT"; event: "verdict"; text: string; runId: string | null };
 
 export type FlightDeckInput = {
   type: "BUILDOS_AUTOPSY_INPUT";
   text: string;
+  subjectId?: string;
+  subjectToken?: string;
 };
 
 export function postToFlightDeck(message: FlightDeckEvent) {

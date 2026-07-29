@@ -18,10 +18,19 @@ import { cn } from "@/lib/utils";
 
 type Interpretation = {
   question_id: string;
+  subject_token: string;
+  turn_type:
+    | "answer"
+    | "question"
+    | "repeat_request"
+    | "correction"
+    | "control_request"
+    | "digression";
   selected_option_id: string | null;
   confidence: number;
   plain_summary: string;
   clarifying_question: string | null;
+  conversation_reply: string | null;
 };
 
 type RecognitionResultEvent = {
@@ -44,20 +53,82 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-const SUBJECT_PROMPTS = [
-  "How long could you and your household manage if the cleaning work produced little or delayed income?",
-  "What money, tools, supplies, time and other essentials do you believe are genuinely required before taking the first job?",
-  "How would you separate money received from money already committed to tax, costs or future obligations?",
-  "Which easily missed costs could quietly consume the money left from a cleaning job?",
-  "What real customer behaviour—not encouragement or optimism—suggests people will buy from you?",
-  "Which customer do you expect to serve first, what do they need solved, and why would they choose you?",
-  "What could prevent you from delivering the promised cleaning result reliably when work becomes busy or inconvenient?",
-  "Is your essential way of doing the work clear enough to repeat without guesswork?",
-  "What practical action have you already taken that taught you something planning could not?",
-  "What time have you genuinely protected during the next thirty days to keep moving?",
-  "How do you usually respond when results are slow, uncertain or disappointing?",
-  "What shows you can continue important, repetitive work after the initial enthusiasm fades?",
+const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
+  CR_01: {
+    prompt: "If the cleaning work produced little or delayed income, how long could your household keep going safely?",
+    boundary: "Household survival runway while cleaning income is uncertain. Exclude business setup purchases and job costs.",
+  },
+  CR_02: {
+    prompt: "Before taking the first cleaning job, what must you have paid for, organised or kept available?",
+    boundary: "The minimum one-off setup and working resources required before the first job. Exclude household living costs and recurring per-job economics.",
+  },
+  EL_01: {
+    prompt: "When a customer pays you, how would you work out what is genuinely left after that job?",
+    boundary: "Understanding one job's revenue, direct costs, tax and money left. Exclude one-off startup purchases and household runway.",
+  },
+  EL_02: {
+    prompt: "As you complete more cleaning jobs, which repeating costs could quietly consume the money you expect to keep?",
+    boundary: "Recurring cost drivers that grow with or repeatedly support jobs, including labour time, travel, supplies, rework, insurance allocation and administration. Exclude one-off startup purchases.",
+  },
+  MR_01: {
+    prompt: "What has a real potential customer actually done—not merely said—that suggests they may buy from you?",
+    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm.",
+  },
+  MR_02: {
+    prompt: "Who would you expect to clean for first, what problem would you remove, and why might they choose you?",
+    boundary: "Clarity about the first likely customer and their problem, not broad market attractiveness.",
+  },
+  OP_01: {
+    prompt: "What might stop you delivering the promised cleaning result when the work becomes busy or inconvenient?",
+    boundary: "Practical ability to deliver reliably under ordinary operating pressure, not written process repeatability.",
+  },
+  OP_02: {
+    prompt: "Could another person follow your cleaning method and produce the same result without guessing?",
+    boundary: "A repeatable method, sequence, tools and quality check, not general willingness or practical effort.",
+  },
+  EX_01: {
+    prompt: "What have you already done in the real world that taught you something planning could not?",
+    boundary: "Completed practical action and learning, not intentions, reading or encouragement.",
+  },
+  EX_02: {
+    prompt: "During the next thirty days, what time have you genuinely protected to keep moving?",
+    boundary: "Specific protected execution time and a credible rhythm, not enthusiasm or a vague intention.",
+  },
+  PR_01: {
+    prompt: "When results are slow or disappointing, how do you usually decide whether to persist, learn or change direction?",
+    boundary: "Response to uncertainty and setbacks, not repetitive follow-through after enthusiasm fades.",
+  },
+  PR_02: {
+    prompt: "What shows you can keep doing important repetitive work after the initial enthusiasm has faded?",
+    boundary: "Sustained follow-through on repetitive work, not general resilience to uncertainty.",
+  },
+};
+
+const SUBJECT_ORDER = [
+  "CR_01",
+  "CR_02",
+  "EL_01",
+  "EL_02",
+  "MR_01",
+  "MR_02",
+  "OP_01",
+  "OP_02",
+  "EX_01",
+  "EX_02",
+  "PR_01",
+  "PR_02",
 ];
+
+const presentationFor = (question: GatewayQuestion | undefined, subjectIndex: number) =>
+  SUBJECT_PRESENTATION[question?.q_id ?? ""] ??
+  SUBJECT_PRESENTATION[SUBJECT_ORDER[subjectIndex]] ?? {
+    prompt: question?.prompt ?? "",
+    boundary: "The single governed subject shown on screen.",
+  };
+
+const FALLBACK_SUBJECT_PROMPTS = SUBJECT_ORDER.map(
+  (key) => SUBJECT_PRESENTATION[key].prompt,
+);
 
 const AUTOPSY_ORIENTATION = [
   "Your test payment is acknowledged, so we are now beginning Autopsy.",
@@ -75,11 +146,19 @@ const transitionFor = (nextIndex: number) =>
       ? "Thank you. Let us look at the next practical area."
       : "All right. Let us move to the next practical area.";
 
-const normaliseOption = (option: any, index: number) => ({
-  id: option?.id ?? option?.option_id ?? option?.value ?? index,
-  label: typeof option === "string" ? option : option?.label ?? String(option?.value ?? index),
-  score_value: Number(option?.score_value ?? option?.score ?? option?.value),
-});
+const normaliseOption = (rawOption: unknown, index: number) => {
+  if (typeof rawOption === "string") {
+    return { id: index, label: rawOption, score_value: Number.NaN };
+  }
+  const option = (rawOption ?? {}) as Record<string, unknown>;
+  return {
+    id: option.id ?? option.option_id ?? option.value ?? index,
+    label: typeof option.label === "string"
+      ? option.label
+      : String(option.value ?? index),
+    score_value: Number(option.score_value ?? option.score ?? option.value),
+  };
+};
 
 export function ConversationalAutopsy() {
   const { session, user } = useAuth();
@@ -91,6 +170,7 @@ export function ConversationalAutopsy() {
   const [combinedAnswer, setCombinedAnswer] = useState("");
   const [clarificationCount, setClarificationCount] = useState(0);
   const [interpretation, setInterpretation] = useState<Interpretation | null>(null);
+  const [conversationReply, setConversationReply] = useState("");
   const [status, setStatus] = useState("Preparing your Autopsy…");
   const [busy, setBusy] = useState(true);
   const [listening, setListening] = useState(false);
@@ -102,7 +182,12 @@ export function ConversationalAutopsy() {
   const handleSpokenTurnRef = useRef<((text: string) => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenTextRef = useRef("");
-  const currentQuestionIdRef = useRef("");
+  const activeSubjectRef = useRef({ id: "", token: "", prompt: "", boundary: "" });
+  const initializationRef = useRef<{
+    email: string;
+    promise: Promise<{ id: string; ordered: GatewayQuestion[] }>;
+    presented: boolean;
+  } | null>(null);
   const embeddedFlightDeck = isFlightDeckEmbedded();
 
   const recognitionConstructor = useMemo(() => {
@@ -162,32 +247,61 @@ export function ConversationalAutopsy() {
     const start = async () => {
       if (!user?.email) return;
       try {
-        const created = await createAutopsyRun({
-          industry: "Cleaning",
-          scenario: "startup",
-          run_name: `Conversation ${new Date().toLocaleString("en-AU")}`,
-          tester_email: user.email,
-          operator_class: "unproven",
-        });
-        const id = extractRunId(created);
-        if (!id) throw new Error("No run was created.");
-        const payload = await getGatewayPayload(id);
-        const ordered = [...(payload.questions ?? [])].sort(
-          (a, b) => Number(a.position ?? 0) - Number(b.position ?? 0),
-        );
-        if (ordered.length !== 12) throw new Error("The governed twelve subjects were not available.");
+        if (!initializationRef.current || initializationRef.current.email !== user.email) {
+          const email = user.email;
+          const promise = (async () => {
+            const created = await createAutopsyRun({
+              industry: "Cleaning",
+              scenario: "startup",
+              run_name: `Conversation ${new Date().toLocaleString("en-AU")}`,
+              tester_email: email,
+              operator_class: "unproven",
+            });
+            const id = extractRunId(created);
+            if (!id) throw new Error("No run was created.");
+            const payload = await getGatewayPayload(id);
+            const ordered = [...(payload.questions ?? [])].sort(
+              (a, b) => Number(a.position ?? 0) - Number(b.position ?? 0),
+            );
+            if (ordered.length !== 12) {
+              throw new Error("The governed twelve subjects were not available.");
+            }
+            return { id, ordered };
+          })();
+          initializationRef.current = { email, promise, presented: false };
+        }
+        const { id, ordered } = await initializationRef.current.promise;
         if (cancelled) return;
+        if (initializationRef.current.presented) return;
+        initializationRef.current.presented = true;
         setRunId(id);
         setQuestions(ordered);
+        const first = ordered[0];
+        const firstPresentation = presentationFor(first, 0);
+        activeSubjectRef.current = {
+          id: String(first.question_id),
+          token: `${id}:0:${String(first.question_id)}`,
+          prompt: firstPresentation.prompt,
+          boundary: firstPresentation.boundary,
+        };
         setBusy(false);
         setStatus("John is explaining how Autopsy will work.");
-        const opening = `${AUTOPSY_ORIENTATION} ${SUBJECT_PROMPTS[0]}`;
+        const opening = `${AUTOPSY_ORIENTATION} ${firstPresentation.prompt}`;
         if (embeddedFlightDeck) {
-          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "ready", text: opening });
+          postToFlightDeck({
+            type: "BUILDOS_AUTOPSY_EVENT",
+            event: "ready",
+            text: opening,
+            subjectId: String(first.question_id),
+            subjectToken: activeSubjectRef.current.token,
+          });
         } else {
           void speak(opening);
         }
       } catch (cause) {
+        if (initializationRef.current?.email === user.email) {
+          initializationRef.current = null;
+        }
         if (!cancelled) {
           setError(cause instanceof Error ? cause.message : "Autopsy could not start.");
           setBusy(false);
@@ -203,16 +317,25 @@ export function ConversationalAutopsy() {
   }, [embeddedFlightDeck, speak, user?.email]);
 
   const currentQuestion = questions[index];
-  const currentPrompt = currentQuestion?.prompt ?? SUBJECT_PROMPTS[index] ?? "";
-  currentQuestionIdRef.current = currentQuestion ? String(currentQuestion.question_id) : "";
+  const presentation = currentQuestion
+    ? presentationFor(currentQuestion, index)
+    : { prompt: FALLBACK_SUBJECT_PROMPTS[index] ?? "", boundary: "" };
+  const currentPrompt = presentation.prompt;
+  if (currentQuestion) {
+    const id = String(currentQuestion.question_id);
+    const token = `${runId ?? "preparing"}:${index}:${id}`;
+    activeSubjectRef.current = { id, token, prompt: currentPrompt, boundary: presentation.boundary };
+  }
 
   const interpret = async (rawAnswer: string) => {
     const text = rawAnswer.trim();
-    if (!text || !currentQuestion || busy) return;
+    const lockedSubject = activeSubjectRef.current;
+    if (!text || !currentQuestion || !lockedSubject.id || busy) return;
     setBusy(true);
     setError("");
     const candidateAnswer = combinedAnswer ? `${combinedAnswer}\nClarification: ${text}` : text;
-    const questionId = String(currentQuestion.question_id);
+    const questionId = lockedSubject.id;
+    const subjectToken = lockedSubject.token;
     try {
       const options = (currentQuestion.options ?? []).map(normaliseOption);
       const response = await fetch("/api/autopsy-assessment-turn", {
@@ -223,8 +346,11 @@ export function ConversationalAutopsy() {
         },
         body: JSON.stringify({
           question_id: questionId,
-          prompt: currentQuestion.prompt,
-          answer: candidateAnswer,
+          subject_token: subjectToken,
+          prompt: lockedSubject.prompt,
+          subject_boundary: lockedSubject.boundary,
+          answer: text,
+          accumulated_answer: candidateAnswer,
           options,
           clarification: interpretation?.clarifying_question ?? null,
           clarification_count: clarificationCount,
@@ -235,18 +361,62 @@ export function ConversationalAutopsy() {
       const next = payload as Interpretation;
       if (
         String(next.question_id ?? "") !== questionId ||
-        currentQuestionIdRef.current !== questionId
+        next.subject_token !== subjectToken ||
+        activeSubjectRef.current.token !== subjectToken
       ) {
-        throw new Error("That answer did not remain attached to its question. Please answer this question again.");
+        setInterpretation(null);
+        setConversationReply("");
+        setCombinedAnswer("");
+        const recovery = `I lost our place. Let me return to the subject we were discussing. ${activeSubjectRef.current.prompt}`;
+        if (embeddedFlightDeck) {
+          postToFlightDeck({
+            type: "BUILDOS_AUTOPSY_EVENT",
+            event: "speak",
+            text: recovery,
+            subjectId: activeSubjectRef.current.id,
+            subjectToken: activeSubjectRef.current.token,
+          });
+        } else {
+          void speak(recovery);
+        }
+        throw new Error("The conversation returned to the current subject before saving anything.");
       }
-      setCombinedAnswer(candidateAnswer);
       setAnswer("");
+      if (!["answer", "correction"].includes(next.turn_type)) {
+        const reply = next.conversation_reply?.trim() ||
+          (next.turn_type === "repeat_request"
+            ? `Of course. ${lockedSubject.prompt}`
+            : `Let us return to this subject. ${lockedSubject.prompt}`);
+        setConversationReply(reply);
+        setInterpretation(null);
+        setStatus("The current subject is still open.");
+        if (embeddedFlightDeck) {
+          postToFlightDeck({
+            type: "BUILDOS_AUTOPSY_EVENT",
+            event: "speak",
+            text: reply,
+            subjectId: lockedSubject.id,
+            subjectToken,
+          });
+        } else {
+          void speak(reply);
+        }
+        return;
+      }
+      setConversationReply("");
+      setCombinedAnswer(candidateAnswer);
       setInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
         const words = `${next.plain_summary} Have I got that right?`;
         setStatus("John has reflected what he heard. Say yes, or correct it in your own words.");
         if (embeddedFlightDeck) {
-          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
+          postToFlightDeck({
+            type: "BUILDOS_AUTOPSY_EVENT",
+            event: "speak",
+            text: words,
+            subjectId: questionId,
+            subjectToken,
+          });
         } else {
           void speak(words);
         }
@@ -255,7 +425,13 @@ export function ConversationalAutopsy() {
         const words = next.clarifying_question || "Could you tell me a little more about that?";
         setStatus("John needs one point clarified before anything is saved.");
         if (embeddedFlightDeck) {
-          postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
+          postToFlightDeck({
+            type: "BUILDOS_AUTOPSY_EVENT",
+            event: "speak",
+            text: words,
+            subjectId: questionId,
+            subjectToken,
+          });
         } else {
           void speak(words);
         }
@@ -293,15 +469,31 @@ export function ConversationalAutopsy() {
         return;
       }
       const nextIndex = index + 1;
+      const nextQuestion = questions[nextIndex];
+      const nextPresentation = presentationFor(nextQuestion, nextIndex);
+      const nextId = String(nextQuestion.question_id);
+      const nextToken = `${runId}:${nextIndex}:${nextId}`;
+      activeSubjectRef.current = {
+        id: nextId,
+        token: nextToken,
+        prompt: nextPresentation.prompt,
+        boundary: nextPresentation.boundary,
+      };
       setIndex(nextIndex);
       setCombinedAnswer("");
       setClarificationCount(0);
       setInterpretation(null);
+      setConversationReply("");
       setStatus("Answer in your own words.");
-      const nextQuestion = questions[nextIndex];
-      const nextWords = `${transitionFor(nextIndex)} ${nextQuestion?.prompt ?? SUBJECT_PROMPTS[nextIndex]}`;
+      const nextWords = `${transitionFor(nextIndex)} ${nextPresentation.prompt}`;
       if (embeddedFlightDeck) {
-        postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: nextWords });
+        postToFlightDeck({
+          type: "BUILDOS_AUTOPSY_EVENT",
+          event: "speak",
+          text: nextWords,
+          subjectId: nextId,
+          subjectToken: nextToken,
+        });
       } else {
         void speak(nextWords);
       }
@@ -314,6 +506,7 @@ export function ConversationalAutopsy() {
 
   const correct = () => {
     setInterpretation(null);
+    setConversationReply("");
     setCombinedAnswer("");
     setClarificationCount(0);
     setAnswer("");
@@ -366,7 +559,7 @@ export function ConversationalAutopsy() {
     recognition.start();
   };
 
-  const handleSpokenTurn = useCallback((text: string) => {
+  const handleSpokenTurn = (text: string) => {
     const normalised = text
       .toLowerCase()
       .replace(/[’']/g, "")
@@ -388,19 +581,11 @@ export function ConversationalAutopsy() {
       correct();
       return;
     }
-    setStatus("Please say yes, or tell John you would like to correct it.");
-    const words = "Please say yes if that is a fair reading, or say no and we will correct it.";
-    if (embeddedFlightDeck) {
-      postToFlightDeck({ type: "BUILDOS_AUTOPSY_EVENT", event: "speak", text: words });
-    } else {
-      void speak(words);
-    }
-  }, [confirm, correct, embeddedFlightDeck, interpretation, speak]);
+    void interpret(text);
+  };
 
-  useEffect(() => {
-    startListeningRef.current = startListening;
-    handleSpokenTurnRef.current = handleSpokenTurn;
-  }, [handleSpokenTurn]);
+  startListeningRef.current = startListening;
+  handleSpokenTurnRef.current = handleSpokenTurn;
 
   useEffect(() => {
     if (!embeddedFlightDeck) return;
@@ -408,6 +593,20 @@ export function ConversationalAutopsy() {
       if (!isFlightDeckInput(event)) return;
       const text = event.data.text.trim();
       if (!text) return;
+      if (
+        (event.data.subjectId && event.data.subjectId !== activeSubjectRef.current.id) ||
+        (event.data.subjectToken && event.data.subjectToken !== activeSubjectRef.current.token)
+      ) {
+        const recovery = `I lost our place. Let me return to the subject we were discussing. ${activeSubjectRef.current.prompt}`;
+        postToFlightDeck({
+          type: "BUILDOS_AUTOPSY_EVENT",
+          event: "speak",
+          text: recovery,
+          subjectId: activeSubjectRef.current.id,
+          subjectToken: activeSubjectRef.current.token,
+        });
+        return;
+      }
       setAnswer(text);
       setStatus("John is considering what you said…");
       handleSpokenTurnRef.current?.(text);
@@ -507,6 +706,12 @@ export function ConversationalAutopsy() {
               ) : (
                 <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.clarifying_question}</p>
               )}
+            </div>
+          ) : null}
+
+          {conversationReply && !interpretation ? (
+            <div className="mt-6 border-l-2 border-[#38aafa] bg-[#0d2637] px-5 py-4">
+              <p className="text-base leading-7 text-[#dce8ec]">{conversationReply}</p>
             </div>
           ) : null}
 
