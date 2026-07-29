@@ -37,7 +37,7 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("event.data.subjectToken !== activeSubjectRef.current.token");
     expect(component).toContain("I lost our place. Let me return to the subject we were discussing.");
     expect(component).toContain("question_id: questionId");
-    expect(component).toContain("interpretation.question_id !== String(currentQuestion.question_id)");
+    expect(component).toContain("confirmedInterpretation.question_id !== String(currentQuestion.question_id)");
     expect(endpoint).toContain("question_id?: string | number");
     expect(endpoint).toContain("subject_token: subjectToken");
     expect(endpoint).toContain("question_id: questionId");
@@ -56,6 +56,13 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("clarification_count");
     expect(endpoint).toContain("What makes you lean that way?");
     expect(component).toContain("clarification_count: clarificationCount");
+    expect(endpoint).toContain("If clarification_count is at least 1, do not ask another clarifying question");
+  });
+
+  it("accepts natural confirmation language without reinterpreting it as a new answer", () => {
+    expect(component).toContain("interpretationRef.current ?? interpretation");
+    expect(component).toContain("confirmationSavingRef.current");
+    expect(component).toContain("thats cool|that is cool|sounds right|sounds good");
   });
 
   it("routes questions and interruptions before interpreting assessment material", () => {
@@ -100,6 +107,11 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("Understanding one job's revenue, direct costs, tax and money left");
     expect(component).toContain("Recurring cost drivers that grow with or repeatedly support jobs");
     expect(component).toContain("labour time, travel, supplies, rework");
+  });
+
+  it("recognises a firm customer booking without demanding premature payment paperwork", () => {
+    expect(component).toContain("A genuine booking for specific work on an agreed date");
+    expect(component).toContain("do not require a deposit, completed work, signed purchase order or prior payment");
   });
 
   it("deduplicates the opening while remaining safe under React effect replay", () => {

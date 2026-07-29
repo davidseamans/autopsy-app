@@ -73,7 +73,7 @@ const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }>
   },
   MR_01: {
     prompt: "What has a real potential customer actually done—not merely said—that suggests they may buy from you?",
-    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm.",
+    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm. A genuine booking for specific work on an agreed date is a customer commitment and strong proof of intent to pay; do not require a deposit, completed work, signed purchase order or prior payment when the governed option also permits commitment or strong proof.",
   },
   MR_02: {
     prompt: "Who would you expect to clean for first, what problem would you remove, and why might they choose you?",
@@ -185,12 +185,19 @@ export function ConversationalAutopsy() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSpokenTextRef = useRef("");
   const activeSubjectRef = useRef({ id: "", token: "", prompt: "", boundary: "" });
+  const interpretationRef = useRef<Interpretation | null>(null);
+  const confirmationSavingRef = useRef(false);
   const initializationRef = useRef<{
     email: string;
     promise: Promise<{ id: string; ordered: GatewayQuestion[] }>;
     presented: boolean;
   } | null>(null);
   const embeddedFlightDeck = isFlightDeckEmbedded();
+
+  const storeInterpretation = (next: Interpretation | null) => {
+    interpretationRef.current = next;
+    setInterpretation(next);
+  };
 
   const recognitionConstructor = useMemo(() => {
     const w = window as typeof window & {
@@ -366,7 +373,7 @@ export function ConversationalAutopsy() {
         next.subject_token !== subjectToken ||
         activeSubjectRef.current.token !== subjectToken
       ) {
-        setInterpretation(null);
+        storeInterpretation(null);
         setConversationReply("");
         setCombinedAnswer("");
         const recovery = `I lost our place. Let me return to the subject we were discussing. ${activeSubjectRef.current.prompt}`;
@@ -390,7 +397,7 @@ export function ConversationalAutopsy() {
             ? `Of course. ${lockedSubject.prompt}`
             : `Let us return to this subject. ${lockedSubject.prompt}`);
         setConversationReply(reply);
-        setInterpretation(null);
+        storeInterpretation(null);
         setStatus("The current subject is still open.");
         if (embeddedFlightDeck) {
           postToFlightDeck({
@@ -407,7 +414,7 @@ export function ConversationalAutopsy() {
       }
       setConversationReply("");
       setCombinedAnswer(candidateAnswer);
-      setInterpretation(next);
+      storeInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
         const words = `${next.plain_summary} Is that right, or should we try again?`;
         setStatus("John is checking the exact meaning before saving it.");
@@ -446,20 +453,23 @@ export function ConversationalAutopsy() {
   };
 
   const confirm = async () => {
+    const confirmedInterpretation = interpretationRef.current ?? interpretation;
     if (
       !runId ||
       !currentQuestion ||
-      !interpretation?.selected_option_id ||
-      interpretation.question_id !== String(currentQuestion.question_id) ||
-      busy
+      !confirmedInterpretation?.selected_option_id ||
+      confirmedInterpretation.question_id !== String(currentQuestion.question_id) ||
+      busy ||
+      confirmationSavingRef.current
     ) return;
+    confirmationSavingRef.current = true;
     setBusy(true);
     setError("");
     try {
       await recordAutopsyAnswer({
         run_id: runId,
         question_id: currentQuestion.question_id,
-        selected_option: interpretation.selected_option_id,
+        selected_option: confirmedInterpretation.selected_option_id,
       });
       if (index === 11) {
         setStatus("Your answers are saved. John is preparing your Verdict…");
@@ -484,7 +494,7 @@ export function ConversationalAutopsy() {
       setIndex(nextIndex);
       setCombinedAnswer("");
       setClarificationCount(0);
-      setInterpretation(null);
+      storeInterpretation(null);
       setConversationReply("");
       setStatus("Answer in your own words.");
       const nextWords = `${transitionFor(nextIndex)} ${nextPresentation.prompt}`;
@@ -502,12 +512,13 @@ export function ConversationalAutopsy() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That answer could not be saved.");
     } finally {
+      confirmationSavingRef.current = false;
       setBusy(false);
     }
   };
 
   const correct = () => {
-    setInterpretation(null);
+    storeInterpretation(null);
     setConversationReply("");
     setCombinedAnswer("");
     setClarificationCount(0);
@@ -569,14 +580,14 @@ export function ConversationalAutopsy() {
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
     const awaitingConfirmation =
-      Boolean(interpretation?.selected_option_id) &&
-      !interpretation?.clarifying_question;
+      Boolean(interpretationRef.current?.selected_option_id) &&
+      !interpretationRef.current?.clarifying_question;
 
     if (!awaitingConfirmation) {
       void interpret(text);
       return;
     }
-    if (/^(yes|yeah|yep|correct|exactly|right|definitely|absolutely|certainly|affirmative|spot on|one hundred percent|100 percent|thats right|that is right)\b/.test(normalised)) {
+    if (/^(yes|yeah|yep|correct|exactly|right|definitely|absolutely|certainly|affirmative|spot on|one hundred percent|100 percent|thats right|that is right|thats cool|that is cool|sounds right|sounds good|thats fine|that is fine|all good|you got it)\b/.test(normalised)) {
       void confirm();
       return;
     }
