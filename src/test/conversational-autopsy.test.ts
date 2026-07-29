@@ -44,6 +44,20 @@ describe("conversational Autopsy boundary", () => {
     expect(component).not.toContain("SUBJECT_TRANSITIONS");
   });
 
+  it("handles uncertain answers without exposing the governed answer menu", () => {
+    expect(endpoint).toContain('"I don\'t know", "probably", "maybe"');
+    expect(endpoint).toContain("Never list, quote, paraphrase or compare the supplied options");
+    expect(endpoint).toContain("clarification_count");
+    expect(endpoint).toContain("What makes you lean that way?");
+    expect(component).toContain("clarification_count: clarificationCount");
+  });
+
+  it("keeps the embedded assessment controls inside the Flight Deck viewport", () => {
+    expect(component).toContain('"min-h-0 p-0"');
+    expect(component).toContain('"max-h-[610px] lg:p-9"');
+    expect(component).toContain("overflow-y-auto");
+  });
+
   it("does not expose scoring language or values to the candidate", () => {
     const visible = component
       .replace(/type [\s\S]*?;\n\n/g, "")

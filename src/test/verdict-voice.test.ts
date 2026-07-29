@@ -24,8 +24,19 @@ describe("governed spoken Verdict handover", () => {
       expect(script).toContain(expected);
       expect(script.includes("Your available next step is First 5 Jobs")).toBe(opensFirstFive);
       expect(script).not.toMatch(/score|band|dimension|hard fail/i);
+      expect(script).toContain("your result will remain available in My Autopsy");
     },
   );
+
+  it("addresses the person directly instead of speaking about a candidate", () => {
+    const script = buildVerdictVoiceScript({
+      verdictName: "Ready for Test Run",
+      verdictBody: "The candidate has demonstrated enough readiness. The candidate is prepared.",
+    });
+
+    expect(script).toContain("You have demonstrated enough readiness. You are prepared.");
+    expect(script).not.toMatch(/\bcandidate\b/i);
+  });
 
   it("fails closed when the backend returns an unknown verdict label", () => {
     const script = buildVerdictVoiceScript({

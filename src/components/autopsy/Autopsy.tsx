@@ -3018,7 +3018,8 @@ function CandidateVerdict({
       )}
 
       <section className="rounded-2xl border bg-[#092540] p-5 text-white shadow-sm sm:p-6">
-        <h2 className="text-xl font-semibold">What happens next</h2>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">Your saved Autopsy record</p>
+        <h2 className="mt-2 text-xl font-semibold">What happens next</h2>
         <p className="mt-3 leading-7 text-slate-200">{next}</p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           {ready && runId ? (
@@ -3027,9 +3028,15 @@ function CandidateVerdict({
             </Button>
           ) : null}
           <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">
-            Read your full explanation
+            Read or print full explanation
+          </Button>
+          <Button asChild variant="outline" className="border-slate-400 bg-transparent text-white hover:bg-white/10 hover:text-white">
+            <Link to="/autopsy/history">My Autopsy results</Link>
           </Button>
         </div>
+        <p className="mt-4 text-sm leading-6 text-slate-300">
+          Opening First 5 Jobs does not replace this result. You can return to your Verdict and full explanation later.
+        </p>
       </section>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   SEED_UNITS,
   computeScorecard,
@@ -3241,6 +3241,11 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
+          {activeRunId ? (
+            <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+              <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
+            </Button>
+          ) : null}
           {!isDemo && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />

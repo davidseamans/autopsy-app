@@ -13,6 +13,7 @@ type Body = {
   answer?: string;
   options?: Option[];
   clarification?: string | null;
+  clarification_count?: number;
 };
 
 const extractText = (payload: any): string => {
@@ -54,6 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     id: String(option.id),
     label: option.label,
   }));
+  const clarificationCount = Math.max(
+    0,
+    Math.min(2, Number(body.clarification_count ?? 0) || 0),
+  );
 
   const instructions = `You are the interpretation boundary inside an explicitly authorised Autopsy assessment.
 
@@ -67,7 +72,9 @@ Return JSON only:
   "clarifying_question": "one short question, or null"
 }
 
-If the answer is ambiguous, incomplete, contradictory, or confidence is below 0.78, selected_option_id must be null and clarifying_question must ask only for the missing distinction. Otherwise provide the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
+Treat "I don't know", "probably", "maybe" and similar uncertainty as honest conversational answers, not as a reason to read out the governed answer menu. On the first ambiguous answer, selected_option_id must be null and clarifying_question must ask one natural, narrow follow-up about what makes the person lean that way or what they have actually done. Never list, quote, paraphrase or compare the supplied options.
+
+If clarification_count is at least 1 and the person remains genuinely uncertain, select the supplied option that explicitly and most accurately represents unknown, untested, not demonstrated or the weakest currently supportable position. Do not strengthen the answer. If no supplied option can defensibly represent the uncertainty, selected_option_id must remain null and clarifying_question must ask one final plain question about present facts. Otherwise provide the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
 
 The plain_summary is spoken aloud by John. It must be a natural reflection of what the person actually said, not a governed option label, criterion, answer menu or new question. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
 
@@ -115,6 +122,7 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
               governed_options: governedOptions,
               candidate_answer: answer,
               earlier_clarification: body.clarification ?? null,
+              clarification_count: clarificationCount,
             }),
           }],
         },
@@ -133,6 +141,20 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
     const allowed = new Set(governedOptions.map((option) => option.id));
     if (parsed.selected_option_id != null && !allowed.has(String(parsed.selected_option_id))) {
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });
+    }
+    if (
+      parsed.clarifying_question != null &&
+      (
+        String(parsed.clarifying_question).includes("/") ||
+        /which of (these|the following)|choose (one|from)|options? (are|include)/i.test(
+          String(parsed.clarifying_question),
+        )
+      )
+    ) {
+      parsed.clarifying_question =
+        clarificationCount > 0
+          ? "What have you actually done or seen that would help you answer?"
+          : "That is fair. What makes you lean that way?";
     }
     return res.status(200).json({ ...parsed, question_id: questionId });
   } catch {

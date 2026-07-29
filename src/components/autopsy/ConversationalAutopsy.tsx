@@ -14,6 +14,7 @@ import {
   getGatewayPayload,
   recordAutopsyAnswer,
 } from "./rpc";
+import { cn } from "@/lib/utils";
 
 type Interpretation = {
   question_id: string;
@@ -88,6 +89,7 @@ export function ConversationalAutopsy() {
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState("");
   const [combinedAnswer, setCombinedAnswer] = useState("");
+  const [clarificationCount, setClarificationCount] = useState(0);
   const [interpretation, setInterpretation] = useState<Interpretation | null>(null);
   const [status, setStatus] = useState("Preparing your Autopsy…");
   const [busy, setBusy] = useState(true);
@@ -225,6 +227,7 @@ export function ConversationalAutopsy() {
           answer: candidateAnswer,
           options,
           clarification: interpretation?.clarifying_question ?? null,
+          clarification_count: clarificationCount,
         }),
       });
       const payload = await response.json();
@@ -248,6 +251,7 @@ export function ConversationalAutopsy() {
           void speak(words);
         }
       } else {
+        setClarificationCount((count) => Math.min(2, count + 1));
         const words = next.clarifying_question || "Could you tell me a little more about that?";
         setStatus("John needs one point clarified before anything is saved.");
         if (embeddedFlightDeck) {
@@ -291,6 +295,7 @@ export function ConversationalAutopsy() {
       const nextIndex = index + 1;
       setIndex(nextIndex);
       setCombinedAnswer("");
+      setClarificationCount(0);
       setInterpretation(null);
       setStatus("Answer in your own words.");
       const nextQuestion = questions[nextIndex];
@@ -310,6 +315,7 @@ export function ConversationalAutopsy() {
   const correct = () => {
     setInterpretation(null);
     setCombinedAnswer("");
+    setClarificationCount(0);
     setAnswer("");
     setStatus("No problem. Say it again in your own words.");
     if (embeddedFlightDeck) {
@@ -421,24 +427,41 @@ export function ConversationalAutopsy() {
 
   return (
     <main
-      className="relative min-h-screen overflow-hidden bg-[#06111c] px-4 pb-10 pt-20 text-[#edf8fb] sm:px-8"
+      className={cn(
+        "relative overflow-x-hidden bg-[#06111c] text-[#edf8fb]",
+        embeddedFlightDeck
+          ? "min-h-0 p-0"
+          : "min-h-screen px-4 pb-10 pt-20 sm:px-8",
+      )}
       style={{
         backgroundImage:
           "linear-gradient(rgba(56,170,250,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(56,170,250,.05) 1px,transparent 1px)",
         backgroundSize: "70px 70px",
       }}
     >
-      <div className="absolute inset-x-0 top-14 h-px bg-gradient-to-r from-transparent via-[#38aafa] to-transparent shadow-[0_0_20px_#38aafa]" />
-      <nav className="relative mx-auto flex max-w-7xl items-center gap-4 font-mono text-[10px] tracking-[0.16em] text-[#556c7c]">
-        <span className="text-[#b78525]">LANDING</span><i className="h-px w-14 bg-[#1c3547]" />
-        <span className="text-[#38aafa]">AUTOPSY</span><i className="h-px w-14 bg-[#1c3547]" />
-        <span>5JD</span><i className="h-px w-14 bg-[#1c3547]" /><span>CORE</span>
-      </nav>
+      {!embeddedFlightDeck ? (
+        <>
+          <div className="absolute inset-x-0 top-14 h-px bg-gradient-to-r from-transparent via-[#38aafa] to-transparent shadow-[0_0_20px_#38aafa]" />
+          <nav className="relative mx-auto flex max-w-7xl items-center gap-4 font-mono text-[10px] tracking-[0.16em] text-[#556c7c]">
+            <span className="text-[#b78525]">LANDING</span><i className="h-px w-14 bg-[#1c3547]" />
+            <span className="text-[#38aafa]">AUTOPSY</span><i className="h-px w-14 bg-[#1c3547]" />
+            <span>5JD</span><i className="h-px w-14 bg-[#1c3547]" /><span>CORE</span>
+          </nav>
+        </>
+      ) : null}
 
-      <section className="relative mx-auto mt-10 grid min-h-[690px] max-w-7xl border border-[#1c3547] bg-[#091925]/95 lg:grid-cols-[34%_66%]">
-        <aside className="flex min-h-[270px] flex-col border-b border-[#1c3547] p-8 lg:border-b-0 lg:border-r lg:p-14">
+      <section
+        className={cn(
+          "relative mx-auto grid max-w-7xl border border-[#1c3547] bg-[#091925]/95 lg:grid-cols-[34%_66%]",
+          embeddedFlightDeck ? "min-h-[610px]" : "mt-10 min-h-[690px]",
+        )}
+      >
+        <aside className={cn(
+          "flex min-h-[240px] flex-col border-b border-[#1c3547] p-8 lg:border-b-0 lg:border-r",
+          embeddedFlightDeck ? "lg:p-9" : "lg:p-14",
+        )}>
           <p className="text-[10px] font-bold tracking-[0.2em] text-[#b78525]">AUTOPSY · TEST CONVERSATION</p>
-          <blockquote className="my-auto font-serif text-3xl leading-snug text-[#dce8ec]">
+          <blockquote className="my-auto font-serif text-2xl leading-snug text-[#dce8ec] xl:text-3xl">
             “Speak naturally. John will listen, clarify and keep the twelve subjects in the background.”
           </blockquote>
           <small className="text-sm leading-6 text-[#718796]">
@@ -446,7 +469,10 @@ export function ConversationalAutopsy() {
           </small>
         </aside>
 
-        <article className="flex min-h-[600px] flex-col p-8 lg:p-14">
+        <article className={cn(
+          "flex min-h-[560px] flex-col overflow-y-auto p-8",
+          embeddedFlightDeck ? "max-h-[610px] lg:p-9" : "lg:min-h-[650px] lg:p-14",
+        )}>
           <header className="flex items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <i className="grid h-12 w-12 place-items-center rounded-full border border-[#38aafa] not-italic text-[#38aafa] shadow-[0_0_28px_rgba(56,170,250,.18)]">J</i>
@@ -455,15 +481,15 @@ export function ConversationalAutopsy() {
             <span className="font-mono text-xs text-[#7f95a7]">{questions.length ? `${index + 1} OF 12` : "PREPARING"}</span>
           </header>
 
-          <div className="mt-12">
+          <div className="mt-8">
             <p className="text-[10px] font-bold tracking-[0.2em] text-[#54c5ff]">CURRENT SUBJECT</p>
-            <h1 className="mt-5 max-w-4xl font-serif text-4xl font-normal leading-[1.12] tracking-[-0.035em] text-[#edf8fb] sm:text-5xl">
+            <h1 className="mt-4 max-w-4xl font-serif text-3xl font-normal leading-[1.12] tracking-[-0.03em] text-[#edf8fb] sm:text-4xl xl:text-[2.75rem]">
               {currentPrompt || status}
             </h1>
           </div>
 
           {interpretation ? (
-            <div className="mt-8 border border-[#24475e] bg-[#0d2637] p-5">
+            <div className="mt-6 border border-[#24475e] bg-[#0d2637] p-5">
               {interpretation.selected_option_id && !interpretation.clarifying_question ? (
                 <>
                   <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
@@ -485,7 +511,7 @@ export function ConversationalAutopsy() {
           ) : null}
 
           {(!interpretation || interpretation.clarifying_question) ? (
-            <form onSubmit={submit} className="mt-auto pt-9">
+            <form onSubmit={submit} className="mt-auto pt-6">
               <label htmlFor="autopsy-conversation-answer" className="text-[10px] font-bold tracking-[0.2em] text-[#54c5ff]">YOUR RESPONSE</label>
               <textarea
                 id="autopsy-conversation-answer"
