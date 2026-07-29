@@ -23,10 +23,10 @@ describe("conversational Autopsy boundary", () => {
   });
 
   it("requires operator confirmation before persisting an interpreted answer", () => {
-    expect(component).toContain("Have I got that right?");
+    expect(component).toContain("Is that right, or should we try again?");
     expect(component).toContain("YES, THAT'S RIGHT");
     expect(component).toContain('lastInputMode === "text"');
-    expect(component).toContain("say that it is right, or tell John what needs changing");
+    expect(component).toContain("definitely|absolutely|certainly");
     expect(component).toContain("briefly check only the meaning he is about to save");
   });
 
@@ -46,7 +46,7 @@ describe("conversational Autopsy boundary", () => {
   it("keeps spoken confirmation short and conversational", () => {
     expect(endpoint).toContain("Use no more than 18 words");
     expect(endpoint).toContain('Never include slashes, a list of alternatives, "which of these", or a question mark');
-    expect(component).toContain("Have I got that right?");
+    expect(component).toContain("Is that right, or should we try again?");
     expect(component).not.toContain("SUBJECT_TRANSITIONS");
   });
 
@@ -84,6 +84,14 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain('setLastInputMode("text")');
     expect(component).toContain('event.data.inputMode === "text" ? "text" : "voice"');
     expect(component).toContain('lastInputMode === "text"');
+    expect(component).toContain("definitely|absolutely|certainly");
+    expect(component).toContain('interpretation && lastInputMode === "text"');
+  });
+
+  it("keeps the spoken reflection bound to the exact governed option", () => {
+    expect(endpoint).toContain("score_value");
+    expect(endpoint).toContain("must never sound stronger or weaker than selected_option_id");
+    expect(endpoint).toContain(".replace(/^I have\\b/i, \"You have\")");
   });
 
   it("separates household runway, startup requirement and recurring job costs", () => {

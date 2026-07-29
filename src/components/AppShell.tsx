@@ -40,6 +40,17 @@ const navGroups = [
 ];
 
 export default function AppShell() {
+  const embeddedFlightDeck =
+    new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
+
+  if (embeddedFlightDeck) {
+    return (
+      <div className="min-h-screen bg-white text-foreground">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white text-foreground">
       <header className="border-b px-4 py-3">

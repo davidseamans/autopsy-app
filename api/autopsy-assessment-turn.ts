@@ -71,6 +71,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const governedOptions = options.map((option) => ({
     id: String(option.id),
     label: option.label,
+    score_value: Number.isFinite(Number(option.score_value))
+      ? Number(option.score_value)
+      : null,
   }));
   const clarificationCount = Math.max(
     0,
@@ -79,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const instructions = `You are the interpretation boundary inside an explicitly authorised Autopsy assessment.
 
-Map the candidate's natural spoken answer to exactly one of the supplied governed answer options. Do not invent an option, score, weight, threshold or verdict. Do not coach the candidate toward a stronger answer. Do not judge the person or the proposed business.
+Map the candidate's natural spoken answer to exactly one of the supplied governed answer options. The supplied score_value is immutable metadata that describes the existing strength represented by that option. Use it only to distinguish the governed levels accurately. Never alter it, average it, optimise for it or reveal it. Do not invent an option, score, weight, threshold or verdict. Do not coach the candidate toward a stronger answer. Do not judge the person or the proposed business.
 
 Return JSON only:
 {
@@ -111,7 +114,9 @@ Treat "I don't know", "probably", "maybe" and similar uncertainty as honest conv
 
 If clarification_count is at least 1 and the person remains genuinely uncertain, select the supplied option that explicitly and most accurately represents unknown, untested, not demonstrated or the weakest currently supportable position. Do not strengthen the answer. If no supplied option can defensibly represent the uncertainty, selected_option_id must remain null and clarifying_question must ask one final plain question about present facts. Otherwise provide the exact option id and no clarifying question. The person will separately confirm or correct the interpretation before anything is saved.
 
-The plain_summary is spoken aloud by John. It must be a natural reflection of what the person actually said, not a governed option label, criterion, answer menu or new question. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
+Selection accuracy is more important than conversational optimism. A detailed, direct answer that fully and specifically satisfies the strongest supplied option must map to that option. Do not downgrade it merely because the person has not used the option's exact wording. Conversely, do not upgrade intention, confidence, plans or general positivity into completed action, tested understanding or demonstrated reliability.
+
+The plain_summary is spoken aloud by John. It must describe the exact governed option selected, while remaining faithful to what the person said. It must never sound stronger or weaker than selected_option_id. Use no more than 18 words. Address the person directly in the second person: for example, "You could manage for about a month without income." Never say "the candidate", "candidate estimates", "they", "their answer", "the respondent", or speak about the person as if they are absent. Never include slashes, a list of alternatives, "which of these", or a question mark. Avoid the words evidence, score, dimension, hard fail, maturity and assessment engine.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -210,6 +215,26 @@ The plain_summary is spoken aloud by John. It must be a natural reflection of wh
     }
     if (parsed.selected_option_id != null && !allowed.has(String(parsed.selected_option_id))) {
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });
+    }
+    if (parsed.selected_option_id != null) {
+      const selected = governedOptions.find(
+        (option) => option.id === String(parsed.selected_option_id),
+      );
+      if (!selected) {
+        return res.status(422).json({ error: "The interpretation did not match a governed answer." });
+      }
+      parsed.plain_summary = selected.label
+        .replace(/^I am\b/i, "You are")
+        .replace(/^I'm\b/i, "You are")
+        .replace(/^I have\b/i, "You have")
+        .replace(/^I've\b/i, "You have")
+        .replace(/^I can\b/i, "You can")
+        .replace(/^I know\b/i, "You know")
+        .replace(/^I understand\b/i, "You understand")
+        .replace(/^My\b/i, "Your")
+        .replace(/^Yes\s*[-—:]\s*/i, "")
+        .replace(/^No\s*[-—:]\s*/i, "")
+        .trim();
     }
     if (
       parsed.clarifying_question != null &&

@@ -409,8 +409,8 @@ export function ConversationalAutopsy() {
       setCombinedAnswer(candidateAnswer);
       setInterpretation(next);
       if (next.selected_option_id && !next.clarifying_question) {
-        const words = `${next.plain_summary} Have I got that right?`;
-        setStatus("John has reflected what he heard. Say yes, or correct it in your own words.");
+        const words = `${next.plain_summary} Is that right, or should we try again?`;
+        setStatus("John is checking the exact meaning before saving it.");
         if (embeddedFlightDeck) {
           postToFlightDeck({
             type: "BUILDOS_AUTOPSY_EVENT",
@@ -576,7 +576,7 @@ export function ConversationalAutopsy() {
       void interpret(text);
       return;
     }
-    if (/^(yes|yeah|yep|correct|exactly|right|thats right|that is right)\b/.test(normalised)) {
+    if (/^(yes|yeah|yep|correct|exactly|right|definitely|absolutely|certainly|affirmative|spot on|one hundred percent|100 percent|thats right|that is right)\b/.test(normalised)) {
       void confirm();
       return;
     }
@@ -693,27 +693,21 @@ export function ConversationalAutopsy() {
             </h1>
           </div>
 
-          {interpretation ? (
+          {interpretation && lastInputMode === "text" ? (
             <div className="mt-6 border border-[#24475e] bg-[#0d2637] p-5">
               {interpretation.selected_option_id && !interpretation.clarifying_question ? (
                 <>
                   <p className="text-lg leading-8 text-[#dce8ec]">{interpretation.plain_summary}</p>
-                  <p className="mt-3 font-semibold text-[#54c5ff]">Have I got that right?</p>
-                  {lastInputMode === "text" ? (
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
-                      <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
-                      {!embeddedFlightDeck ? (
-                        <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
-                          {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm leading-6 text-[#8ea5b4]">
-                      Answer naturally: say that it is right, or tell John what needs changing.
-                    </p>
-                  )}
+                  <p className="mt-3 font-semibold text-[#54c5ff]">Is that right, or should we try again?</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button type="button" onClick={confirm} disabled={busy} className="bg-[#2f8b5a] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">YES, THAT'S RIGHT</button>
+                    <button type="button" onClick={correct} disabled={busy} className="border border-[#547083] px-5 py-3 text-sm font-bold text-[#dce8ec] disabled:opacity-40">NO, LET ME CORRECT IT</button>
+                    {!embeddedFlightDeck ? (
+                      <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+                        {listening ? "FINISH SPEAKING" : "ANSWER BY VOICE"}
+                      </button>
+                    ) : null}
+                  </div>
                   {lastInputMode === "voice" && !embeddedFlightDeck ? (
                     <div className="mt-4">
                       <button type="button" onClick={listening ? () => recognitionRef.current?.stop() : startListening} disabled={busy || speaking || !recognitionConstructor} className="bg-[#145ee7] px-5 py-3 text-sm font-bold text-white disabled:opacity-40">

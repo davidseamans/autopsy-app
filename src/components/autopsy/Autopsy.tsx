@@ -2682,6 +2682,29 @@ function CandidateVerdict({
     });
   }, [embeddedFlightDeck, runId, verdictVoiceScript]);
 
+  useEffect(() => {
+    if (!embeddedFlightDeck) return;
+    const reportHeight = () => {
+      postToFlightDeck({
+        type: "BUILDOS_AUTOPSY_EVENT",
+        event: "layout",
+        text: "",
+        height: Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+        ),
+      });
+    };
+    reportHeight();
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(document.body);
+    window.addEventListener("load", reportHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("load", reportHeight);
+    };
+  }, [embeddedFlightDeck]);
+
   const explanationProfile = ready
     ? {
         decision: "Your answers showed enough practical awareness, discipline and personal readiness to justify a controlled real-world test. This is a doorway into evidence gathering—not a declaration that you are already a competent business owner.",
@@ -2963,6 +2986,11 @@ function CandidateVerdict({
               {verdictVoiceState === "speaking" ? "John is speaking…" : "Hear John explain this result"}
             </Button>
           ) : null}
+        </div>
+        <div className="mt-4">
+          <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">
+            Read or print full explanation
+          </Button>
         </div>
       </section>
 

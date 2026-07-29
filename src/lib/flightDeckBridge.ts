@@ -12,7 +12,8 @@ export type FlightDeckEvent =
       subjectId?: string;
       subjectToken?: string;
     }
-  | { type: "BUILDOS_AUTOPSY_EVENT"; event: "verdict"; text: string; runId: string | null };
+  | { type: "BUILDOS_AUTOPSY_EVENT"; event: "verdict"; text: string; runId: string | null }
+  | { type: "BUILDOS_AUTOPSY_EVENT"; event: "layout"; text: ""; height: number };
 
 export type FlightDeckInput = {
   type: "BUILDOS_AUTOPSY_INPUT";
