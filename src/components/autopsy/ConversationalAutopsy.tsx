@@ -29,6 +29,7 @@ type Interpretation = {
   selected_option_id: string | null;
   confidence: number;
   plain_summary: string;
+  spoken_acknowledgement: string;
   clarifying_question: string | null;
   conversation_reply: string | null;
 };
@@ -73,7 +74,7 @@ const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }>
   },
   MR_01: {
     prompt: "What has a real potential customer actually done—not merely said—that suggests they may buy from you?",
-    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm. A genuine booking for specific work on an agreed date is a customer commitment and strong proof of intent to pay; do not require a deposit, completed work, signed purchase order or prior payment when the governed option also permits commitment or strong proof.",
+    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm. A genuine booking for specific work on an agreed date is a real customer commitment; do not require a deposit, completed work, signed purchase order or prior payment.",
   },
   MR_02: {
     prompt: "Who would you expect to clean for first, what problem would you remove, and why might they choose you?",
@@ -89,7 +90,7 @@ const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }>
   },
   EX_01: {
     prompt: "What have you already done in the real world that taught you something planning could not?",
-    boundary: "Completed practical action and learning, not intentions, reading or encouragement.",
+    boundary: "Completed practical action and learning, not intentions, reading or encouragement. Sustained work alongside an experienced cleaning operator counts as strong practical action and learning even when it was not the person's own operation.",
   },
   EX_02: {
     prompt: "During the next thirty days, what time have you genuinely protected to keep moving?",
@@ -146,6 +147,9 @@ const transitionFor = (nextIndex: number) =>
     : nextIndex % 2 === 0
       ? "Thank you. Let us look at the next practical area."
       : "All right. Let us move to the next practical area.";
+
+const conversationalTransition = (acknowledgement: string | undefined, nextIndex: number) =>
+  `${acknowledgement?.trim() ? `${acknowledgement.trim()} ` : ""}${transitionFor(nextIndex)}`;
 
 const normaliseOption = (rawOption: unknown, index: number) => {
   if (typeof rawOption === "string") {
@@ -376,7 +380,7 @@ export function ConversationalAutopsy() {
     storeInterpretation(null);
     setConversationReply("");
     setStatus("Answer in your own words.");
-    const nextWords = `${transitionFor(nextIndex)} ${nextPresentation.prompt}`;
+    const nextWords = `${conversationalTransition(chosen.spoken_acknowledgement, nextIndex)} ${nextPresentation.prompt}`;
     if (embeddedFlightDeck) {
       postToFlightDeck({
         type: "BUILDOS_AUTOPSY_EVENT",
@@ -409,6 +413,7 @@ export function ConversationalAutopsy() {
         },
         body: JSON.stringify({
           question_id: questionId,
+          subject_code: currentQuestion.q_id,
           subject_token: subjectToken,
           prompt: lockedSubject.prompt,
           subject_boundary: lockedSubject.boundary,

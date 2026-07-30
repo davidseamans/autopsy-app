@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticateRequest } from "./_lib/supabase-server.js";
+import { applyConstitutionalScoreFloor } from "./_lib/autopsy-scoring-policy.js";
 
 type Option = {
   id: string | number;
@@ -9,6 +10,7 @@ type Option = {
 
 type Body = {
   question_id?: string | number;
+  subject_code?: string;
   subject_token?: string;
   prompt?: string;
   subject_boundary?: string;
@@ -58,13 +60,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (req.body ?? {}) as Body;
   const questionId = body.question_id == null ? "" : String(body.question_id).trim();
+  const subjectCode = body.subject_code?.trim() ?? "";
   const subjectToken = body.subject_token?.trim();
   const prompt = body.prompt?.trim();
   const subjectBoundary = body.subject_boundary?.trim();
   const answer = body.answer?.trim();
   const accumulatedAnswer = body.accumulated_answer?.trim() || answer;
   const options = Array.isArray(body.options) ? body.options : [];
-  if (!questionId || !subjectToken || !prompt || !subjectBoundary || !answer || options.length < 2) {
+  if (!questionId || !subjectCode || !subjectToken || !prompt || !subjectBoundary || !answer || options.length < 2) {
     return res.status(400).json({ error: "A locked subject, question, answer and governed options are required." });
   }
 
@@ -90,6 +93,7 @@ Return JSON only:
   "selected_option_id": "an exact supplied option id, or null",
   "confidence": 0 to 1,
   "plain_summary": "one short, plain-English reflection addressed directly to the person as you",
+  "spoken_acknowledgement": "a natural acknowledgement of one fact the person gave, under 14 words",
   "clarifying_question": "one short question, or null",
   "conversation_reply": "a brief direct response to a non-answer turn, or null"
 }
@@ -116,13 +120,17 @@ If clarification_count is at least 1, do not ask another clarifying question. Se
 
 Selection accuracy is more important than conversational optimism. A detailed, direct answer that fully and specifically satisfies the strongest supplied option must map to that option. Do not downgrade it merely because the person has not used the option's exact wording. Conversely, do not upgrade intention, confidence, plans or general positivity into completed action, tested understanding or demonstrated reliability.
 
+The person's truthful account is the assessment input. Autopsy is not a compliance inspection. Do not demand documents, receipts, signed orders, deposits or external exhibits unless the locked subject itself expressly asks about them. Do not replace a disclosed fact with an accusation that it is unproven. A firm booking is customer action. Sustained work alongside an experienced operator is practical experience. A job-cost ledger maintained for each job is direct understanding of job economics and recurring costs.
+
 For every answer, silently separate:
 1. the decisive fact that directly answers the locked subject,
 2. supporting facts that make that answer more dependable, and
 3. surrounding detail that is irrelevant to this subject.
 Map the decisive and supporting facts together. Do not let a long answer, conversational wording, or irrelevant detail dilute a clear answer. A quantified outcome supported by the person's described inputs, method, household resources, allowance or contingency can satisfy an option that says the position is known or can be shown. Do not ask the person to repeat a decisive fact already supplied.
 
-The plain_summary is an internal audit note and is never spoken to the person. Keep it factual and under 18 words. Never use specialist shorthand such as cash runway, evidence, score, dimension, hard fail, maturity or assessment engine.`;
+The plain_summary is an internal audit note and is never spoken to the person. Keep it factual and under 18 words. Never use specialist shorthand such as cash runway, evidence, score, dimension, hard fail, maturity or assessment engine.
+
+The spoken_acknowledgement is heard by the person before the next subject. Reflect one fact they actually supplied without praising, judging, coaching, introducing jargon or mentioning proof, evidence, scoring or an option. Examples: "Working alongside an experienced cleaner has given you practical exposure." "Those future bookings are a real customer commitment."`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -133,7 +141,7 @@ The plain_summary is an internal audit note and is never spoken to the person. K
     body: JSON.stringify({
       model: process.env.OPENAI_CONVERSATION_MODEL || "gpt-5-mini",
       reasoning: { effort: "low" },
-      max_output_tokens: 1200,
+      max_output_tokens: 700,
       text: {
         format: {
           type: "json_schema",
@@ -157,6 +165,7 @@ The plain_summary is an internal audit note and is never spoken to the person. K
               selected_option_id: { type: ["string", "null"] },
               confidence: { type: "number", minimum: 0, maximum: 1 },
               plain_summary: { type: "string" },
+              spoken_acknowledgement: { type: "string" },
               clarifying_question: { type: ["string", "null"] },
               conversation_reply: { type: ["string", "null"] },
             },
@@ -165,6 +174,7 @@ The plain_summary is an internal audit note and is never spoken to the person. K
               "selected_option_id",
               "confidence",
               "plain_summary",
+              "spoken_acknowledgement",
               "clarifying_question",
               "conversation_reply",
             ],
@@ -179,6 +189,7 @@ The plain_summary is an internal audit note and is never spoken to the person. K
             type: "input_text",
             text: JSON.stringify({
               question: prompt,
+              subject_code: subjectCode,
               subject_boundary: subjectBoundary,
               governed_options: governedOptions,
               current_utterance: answer,
@@ -223,6 +234,12 @@ The plain_summary is an internal audit note and is never spoken to the person. K
       return res.status(422).json({ error: "The interpretation did not match a governed answer." });
     }
     if (parsed.selected_option_id != null) {
+      parsed.selected_option_id = applyConstitutionalScoreFloor(
+        subjectCode,
+        accumulatedAnswer ?? answer,
+        String(parsed.selected_option_id),
+        governedOptions,
+      );
       const selected = governedOptions.find(
         (option) => option.id === String(parsed.selected_option_id),
       );
@@ -241,6 +258,11 @@ The plain_summary is an internal audit note and is never spoken to the person. K
         .replace(/^Yes\s*[-—:]\s*/i, "")
         .replace(/^No\s*[-—:]\s*/i, "")
         .trim();
+      parsed.spoken_acknowledgement = String(parsed.spoken_acknowledgement ?? "")
+        .replace(/\b(proof|evidence|score|rubric|cash runway)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180);
     }
     if (
       parsed.clarifying_question != null &&
