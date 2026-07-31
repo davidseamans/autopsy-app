@@ -13,6 +13,11 @@ describe("Autopsy constitutional scoring floors", () => {
     expect(applyConstitutionalScoreFloor("EX_01", answer, "1", options)).toBe("3");
   });
 
+  it("recognises prior cleaning work and responsibility for running a business", () => {
+    const answer = "I worked as a cleaner before and I managed my own business with real customers and staff.";
+    expect(applyConstitutionalScoreFloor("EX_01", answer, "1", options)).toBe("3");
+  });
+
   it("recognises a per-job cost ledger as direct economic understanding", () => {
     const answer = "We run a job cost ledger for every job with the price, labour, supplies, travel costs and margin left.";
     expect(applyConstitutionalScoreFloor("EL_01", answer, "1", options)).toBe("3");

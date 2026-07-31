@@ -2937,7 +2937,7 @@ function CandidateVerdict({
       </section>
       <section class="detail-page"><p class="small">PRE-BUSINESS AUTOPSY™ · SUPPORTING EXPLANATION</p>
       ${reportIdentityHtml}
-      <div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>
+      <h2>Why Autopsy reached this result</h2><p>${escapeExplanation(explanationProfile.decision)}</p>
       <h2>Your readiness position</h2><p class="note">${escapeExplanation(readinessPosition)}</p>
       <h2>How to understand this result</h2><p>${escapeExplanation(explanationProfile.distinction)}</p>
       <h2>Why this matters in the real world</h2><p>${escapeExplanation(explanationProfile.risk)}</p>

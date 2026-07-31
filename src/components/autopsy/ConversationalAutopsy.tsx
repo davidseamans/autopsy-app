@@ -374,13 +374,17 @@ export function ConversationalAutopsy() {
       prompt: nextPresentation.prompt,
       boundary: nextPresentation.boundary,
     };
+    const resolvedAfterClarification = clarificationCount > 0;
     setIndex(nextIndex);
     setCombinedAnswer("");
     setClarificationCount(0);
     storeInterpretation(null);
     setConversationReply("");
     setStatus("Answer in your own words.");
-    const nextWords = `${conversationalTransition(chosen.spoken_acknowledgement, nextIndex)} ${nextPresentation.prompt}`;
+    const nextWords = `${conversationalTransition(
+      resolvedAfterClarification ? undefined : chosen.spoken_acknowledgement,
+      nextIndex,
+    )} ${nextPresentation.prompt}`;
     if (embeddedFlightDeck) {
       postToFlightDeck({
         type: "BUILDOS_AUTOPSY_EVENT",
@@ -612,6 +616,7 @@ export function ConversationalAutopsy() {
     if (!embeddedFlightDeck) return;
     const receiveFlightDeckAnswer = (event: MessageEvent<unknown>) => {
       if (!isFlightDeckInput(event)) return;
+      if (busy) return;
       const text = event.data.text.trim();
       if (!text) return;
       if (
@@ -636,7 +641,7 @@ export function ConversationalAutopsy() {
     };
     window.addEventListener("message", receiveFlightDeckAnswer);
     return () => window.removeEventListener("message", receiveFlightDeckAnswer);
-  }, [embeddedFlightDeck]);
+  }, [busy, embeddedFlightDeck]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

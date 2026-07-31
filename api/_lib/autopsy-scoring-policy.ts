@@ -37,11 +37,18 @@ const floorForSpokenFacts = (subjectCode: string, answer: string): number | null
 
   if (
     subjectCode === "EX_01" &&
-    includesAll(text, [
-      /\b(worked|went out|helped|shadowed|assisted|trained)\b/,
-      /\b(friend|cleaner|cleaning business|operator)\b/,
-      /\b(clean|management|paperwork|job|customer|years?|months?)\b/,
-    ])
+    (
+      includesAll(text, [
+        /\b(worked|went out|helped|shadowed|assisted|trained)\b/,
+        /\b(friend|cleaner|cleaning business|operator)\b/,
+        /\b(clean|management|paperwork|job|customer|years?|months?)\b/,
+      ]) ||
+      includesAll(text, [
+        /\b(worked|cleaned|ran|managed|owned|operated)\b/,
+        /\b(as (a )?cleaner|cleaning (jobs?|work|business)|my own business|own business)\b/,
+        /\b(customers?|clients?|jobs?|staff|business|cleaning|before|previously|years?|months?)\b/,
+      ])
+    )
   ) return 3;
 
   if (
@@ -71,4 +78,3 @@ export const applyConstitutionalScoreFloor = (
 
   return replacement?.id ?? selectedOptionId;
 };
-

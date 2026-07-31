@@ -118,6 +118,21 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("initializationRef.current.presented = true");
   });
 
+  it("keeps a resolved clarification brief before moving on", () => {
+    expect(component).toContain("resolvedAfterClarification");
+    expect(component).toContain("resolvedAfterClarification ? undefined : chosen.spoken_acknowledgement");
+  });
+
+  it("does not accept another embedded answer while the current turn is being processed", () => {
+    expect(component).toContain("if (busy) return;");
+    expect(component).toContain("[busy, embeddedFlightDeck]");
+  });
+
+  it("does not repeat the verdict headline in the supporting explanation", () => {
+    expect(verdict).toContain("Why Autopsy reached this result");
+    expect(verdict).not.toContain('<div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>');
+  });
+
   it("keeps the embedded assessment controls inside the Flight Deck viewport", () => {
     expect(component).toContain('"min-h-0 p-0"');
     expect(component).toContain('"max-h-[610px] lg:p-9"');
