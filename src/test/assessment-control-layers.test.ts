@@ -8,6 +8,8 @@ import {
   recomputePermission,
   type ProgressionState,
 } from "../lib/progression";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 describe("paid assessment policy gate", () => {
   const safe = {
@@ -40,6 +42,22 @@ describe("paid assessment policy gate", () => {
       selected_option_id: null,
       clarifying_question: "What happened? What did you do next?",
     })).toContain("multiple_questions");
+  });
+});
+
+describe("whole-run reconciliation contract", () => {
+  const source = readFileSync(
+    resolve("api/autopsy-assessment-reconcile.ts"),
+    "utf8",
+  );
+
+  it("passes answer text, selected UUID and options in the scoring-policy order", () => {
+    expect(source).toContain(`applyConstitutionalScoreFloor(\n        question.subject_code,\n        fullText,\n        selected,\n        question.options,\n      )`);
+    expect(source).not.toContain(`question.subject_code,\n        question.subject_code,\n        fullText`);
+  });
+
+  it("rejects a score-floor result that is not a governed option id", () => {
+    expect(source).toContain('if (!allowed.includes(selected)) throw new Error("reconciled option mismatch")');
   });
 });
 

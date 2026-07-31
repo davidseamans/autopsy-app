@@ -161,11 +161,11 @@ systemisation, not a complete tested method. Return JSON only.`,
       if (!allowed.includes(selected)) throw new Error("option mismatch");
       selected = applyConstitutionalScoreFloor(
         question.subject_code,
-        question.subject_code,
         fullText,
         selected,
         question.options,
       );
+      if (!allowed.includes(selected)) throw new Error("reconciled option mismatch");
       return {
         question_id: questionId,
         selected_option_id: selected,
