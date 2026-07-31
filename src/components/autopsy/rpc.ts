@@ -50,6 +50,10 @@ export interface GatewayQuestion {
   q_id?: string;
   dimension_code: string;
   prompt: string;
+  conversation_prompt?: string | null;
+  conversation_follow_up?: string | null;
+  conversation_guardrail?: string | null;
+  conversation_variant_version?: string | null;
   position: number;
   options: Array<{
     id?: string | number;
@@ -118,7 +122,7 @@ export const createAutopsyRun = (params: {
   tester_email: string;
   operator_class: string;
 }) =>
-  rpc<any>("create_autopsy_run", {
+  rpc<any>("create_authorized_autopsy_run", {
     p_industry: params.industry,
     p_run_name: params.run_name,
     p_scenario: params.scenario,
@@ -176,6 +180,29 @@ export const recordAutopsyAnswer = (params: {
     p_run_id: params.run_id,
     p_question_id: params.question_id,
     p_selected_option: params.selected_option,
+  });
+
+export const recordAutopsyInterpretation = (params: {
+  run_id: string;
+  question_id: string | number;
+  selected_option: string | number;
+  confidence: number;
+  fact_flags?: string[];
+  prompt_version: string;
+  contract_version: string;
+  policy_gate_version: string;
+  reconciled?: boolean;
+}) =>
+  rpc("record_autopsy_interpretation", {
+    p_run_id: params.run_id,
+    p_question_id: params.question_id,
+    p_selected_option: params.selected_option,
+    p_confidence: params.confidence,
+    p_fact_flags: params.fact_flags ?? [],
+    p_prompt_version: params.prompt_version,
+    p_contract_version: params.contract_version,
+    p_policy_gate_version: params.policy_gate_version,
+    p_reconciled: params.reconciled ?? false,
   });
 
 export const finalizeAutopsyRun = (run_id: string) =>

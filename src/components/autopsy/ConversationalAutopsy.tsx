@@ -13,6 +13,7 @@ import {
   GatewayQuestion,
   getGatewayPayload,
   recordAutopsyAnswer,
+  recordAutopsyInterpretation,
 } from "./rpc";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,12 @@ type Interpretation = {
   spoken_acknowledgement: string;
   clarifying_question: string | null;
   conversation_reply: string | null;
+  fact_flags?: string[];
+  runtime?: {
+    prompt_version: string;
+    contract_version: string;
+    policy_gate_version: string;
+  };
 };
 
 type RecognitionResultEvent = {
@@ -60,6 +67,16 @@ type AssessmentMemoryEntry = {
   question: string;
   answer: string;
   interpreted_summary: string;
+};
+
+type Reconciliation = {
+  selections: Array<{
+    question_id: string;
+    selected_option_id: string;
+    confidence: number;
+    fact_flags: string[];
+  }>;
+  runtime: NonNullable<Interpretation["runtime"]>;
 };
 
 const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
@@ -128,12 +145,20 @@ const SUBJECT_ORDER = [
   "PR_02",
 ];
 
-const presentationFor = (question: GatewayQuestion | undefined, subjectIndex: number) =>
-  SUBJECT_PRESENTATION[question?.q_id ?? ""] ??
-  SUBJECT_PRESENTATION[SUBJECT_ORDER[subjectIndex]] ?? {
-    prompt: question?.prompt ?? "",
-    boundary: "The single governed subject shown on screen.",
+const presentationFor = (question: GatewayQuestion | undefined, subjectIndex: number) => {
+  const fallback =
+    SUBJECT_PRESENTATION[question?.q_id ?? ""] ??
+    SUBJECT_PRESENTATION[SUBJECT_ORDER[subjectIndex]] ?? {
+      prompt: question?.prompt ?? "",
+      boundary: "The single governed subject shown on screen.",
+    };
+  return {
+    prompt: question?.conversation_prompt?.trim() || fallback.prompt,
+    boundary: [fallback.boundary, question?.conversation_guardrail]
+      .filter(Boolean)
+      .join(" "),
   };
+};
 
 const FALLBACK_SUBJECT_PROMPTS = SUBJECT_ORDER.map(
   (key) => SUBJECT_PRESENTATION[key].prompt,
@@ -365,6 +390,18 @@ export function ConversationalAutopsy() {
       question_id: currentQuestion.question_id,
       selected_option: chosen.selected_option_id,
     });
+    if (chosen.runtime) {
+      await recordAutopsyInterpretation({
+        run_id: runId,
+        question_id: currentQuestion.question_id,
+        selected_option: chosen.selected_option_id,
+        confidence: chosen.confidence,
+        fact_flags: chosen.fact_flags,
+        prompt_version: chosen.runtime.prompt_version,
+        contract_version: chosen.runtime.contract_version,
+        policy_gate_version: chosen.runtime.policy_gate_version,
+      });
+    }
     assessmentMemoryRef.current = [
       ...assessmentMemoryRef.current,
       {
@@ -375,7 +412,49 @@ export function ConversationalAutopsy() {
       },
     ];
     if (index === 11) {
-      setStatus("Your answers are saved. John is preparing your Verdict…");
+      setStatus("Your answers are saved. John is checking the whole conversation before preparing your Verdict…");
+      const reconciliationResponse = await fetch("/api/autopsy-assessment-reconcile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({
+          questions: questions.map((question, subjectIndex) => {
+            const subjectPresentation = presentationFor(question, subjectIndex);
+            return {
+              question_id: String(question.question_id),
+              subject_code: question.q_id ?? SUBJECT_ORDER[subjectIndex],
+              prompt: subjectPresentation.prompt,
+              subject_boundary: subjectPresentation.boundary,
+              options: (question.options ?? []).map(normaliseOption),
+            };
+          }),
+          assessment_memory: assessmentMemoryRef.current,
+        }),
+      });
+      const reconciliation = await reconciliationResponse.json() as Reconciliation & { error?: string };
+      if (!reconciliationResponse.ok || reconciliation.selections?.length !== 12) {
+        throw new Error(reconciliation.error || "The final whole-conversation check could not be completed.");
+      }
+      for (const selection of reconciliation.selections) {
+        await recordAutopsyAnswer({
+          run_id: runId,
+          question_id: selection.question_id,
+          selected_option: selection.selected_option_id,
+        });
+        await recordAutopsyInterpretation({
+          run_id: runId,
+          question_id: selection.question_id,
+          selected_option: selection.selected_option_id,
+          confidence: selection.confidence,
+          fact_flags: selection.fact_flags,
+          prompt_version: reconciliation.runtime.prompt_version,
+          contract_version: reconciliation.runtime.contract_version,
+          policy_gate_version: reconciliation.runtime.policy_gate_version,
+          reconciled: true,
+        });
+      }
       await finalizeAutopsyRun(runId);
       if (!embeddedFlightDeck) {
         sessionStorage.setItem(`autopsy.verdict_voice.${runId}`, "pending");

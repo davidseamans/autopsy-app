@@ -4,7 +4,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   getStage1RunId,
   getActiveRunId,
-  isStage1Reachable,
   ROUTING_COPY,
   setStage1RunId,
   STAGE_1_GOAL,
@@ -97,6 +96,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { supabase, isDebug } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
+import { getGatewayPayload } from "@/components/autopsy/rpc";
 import {
   loadAdjustments,
   saveAdjustment,
@@ -5115,6 +5115,16 @@ export default function Stage1() {
     setRunIdState(nextRunId);
   }, [searchParams]);
   const { state: progression, update: updateProgression } = useProgression(runId);
+  const admission = useQuery({
+    queryKey: ["stage1-backend-admission", runId],
+    queryFn: () => getGatewayPayload(runId!),
+    enabled: Boolean(runId && user?.id),
+    retry: false,
+  });
+  const backendStage1Granted =
+    admission.data?.run?.verdict_name === "Ready for Test Run" &&
+    admission.data?.run?.permission_level === "granted" &&
+    admission.data?.run?.hard_fail_triggered !== true;
   // Proof units (invoices, costs, GST treatments) are a persistent commercial
   // record scoped to this Autopsy run. Supabase is the canonical source of
   // truth; localStorage is a cache only. Paint instantly from the cache, then
@@ -5312,7 +5322,11 @@ export default function Stage1() {
   };
 
   // If we have a progression record but Stage 1 is not yet reachable, block entry.
-  if (runId && progression && !isStage1Reachable(progression.stagePermission)) {
+  if (
+    runId &&
+    !admission.isLoading &&
+    !backendStage1Granted
+  ) {
     return <Stage1BlockedScreen runId={runId} />;
   }
 

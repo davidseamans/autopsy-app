@@ -1,6 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authenticateRequest } from "./_lib/supabase-server.js";
 import { applyConstitutionalScoreFloor } from "./_lib/autopsy-scoring-policy.js";
+import {
+  assessmentPolicyViolations,
+  AUTOPSY_ASSESSMENT_CONTRACT_VERSION,
+  AUTOPSY_ASSESSMENT_POLICY_GATE_VERSION,
+  AUTOPSY_ASSESSMENT_PROMPT_VERSION,
+  privacySafeFactFlags,
+} from "./_lib/autopsy-assessment-policy.js";
 
 type Option = {
   id: string | number;
@@ -51,6 +58,9 @@ const extractText = (rawPayload: unknown): string => {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader("X-Autopsy-Prompt-Version", AUTOPSY_ASSESSMENT_PROMPT_VERSION);
+  res.setHeader("X-Autopsy-Contract-Version", AUTOPSY_ASSESSMENT_CONTRACT_VERSION);
+  res.setHeader("X-Autopsy-Policy-Gate-Version", AUTOPSY_ASSESSMENT_POLICY_GATE_VERSION);
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
@@ -299,10 +309,25 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
           ? "What have you actually done or seen that would help you answer?"
           : "That is fair. What makes you lean that way?";
     }
+    const policyViolations = assessmentPolicyViolations(parsed);
+    if (policyViolations.length) {
+      console.error("Assessment policy gate rejected output", policyViolations);
+      return res.status(422).json({
+        error: "John could not form a safe interpretation. Please try that answer again.",
+      });
+    }
     return res.status(200).json({
       ...parsed,
       question_id: questionId,
       subject_token: subjectToken,
+      fact_flags: privacySafeFactFlags(
+        [...assessmentMemory.map((entry) => entry.answer), accumulatedAnswer ?? answer].join("\n"),
+      ),
+      runtime: {
+        prompt_version: AUTOPSY_ASSESSMENT_PROMPT_VERSION,
+        contract_version: AUTOPSY_ASSESSMENT_CONTRACT_VERSION,
+        policy_gate_version: AUTOPSY_ASSESSMENT_POLICY_GATE_VERSION,
+      },
     });
   } catch {
     return res.status(502).json({ error: "John could not form a reliable interpretation. Please try again." });

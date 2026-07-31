@@ -101,9 +101,10 @@ export function defaultPermissionForBand(band: VerdictBand): StagePermission {
     case "high_risk":
       return "Worksheet Required";
     case "viable":
-    case "structurally_viable":
-      // Worksheet-lite / checklist still required before Stage 1 opens.
       return "Worksheet Required";
+    case "structurally_viable":
+      // The governed backend has already activated First 5 Jobs for this band.
+      return "Stage 1 Eligible";
     default:
       return "Locked";
   }
@@ -141,7 +142,11 @@ export function recomputePermission(s: ProgressionState): StagePermission {
     return "Worksheet Required";
   }
 
-  // viable / structurally_viable
+  if (s.band === "structurally_viable") {
+    return "Stage 1 Eligible";
+  }
+
+  // viable
   if (s.worksheetStatus === "Rejected") return "Worksheet Required";
   if (s.worksheetStatus === "Accepted" && checklistComplete) {
     return "Stage 1 Eligible";
