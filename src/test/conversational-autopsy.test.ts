@@ -23,7 +23,7 @@ describe("conversational Autopsy boundary", () => {
   });
 
   it("persists a reliable interpretation without exposing the option mapping", () => {
-    expect(component).toContain("await saveSelectionAndAdvance(next)");
+    expect(component).toContain("await saveSelectionAndAdvance(next, candidateAnswer)");
     expect(component).toContain("The analysis stays quietly in the background");
     expect(component).not.toContain("Is that right, or should we try again?");
     expect(component).not.toContain("YES, THAT'S RIGHT");
@@ -72,6 +72,10 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain("Classify current_utterance on its own");
     expect(endpoint).toContain("accumulated_answer: accumulatedAnswer");
     expect(component).toContain("accumulated_answer: candidateAnswer");
+    expect(component).toContain("assessment_memory: assessmentMemoryRef.current");
+    expect(endpoint).toContain("The assessment_memory contains facts");
+    expect(endpoint).toContain("the person must not repeat it merely because the locked subject has changed");
+    expect(endpoint).toContain("Do not turn general confidence, a job title or one strong answer into blanket strength");
     expect(component).toContain('!["answer", "correction"].includes(next.turn_type)');
     expect(component).toContain("The current subject is still open.");
     expect(component).toContain("setConversationReply(reply)");
@@ -184,7 +188,7 @@ describe("conversational Autopsy boundary", () => {
   it("continues the paid assessment as a spoken conversation", () => {
     expect(component).toContain("if (listenAfter) window.setTimeout(() => startListeningRef.current?.()");
     expect(component).toContain("handleSpokenTurnRef.current?.(captured)");
-    expect(component).toContain("await saveSelectionAndAdvance(next)");
+    expect(component).toContain("await saveSelectionAndAdvance(next, candidateAnswer)");
     expect(component).toContain("USE MICROPHONE");
     expect(component).toContain("Listening…");
     expect(component).toContain("John is speaking…");

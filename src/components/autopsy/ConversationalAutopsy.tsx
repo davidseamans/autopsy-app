@@ -55,6 +55,13 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 type InputMode = "voice" | "text";
 
+type AssessmentMemoryEntry = {
+  subject_code: string;
+  question: string;
+  answer: string;
+  interpreted_summary: string;
+};
+
 const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
   CR_01: {
     prompt: "If the cleaning work produced little or delayed income, how long could your household keep going safely?",
@@ -191,6 +198,7 @@ export function ConversationalAutopsy() {
   const activeSubjectRef = useRef({ id: "", token: "", prompt: "", boundary: "" });
   const interpretationRef = useRef<Interpretation | null>(null);
   const confirmationSavingRef = useRef(false);
+  const assessmentMemoryRef = useRef<AssessmentMemoryEntry[]>([]);
   const initializationRef = useRef<{
     email: string;
     promise: Promise<{ id: string; ordered: GatewayQuestion[] }>;
@@ -340,7 +348,10 @@ export function ConversationalAutopsy() {
     activeSubjectRef.current = { id, token, prompt: currentPrompt, boundary: presentation.boundary };
   }
 
-  const saveSelectionAndAdvance = async (chosen: Interpretation) => {
+  const saveSelectionAndAdvance = async (
+    chosen: Interpretation,
+    answeredText = combinedAnswer,
+  ) => {
     if (
       !runId ||
       !currentQuestion ||
@@ -354,6 +365,15 @@ export function ConversationalAutopsy() {
       question_id: currentQuestion.question_id,
       selected_option: chosen.selected_option_id,
     });
+    assessmentMemoryRef.current = [
+      ...assessmentMemoryRef.current,
+      {
+        subject_code: currentQuestion.q_id,
+        question: activeSubjectRef.current.prompt,
+        answer: answeredText.trim(),
+        interpreted_summary: chosen.plain_summary.trim(),
+      },
+    ];
     if (index === 11) {
       setStatus("Your answers are saved. John is preparing your Verdict…");
       await finalizeAutopsyRun(runId);
@@ -419,6 +439,7 @@ export function ConversationalAutopsy() {
           subject_boundary: lockedSubject.boundary,
           answer: text,
           accumulated_answer: candidateAnswer,
+          assessment_memory: assessmentMemoryRef.current,
           options,
           clarification: interpretation?.clarifying_question ?? null,
           clarification_count: clarificationCount,
@@ -476,7 +497,7 @@ export function ConversationalAutopsy() {
       if (next.selected_option_id && !next.clarifying_question) {
         storeInterpretation(null);
         setStatus("John has understood. Moving to the next subject…");
-        await saveSelectionAndAdvance(next);
+        await saveSelectionAndAdvance(next, candidateAnswer);
       } else {
         storeInterpretation(next);
         setClarificationCount((count) => Math.min(2, count + 1));

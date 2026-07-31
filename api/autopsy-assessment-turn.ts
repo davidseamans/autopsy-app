@@ -8,6 +8,13 @@ type Option = {
   score_value?: number;
 };
 
+type AssessmentMemoryEntry = {
+  subject_code?: string;
+  question?: string;
+  answer?: string;
+  interpreted_summary?: string;
+};
+
 type Body = {
   question_id?: string | number;
   subject_code?: string;
@@ -16,6 +23,7 @@ type Body = {
   subject_boundary?: string;
   answer?: string;
   accumulated_answer?: string;
+  assessment_memory?: AssessmentMemoryEntry[];
   options?: Option[];
   clarification?: string | null;
   clarification_count?: number;
@@ -66,6 +74,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const subjectBoundary = body.subject_boundary?.trim();
   const answer = body.answer?.trim();
   const accumulatedAnswer = body.accumulated_answer?.trim() || answer;
+  const assessmentMemory = (Array.isArray(body.assessment_memory)
+    ? body.assessment_memory
+    : [])
+    .slice(-12)
+    .map((entry) => ({
+      subject_code: entry.subject_code?.trim() ?? "",
+      question: entry.question?.trim() ?? "",
+      answer: entry.answer?.trim() ?? "",
+      interpreted_summary: entry.interpreted_summary?.trim() ?? "",
+    }))
+    .filter((entry) => entry.answer);
   const options = Array.isArray(body.options) ? body.options : [];
   if (!questionId || !subjectCode || !subjectToken || !prompt || !subjectBoundary || !answer || options.length < 2) {
     return res.status(400).json({ error: "A locked subject, question, answer and governed options are required." });
@@ -107,6 +126,8 @@ First classify what the person is doing.
 - digression: they have moved away from the locked subject without answering it.
 
 Classify current_utterance on its own. Do not let an earlier accumulated answer turn a present question, repeat request or control request into an answer.
+
+The assessment_memory contains facts the person truthfully disclosed in completed earlier subjects during this same authorised Autopsy. Treat a relevant explicit fact as available throughout the remaining assessment; the person must not repeat it merely because the locked subject has changed. Use only facts that genuinely bear on the locked subject. Do not turn general confidence, a job title or one strong answer into blanket strength across unrelated subjects. Do not invent details that were not disclosed. If the current answer explicitly corrects an earlier fact, the correction is authoritative.
 
 Only an answer or correction may be mapped to a governed option. A question, repeat_request, control_request or digression must return selected_option_id null. Nothing in those turns is assessment material.
 
@@ -194,6 +215,7 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
               governed_options: governedOptions,
               current_utterance: answer,
               accumulated_answer: accumulatedAnswer,
+              assessment_memory: assessmentMemory,
               earlier_clarification: body.clarification ?? null,
               clarification_count: clarificationCount,
             }),
@@ -236,7 +258,10 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
     if (parsed.selected_option_id != null) {
       parsed.selected_option_id = applyConstitutionalScoreFloor(
         subjectCode,
-        accumulatedAnswer ?? answer,
+        [
+          ...assessmentMemory.map((entry) => entry.answer),
+          accumulatedAnswer ?? answer,
+        ].join("\n"),
         String(parsed.selected_option_id),
         governedOptions,
       );
