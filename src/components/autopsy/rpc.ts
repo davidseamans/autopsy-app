@@ -205,6 +205,27 @@ export const recordAutopsyInterpretation = (params: {
     p_reconciled: params.reconciled ?? false,
   });
 
+export interface PriorInterpretation {
+  question_id: string;
+  selected_option_id: string;
+  fact_flags: string[];
+}
+
+export async function getPriorAutopsyInterpretations(
+  run_id: string,
+): Promise<PriorInterpretation[]> {
+  const { data, error } = await supabase
+    .from("autopsy_answer_interpretations")
+    .select("question_id, selected_option_id, fact_flags")
+    .eq("run_id", run_id);
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    question_id: String(row.question_id),
+    selected_option_id: String(row.selected_option_id),
+    fact_flags: Array.isArray(row.fact_flags) ? row.fact_flags.map(String) : [],
+  }));
+}
+
 export const finalizeAutopsyRun = (run_id: string) =>
   rpc("finalize_autopsy_run", { p_run_id: run_id });
 

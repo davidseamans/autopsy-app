@@ -15,6 +15,10 @@ describe("conversational Autopsy boundary", () => {
   const app = readFileSync(resolve("src/App.tsx"), "utf8");
   const previewSession = readFileSync(resolve("api/autopsy-preview-session.ts"), "utf8");
   const verdict = readFileSync(resolve("src/components/autopsy/Autopsy.tsx"), "utf8");
+  const resumeMigration = readFileSync(
+    resolve("supabase/migrations/20260731030000_resume_preview_autopsy_runs.sql"),
+    "utf8",
+  );
 
   it("uses the canonical run, answer and finalisation RPC path", () => {
     expect(component).toContain("createAutopsyRun");
@@ -120,6 +124,12 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("initializationRef");
     expect(component).toContain("initializationRef.current.presented");
     expect(component).toContain("initializationRef.current.presented = true");
+    expect(component).toContain("autopsy.introduction.presented.${id}");
+    expect(component).toContain("Welcome back. Let us continue.");
+    expect(component).toContain("firstUnanswered");
+    expect(component).toContain("getPriorAutopsyInterpretations");
+    expect(resumeMigration).toContain("created_at >= now() - interval '4 hours'");
+    expect(resumeMigration).toContain("return v_run_id");
   });
 
   it("uses only a neutral transition between subjects", () => {

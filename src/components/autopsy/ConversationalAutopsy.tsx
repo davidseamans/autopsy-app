@@ -12,6 +12,7 @@ import {
   finalizeAutopsyRun,
   GatewayQuestion,
   getGatewayPayload,
+  getPriorAutopsyInterpretations,
   recordAutopsyAnswer,
   recordAutopsyInterpretation,
 } from "./rpc";
@@ -226,7 +227,12 @@ export function ConversationalAutopsy() {
   const assessmentMemoryRef = useRef<AssessmentMemoryEntry[]>([]);
   const initializationRef = useRef<{
     email: string;
-    promise: Promise<{ id: string; ordered: GatewayQuestion[] }>;
+    promise: Promise<{
+      id: string;
+      ordered: GatewayQuestion[];
+      resumeIndex: number;
+      priorMemory: AssessmentMemoryEntry[];
+    }>;
     presented: boolean;
   } | null>(null);
   const embeddedFlightDeck = isFlightDeckEmbedded();
@@ -312,27 +318,66 @@ export function ConversationalAutopsy() {
             if (ordered.length !== 12) {
               throw new Error("The governed twelve subjects were not available.");
             }
-            return { id, ordered };
+            const firstUnanswered = ordered.findIndex((question) => !question.answered);
+            const resumeIndex = firstUnanswered < 0 ? 11 : firstUnanswered;
+            const prior = await getPriorAutopsyInterpretations(id);
+            const priorByQuestion = new Map(
+              prior.map((entry) => [entry.question_id, entry]),
+            );
+            const priorMemory = ordered
+              .slice(0, resumeIndex)
+              .map((question, subjectIndex) => {
+                const recorded = priorByQuestion.get(String(question.question_id));
+                if (!recorded) return null;
+                const selected = (question.options ?? [])
+                  .map(normaliseOption)
+                  .find((option) => String(option.id) === recorded.selected_option_id);
+                return {
+                  subject_code: question.q_id ?? SUBJECT_ORDER[subjectIndex],
+                  question: presentationFor(question, subjectIndex).prompt,
+                  answer: [
+                    selected?.label ? `Previously recorded answer: ${selected.label}.` : "",
+                    recorded.fact_flags.length
+                      ? `Relevant facts already disclosed: ${recorded.fact_flags.join(", ")}.`
+                      : "",
+                  ].filter(Boolean).join(" "),
+                  interpreted_summary: selected?.label ?? "Earlier answer recorded.",
+                };
+              })
+              .filter((entry): entry is AssessmentMemoryEntry => entry !== null);
+            return { id, ordered, resumeIndex, priorMemory };
           })();
           initializationRef.current = { email, promise, presented: false };
         }
-        const { id, ordered } = await initializationRef.current.promise;
+        const { id, ordered, resumeIndex, priorMemory } =
+          await initializationRef.current.promise;
         if (cancelled) return;
         if (initializationRef.current.presented) return;
         initializationRef.current.presented = true;
         setRunId(id);
         setQuestions(ordered);
-        const first = ordered[0];
-        const firstPresentation = presentationFor(first, 0);
+        setIndex(resumeIndex);
+        assessmentMemoryRef.current = priorMemory;
+        const first = ordered[resumeIndex];
+        const firstPresentation = presentationFor(first, resumeIndex);
         activeSubjectRef.current = {
           id: String(first.question_id),
-          token: `${id}:0:${String(first.question_id)}`,
+          token: `${id}:${resumeIndex}:${String(first.question_id)}`,
           prompt: firstPresentation.prompt,
           boundary: firstPresentation.boundary,
         };
         setBusy(false);
-        setStatus("John is explaining how Autopsy will work.");
-        const opening = `${AUTOPSY_ORIENTATION} ${firstPresentation.prompt}`;
+        const introductionKey = `autopsy.introduction.presented.${id}`;
+        const introductionPresented = sessionStorage.getItem(introductionKey) === "true";
+        sessionStorage.setItem(introductionKey, "true");
+        setStatus(
+          introductionPresented || resumeIndex > 0
+            ? "Resuming your Autopsy."
+            : "John is explaining how Autopsy will work.",
+        );
+        const opening = introductionPresented || resumeIndex > 0
+          ? `Welcome back. Let us continue. ${firstPresentation.prompt}`
+          : `${AUTOPSY_ORIENTATION} ${firstPresentation.prompt}`;
         if (embeddedFlightDeck) {
           postToFlightDeck({
             type: "BUILDOS_AUTOPSY_EVENT",
