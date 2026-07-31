@@ -29,6 +29,26 @@ describe("Autopsy constitutional scoring floors", () => {
     expect(applyConstitutionalScoreFloor("MR_01", answer, "1", options)).toBe("3");
   });
 
+  it("recognises renewed contact with past cleaning clients as real market acceptance", () => {
+    const answer = "I previously ran a cleaning business and I have talked to past clients about starting again.";
+    expect(applyConstitutionalScoreFloor("MR_01", answer, "1", options)).toBe("3");
+  });
+
+  it("does not treat a former cleaning-business owner as unaware of important costs", () => {
+    const answer = "I previously worked as a cleaner and managed my own business.";
+    expect(applyConstitutionalScoreFloor("EL_02", answer, "1", options)).toBe("2");
+  });
+
+  it("recognises former cleaning ownership plus named recurring costs as strong economic understanding", () => {
+    const answer = "I previously ran a cleaning business. Labour, travel, chemicals, insurance and administration all affect the profit on each job.";
+    expect(applyConstitutionalScoreFloor("EL_02", answer, "1", options)).toBe("3");
+  });
+
+  it("recognises partly completed written SOPs as material systemisation", () => {
+    const answer = "My written SOPs are about 30 percent complete and I know I have to finish and test them.";
+    expect(applyConstitutionalScoreFloor("OP_02", answer, "1", options)).toBe("2");
+  });
+
   it("recognises a budgeted six-month household position", () => {
     const answer = "We reviewed our expenses, my partner is working, allowed a 30% contingency and can manage for six months.";
     expect(applyConstitutionalScoreFloor("CR_01", answer, "1", options)).toBe("3");

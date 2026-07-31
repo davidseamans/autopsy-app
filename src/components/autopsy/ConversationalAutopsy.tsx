@@ -70,11 +70,11 @@ const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }>
   },
   EL_02: {
     prompt: "As you complete more cleaning jobs, which repeating costs could quietly consume the money you expect to keep?",
-    boundary: "Recurring cost drivers that grow with or repeatedly support jobs, including labour time, travel, supplies, rework, insurance allocation and administration. Exclude one-off startup purchases.",
+    boundary: "Recurring cost drivers that grow with or repeatedly support jobs, including labour time, travel, supplies, rework, insurance allocation and administration. Prior ownership of a cleaning business is relevant operating context: it rules out treating the person as merely unaware, while a clear account of the main recurring costs and their effect on job profit supports the strongest level. Exclude one-off startup purchases.",
   },
   MR_01: {
     prompt: "What has a real potential customer actually done—not merely said—that suggests they may buy from you?",
-    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm. A genuine booking for specific work on an agreed date is a real customer commitment; do not require a deposit, completed work, signed purchase order or prior payment.",
+    boundary: "Observed customer behaviour rather than encouragement, market size or the operator's enthusiasm. A genuine booking for specific work on an agreed date is a real customer commitment; do not require a deposit, completed work, signed purchase order or prior payment. Past cleaning clients who previously hired or paid the person are strong proof that customers will pay, especially when the person has contacted them again.",
   },
   MR_02: {
     prompt: "Who would you expect to clean for first, what problem would you remove, and why might they choose you?",
@@ -86,7 +86,7 @@ const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }>
   },
   OP_02: {
     prompt: "Could another person follow your cleaning method and produce the same result without guessing?",
-    boundary: "A repeatable method, sequence, tools and quality check, not general willingness or practical effort.",
+    boundary: "A repeatable method, sequence, tools and quality check, not general willingness or practical effort. Partly completed written SOPs are material progress and must not be treated as merely knowing unwritten steps. An incomplete or untested SOP supports the middle level; only a complete repeatable method supports the strongest level.",
   },
   EX_01: {
     prompt: "What have you already done in the real world that taught you something planning could not?",

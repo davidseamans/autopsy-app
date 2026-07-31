@@ -7,6 +7,9 @@ type GovernedOption = {
 const includesAll = (text: string, patterns: RegExp[]) =>
   patterns.every((pattern) => pattern.test(text));
 
+const countMatches = (text: string, patterns: RegExp[]) =>
+  patterns.filter((pattern) => pattern.test(text)).length;
+
 const floorForSpokenFacts = (subjectCode: string, answer: string): number | null => {
   const text = answer.toLowerCase();
 
@@ -30,9 +33,42 @@ const floorForSpokenFacts = (subjectCode: string, answer: string): number | null
   ) return 3;
 
   if (
+    subjectCode === "EL_02" &&
+    /\b(previously|before|formerly|used to|have|had)\b/.test(text) &&
+    (
+      (
+        /\b(ran|managed|owned|operated)\b/.test(text) &&
+        /\b(cleaning business|cleaning company)\b/.test(text)
+      ) ||
+      (
+        /\b(worked|work|experience)\b.{0,30}\b(cleaner|cleaning)\b/.test(text) &&
+        /\b(ran|managed|owned|operated)\b.{0,20}\b(my|our|own|a)\b.{0,20}\b(business|company)\b/.test(text)
+      )
+    )
+  ) {
+    const recurringCostCount = countMatches(text, [
+      /\b(labou?r|wages?|staff|time)\b/,
+      /\b(travel|fuel|vehicle|transport)\b/,
+      /\b(supplies|chemicals?|materials?|equipment)\b/,
+      /\b(rework|callbacks?|quality)\b/,
+      /\b(insurance|administration|admin|tax|gst|software)\b/,
+    ]);
+    return recurringCostCount >= 2 ? 3 : 2;
+  }
+
+  if (
     subjectCode === "MR_01" &&
     /\b(booked|booking|scheduled|confirmed|accepted)\b/.test(text) &&
     /\b(job|work|clean|client|customer|day|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(text)
+  ) return 3;
+
+  if (
+    subjectCode === "MR_01" &&
+    /\b(past|previous|former|old|existing)\s+(clients?|customers?)\b/.test(text) &&
+    (
+      /\b(talked|spoke|contacted|called|messaged|approached)\b/.test(text) ||
+      /\b(paid|hired|used|booked|rebooked|returned|cleaned|worked)\b/.test(text)
+    )
   ) return 3;
 
   if (
@@ -56,6 +92,16 @@ const floorForSpokenFacts = (subjectCode: string, answer: string): number | null
     /\b(checklist|written|wrote|documented|steps?|sequence|procedure|method)\b/.test(text) &&
     /\b(tools?|supplies|chemicals?|quality|check)\b/.test(text)
   ) return /\b(used|tested|repeat|each|every)\b/.test(text) ? 3 : 2;
+
+  if (
+    subjectCode === "OP_02" &&
+    /\b(sop|sops|standard operating procedure|procedures?|method|process)\b/.test(text) &&
+    (
+      /\b\d{1,2}\s*(?:%|percent)\b/.test(text) ||
+      /\b(partly|partially|incomplete|started|underway|in progress)\b/.test(text)
+    ) &&
+    /\b(written|documented|complete|completed|developed|prepared|working on|in progress)\b/.test(text)
+  ) return 2;
 
   return null;
 };
