@@ -93,7 +93,7 @@ Return JSON only:
   "selected_option_id": "an exact supplied option id, or null",
   "confidence": 0 to 1,
   "plain_summary": "one short, plain-English reflection addressed directly to the person as you",
-  "spoken_acknowledgement": "a natural acknowledgement of one fact the person gave, under 14 words",
+  "spoken_acknowledgement": "an empty string",
   "clarifying_question": "one short question, or null",
   "conversation_reply": "a brief direct response to a non-answer turn, or null"
 }
@@ -130,7 +130,7 @@ Map the decisive and supporting facts together. Do not let a long answer, conver
 
 The plain_summary is an internal audit note and is never spoken to the person. Keep it factual and under 18 words. Never use specialist shorthand such as cash runway, evidence, score, dimension, hard fail, maturity or assessment engine.
 
-The spoken_acknowledgement is heard by the person before the next subject. Reflect one fact they actually supplied without praising, judging, coaching, introducing jargon or mentioning proof, evidence, scoring or an option. Examples: "Working alongside an experienced cleaner has given you practical exposure." "Those future bookings are a real customer commitment."`;
+The spoken_acknowledgement must always be an empty string. Do not generate or speak a summary, paraphrase, judgement or reflection between subjects. The next subject should follow a short neutral transition only.`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -258,11 +258,7 @@ The spoken_acknowledgement is heard by the person before the next subject. Refle
         .replace(/^Yes\s*[-—:]\s*/i, "")
         .replace(/^No\s*[-—:]\s*/i, "")
         .trim();
-      parsed.spoken_acknowledgement = String(parsed.spoken_acknowledgement ?? "")
-        .replace(/\b(proof|evidence|score|rubric|cash runway)\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180);
+      parsed.spoken_acknowledgement = "";
     }
     if (
       parsed.clarifying_question != null &&

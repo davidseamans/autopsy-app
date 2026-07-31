@@ -118,9 +118,11 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("initializationRef.current.presented = true");
   });
 
-  it("keeps a resolved clarification brief before moving on", () => {
-    expect(component).toContain("resolvedAfterClarification");
-    expect(component).toContain("resolvedAfterClarification ? undefined : chosen.spoken_acknowledgement");
+  it("uses only a neutral transition between subjects", () => {
+    expect(endpoint).toContain("spoken_acknowledgement must always be an empty string");
+    expect(endpoint).toContain('parsed.spoken_acknowledgement = ""');
+    expect(component).toContain("conversationalTransition(undefined, nextIndex)");
+    expect(component).not.toContain("chosen.spoken_acknowledgement");
   });
 
   it("does not accept another embedded answer while the current turn is being processed", () => {
@@ -131,6 +133,11 @@ describe("conversational Autopsy boundary", () => {
   it("does not repeat the verdict headline in the supporting explanation", () => {
     expect(verdict).toContain("Why Autopsy reached this result");
     expect(verdict).not.toContain('<div class="result"><h1>${escapeExplanation(verdictName)}</h1><p>${escapeExplanation(explanationProfile.decision)}</p></div>');
+  });
+
+  it("does not claim there is only one unclear point in a mixed dimension", () => {
+    expect(verdict).toContain("Some parts remain unclear");
+    expect(verdict).not.toContain("One thing to clarify");
   });
 
   it("keeps the embedded assessment controls inside the Flight Deck viewport", () => {

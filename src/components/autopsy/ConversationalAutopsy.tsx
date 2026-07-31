@@ -374,17 +374,13 @@ export function ConversationalAutopsy() {
       prompt: nextPresentation.prompt,
       boundary: nextPresentation.boundary,
     };
-    const resolvedAfterClarification = clarificationCount > 0;
     setIndex(nextIndex);
     setCombinedAnswer("");
     setClarificationCount(0);
     storeInterpretation(null);
     setConversationReply("");
     setStatus("Answer in your own words.");
-    const nextWords = `${conversationalTransition(
-      resolvedAfterClarification ? undefined : chosen.spoken_acknowledgement,
-      nextIndex,
-    )} ${nextPresentation.prompt}`;
+    const nextWords = `${conversationalTransition(undefined, nextIndex)} ${nextPresentation.prompt}`;
     if (embeddedFlightDeck) {
       postToFlightDeck({
         type: "BUILDOS_AUTOPSY_EVENT",
