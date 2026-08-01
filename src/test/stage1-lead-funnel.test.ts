@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/20260801080000_stage1_aggregate_lead_volume.sql"),
   "utf8",
 );
+const indexMigration = readFileSync(
+  resolve("supabase/migrations/20260801091000_stage1_funnel_totals_created_by_index.sql"),
+  "utf8",
+);
 const quoteMigration = readFileSync(
   resolve("supabase/migrations/20260801041235_stage1_quote_to_invoice.sql"),
   "utf8",
@@ -35,6 +39,8 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(migration).toContain("current_user_can_use_stage1_run");
     expect(migration).toContain("security invoker");
     expect(migration).toContain("from public, anon");
+    expect(indexMigration).toContain("stage1_funnel_totals_created_by_idx");
+    expect(indexMigration).toContain("public.stage1_funnel_totals(created_by)");
   });
 
   it("uses one cumulative total rather than individual lead creation", () => {
