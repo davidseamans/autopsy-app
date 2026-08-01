@@ -174,12 +174,19 @@ const AUTOPSY_ORIENTATION = [
   "Let us begin.",
 ].join(" ");
 
+const NEUTRAL_TRANSITIONS = [
+  "Thanks for that. Let us look at the next practical area.",
+  "All right. Let us move to the next practical area.",
+  "Thank you. Here is the next practical area.",
+  "I hear you. Let us continue.",
+] as const;
+
 const transitionFor = (nextIndex: number) =>
   nextIndex === 11
     ? "All right. One final practical area."
-    : nextIndex % 2 === 0
-      ? "Thank you. Let us look at the next practical area."
-      : "All right. Let us move to the next practical area.";
+    : NEUTRAL_TRANSITIONS[nextIndex % NEUTRAL_TRANSITIONS.length];
+
+const candidateSafeFailure = (fallback: string) => fallback;
 
 const conversationalTransition = (acknowledgement: string | undefined, nextIndex: number) =>
   `${acknowledgement?.trim() ? `${acknowledgement.trim()} ` : ""}${transitionFor(nextIndex)}`;
@@ -394,7 +401,7 @@ export function ConversationalAutopsy() {
           initializationRef.current = null;
         }
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : "Autopsy could not start.");
+          setError(candidateSafeFailure("Autopsy could not start. Please reload and try again."));
           setBusy(false);
         }
       }
@@ -640,7 +647,7 @@ export function ConversationalAutopsy() {
         }
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That answer could not be interpreted.");
+      setError(candidateSafeFailure("John could not complete that step. Your answer has not been lost. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -662,7 +669,7 @@ export function ConversationalAutopsy() {
     try {
       await saveSelectionAndAdvance(confirmedInterpretation);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "That answer could not be saved.");
+      setError(candidateSafeFailure("John could not save that step. Please try again."));
     } finally {
       confirmationSavingRef.current = false;
       setBusy(false);
