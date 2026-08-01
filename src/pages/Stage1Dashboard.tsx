@@ -17,6 +17,7 @@ import {
   loadStage1Board,
 } from "@/lib/jobProvisioning";
 import { getActiveRunId, getStage1RunId, setStage1RunId } from "@/lib/progression";
+import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
 import {
   fetchStage1Units,
   loadStage1UnitsCache,
@@ -754,190 +755,77 @@ function KpiCard({
   );
 }
 
-// ---------- Business Details (simplified dialog) ----------
-type BDForm = {
-  business_name: string;
-  abn: string;
-  trading_name: string;
-  business_address: string;
-  contact_name: string;
-  phone: string;
-  email: string;
-};
-const EMPTY_BD: BDForm = {
-  business_name: "",
-  abn: "",
-  trading_name: "",
-  business_address: "",
-  contact_name: "",
-  phone: "",
-  email: "",
-};
-const BD_REQUIRED: (keyof BDForm)[] = ["abn"];
-const BD_EXTRA_KEY = "stage1.business_details.extras";
-
-const normaliseAbn = (value: string) => value.replace(/\D/g, "");
-const isEnteredAbn = (value: string) => normaliseAbn(value).length === 11;
-
-type BusinessGateStatus = "missing" | "entered" | "pending_verification" | "verified" | "invalid";
-
-function getBusinessGateStatus(form: BDForm): BusinessGateStatus {
-  return isEnteredAbn(form.abn) ? "entered" : "missing";
-}
-
-
-function useBusinessDetails() {
+// ---------- Business Details (server-verified gate) ----------
+function useBusinessDetails(runId: string | null, isDemo: boolean) {
   const [loaded, setLoaded] = useState(false);
-  const [complete, setComplete] = useState(false);
-  const [form, setForm] = useState<BDForm>(EMPTY_BD);
-  const [rowId, setRowId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("business_identity_profile")
-          .select("*")
-          .order("created_at", { ascending: false, nullsFirst: false })
-          .limit(1)
-          .maybeSingle();
-        const extras = (() => {
-          try { return JSON.parse(localStorage.getItem(BD_EXTRA_KEY) || "{}"); } catch { return {}; }
-        })();
-        if (data) {
-          setRowId((data as any).id ?? null);
-          const merged: BDForm = {
-            ...EMPTY_BD,
-            business_name: data.business_name ?? "",
-            contact_name: data.contact_name ?? "",
-            phone: data.phone ?? "",
-            email: data.email ?? "",
-            abn: data.abn ?? "",
-            trading_name: extras.trading_name ?? "",
-            business_address: extras.business_address ?? "",
-          };
-          setForm(merged);
-          setComplete(isEnteredAbn(merged.abn));
-        }
-      } catch {
-        /* ignore */
-      }
+    if (isDemo) {
       setLoaded(true);
-    })();
-  }, []);
+      return;
+    }
+    if (!runId) {
+      setLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    setLoaded(false);
+    setError(null);
+    void fetchBusinessIdentity(runId)
+      .then(({ profile: next }) => { if (!cancelled) setProfile(next); })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
+      })
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [isDemo, runId]);
 
-  async function save(next: BDForm): Promise<{ ok: boolean; error?: string }> {
-    const missing = BD_REQUIRED.filter((k) => !String(next[k] ?? "").trim());
-    if (missing.length) return { ok: false, error: `Missing: ${missing.join(", ")}` };
-    const payload: any = {
-      business_name: next.business_name,
-      contact_name: next.contact_name,
-      phone: next.phone,
-      email: next.email,
-      abn: next.abn,
-    };
-    if (rowId) payload.id = rowId;
-    const { data, error } = await supabase
-      .from("business_identity_profile")
-      .upsert(payload)
-      .select()
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    if (data?.id) setRowId(data.id);
-    localStorage.setItem(
-      BD_EXTRA_KEY,
-      JSON.stringify({
-        trading_name: next.trading_name,
-        business_address: next.business_address,
-      }),
-    );
-    setForm(next);
-    setComplete(isEnteredAbn(next.abn));
-    return { ok: true };
-  }
-
-  const gateStatus = getBusinessGateStatus(form);
-  const canOperate = gateStatus === "entered";
-  return { loaded, complete, form, setForm, save, gateStatus, canOperate };
+  const canOperate = isDemo || profile?.verified === true;
+  return { loaded, complete: canOperate, profile, error, canOperate };
 }
 
 function BusinessDetailsDialog({
   open,
   onOpenChange,
-  hook,
+  runId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  hook: ReturnType<typeof useBusinessDetails>;
+  runId: string | null;
 }) {
-  const { form, setForm, save } = hook;
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const set = <K extends keyof BDForm>(k: K, v: BDForm[K]) =>
-    setForm((p) => ({ ...p, [k]: v }));
-
-  const missing = BD_REQUIRED.filter((k) => !String(form[k] ?? "").trim());
-
-  async function onSave() {
-    setSaving(true);
-    setErr(null);
-    const res = await save(form);
-    setSaving(false);
-    if (!res.ok) {
-      setErr(res.error ?? "Save failed");
-      return;
-    }
-    onOpenChange(false);
-  }
-
-  const field = (id: keyof BDForm, label: string, required?: boolean, type: string = "text") => (
-    <div className="space-y-1.5" key={id}>
-      <Label htmlFor={id}>
-        {label} {required && <span className="text-destructive">*</span>}
-      </Label>
-      <Input
-        id={id}
-        type={type}
-        value={form[id]}
-        onChange={(e) => set(id, e.target.value)}
-      />
-    </div>
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Complete Business Details</DialogTitle>
+          <DialogTitle>Before you start First 5 Jobs</DialogTitle>
           <DialogDescription>
-            Your ABN is required before you can create quotes, convert jobs, or record business transactions. ATO/ABR verification will be wired next; for now this gate requires a correctly entered 11-digit ABN.
+            John will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          {field("business_name", "Business name")}
-          {field("abn", "ABN", true)}
-          {field("trading_name", "Trading name (if different)")}
-          <div className="md:col-span-2">
-            {field("business_address", "Business address")}
+        <div className="space-y-3">
+          <div className="rounded-lg border p-4">
+            <p className="font-medium">I already have an ABN</p>
+            <p className="mt-1 text-sm text-muted-foreground">Enter your details, then we will check the ABN and GST status against the register.</p>
+            {runId ? (
+              <Button asChild className="mt-3">
+                <Link to={`/business-setup?runId=${encodeURIComponent(runId)}`}>Enter Business Details</Link>
+              </Button>
+            ) : (
+              <Button className="mt-3" disabled>Enter Business Details</Button>
+            )}
           </div>
-          {field("contact_name", "Contact name")}
-          {field("phone", "Contact phone")}
-          {field("email", "Contact email", false, "email")}
+          <div className="rounded-lg border p-4">
+            <p className="font-medium">I need to apply for an ABN</p>
+            <p className="mt-1 text-sm text-muted-foreground">Use the official government guide. Applying is free. Come back here once the ABN is active.</p>
+            <Button asChild variant="outline" className="mt-3">
+              <a href="https://www.abr.gov.au/business-super-funds-charities/applying-abn" target="_blank" rel="noreferrer">Show me how to apply</a>
+            </Button>
+          </div>
         </div>
-
-        {err && <p className="text-xs text-destructive">{err}</p>}
-
-        <DialogFooter className="gap-2">
-          <p className="text-xs text-muted-foreground mr-auto">
-            {missing.length === 0 ? "All required fields complete." : `Missing: ${missing.join(", ")}`}
-          </p>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave} disabled={saving || missing.length > 0}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Save business details
-          </Button>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Not now</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1733,13 +1621,9 @@ function QuoteDetailDialog({
 
   if (!quote) return null;
   const isConverted = !!quote.converted;
-  // Converted quotes can still amend the flow-through fields (client, site, amount).
-  // Fully read-only is no longer the default.
-  const readOnly = false;
   const isSent = quote.status === "Sent" && !isConverted;
   const isRejected = quote.status === "Rejected" && !isConverted;
-  // Fields editable for amendment: Sent OR Converted (flow-through to job)
-  const canEditFlowThrough = isSent || isConverted;
+  const canEditFlowThrough = isSent;
   const hadNotes = !!quote.notes;
 
   const handleSave = () => {
@@ -1774,7 +1658,7 @@ function QuoteDetailDialog({
           <DialogTitle>Quote Detail</DialogTitle>
           <DialogDescription>
             {isConverted
-              ? "This quote has been converted into a job. Amendments to client, location, or quote amount will update the linked job and ledger."
+              ? "This accepted quote is locked. If the agreed work or price changes, issue a replacement quote so the history remains clear."
               : isSent
                 ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
                 : "Status changes happen in Quote Activity."}
@@ -1784,7 +1668,7 @@ function QuoteDetailDialog({
         {isConverted && (
           <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-xs text-amber-900">
             <div className="font-semibold">This quote has already been converted into a job.</div>
-            <div>Changing client, location, or quote amount will update the linked job and ledger.</div>
+            <div>The accepted customer, work and price are now part of the commercial record.</div>
           </div>
         )}
 
@@ -1879,8 +1763,14 @@ function Stage1DashboardInner() {
   const [searchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
   const { user, loading: authLoading } = useAuth();
-  const bd = useBusinessDetails();
+  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  const bd = useBusinessDetails(activeRunId, isDemo);
   const [bdOpen, setBdOpen] = useState(false);
+  useEffect(() => {
+    if (!isDemo && activeRunId && bd.loaded && !bd.canOperate) setBdOpen(true);
+  }, [activeRunId, bd.canOperate, bd.loaded, isDemo]);
   const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
@@ -1904,9 +1794,6 @@ function Stage1DashboardInner() {
   // from this component.
   const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
-  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
-    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
-  );
   const unitsRef = useRef<ProofUnit[]>(units);
   useEffect(() => {
     unitsRef.current = units;
@@ -3201,7 +3088,7 @@ function Stage1DashboardInner() {
     if (bd.canOperate) return true;
     toast({
       title: "Business registration required",
-      description: `Enter your ABN before you ${action}.`,
+      description: `Complete and verify your Business Details before you ${action}.`,
     });
     setBdOpen(true);
     return false;
@@ -3241,6 +3128,11 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
+          {!isDemo && activeRunId && bd.canOperate ? (
+            <Button asChild className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
+              <Link to={`/launchpad/quote/new?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> New Quote</Link>
+            </Button>
+          ) : null}
           {activeRunId ? (
             <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
@@ -3263,26 +3155,26 @@ function Stage1DashboardInner() {
 
       {(isDemo || (bd.loaded && bd.complete)) && (
         <p className="text-xs text-muted-foreground -mt-2">
-          Business registration is ready. You can now create quotes and record Stage 1 transactions. Business details can be updated if required.
+          Business registration is ready. You can create written quotes and record Stage 1 transactions. The verified identity is locked; only the customer-facing business name can change.
         </p>
       )}
 
       {!isDemo && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Complete Business Registration</CardTitle>
+            <CardTitle className="text-base">Let’s set up your Business Details first</CardTitle>
             <CardDescription>
-              Enter your ABN before creating quotes, converting jobs, or recording business transactions.
+              You can look around the summary, but quoting and job activity stay locked until your ABN is verified.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm text-amber-900">
-              Required: <span className="font-semibold">Australian Business Number (ABN)</span>.
-              Trading name and other details can be added later.
+            <div className="text-sm text-amber-900 space-y-1">
+              <p>John: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
+              {bd.error ? <p className="text-xs text-destructive">{bd.error}</p> : null}
             </div>
             <Button onClick={() => setBdOpen(true)} className="gap-2 shrink-0">
               <IdCard className="h-4 w-4" />
-              Enter ABN
+              Choose your next step
             </Button>
           </CardContent>
         </Card>
@@ -4831,7 +4723,7 @@ function Stage1DashboardInner() {
         onDelete={() => { /* no-op */ }}
         onOpenDetailedReport={(n) => openReport(n)}
       />
-      <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
+      <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} runId={activeRunId} />
       <DrillCurtain
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}

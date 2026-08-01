@@ -385,6 +385,8 @@ export interface InvoiceLine {
   gstAmount?: number;
   gstOverridden?: boolean;
   proofName?: string;
+  /** Generated quote-conversion invoices are immutable document records. */
+  source?: string;
 }
 
 export type PaymentMethod =

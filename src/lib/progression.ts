@@ -402,8 +402,8 @@ export const ROUTING_COPY: Record<VerdictBand, RoutingCopy> = {
     body:
       "The candidate has demonstrated enough current readiness to enter the First 5 Jobs test. That stage will test the evidence through real customers, real costs and disciplined records.",
     primaryCta: {
-      label: "Open Stage 1 Dashboard",
-      to: (id) => `/stage-1?runId=${id}`,
+      label: "Start First 5 Jobs",
+      to: (id) => `/launchpad?runId=${id}`,
     },
     secondaryCta: {
       label: "Confirm Readiness Checklist",

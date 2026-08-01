@@ -15,7 +15,15 @@ type Mode = "signin" | "signup";
  * based solely on the Supabase session — never on tester_email or a
  * client-supplied user_id.
  */
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({
+  children,
+  heading,
+  description,
+}: {
+  children: ReactNode;
+  heading?: string;
+  description?: string;
+}) {
   const { session, loading } = useAuth();
 
   if (loading) {
@@ -27,13 +35,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!session) {
-    return <AuthForm />;
+    return <AuthForm heading={heading} description={description} />;
   }
 
   return <>{children}</>;
 }
 
-function AuthForm() {
+function AuthForm({ heading, description }: { heading?: string; description?: string }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,8 +72,8 @@ function AuthForm() {
         });
         if (error) throw error;
       }
-    } catch (err: any) {
-      setError(err?.message ?? "Authentication failed.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed.");
     } finally {
       setBusy(false);
     }
@@ -79,10 +87,10 @@ function AuthForm() {
             <Skull className="h-7 w-7 text-[hsl(var(--autopsy-accent))]" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {mode === "signin" ? "Sign in to continue" : "Create your account"}
+            {mode === "signin" ? heading ?? "Sign in to continue" : "Create your account"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            A signed-in account is required to start an Autopsy run.
+            {description ?? "A signed-in account is required to start an Autopsy run."}
           </p>
         </div>
 

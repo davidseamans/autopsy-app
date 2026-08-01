@@ -328,43 +328,14 @@ export interface ConvertQuoteResult {
 /** Convert a Stage 1 sandbox quote into a Stage 1 sandbox job. */
 export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<ConvertQuoteResult> {
   try {
-    const userId = await currentUserId();
-    if (!userId) return { ok: false, error: "A valid session is required to convert a Stage 1 quote." };
-
-    const { data: quote, error: quoteLoadErr } = await supabase
-      .from("stage1_quotes")
-      .select("id,autopsy_run_id,stage_progress_id,client_name,site_address,amount,quote_sequence_number")
-      .eq("id", input.quoteId)
-      .single();
-    if (quoteLoadErr) return { ok: false, error: `Quote load: ${quoteLoadErr.message}` };
-
-    const nowIso = new Date().toISOString();
-    const { error: accErr } = await supabase
-      .from("stage1_quotes")
-      .update({ status: "accepted", accepted_at: nowIso })
-      .eq("id", input.quoteId);
-    if (accErr) return { ok: false, error: `Quote accept: ${accErr.message}` };
-
-    const { data: job, error: jobErr } = await supabase
-      .from("stage1_jobs")
-      .insert({
-        autopsy_run_id: quote.autopsy_run_id,
-        stage_progress_id: quote.stage_progress_id,
-        client_name: quote.client_name,
-        job_title: quote.site_address || quote.client_name,
-        job_status: "draft",
-        notes: `Created from Stage 1 quote ${makeQuoteNumber(quote.quote_sequence_number)}.`,
-        created_by: userId,
-      })
-      .select("id, job_sequence_number")
-      .single();
-    if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
-
-    await supabase.from("stage1_quotes").update({ stage1_job_id: job.id }).eq("id", input.quoteId);
+    const { data, error } = await supabase.rpc("accept_stage1_quote", { p_quote_id: input.quoteId });
+    if (error) return { ok: false, error: error.message };
+    const job = Array.isArray(data) ? data[0] : data;
+    if (!job?.job_id) return { ok: false, error: "The accepted quote did not create a job." };
 
     return {
       ok: true,
-      jobId: job.id as string,
+      jobId: String(job.job_id),
       jobNumber: `J-${job.job_sequence_number ?? ""}`,
     };
   } catch (e) {

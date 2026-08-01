@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
-import { isBusinessVerified } from "@/lib/businessIdentity";
+import { Link, useSearchParams } from "react-router-dom";
+import { fetchBusinessIdentity } from "@/lib/businessIdentity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,32 +41,37 @@ function StatusPill({ status }: { status: SetupStatus }) {
 }
 
 export default function Launchpad() {
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get("runId") ?? "";
   const [setupStatus, setSetupStatus] = useState<SetupStatus>("loading");
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("business_identity_profile")
-        .select("*")
-        .order("created_at", { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle();
-      if (error || !data) {
+      if (!runId) {
         setSetupStatus("incomplete");
         return;
       }
-      setSetupStatus(isBusinessVerified(data as any) ? "complete" : "incomplete");
+      try {
+        const { profile } = await fetchBusinessIdentity(runId);
+        setSetupStatus(profile?.verified ? "complete" : "incomplete");
+      } catch {
+        setSetupStatus("incomplete");
+      }
     })();
-  }, []);
+  }, [runId]);
+
+  const withRun = (path: string) => runId ? `${path}?runId=${encodeURIComponent(runId)}` : path;
+  const businessDetailsPath = runId
+    ? `/business-setup?runId=${encodeURIComponent(runId)}&from=launchpad`
+    : "/business-setup?from=launchpad";
 
   return (
     <div className="container max-w-4xl py-10 space-y-8">
       <header className="space-y-2">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">Launchpad Intake</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Get set up before your first job</h1>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Launchpad</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Welcome to your First 5 Jobs</h1>
         <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-          Launchpad is a guided intake layer. It writes to the same underlying records as Core, but keeps
-          first-time operators away from technical admin screens.
+          Launchpad is a guided Stage 1 intake layer. It captures early commercial evidence without writing premature records into Core.
         </p>
       </header>
 
@@ -92,7 +96,7 @@ export default function Launchpad() {
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline" size="sm">
-                <Link to="/business-setup">
+                <Link to={businessDetailsPath}>
                   Go to Business Details <ArrowRight className="ml-2 h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -116,11 +120,15 @@ export default function Launchpad() {
               </div>
             </CardHeader>
             <CardContent>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/launchpad/quote/new">
-                  Start Simple Quote <ArrowRight className="ml-2 h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              {setupStatus === "complete" ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link to={withRun("/launchpad/quote/new")}>
+                    Start Simple Quote <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled>Verify Business Details first</Button>
+              )}
             </CardContent>
           </Card>
         </li>
@@ -135,12 +143,11 @@ export default function Launchpad() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-base">3. Track Quote Outcome</CardTitle>
-                  <Badge variant="outline" className="text-muted-foreground">Coming soon</Badge>
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
                   Every quote moves through one of four statuses: <strong>Sent</strong>, <strong>Accepted</strong>,
                   <strong> Declined</strong>, or <strong>Expired</strong>. Tracking lives here once the simple
-                  quote flow is built.
+                  quote flow records it.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -157,7 +164,6 @@ export default function Launchpad() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <CardTitle className="text-base">4. Convert Accepted Quote to Job</CardTitle>
-                  <Badge variant="outline" className="text-muted-foreground">Coming soon</Badge>
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
                   Accepted quotes become jobs. The quote reference carries through so the lineage stays intact.
@@ -183,7 +189,7 @@ export default function Launchpad() {
             </CardHeader>
             <CardContent>
               <Button asChild variant="outline" size="sm">
-                <Link to="/stage-1">
+                <Link to={withRun("/stage-1")}>
                   View First 5 Jobs Dashboard <ArrowRight className="ml-2 h-3.5 w-3.5" />
                 </Link>
               </Button>

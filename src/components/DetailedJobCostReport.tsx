@@ -672,7 +672,7 @@ export function DetailedJobCostReport({
         gstOverride: line.gstAmount,
         overridden: line.gstOverridden,
         proof: line.proofName || line.ref || "Recorded",
-        onEdit: () => openInvoiceDialog(line, index),
+        onEdit: line.source === "stage1_quote_conversion" ? undefined : () => openInvoiceDialog(line, index),
       };
     });
 

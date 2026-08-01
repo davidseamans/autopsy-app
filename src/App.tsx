@@ -25,11 +25,28 @@ import NotFound from "./pages/NotFound.tsx";
 import Launchpad from "@/pages/Launchpad";
 import BusinessSetup from "@/pages/BusinessSetup";
 import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
+import Stage1QuoteDocument from "@/pages/Stage1QuoteDocument";
+import AutopsyClaim from "@/pages/AutopsyClaim";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
   <AuthGate>
     <FirstConversation />
+  </AuthGate>
+);
+const BusinessSetupRoute = () => (
+  <AuthGate>
+    <BusinessSetup />
+  </AuthGate>
+);
+const Stage1QuoteNewRoute = () => (
+  <AuthGate>
+    <LaunchpadQuoteNew />
+  </AuthGate>
+);
+const Stage1QuoteDocumentRoute = () => (
+  <AuthGate>
+    <Stage1QuoteDocument />
   </AuthGate>
 );
 
@@ -67,14 +84,16 @@ const App = () => (
               <Route path="/autopsy" element={<Autopsy />} />
               <Route path="/autopsy/history" element={<AutopsyHistory />} />
               <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
+              <Route path="/autopsy/claim/:runId" element={<AutopsyClaim />} />
               <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/autopsy/run/:runId/readiness" element={<ReadinessWorksheet />} />
               <Route path="/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
               <Route path="/stage-1" element={<Stage1Dashboard />} />
               <Route path="/launchpad" element={<Launchpad />} />
-              <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
-              <Route path="/business-setup" element={<BusinessSetup />} />
+              <Route path="/launchpad/quote/new" element={<Stage1QuoteNewRoute />} />
+              <Route path="/stage-1/quote/:quoteId" element={<Stage1QuoteDocumentRoute />} />
+              <Route path="/business-setup" element={<BusinessSetupRoute />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/pipeline" element={<Pipeline />} />

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createServiceClient } from "./_lib/supabase-server.js";
@@ -32,14 +32,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const id = randomUUID();
     const email = `flight-deck+${id}@davidseamans.com.au`;
     const password = randomUUID();
+    const claimToken = randomBytes(32).toString("base64url");
+    const claimTokenHash = createHash("sha256").update(claimToken).digest("hex");
     const service = createServiceClient();
-    const { error: createError } = await service.auth.admin.createUser({
+    const { data: created, error: createError } = await service.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       app_metadata: { autopsy_preview: true },
     });
-    if (createError) throw createError;
+    if (createError || !created.user) throw createError ?? new Error("No preview user");
+
+    const { error: claimError } = await service
+      .from("autopsy_preview_claims")
+      .insert({
+        preview_user_id: created.user.id,
+        claim_token_hash: claimTokenHash,
+      });
+    if (claimError) {
+      await service.auth.admin.deleteUser(created.user.id);
+      throw claimError;
+    }
 
     const auth = createClient(
       process.env.SUPABASE_URL ?? requireEnv("VITE_SUPABASE_URL"),
@@ -53,6 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
+      claim_token: claimToken,
     });
   } catch (error) {
     console.error("Autopsy preview session failed", error);

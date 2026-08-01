@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ConversationalAutopsy } from "@/components/autopsy/ConversationalAutopsy";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
+import { storePreviewClaimToken } from "@/lib/flightDeckBridge";
 
 const INTEGRATION_PREVIEW_HOST =
   "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app";
@@ -33,7 +34,7 @@ export default function PaidAutopsyEntry() {
       })
         .then(async (response) => {
           const payload = await response.json();
-          if (!response.ok || !payload.access_token || !payload.refresh_token) {
+          if (!response.ok || !payload.access_token || !payload.refresh_token || !payload.claim_token) {
             throw new Error(payload.error || "Preview session unavailable.");
           }
           const { error } = await supabase.auth.setSession({
@@ -41,6 +42,7 @@ export default function PaidAutopsyEntry() {
             refresh_token: payload.refresh_token,
           });
           if (error) throw error;
+          storePreviewClaimToken(payload.claim_token);
           setState("authorised");
         })
         .catch(() => setState("blocked"));

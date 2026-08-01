@@ -2631,6 +2631,13 @@ function CandidateVerdict({
     [verdictBody, verdictName],
   );
   const embeddedFlightDeck = isFlightDeckEmbedded();
+  const previewClaimRequired =
+    embeddedFlightDeck && session?.user.app_metadata?.autopsy_preview === true;
+  const first5JobsHref = runId
+    ? previewClaimRequired
+      ? `/autopsy/claim/${runId}?embedded=flight-deck`
+      : `/launchpad?runId=${encodeURIComponent(runId)}${embeddedFlightDeck ? "&embedded=flight-deck" : ""}`
+    : "/launchpad";
 
   const speakVerdict = useCallback(async () => {
     if (!session?.access_token || verdictSpeakingRef.current) return;
@@ -3071,7 +3078,7 @@ function CandidateVerdict({
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           {ready && runId ? (
             <Button asChild className="bg-emerald-600 text-white hover:bg-emerald-700">
-              <Link to={`/stage-1?runId=${runId}`}>Start First 5 Jobs</Link>
+              <Link to={first5JobsHref}>{previewClaimRequired ? "Save result and start First 5 Jobs" : "Start First 5 Jobs"}</Link>
             </Button>
           ) : null}
           <Button onClick={printExplanation} className="bg-sky-500 text-slate-950 hover:bg-sky-400">

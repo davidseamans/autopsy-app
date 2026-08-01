@@ -4,6 +4,20 @@ export const FLIGHT_DECK_ORIGIN =
 export const isFlightDeckEmbedded = () =>
   new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
 
+const PREVIEW_CLAIM_TOKEN_KEY = "autopsy.flight_deck.claim_token";
+
+export function storePreviewClaimToken(token: string) {
+  localStorage.setItem(PREVIEW_CLAIM_TOKEN_KEY, token);
+}
+
+export function readPreviewClaimToken(): string {
+  return localStorage.getItem(PREVIEW_CLAIM_TOKEN_KEY) ?? "";
+}
+
+export function clearPreviewClaimToken() {
+  localStorage.removeItem(PREVIEW_CLAIM_TOKEN_KEY);
+}
+
 export type FlightDeckEvent =
   | {
       type: "BUILDOS_AUTOPSY_EVENT";

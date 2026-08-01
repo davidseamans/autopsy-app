@@ -229,6 +229,7 @@ export async function fetchStage1Units(
             gstAmount: r.gst_amount != null ? Number(r.gst_amount) : undefined,
             gstOverridden: false,
             proofName: typeof r.reference === "string" ? r.reference : undefined,
+            source: typeof r.source === "string" ? r.source : undefined,
           });
           invoiceLinesByJob.set(jobId, list);
         }
@@ -922,13 +923,18 @@ async function doSyncStage1Units(
 
     // Revenue — invoice/payment sandbox events per job. Replace all rows to
     // keep the sandbox in lockstep with the report transaction lines.
-    const { error: revDelErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", jobId);
+    const { error: revDelErr } = await supabase
+      .from("stage1_revenue_events")
+      .delete()
+      .eq("stage1_job_id", jobId)
+      .or("source.is.null,source.neq.stage1_quote_conversion");
     if (revDelErr) {
       ok = false;
       addWriteError(diagnostics, "stage1_revenue_events", "delete existing for job", revDelErr, { stage1_job_id: jobId });
     }
     const revenueRows: Record<string, unknown>[] = [];
     for (const line of invoiceLinesForWrite(u)) {
+      if (line.source === "stage1_quote_conversion") continue;
       if ((line.amount ?? 0) <= 0) continue;
       const split = computeGstSplit({
         inclusive: line.amount,
