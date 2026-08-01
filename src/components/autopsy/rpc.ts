@@ -239,6 +239,7 @@ export interface SelectedAnswerAuditRow {
   score_value: number | null;
   option_hard_fail?: boolean;
   hard_fail: boolean;
+  fact_flags?: string[];
 }
 
 async function fetchSelectedAnswerOptions(selectedOptionIds: any[]) {
@@ -274,7 +275,7 @@ export async function getCurrentRunAnswerAudit(
     .map((a: any) => a.question_id)
     .filter((id: any) => id != null);
 
-  const [optionsResult, runQuestionsResult] = await Promise.all([
+  const [optionsResult, runQuestionsResult, interpretationsResult] = await Promise.all([
     fetchSelectedAnswerOptions(selectedOptionIds).then((data) => ({ data, error: null })),
     questionIds.length
       ? supabase
@@ -283,6 +284,10 @@ export async function getCurrentRunAnswerAudit(
           .eq("run_id", run_id)
           .in("question_id", questionIds)
       : Promise.resolve({ data: [], error: null } as any),
+    supabase
+      .from("autopsy_answer_interpretations")
+      .select("question_id, fact_flags")
+      .eq("run_id", run_id),
   ]);
 
   if (optionsResult.error) throw optionsResult.error;
@@ -295,6 +300,12 @@ export async function getCurrentRunAnswerAudit(
       String(rq.question_id),
       Number(rq.position ?? rq.question_order),
     ] as [string, number]),
+  );
+  const factsByQuestionId = new Map<string, string[]>(
+    (interpretationsResult.data ?? []).map((row: any) => [
+      String(row.question_id),
+      Array.isArray(row.fact_flags) ? row.fact_flags.map(String) : [],
+    ] as [string, string[]]),
   );
 
   return (answers ?? [])
@@ -316,6 +327,7 @@ export async function getCurrentRunAnswerAudit(
             : null,
         option_hard_fail: opt?.option_hard_fail === true,
         hard_fail: readOptionHardFail(opt),
+        fact_flags: factsByQuestionId.get(String(a.question_id)) ?? [],
       };
     })
     .sort((a, b) => (a.question_number ?? 0) - (b.question_number ?? 0));
