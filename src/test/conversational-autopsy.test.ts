@@ -137,6 +137,21 @@ describe("conversational Autopsy boundary", () => {
     expect(endpoint).toContain('parsed.spoken_acknowledgement = ""');
     expect(component).toContain("conversationalTransition(undefined, nextIndex)");
     expect(component).not.toContain("chosen.spoken_acknowledgement");
+    expect(component).toContain("Thanks for that. Let us look at the next practical area.");
+    expect(component).toContain("I hear you. Let us continue.");
+  });
+
+  it("never exposes a backend error or candidate transcript in the assessment UI", () => {
+    expect(component).toContain("candidateSafeFailure");
+    expect(component).not.toContain('setError(cause instanceof Error ? cause.message');
+    expect(component).toContain("John could not complete that step. Your answer has not been lost.");
+  });
+
+  it("tailors a successful explanation to disclosed operating experience", () => {
+    expect(verdict).toContain('factFlags.includes("prior_business_management")');
+    expect(verdict).toContain("not a lesson in basic business ownership");
+    expect(verdict).toContain("not evidence that you are a novice");
+    expect(verdict).toContain("not to re-establish experience you have already disclosed");
   });
 
   it("does not accept another embedded answer while the current turn is being processed", () => {
