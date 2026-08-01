@@ -104,7 +104,7 @@ export default function Launchpad() {
           </Card>
         </li>
 
-        {/* 2. Lead Funnel */}
+        {/* 2. Sales Activity */}
         <li>
           <Card>
             <CardHeader className="flex flex-row items-start gap-4 space-y-0">
@@ -112,9 +112,9 @@ export default function Launchpad() {
                 <FileText className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-base">2. Add Leads and Opportunities</CardTitle>
+                <CardTitle className="text-base">2. Record Lead Volume</CardTitle>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Record each opportunity before quoting it. This lets you see where leads come from and which ones become paying work.
+                  Record one running total of the leads you receive. Individual customer details are not needed until you prepare a quote.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -122,7 +122,7 @@ export default function Launchpad() {
               {setupStatus === "complete" ? (
                 <Button asChild variant="outline" size="sm">
                   <Link to={withRun("/launchpad/leads")}>
-                    Open Lead Funnel <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                    Open Sales Activity <ArrowRight className="ml-2 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               ) : (
@@ -144,7 +144,7 @@ export default function Launchpad() {
                   <CardTitle className="text-base">3. Create and Track the Quote</CardTitle>
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Select a lead, issue the written quote, then record whether it was accepted, declined or expired.
+                  Enter the customer and work details, issue the written quote, then record whether it was accepted, declined or expired.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -201,7 +201,7 @@ export default function Launchpad() {
           <div>
             <CardTitle className="text-sm">Why Launchpad exists</CardTitle>
             <CardDescription className="mt-1 leading-relaxed">
-              The Core screens stay separate for later. Launchpad keeps Stage 1 simple: setup → lead → quote →
+              The Core screens stay separate for later. Launchpad keeps Stage 1 simple: setup → lead count → quote →
               outcome → job → dashboard.
             </CardDescription>
           </div>

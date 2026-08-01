@@ -1,9 +1,11 @@
 import { supabase } from "@/lib/supabase";
+import type { Stage1CleanTypePricingRule } from "@/lib/stage1Pricing";
+
+export type { Stage1CleanTypePricingRule } from "@/lib/stage1Pricing";
 
 export type QuoteLineDraft = {
   description: string;
-  quantity: number;
-  unitPriceExGst: number;
+  estimatedHours: number;
 };
 
 export type Stage1QuoteDocument = {
@@ -20,6 +22,12 @@ export type Stage1QuoteDocument = {
   siteAddress: string | null;
   serviceDescription: string | null;
   paymentTerms: string | null;
+  cleanTypeCode: string | null;
+  cleanTypeLabel: string | null;
+  pricingRuleVersion: number | null;
+  labourServiceAmountExGst: number;
+  estimatedConsumablesCost: number;
+  consumablesSellAmount: number;
   subtotalExGst: number;
   gstAmount: number;
   totalIncGst: number;
@@ -29,8 +37,8 @@ export type Stage1QuoteDocument = {
     id: string;
     position: number;
     description: string;
-    quantity: number;
-    unitPriceExGst: number;
+    estimatedHours: number;
+    chargeOutRateExGst: number;
     lineTotalExGst: number;
   }>;
   invoice: null | {
@@ -52,8 +60,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export async function fetchStage1CleanTypePricingRules(): Promise<Stage1CleanTypePricingRule[]> {
+  const { data, error } = await supabase
+    .from("stage1_clean_type_pricing_rules")
+    .select("code,label,guidance,rule_version,consumables_cost_per_hour,minimum_consumables_cost,target_consumables_margin_pct")
+    .eq("active", true)
+    .order("display_order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((rule) => ({
+    code: String(rule.code),
+    label: String(rule.label),
+    guidance: String(rule.guidance),
+    ruleVersion: Number(rule.rule_version),
+    consumablesCostPerHour: Number(rule.consumables_cost_per_hour),
+    minimumConsumablesCost: Number(rule.minimum_consumables_cost),
+    targetConsumablesMarginPct: Number(rule.target_consumables_margin_pct),
+  }));
+}
+
 export async function createStandardQuote(input: {
-  leadId: string;
+  runId: string;
+  clientName: string;
   clientContactName: string;
   clientEmail: string;
   clientPhone: string;
@@ -61,10 +88,13 @@ export async function createStandardQuote(input: {
   serviceDescription: string;
   validUntil: string;
   paymentTerms: string;
+  cleanTypeCode: string;
+  chargeOutRateExGst: number;
   items: QuoteLineDraft[];
 }) {
-  const { data, error } = await supabase.rpc("create_stage1_quote_from_lead", {
-    p_lead_id: input.leadId,
+  const { data, error } = await supabase.rpc("create_stage1_guided_quote", {
+    p_run_id: input.runId,
+    p_client_name: input.clientName,
     p_client_contact_name: input.clientContactName,
     p_client_email: input.clientEmail,
     p_client_phone: input.clientPhone,
@@ -72,7 +102,12 @@ export async function createStandardQuote(input: {
     p_service_description: input.serviceDescription,
     p_valid_until: input.validUntil,
     p_payment_terms: input.paymentTerms,
-    p_items: input.items,
+    p_clean_type_code: input.cleanTypeCode,
+    p_items: input.items.map((item) => ({
+      description: item.description,
+      quantity: item.estimatedHours,
+      unitPriceExGst: input.chargeOutRateExGst,
+    })),
   });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
@@ -109,7 +144,7 @@ export async function createInvoiceFromQuote(quoteId: string, dueDate: string) {
 export async function fetchStage1QuoteDocument(quoteId: string): Promise<Stage1QuoteDocument> {
   const { data: quote, error: quoteError } = await supabase
     .from("stage1_quotes")
-    .select("id,autopsy_run_id,quote_sequence_number,status,issued_at,valid_until,client_name,client_contact_name,client_email,client_phone,site_address,service_description,payment_terms,subtotal_ex_gst,gst_amount,total_inc_gst,amount,stage1_job_id")
+    .select("id,autopsy_run_id,quote_sequence_number,status,issued_at,valid_until,client_name,client_contact_name,client_email,client_phone,site_address,service_description,payment_terms,clean_type_code,clean_type_label,pricing_rule_version,labour_service_amount_ex_gst,estimated_consumables_cost,consumables_sell_amount,subtotal_ex_gst,gst_amount,total_inc_gst,amount,stage1_job_id")
     .eq("id", quoteId)
     .single();
   if (quoteError) throw new Error(quoteError.message);
@@ -152,6 +187,12 @@ export async function fetchStage1QuoteDocument(quoteId: string): Promise<Stage1Q
     siteAddress: quote.site_address ? String(quote.site_address) : null,
     serviceDescription: quote.service_description ? String(quote.service_description) : null,
     paymentTerms: quote.payment_terms ? String(quote.payment_terms) : null,
+    cleanTypeCode: quote.clean_type_code ? String(quote.clean_type_code) : null,
+    cleanTypeLabel: quote.clean_type_label ? String(quote.clean_type_label) : null,
+    pricingRuleVersion: quote.pricing_rule_version == null ? null : Number(quote.pricing_rule_version),
+    labourServiceAmountExGst: Number(quote.labour_service_amount_ex_gst ?? subtotal),
+    estimatedConsumablesCost: Number(quote.estimated_consumables_cost ?? 0),
+    consumablesSellAmount: Number(quote.consumables_sell_amount ?? 0),
     subtotalExGst: subtotal,
     gstAmount: gst,
     totalIncGst: total,
@@ -161,8 +202,8 @@ export async function fetchStage1QuoteDocument(quoteId: string): Promise<Stage1Q
       id: String(line.id),
       position: Number(line.line_position),
       description: String(line.description),
-      quantity: Number(line.quantity),
-      unitPriceExGst: Number(line.unit_price_ex_gst),
+      estimatedHours: Number(line.quantity),
+      chargeOutRateExGst: Number(line.unit_price_ex_gst),
       lineTotalExGst: Number(line.line_total_ex_gst),
     })),
     invoice: invoice

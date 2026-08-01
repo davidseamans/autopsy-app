@@ -838,6 +838,14 @@ export function DetailedJobCostReport({
                 Add Job Cost
               </Button>
             </div>
+            <div className="grid gap-3 rounded-md bg-muted/40 p-3 text-sm sm:grid-cols-3">
+              <div><p className="text-xs text-muted-foreground">Hours estimated</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 ? `${unit.quotedLabourHours} hours` : "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Actual hours</p><p className="font-medium">{(unit.actualLabourHours ?? 0) > 0 ? `${unit.actualLabourHours} hours` : "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Hours variance</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 && unit.actualLabourHours != null ? `${unit.actualLabourHours - (unit.quotedLabourHours ?? 0) >= 0 ? "+" : ""}${unit.actualLabourHours - (unit.quotedLabourHours ?? 0)} hours` : "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Clean type</p><p className="font-medium">{unit.quotedCleanTypeLabel ?? "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Consumables budget</p><p className="font-medium">{(unit.quotedConsumablesBudget ?? 0) > 0 ? `$${fmt(unit.quotedConsumablesBudget ?? 0)}` : "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Actual consumables</p><p className="font-medium">{(unit.costMaterials ?? 0) > 0 ? `$${fmt(unit.costMaterials ?? 0)}` : "Not yet recorded"}</p></div>
+            </div>
             <LineTable
               lines={costLines}
               supplierLabel="Supplier / Ref"

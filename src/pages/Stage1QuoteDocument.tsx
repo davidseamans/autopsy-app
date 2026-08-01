@@ -139,8 +139,18 @@ export default function Stage1QuoteDocument() {
 
         <div className="mt-7 overflow-x-auto">
           <table className="w-full min-w-[620px] text-sm">
-            <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500"><th className="py-3">Description</th><th className="py-3 text-right">Qty</th><th className="py-3 text-right">Price ex GST</th><th className="py-3 text-right">Amount ex GST</th></tr></thead>
-            <tbody>{quote.lines.map((line) => <tr key={line.id} className="border-b"><td className="py-4 pr-4">{line.description}</td><td className="py-4 text-right">{line.quantity}</td><td className="py-4 text-right">{money(line.unitPriceExGst)}</td><td className="py-4 text-right">{money(line.lineTotalExGst)}</td></tr>)}</tbody>
+            <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-slate-500"><th className="py-3">Work item</th><th className="py-3 text-right">Estimated hours</th><th className="py-3 text-right">Rate ex GST</th><th className="py-3 text-right">Amount ex GST</th></tr></thead>
+            <tbody>
+              {quote.lines.map((line) => <tr key={line.id} className="border-b"><td className="py-4 pr-4">{line.description}</td><td className="py-4 text-right">{line.estimatedHours}</td><td className="py-4 text-right">{money(line.chargeOutRateExGst)}</td><td className="py-4 text-right">{money(line.lineTotalExGst)}</td></tr>)}
+              {quote.consumablesSellAmount > 0 ? (
+                <tr className="border-b">
+                  <td className="py-4 pr-4">Supplies allowance{quote.cleanTypeLabel ? ` — ${quote.cleanTypeLabel}` : ""}</td>
+                  <td className="py-4 text-right">—</td>
+                  <td className="py-4 text-right">—</td>
+                  <td className="py-4 text-right">{money(quote.consumablesSellAmount)}</td>
+                </tr>
+              ) : null}
+            </tbody>
           </table>
         </div>
 

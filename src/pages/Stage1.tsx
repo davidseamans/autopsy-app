@@ -424,6 +424,18 @@ export interface ProofUnit {
   isReferralOrRepeat?: boolean;
   projectedRevenue?: number;
   quoteValue?: number;
+  /** Total hours estimated on the accepted Stage 1 quote. */
+  quotedLabourHours?: number;
+  /** Effective hourly charge-out rate from the accepted Stage 1 quote. */
+  quotedChargeOutRate?: number;
+  /** Estimated consumables cost retained from the guided quote. */
+  quotedConsumablesBudget?: number;
+  /** Customer-facing supplies amount retained from the guided quote. */
+  quotedConsumablesSellAmount?: number;
+  /** Clean type selected for the guided quote. */
+  quotedCleanTypeLabel?: string;
+  /** One actual-hours total for the job. This is deliberately not a timecard. */
+  actualLabourHours?: number;
   scheduledDate?: string;
   sourceQuote?: string;
   quoteComment?: string;
@@ -3309,6 +3321,37 @@ export function JobDetailSheet({
             <p className="text-xs text-muted-foreground">
               Enter each cost as a simple line. If you used a subcontractor, add it as a normal line (e.g. "Subcontractor help") with its invoice as proof.
             </p>
+            <div className="grid gap-3 rounded-md bg-muted/40 p-3 sm:grid-cols-3">
+              <div>
+                <Label className="text-xs">Hours estimated in quote</Label>
+                <div className="mt-2 h-10 font-medium tabular-nums">
+                  {(draft.quotedLabourHours ?? 0) > 0 ? `${draft.quotedLabourHours} hours` : "—"}
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Charge-out rate ex GST</Label>
+                <div className="mt-2 h-10 font-medium tabular-nums">
+                  {(draft.quotedChargeOutRate ?? 0) > 0
+                    ? `$${draft.quotedChargeOutRate?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / hour`
+                    : "—"}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs" htmlFor="actual-job-hours">Actual hours worked</Label>
+                <Input
+                  id="actual-job-hours"
+                  type="number"
+                  min={0}
+                  step="0.25"
+                  value={draft.actualLabourHours ?? ""}
+                  onChange={(e) => setDraft({
+                    ...draft,
+                    actualLabourHours: e.target.value === "" ? undefined : Number(e.target.value),
+                  })}
+                />
+                <p className="text-[11px] text-muted-foreground">One total for this job—not a timecard.</p>
+              </div>
+            </div>
             <div className="space-y-2">
               {(draft.costLines ?? []).map((line, idx) => {
                 const split = lineSplits[idx] ?? computeGstSplit({ inclusive: line.amount ?? 0 });
@@ -3450,6 +3493,23 @@ export function JobDetailSheet({
               </Button>
             </div>
             <div className="rounded bg-muted/40 p-2 text-sm">
+              {fieldRow("Hours estimated", (draft.quotedLabourHours ?? 0) > 0 ? `${draft.quotedLabourHours} hours` : "—")}
+              {fieldRow("Actual hours", (draft.actualLabourHours ?? 0) > 0 ? `${draft.actualLabourHours} hours` : "—")}
+              {fieldRow(
+                "Hours variance",
+                (draft.quotedLabourHours ?? 0) > 0 && draft.actualLabourHours != null
+                  ? `${draft.actualLabourHours - (draft.quotedLabourHours ?? 0) >= 0 ? "+" : ""}${(draft.actualLabourHours - (draft.quotedLabourHours ?? 0)).toLocaleString()} hours`
+                  : "—",
+              )}
+              {fieldRow("Clean type", draft.quotedCleanTypeLabel ?? "—")}
+              {fieldRow("Consumables budget", (draft.quotedConsumablesBudget ?? 0) > 0 ? `$${draft.quotedConsumablesBudget?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
+              {fieldRow("Actual consumables (ex GST)", (draft.costMaterials ?? 0) > 0 ? `$${draft.costMaterials?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
+              {fieldRow(
+                "Consumables variance",
+                (draft.quotedConsumablesBudget ?? 0) > 0 && draft.costMaterials != null
+                  ? `$${((draft.costMaterials ?? 0) - (draft.quotedConsumablesBudget ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : "—",
+              )}
               {fieldRow("Total job costs incl. GST", costsInclGst > 0 ? `$${costsInclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}
               {fieldRow("Job Costs (ex-GST, for margin)", costs > 0 ? `$${costs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "Not Yet Recorded")}
               {fieldRow("Ex-GST revenue", invAmt > 0 ? `$${revenueExGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—")}

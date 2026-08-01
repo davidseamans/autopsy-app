@@ -8,8 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
-import { createStandardQuote, describeDocumentError, type QuoteLineDraft } from "@/lib/stage1Documents";
-import { fetchStage1Lead, type Stage1Lead } from "@/lib/stage1Funnel";
+import {
+  createStandardQuote,
+  describeDocumentError,
+  fetchStage1CleanTypePricingRules,
+  type QuoteLineDraft,
+  type Stage1CleanTypePricingRule,
+} from "@/lib/stage1Documents";
+import { calculateGuidedQuoteTotals } from "@/lib/stage1Pricing";
 
 const isoAfterDays = (days: number) => {
   const date = new Date();
@@ -17,17 +23,15 @@ const isoAfterDays = (days: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-const blankLine = (): QuoteLineDraft => ({ description: "", quantity: 1, unitPriceExGst: 0 });
+const blankLine = (): QuoteLineDraft => ({ description: "", estimatedHours: 1 });
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 
 export default function LaunchpadQuoteNew() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const leadId = searchParams.get("leadId") ?? "";
   const backTo = runId ? `/launchpad/leads?runId=${encodeURIComponent(runId)}` : "/launchpad/leads";
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
-  const [lead, setLead] = useState<Stage1Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,43 +43,43 @@ export default function LaunchpadQuoteNew() {
   const [serviceDescription, setServiceDescription] = useState("");
   const [validUntil, setValidUntil] = useState(isoAfterDays(14));
   const [paymentTerms, setPaymentTerms] = useState("Payment due within 7 days of invoice.");
+  const [cleanTypeCode, setCleanTypeCode] = useState("");
+  const [cleanTypeRules, setCleanTypeRules] = useState<Stage1CleanTypePricingRule[]>([]);
+  const [chargeOutRateExGst, setChargeOutRateExGst] = useState(0);
   const [items, setItems] = useState<QuoteLineDraft[]>([blankLine()]);
 
   useEffect(() => {
-    if (!runId || !leadId) {
-      setError("Choose a lead from your First 5 Jobs funnel before creating a quote.");
+    if (!runId) {
+      setError("Open the quote form from your First 5 Jobs sales activity page.");
       setLoading(false);
       return;
     }
-    void Promise.all([fetchBusinessIdentity(runId), fetchStage1Lead(leadId)])
-      .then(([{ profile: current }, selectedLead]) => {
+    void Promise.all([fetchBusinessIdentity(runId), fetchStage1CleanTypePricingRules()])
+      .then(([{ profile: current }, rules]) => {
         if (!current?.verified) throw new Error("Verify Business Details before creating a quote.");
-        if (selectedLead.runId !== runId) throw new Error("This lead does not belong to the active First 5 Jobs run.");
-        if (selectedLead.status === "won") throw new Error("This lead has already become a job.");
-        if (selectedLead.activeQuoteId && selectedLead.status === "quoted") throw new Error("This lead already has an active quote.");
+        if (rules.length === 0) throw new Error("The guided clean types are not available.");
         setProfile(current);
-        setLead(selectedLead);
-        setClientName(selectedLead.clientName);
-        setClientContactName(selectedLead.contactName);
-        setClientEmail(selectedLead.contactEmail);
-        setClientPhone(selectedLead.contactPhone);
-        setSiteAddress(selectedLead.siteAddress);
+        setCleanTypeRules(rules);
       })
       .catch((loadError) => setError(describeDocumentError(loadError)))
       .finally(() => setLoading(false));
-  }, [leadId, runId]);
+  }, [runId]);
 
   const totals = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPriceExGst, 0);
-    const gst = Math.round(subtotal * 10) / 100;
-    return { subtotal, gst, total: subtotal + gst };
-  }, [items]);
+    const selectedRule = cleanTypeRules.find((rule) => rule.code === cleanTypeCode) ?? null;
+    return {
+      selectedRule,
+      ...calculateGuidedQuoteTotals({ items, chargeOutRateExGst, rule: selectedRule }),
+    };
+  }, [chargeOutRateExGst, cleanTypeCode, cleanTypeRules, items]);
 
   const formReady = Boolean(
-    profile?.verified && lead?.id && clientName.trim() && clientEmail.trim() && siteAddress.trim()
-      && serviceDescription.trim() && validUntil
+    profile?.verified && clientName.trim() && clientEmail.trim() && siteAddress.trim()
+      && validUntil
+      && totals.selectedRule
       && items.length > 0
-      && items.every((item) => item.description.trim() && item.quantity > 0 && item.unitPriceExGst >= 0)
+      && items.every((item) => item.description.trim() && item.estimatedHours > 0)
+      && chargeOutRateExGst > 0
       && totals.total > 0,
   );
 
@@ -88,14 +92,18 @@ export default function LaunchpadQuoteNew() {
     setSaving(true);
     try {
       const created = await createStandardQuote({
-        leadId,
+        runId,
+        clientName,
         clientContactName,
         clientEmail,
         clientPhone,
         siteAddress,
-        serviceDescription,
+        serviceDescription: serviceDescription.trim()
+          || items.map((item) => `${item.description.trim()} — ${item.estimatedHours} hours`).join("; "),
         validUntil,
         paymentTerms,
+        cleanTypeCode,
+        chargeOutRateExGst,
         items,
       });
       toast.success(`${created.quoteNumber} created.`);
@@ -117,7 +125,7 @@ export default function LaunchpadQuoteNew() {
       <header className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Written Quote</p>
         <h1 className="text-3xl font-semibold tracking-tight">Create a standard quote</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">This quote stays attached to the selected lead. If the customer accepts, the same chain becomes the job and then the tax invoice.</p>
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Customer and work details begin here. If the customer accepts, this quote becomes the job and then the tax invoice.</p>
       </header>
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
@@ -135,47 +143,71 @@ export default function LaunchpadQuoteNew() {
         </Card>
       ) : null}
 
-      {lead ? (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Lead</CardTitle><CardDescription>This customer came from your Stage 1 funnel.</CardDescription></CardHeader>
-          <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
-            <p><span className="text-muted-foreground">Customer:</span> {lead.clientName}</p>
-            <p><span className="text-muted-foreground">Source:</span> {lead.source}</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card>
-        <CardHeader><CardTitle className="text-base">Customer and work</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Customer and work</CardTitle><CardDescription>Capture these details because this opportunity is now ready to quote.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor="client-name">Customer or business *</Label><Input id="client-name" value={clientName} readOnly className="bg-muted/40" /></div>
+          <Field id="client-name" label="Customer or business" value={clientName} onChange={setClientName} required />
           <Field id="client-contact" label="Contact person" value={clientContactName} onChange={setClientContactName} />
           <Field id="client-email" label="Customer email" type="email" value={clientEmail} onChange={setClientEmail} required />
           <Field id="client-phone" label="Customer phone" value={clientPhone} onChange={setClientPhone} />
           <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="site-address">Service address *</Label><Textarea id="site-address" value={siteAddress} onChange={(event) => setSiteAddress(event.target.value)} /></div>
-          <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="scope">Work included *</Label><Textarea id="scope" rows={5} value={serviceDescription} onChange={(event) => setServiceDescription(event.target.value)} placeholder="Describe exactly what you will do, where, and any important exclusions." /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="scope">Notes or exclusions (optional)</Label><Textarea id="scope" rows={3} value={serviceDescription} onChange={(event) => setServiceDescription(event.target.value)} placeholder="Add anything the customer should know. The work items and hours are added to the quote automatically." /></div>
           <Field id="valid-until" label="Quote valid until" type="date" value={validUntil} onChange={setValidUntil} required />
           <Field id="terms" label="Payment terms" value={paymentTerms} onChange={setPaymentTerms} required />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Price</CardTitle><CardDescription>Enter prices before GST. GST and the customer total are calculated automatically.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="text-base">Choose the type of clean</CardTitle><CardDescription>Make one choice. First 5 Jobs will allow for the expected supplies automatically.</CardDescription></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Type of clean">
+          {cleanTypeRules.map((rule) => {
+            const selected = cleanTypeCode === rule.code;
+            return (
+              <button
+                key={`${rule.code}-${rule.ruleVersion}`}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`rounded-lg border p-4 text-left transition-colors ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"}`}
+                onClick={() => setCleanTypeCode(rule.code)}
+              >
+                <span className="block font-medium">{rule.label}</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{rule.guidance}</span>
+              </button>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Estimate the work</CardTitle><CardDescription>Break the job into a few plain work items. Enter the hours you expect, then use one hourly charge-out rate for the whole quote.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
+          <div className="max-w-xs space-y-1.5">
+            <Label htmlFor="charge-out-rate">Your charge-out rate, ex GST *</Label>
+            <Input id="charge-out-rate" type="number" min={0.01} step="0.01" value={chargeOutRateExGst} onChange={(event) => setChargeOutRateExGst(Number(event.target.value))} />
+          </div>
           {items.map((item, index) => (
-            <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_110px_150px_42px]">
-              <Field id={`line-${index}`} label="Description" value={item.description} onChange={(value) => updateLine(index, { description: value })} />
-              <NumberField id={`quantity-${index}`} label="Quantity" value={item.quantity} min={0.01} onChange={(value) => updateLine(index, { quantity: value })} />
-              <NumberField id={`price-${index}`} label="Price ex GST" value={item.unitPriceExGst} min={0} onChange={(value) => updateLine(index, { unitPriceExGst: value })} />
+            <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_150px_42px]">
+              <Field id={`line-${index}`} label="Work item" value={item.description} onChange={(value) => updateLine(index, { description: value })} />
+              <NumberField id={`hours-${index}`} label="Estimated hours" value={item.estimatedHours} min={0.25} onChange={(value) => updateLine(index, { estimatedHours: value })} />
               <Button type="button" variant="ghost" size="icon" className="self-end" disabled={items.length === 1} onClick={() => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index))} aria-label={`Remove line ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" onClick={() => setItems((current) => [...current, blankLine()])} disabled={items.length >= 20}><Plus className="mr-2 h-4 w-4" /> Add line</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setItems((current) => [...current, blankLine()])} disabled={items.length >= 20}><Plus className="mr-2 h-4 w-4" /> Add work item</Button>
           <dl className="ml-auto grid max-w-sm grid-cols-2 gap-2 border-t pt-4 text-sm">
+            <dt className="text-muted-foreground">Estimated hours</dt><dd className="text-right">{totals.totalHours}</dd>
+            <dt className="text-muted-foreground">Rate per hour ex GST</dt><dd className="text-right">{money(chargeOutRateExGst)}</dd>
+            <dt className="text-muted-foreground">Cleaning service</dt><dd className="text-right">{money(totals.serviceAmount)}</dd>
+            <dt className="text-muted-foreground">Supplies included</dt><dd className="text-right">{totals.selectedRule ? money(totals.consumablesSellAmount) : "Choose a clean type"}</dd>
             <dt className="text-muted-foreground">Subtotal</dt><dd className="text-right">{money(totals.subtotal)}</dd>
             <dt className="text-muted-foreground">GST</dt><dd className="text-right">{money(totals.gst)}</dd>
             <dt className="font-semibold">Total including GST</dt><dd className="text-right font-semibold">{money(totals.total)}</dd>
           </dl>
+          {totals.selectedRule ? (
+            <p className="ml-auto max-w-sm text-xs leading-relaxed text-muted-foreground">
+              {totals.selectedRule.label}: First 5 Jobs has budgeted {money(totals.consumablesCost)} for supplies and included {money(totals.consumablesSellAmount)} in the quote. The supplies amount includes a {totals.selectedRule.targetConsumablesMarginPct}% margin.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

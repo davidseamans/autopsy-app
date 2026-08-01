@@ -57,4 +57,40 @@ describe("Stage 1 quote to invoice contract", () => {
     expect(store).toContain("source.neq.stage1_quote_conversion");
     expect(store).toContain('line.source === "stage1_quote_conversion"');
   });
+
+  it("uses an apprentice-friendly hours and charge-out-rate quote", () => {
+    const documents = readFileSync(resolve("src/lib/stage1Documents.ts"), "utf8");
+    const quotePage = readFileSync(resolve("src/pages/LaunchpadQuoteNew.tsx"), "utf8");
+    const quoteDocument = readFileSync(resolve("src/pages/Stage1QuoteDocument.tsx"), "utf8");
+    expect(quotePage).toContain("Your charge-out rate, ex GST");
+    expect(quotePage).toContain("Estimated hours");
+    expect(quotePage).toContain("Add work item");
+    expect(quotePage).not.toContain('label="Quantity"');
+    expect(documents).toContain("quantity: item.estimatedHours");
+    expect(documents).toContain("unitPriceExGst: input.chargeOutRateExGst");
+    expect(quoteDocument).toContain("Estimated hours");
+    expect(quoteDocument).toContain("Rate ex GST");
+  });
+
+  it("compares quoted hours with one actual-hours total without a timecard", () => {
+    const store = readFileSync(resolve("src/lib/stage1Store.ts"), "utf8");
+    const stage1 = readFileSync(resolve("src/pages/Stage1.tsx"), "utf8");
+    expect(store).toContain("source_stage1_quote_id");
+    expect(store).toContain("quotedLabourHours: quotedWork?.hours");
+    expect(store).toContain('const actualLabourHours = num("labour_hours")');
+    expect(store).toContain("labourHours: u.actualLabourHours ?? 0");
+    expect(stage1).toContain("Actual hours worked");
+    expect(stage1).toContain("One total for this job—not a timecard.");
+    expect(stage1).toContain("Hours variance");
+  });
+
+  it("carries the guided consumables budget into job costing", () => {
+    const store = readFileSync(resolve("src/lib/stage1Store.ts"), "utf8");
+    const stage1 = readFileSync(resolve("src/pages/Stage1.tsx"), "utf8");
+    expect(store).toContain("estimated_consumables_cost");
+    expect(store).toContain("quotedConsumablesBudget: quotedWork?.consumablesBudget");
+    expect(stage1).toContain("Consumables budget");
+    expect(stage1).toContain("Actual consumables (ex GST)");
+    expect(stage1).toContain("Consumables variance");
+  });
 });
