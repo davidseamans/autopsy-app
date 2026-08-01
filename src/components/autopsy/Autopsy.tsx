@@ -1942,6 +1942,7 @@ function VerdictView({
       score={scoreNumeric}
       testLabel={String(run.run_name ?? run.test_name ?? "")}
       dimensions={dimensionScores}
+      factFlags={[...new Set(selectedAnswerAudit.selectedAnswers.flatMap((answer) => answer.fact_flags ?? []))]}
       answerEvidence={selectedAnswerAudit.selectedAnswers.map((answer) => ({
         questionNumber: answer.question_number,
         dimensionCode: answer.dimension_code ?? null,
@@ -2572,6 +2573,7 @@ function CandidateVerdict({
   score,
   testLabel,
   dimensions,
+  factFlags,
   answerEvidence,
   showAuditAppendix,
   completedLabel,
@@ -2582,6 +2584,7 @@ function CandidateVerdict({
   score: number | null;
   testLabel: string;
   dimensions: Array<{ code: string; label: string; score: number }>;
+  factFlags: string[];
   answerEvidence: CandidateAnswerEvidence[];
   showAuditAppendix: boolean;
   completedLabel: string;
@@ -2592,6 +2595,7 @@ function CandidateVerdict({
   const provisional = band === "viable";
   const stopped = band === "critical_stop" || band === "not_viable";
   const scoreValue = Number.isFinite(Number(score)) ? Number(score) : null;
+  const hasPriorOperatingExperience = factFlags.includes("prior_business_management");
   const colour = ready
     ? "border-emerald-600 bg-emerald-50 text-emerald-900"
     : provisional
@@ -2611,7 +2615,9 @@ function CandidateVerdict({
           : "Your answers show that starting now would put you under pressure you have not yet shown you can safely handle. Stopping here is a successful result—it may prevent an expensive mistake.";
 
   const next = ready
-    ? "Next, we help you quote, complete and cost your first five jobs. You will learn from real work while the numbers are still small and manageable."
+    ? hasPriorOperatingExperience
+      ? "Next, First 5 Jobs helps you capture the quotes, delivery, costs and lessons for this particular operation. It is a controlled validation of the new setup, not a lesson in basic business ownership."
+      : "Next, we help you quote, complete and cost your first five jobs. You will learn from real work while the numbers are still small and manageable."
     : provisional
       ? "Do not commit serious money or leave secure work yet. The sensible next step is to gain real exposure in the weaker areas and reconsider a small, controlled test only when the evidence changes."
       : "Do not rush into starting and do not immediately repeat Autopsy. Keep the security of regular work while you gain practical exposure and reconsider the commitment. Return only after your circumstances or real-world evidence have genuinely changed.";
@@ -2706,7 +2712,18 @@ function CandidateVerdict({
   }, [embeddedFlightDeck]);
 
   const explanationProfile = ready
-    ? {
+    ? hasPriorOperatingExperience
+      ? {
+        decision: "Your prior cleaning and business management experience was treated as relevant throughout the assessment. Together with paying-customer history, booked work and job-level cost tracking, it supports moving directly into a controlled test of this operation.",
+        distinction: "First 5 Jobs is not asking you to prove basic commercial competence again. It checks whether the current offer, current costs and partly completed procedures hold together in this specific business setup.",
+        risk: "The remaining caution is narrow. A few current start-up requirements may still need checking, and the procedures are not yet complete. Those are execution watchpoints, not evidence that you are a novice.",
+        questions: [
+          "Are the remaining start-up requirements complete for this particular operation?",
+          "Can the partly completed procedures be tested and tightened during the first five jobs?",
+          "Do the first five jobs confirm the current pricing, delivery and job-cost assumptions?",
+        ],
+      }
+      : {
         decision: "Your answers showed enough practical awareness, discipline and personal readiness to justify a controlled real-world test. This opens the next learning stage—it is not a declaration that you are already a competent business owner.",
         distinction: "A Ready for Test Run result is deliberately conditional. Autopsy has assessed what you understand and what you say you will do. The First 5 Jobs stage tests whether that understanding survives real customers, real deadlines, real costs and real pressure.",
         risk: "The main danger now is confidence running ahead of experience. Do not scale, make large commitments or assume that early revenue settles every question. The purpose of five jobs is to learn what is true while the consequences are still small.",
@@ -2750,7 +2767,9 @@ function CandidateVerdict({
           };
 
   const readinessPosition = ready
-    ? "Move forward into First 5 Jobs. Your next learning comes from controlled delivery, not more preparation on paper."
+    ? hasPriorOperatingExperience
+      ? "Move forward into First 5 Jobs. Use the stage to validate this operation's current setup and finish the remaining procedures—not to re-establish experience you have already disclosed."
+      : "Move forward into First 5 Jobs. Your next learning comes from controlled delivery, not more preparation on paper."
     : band === "critical_stop"
       ? "The responsible outcome is closure for now. Autopsy is not prescribing a repair programme or encouraging you to chase a different answer."
       : band === "not_viable"
