@@ -3130,7 +3130,7 @@ function Stage1DashboardInner() {
         <div className="flex items-center gap-2">
           {!isDemo && activeRunId && bd.canOperate ? (
             <Button asChild className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
-              <Link to={`/launchpad/quote/new?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> New Quote</Link>
+              <Link to={`/launchpad/leads?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> Leads &amp; Quotes</Link>
             </Button>
           ) : null}
           {activeRunId ? (

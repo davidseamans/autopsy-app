@@ -104,7 +104,7 @@ export default function Launchpad() {
           </Card>
         </li>
 
-        {/* 2. Create Written Quote */}
+        {/* 2. Lead Funnel */}
         <li>
           <Card>
             <CardHeader className="flex flex-row items-start gap-4 space-y-0">
@@ -112,18 +112,17 @@ export default function Launchpad() {
                 <FileText className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <CardTitle className="text-base">2. Create Written Quote</CardTitle>
+                <CardTitle className="text-base">2. Add Leads and Opportunities</CardTitle>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Every job must start with a written Quote or Tax Invoice reference. Use the simple guided
-                  flow — not the Core Quotes admin table.
+                  Record each opportunity before quoting it. This lets you see where leads come from and which ones become paying work.
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               {setupStatus === "complete" ? (
                 <Button asChild variant="outline" size="sm">
-                  <Link to={withRun("/launchpad/quote/new")}>
-                    Start Simple Quote <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  <Link to={withRun("/launchpad/leads")}>
+                    Open Lead Funnel <ArrowRight className="ml-2 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               ) : (
@@ -133,7 +132,7 @@ export default function Launchpad() {
           </Card>
         </li>
 
-        {/* 3. Track Quote Outcome */}
+        {/* 3. Create and Track Quote */}
         <li>
           <Card>
             <CardHeader className="flex flex-row items-start gap-4 space-y-0">
@@ -142,12 +141,10 @@ export default function Launchpad() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-base">3. Track Quote Outcome</CardTitle>
+                  <CardTitle className="text-base">3. Create and Track the Quote</CardTitle>
                 </div>
                 <CardDescription className="mt-1 leading-relaxed">
-                  Every quote moves through one of four statuses: <strong>Sent</strong>, <strong>Accepted</strong>,
-                  <strong> Declined</strong>, or <strong>Expired</strong>. Tracking lives here once the simple
-                  quote flow records it.
+                  Select a lead, issue the written quote, then record whether it was accepted, declined or expired.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -204,8 +201,7 @@ export default function Launchpad() {
           <div>
             <CardTitle className="text-sm">Why Launchpad exists</CardTitle>
             <CardDescription className="mt-1 leading-relaxed">
-              The Core screens (Leads, Accounts, Pipeline, Quotes, Jobs) stay available for advanced users, but
-              they are too technical for a first-time operator. Launchpad keeps the path simple: setup → quote →
+              The Core screens stay separate for later. Launchpad keeps Stage 1 simple: setup → lead → quote →
               outcome → job → dashboard.
             </CardDescription>
           </div>

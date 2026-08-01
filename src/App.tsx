@@ -27,6 +27,7 @@ import BusinessSetup from "@/pages/BusinessSetup";
 import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
 import Stage1QuoteDocument from "@/pages/Stage1QuoteDocument";
 import AutopsyClaim from "@/pages/AutopsyClaim";
+import LaunchpadLeads from "@/pages/LaunchpadLeads";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
@@ -42,6 +43,11 @@ const BusinessSetupRoute = () => (
 const Stage1QuoteNewRoute = () => (
   <AuthGate>
     <LaunchpadQuoteNew />
+  </AuthGate>
+);
+const Stage1LeadsRoute = () => (
+  <AuthGate>
+    <LaunchpadLeads />
   </AuthGate>
 );
 const Stage1QuoteDocumentRoute = () => (
@@ -91,6 +97,7 @@ const App = () => (
               <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
               <Route path="/stage-1" element={<Stage1Dashboard />} />
               <Route path="/launchpad" element={<Launchpad />} />
+              <Route path="/launchpad/leads" element={<Stage1LeadsRoute />} />
               <Route path="/launchpad/quote/new" element={<Stage1QuoteNewRoute />} />
               <Route path="/stage-1/quote/:quoteId" element={<Stage1QuoteDocumentRoute />} />
               <Route path="/business-setup" element={<BusinessSetupRoute />} />

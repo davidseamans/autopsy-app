@@ -295,16 +295,11 @@ export async function setQuoteOutcome(
   reason?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const patch: Record<string, unknown> = { status: uiToDbStatus(status) };
-    const now = new Date().toISOString();
-    if (status === "Accepted") patch.accepted_at = now;
-    if (status === "Declined" || status === "Rejected") {
-      patch.rejected_at = now;
-      patch.rejection_reason = reason?.trim() || null;
-    }
-    if (status === "Expired") patch.rejected_at = now;
-
-    const { error } = await supabase.from("stage1_quotes").update(patch).eq("id", quoteId);
+    const { error } = await supabase.rpc("set_stage1_quote_outcome", {
+      p_quote_id: quoteId,
+      p_status: uiToDbStatus(status),
+      p_reason: reason?.trim() || null,
+    });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {

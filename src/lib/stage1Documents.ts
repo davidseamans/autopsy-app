@@ -53,8 +53,7 @@ function errorMessage(error: unknown): string {
 }
 
 export async function createStandardQuote(input: {
-  runId: string;
-  clientName: string;
+  leadId: string;
   clientContactName: string;
   clientEmail: string;
   clientPhone: string;
@@ -64,9 +63,8 @@ export async function createStandardQuote(input: {
   paymentTerms: string;
   items: QuoteLineDraft[];
 }) {
-  const { data, error } = await supabase.rpc("create_stage1_quote", {
-    p_run_id: input.runId,
-    p_client_name: input.clientName,
+  const { data, error } = await supabase.rpc("create_stage1_quote_from_lead", {
+    p_lead_id: input.leadId,
     p_client_contact_name: input.clientContactName,
     p_client_email: input.clientEmail,
     p_client_phone: input.clientPhone,

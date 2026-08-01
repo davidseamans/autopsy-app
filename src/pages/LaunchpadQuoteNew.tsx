@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
 import { createStandardQuote, describeDocumentError, type QuoteLineDraft } from "@/lib/stage1Documents";
+import { fetchStage1Lead, type Stage1Lead } from "@/lib/stage1Funnel";
 
 const isoAfterDays = (days: number) => {
   const date = new Date();
@@ -23,8 +24,10 @@ export default function LaunchpadQuoteNew() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const backTo = runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
+  const leadId = searchParams.get("leadId") ?? "";
+  const backTo = runId ? `/launchpad/leads?runId=${encodeURIComponent(runId)}` : "/launchpad/leads";
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
+  const [lead, setLead] = useState<Stage1Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,19 +42,28 @@ export default function LaunchpadQuoteNew() {
   const [items, setItems] = useState<QuoteLineDraft[]>([blankLine()]);
 
   useEffect(() => {
-    if (!runId) {
-      setError("Open New Quote from your First 5 Jobs dashboard.");
+    if (!runId || !leadId) {
+      setError("Choose a lead from your First 5 Jobs funnel before creating a quote.");
       setLoading(false);
       return;
     }
-    void fetchBusinessIdentity(runId)
-      .then(({ profile: current }) => {
+    void Promise.all([fetchBusinessIdentity(runId), fetchStage1Lead(leadId)])
+      .then(([{ profile: current }, selectedLead]) => {
         if (!current?.verified) throw new Error("Verify Business Details before creating a quote.");
+        if (selectedLead.runId !== runId) throw new Error("This lead does not belong to the active First 5 Jobs run.");
+        if (selectedLead.status === "won") throw new Error("This lead has already become a job.");
+        if (selectedLead.activeQuoteId && selectedLead.status === "quoted") throw new Error("This lead already has an active quote.");
         setProfile(current);
+        setLead(selectedLead);
+        setClientName(selectedLead.clientName);
+        setClientContactName(selectedLead.contactName);
+        setClientEmail(selectedLead.contactEmail);
+        setClientPhone(selectedLead.contactPhone);
+        setSiteAddress(selectedLead.siteAddress);
       })
       .catch((loadError) => setError(describeDocumentError(loadError)))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [leadId, runId]);
 
   const totals = useMemo(() => {
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPriceExGst, 0);
@@ -60,7 +72,7 @@ export default function LaunchpadQuoteNew() {
   }, [items]);
 
   const formReady = Boolean(
-    profile?.verified && clientName.trim() && clientEmail.trim() && siteAddress.trim()
+    profile?.verified && lead?.id && clientName.trim() && clientEmail.trim() && siteAddress.trim()
       && serviceDescription.trim() && validUntil
       && items.length > 0
       && items.every((item) => item.description.trim() && item.quantity > 0 && item.unitPriceExGst >= 0)
@@ -76,8 +88,7 @@ export default function LaunchpadQuoteNew() {
     setSaving(true);
     try {
       const created = await createStandardQuote({
-        runId,
-        clientName,
+        leadId,
         clientContactName,
         clientEmail,
         clientPhone,
@@ -106,7 +117,7 @@ export default function LaunchpadQuoteNew() {
       <header className="space-y-2">
         <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Written Quote</p>
         <h1 className="text-3xl font-semibold tracking-tight">Create a standard quote</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Give the customer a clear written scope and price. If they accept, this exact quote becomes the job and then the tax invoice.</p>
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">This quote stays attached to the selected lead. If the customer accepts, the same chain becomes the job and then the tax invoice.</p>
       </header>
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
@@ -124,10 +135,20 @@ export default function LaunchpadQuoteNew() {
         </Card>
       ) : null}
 
+      {lead ? (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Lead</CardTitle><CardDescription>This customer came from your Stage 1 funnel.</CardDescription></CardHeader>
+          <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
+            <p><span className="text-muted-foreground">Customer:</span> {lead.clientName}</p>
+            <p><span className="text-muted-foreground">Source:</span> {lead.source}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Customer and work</CardTitle></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field id="client-name" label="Customer or business" value={clientName} onChange={setClientName} required />
+          <div className="space-y-1.5"><Label htmlFor="client-name">Customer or business *</Label><Input id="client-name" value={clientName} readOnly className="bg-muted/40" /></div>
           <Field id="client-contact" label="Contact person" value={clientContactName} onChange={setClientContactName} />
           <Field id="client-email" label="Customer email" type="email" value={clientEmail} onChange={setClientEmail} required />
           <Field id="client-phone" label="Customer phone" value={clientPhone} onChange={setClientPhone} />
