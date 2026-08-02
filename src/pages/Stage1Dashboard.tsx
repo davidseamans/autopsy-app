@@ -836,7 +836,7 @@ type DrillKey = "leads" | "conversions" | "jobs";
 const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   leads: {
     title: "Lead Method Performance",
-    subtitle: "Where leads are coming from and what is converting.",
+    subtitle: "Where leads are coming from and the activity producing them.",
   },
   conversions: {
     title: "Quote Conversion Board",
@@ -897,9 +897,6 @@ function DrillBody({
                   <TableHead className="text-right">Attempts</TableHead>
                   <TableHead className="text-right">Contacts</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">Quotes</TableHead>
-                  <TableHead className="text-right">Jobs</TableHead>
-                  <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -909,9 +906,6 @@ function DrillBody({
                     <TableCell className="text-right">{r.attempts}</TableCell>
                     <TableCell className="text-right">{r.contacts}</TableCell>
                     <TableCell className="text-right">{r.leads}</TableCell>
-                    <TableCell className="text-right">{r.quotes}</TableCell>
-                    <TableCell className="text-right">{r.jobs}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.notes}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -926,10 +920,7 @@ function DrillBody({
                   <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
                   <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
                   <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
-                  <div><div className="text-muted-foreground">Quotes</div><div>{r.quotes}</div></div>
-                  <div><div className="text-muted-foreground">Jobs</div><div>{r.jobs}</div></div>
                 </div>
-                {r.notes && <div className="mt-2 text-xs text-muted-foreground">{r.notes}</div>}
               </div>
             ))}
           </div>
@@ -2585,17 +2576,15 @@ function Stage1DashboardInner() {
         // Core jobs must never populate the ledger — doing so reindexes rows by
         // local array position (J-1, J-2, …) and breaks persisted row identity
         // (job_sequence_number). That legacy fallback is removed.
-        const { quotes: dbQuotes } = await loadStage1Board();
+        const { quotes: dbQuotes } = await loadStage1Board(activeRunId);
         if (!active) return;
-        if (dbQuotes.length) {
-          setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
-        }
+        setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
       } catch {
         /* board stays empty; nothing persisted yet */
       }
     })();
     return () => { active = false; };
-  }, [isDemo]);
+  }, [activeRunId, isDemo]);
 
   // ---- Canonical Stage 1 sandbox hydration (READ-ONLY) ---------------------
   // On load / refresh / re-login / run change, hydrate the job ledger from the
@@ -2853,6 +2842,8 @@ function Stage1DashboardInner() {
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
   const quotesSent = quotes.length;
   const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
+  const quotesRejected = quotes.filter((q) => ["Rejected", "Declined", "Expired"].includes(q.status)).length;
+  const quotesOutstanding = Math.max(0, quotesSent - quotesAccepted - quotesRejected);
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
   // Jobs in the ledger are only those created from accepted, converted quotes.
   const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
@@ -4296,6 +4287,8 @@ function Stage1DashboardInner() {
           secondaries={[
             { k: "Quotes sent", v: quotesSent },
             { k: "Quotes accepted", v: quotesAccepted },
+            { k: "Quotes rejected", v: quotesRejected },
+            { k: "Quotes outstanding", v: quotesOutstanding },
           ]}
           onClick={() => navigate(activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}` : "/stage-1/quotes")}
         />

@@ -141,6 +141,15 @@ export async function createInvoiceFromQuote(quoteId: string, dueDate: string) {
   };
 }
 
+export async function setStage1QuoteRejected(quoteId: string, rejected: boolean) {
+  const { error } = await supabase.rpc("set_stage1_quote_outcome", {
+    p_quote_id: quoteId,
+    p_status: rejected ? "rejected" : "sent",
+    p_reason: null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function fetchStage1QuoteDocument(quoteId: string): Promise<Stage1QuoteDocument> {
   const { data: quote, error: quoteError } = await supabase
     .from("stage1_quotes")

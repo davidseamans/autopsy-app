@@ -347,7 +347,6 @@ export async function loadStage1Board(runId?: string | null): Promise<{
   const quoteQuery = supabase
     .from("stage1_quotes")
     .select("id,quote_sequence_number,client_name,site_address,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,stage1_job_id")
-    .is("stage1_job_id", null)
     .order("created_at", { ascending: false })
     .limit(200);
   const jobQuery = supabase
@@ -377,7 +376,7 @@ export async function loadStage1Board(runId?: string | null): Promise<{
     notes: q.quote_notes ?? undefined,
     accountId: "stage1",
     siteId: "stage1",
-    converted: false,
+    converted: Boolean(q.stage1_job_id),
     createdAt: q.created_at,
   }));
 

@@ -54,6 +54,9 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(dashboard).not.toContain("Quotes Generated");
     expect(dashboard).not.toContain("Quote Details Required");
     expect(dashboard).not.toContain("matching quote details");
+    expect(dashboard).not.toContain('<TableHead className="text-right">Quotes</TableHead>');
+    expect(dashboard).not.toContain('<TableHead className="text-right">Jobs</TableHead>');
+    expect(dashboard).not.toContain("<TableHead>Notes</TableHead>");
     expect(dashboard).not.toContain('setDrill("conversions")');
     expect(dashboard).toContain("/stage-1/quotes?runId=");
     expect(existsSync(resolve("src/pages/Stage1Leads.tsx"))).toBe(false);
@@ -71,6 +74,12 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(quotePage).not.toContain('searchParams.get("leadId")');
     expect(quotePage).toContain("Customer and work details begin here");
     expect(quotesPage).toContain("Create a quote");
+    expect(quotesPage).toContain('label="Outstanding"');
+    expect(quotesPage).toContain('label="Rejected"');
+    expect(quotesPage).toContain('label="Accepted"');
+    expect(quotesPage).not.toContain('label="Jobs"');
+    expect(quotesPage).toContain("acceptStage1Quote");
+    expect(quotesPage).toContain("setStage1QuoteRejected");
     expect(quotesPage).toContain("An accepted quote becomes a First 5 Jobs job");
     expect(quoteMigration).toContain("create or replace function public.create_stage1_quote");
     expect(quoteMigration).toContain("insert into public.stage1_leads");
