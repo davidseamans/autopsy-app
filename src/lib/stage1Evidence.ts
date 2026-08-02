@@ -29,26 +29,47 @@ import { supabase } from "@/lib/supabase";
 const BUCKET = "stage1-evidence";
 const TABLE = "stage1_evidence";
 
-export type EvidenceLinkType = "job" | "invoice" | "cost" | "quote";
+export type EvidenceLinkType =
+  | "job"
+  | "quote"
+  | "revenue_line"
+  | "cost_line"
+  | "general_cost"
+  | "customer_approval"
+  | "correspondence"
+  | "other";
 
 export type EvidenceType =
-  | "Accepted Quote"
-  | "Invoice"
-  | "Supplier Receipt"
-  | "Work Order"
-  | "Job Photo"
-  | "Customer Approval"
-  | "Relevant Correspondence";
+  | "accepted_quote"
+  | "invoice"
+  | "supplier_receipt"
+  | "work_order"
+  | "job_photo"
+  | "customer_approval"
+  | "correspondence"
+  | "other";
 
 export const EVIDENCE_TYPES: EvidenceType[] = [
-  "Accepted Quote",
-  "Invoice",
-  "Supplier Receipt",
-  "Work Order",
-  "Job Photo",
-  "Customer Approval",
-  "Relevant Correspondence",
+  "accepted_quote",
+  "invoice",
+  "supplier_receipt",
+  "work_order",
+  "job_photo",
+  "customer_approval",
+  "correspondence",
+  "other",
 ];
+
+export const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
+  accepted_quote: "Accepted quote",
+  invoice: "Invoice or credit note",
+  supplier_receipt: "Supplier receipt",
+  work_order: "Work order",
+  job_photo: "Job photo",
+  customer_approval: "Customer approval",
+  correspondence: "Correspondence",
+  other: "Other document",
+};
 
 /** Persisted metadata for an attached document. */
 export interface EvidenceRecord {
@@ -147,9 +168,18 @@ export async function addEvidence(input: {
   evidenceType: EvidenceType;
   file: File;
 }): Promise<EvidenceRecord> {
+  const allowedMimeTypes = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf",
+  ]);
+  const allowedExtension = /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(input.file.name);
+  if ((!allowedMimeTypes.has(input.file.type) && !allowedExtension) || input.file.size > 10 * 1024 * 1024) {
+    throw new Error("Choose a JPG, PNG, WEBP, HEIC or PDF file no larger than 10 MB.");
+  }
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user?.id) throw new Error("Sign in before attaching a document.");
   const id = makeId();
   const contentType = input.file.type || "application/octet-stream";
-  const storagePath = `${input.runId}/${input.linkType}/${input.linkRef}/${id}-${sanitizeFileName(input.file.name)}`;
+  const storagePath = `${authData.user.id}/${input.runId}/${input.linkType}/${input.linkRef}/${id}-${sanitizeFileName(input.file.name)}`;
 
   const stageProgressId = await resolveStageProgressId(input.runId);
 
@@ -258,7 +288,11 @@ export async function deleteEvidence(id: string): Promise<void> {
 
 export const EVIDENCE_LINK_LABELS: Record<EvidenceLinkType, string> = {
   job: "Job record",
-  invoice: "Revenue line",
-  cost: "Cost line",
   quote: "Quote / approval",
+  revenue_line: "Invoice or payment",
+  cost_line: "Job cost",
+  general_cost: "General business expense",
+  customer_approval: "Customer approval",
+  correspondence: "Correspondence",
+  other: "Other",
 };

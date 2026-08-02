@@ -122,4 +122,37 @@ describe("Stage 1 quote to invoice contract", () => {
     expect(stage1).toContain("Actual consumables (ex GST)");
     expect(stage1).toContain("Consumables variance");
   });
+
+  it("uses completion payment terms and makes the invoice due when issued", () => {
+    const quotePage = readFileSync(resolve("src/pages/Stage1QuoteNew.tsx"), "utf8");
+    const quoteDocument = readFileSync(resolve("src/pages/Stage1QuoteDocument.tsx"), "utf8");
+    expect(quotePage).toContain("Payment Due on Completion");
+    expect(quotePage).not.toContain("Payment due within 7 days of invoice");
+    expect(quoteDocument).toContain("createInvoiceFromQuote(quote.id, todayIso())");
+    expect(quoteDocument).not.toContain("isoAfterDays(7)");
+  });
+
+  it("keeps manual credit notes and stable attachment links", () => {
+    const report = readFileSync(resolve("src/components/DetailedJobCostReport.tsx"), "utf8");
+    const store = readFileSync(resolve("src/lib/stage1Store.ts"), "utf8");
+    const attachments = readFileSync(resolve("src/lib/stage1Evidence.ts"), "utf8");
+    expect(report).toContain("(line.amount ?? 0) !== 0");
+    expect(store).toContain("(line.amount ?? 0) === 0");
+    expect(store).toContain("id: line.id");
+    expect(store).toContain("id: e.id");
+    expect(report).toContain("image/heic");
+    expect(report).toContain("application/pdf");
+    expect(attachments).toContain("`${authData.user.id}/${input.runId}");
+    expect(attachments).toContain("10 * 1024 * 1024");
+  });
+
+  it("opens the generated invoice and shows the customer address with the client", () => {
+    const report = readFileSync(resolve("src/components/DetailedJobCostReport.tsx"), "utf8");
+    const store = readFileSync(resolve("src/lib/stage1Store.ts"), "utf8");
+    expect(report).toContain("Open invoice");
+    expect(report).toContain("line.sourceQuoteId");
+    expect(report).toContain('className="mt-1 text-xs text-muted-foreground">{unit.jobSite');
+    expect(store).toContain("sourceQuoteId:");
+    expect(store).toContain("source_quote_id");
+  });
 });

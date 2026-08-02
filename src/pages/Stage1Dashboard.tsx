@@ -4590,6 +4590,7 @@ function Stage1DashboardInner() {
       />
       <DetailedJobCostReport
         unit={reportUnit}
+        runId={activeRunId}
         open={reportOpen}
         onOpenChange={setReportOpen}
         onSave={async (u) => {

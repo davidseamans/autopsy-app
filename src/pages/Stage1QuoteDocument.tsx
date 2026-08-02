@@ -16,11 +16,7 @@ import {
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 const auDate = (value: string | null) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU") : "—";
-const isoAfterDays = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-};
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function Stage1QuoteDocument() {
   const { quoteId = "" } = useParams();
@@ -70,7 +66,7 @@ export default function Stage1QuoteDocument() {
     if (!quote || working) return;
     setWorking(true);
     try {
-      const created = await createInvoiceFromQuote(quote.id, isoAfterDays(7));
+      const created = await createInvoiceFromQuote(quote.id, todayIso());
       toast.success(`${created.invoiceNumber} created from ${quote.number}.`);
       await reload();
       setShowInvoice(true);

@@ -42,7 +42,7 @@ export default function Stage1QuoteNew() {
   const [siteAddress, setSiteAddress] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
   const [validUntil, setValidUntil] = useState(isoAfterDays(14));
-  const [paymentTerms, setPaymentTerms] = useState("Payment due within 7 days of invoice.");
+  const [paymentTerms, setPaymentTerms] = useState("Payment Due on Completion");
   const [cleanTypeCode, setCleanTypeCode] = useState("");
   const [cleanTypeRules, setCleanTypeRules] = useState<Stage1CleanTypePricingRule[]>([]);
   const [chargeOutRateExGst, setChargeOutRateExGst] = useState(0);
@@ -153,7 +153,18 @@ export default function Stage1QuoteNew() {
           <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="site-address">Service address *</Label><Textarea id="site-address" value={siteAddress} onChange={(event) => setSiteAddress(event.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="scope">Notes or exclusions (optional)</Label><Textarea id="scope" rows={3} value={serviceDescription} onChange={(event) => setServiceDescription(event.target.value)} placeholder="Add anything the customer should know. The work items and hours are added to the quote automatically." /></div>
           <Field id="valid-until" label="Quote valid until" type="date" value={validUntil} onChange={setValidUntil} required />
-          <Field id="terms" label="Payment terms" value={paymentTerms} onChange={setPaymentTerms} required />
+          <div className="space-y-1.5">
+            <Label htmlFor="terms">Payment terms *</Label>
+            <select
+              id="terms"
+              value={paymentTerms}
+              onChange={(event) => setPaymentTerms(event.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              required
+            >
+              <option value="Payment Due on Completion">Payment Due on Completion</option>
+            </select>
+          </div>
         </CardContent>
       </Card>
 

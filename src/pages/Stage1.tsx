@@ -387,6 +387,8 @@ export interface InvoiceLine {
   proofName?: string;
   /** Generated quote-conversion invoices are immutable document records. */
   source?: string;
+  /** Quote document behind a system-generated invoice. */
+  sourceQuoteId?: string;
 }
 
 export type PaymentMethod =

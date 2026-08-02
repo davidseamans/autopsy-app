@@ -27,6 +27,8 @@ import type { CostLine, GBExpense, InvoiceLine, PaymentLine, ProofUnit } from "@
 import { supabase } from "@/lib/supabase";
 import { useEffect, useRef, useState } from "react";
 import { computeGstSplit, type GstTreatment } from "@/lib/gst";
+import { addEvidence, getEvidenceUrl, listRunEvidence, type EvidenceRecord } from "@/lib/stage1Evidence";
+import { toast } from "@/components/ui/sonner";
 
 type Line = {
   date?: string;
@@ -44,6 +46,8 @@ type Line = {
   fromJobN?: number;
   fromJobLabel?: string;
   onEdit?: () => void;
+  onOpenSource?: () => void;
+  attachmentLabel?: string;
 };
 
 type TransactionDraft = {
@@ -54,6 +58,7 @@ type TransactionDraft = {
   description: string;
   amount: string;
   proof: string;
+  file?: File;
 };
 
 // Split a line into gross (inc GST) / GST / net (ex GST) using its GST
@@ -82,6 +87,7 @@ type Stage1RevenueRow = {
   gst_amount?: number | null;
   revenue_type: string | null;
   source: string | null;
+  source_quote_id?: string | null;
   reference: string | null;
   description?: string | null;
   created_at: string | null;
@@ -120,7 +126,7 @@ function invoiceLinesForUnit(unit: ProofUnit, revenueRows: Stage1RevenueRow[] = 
   const persisted = revenueRows.filter((r) => (r.revenue_type ?? "invoice") !== "payment");
   if (persisted.length > 0) {
     return persisted
-      .filter((r) => Number(r.amount_inc_gst ?? r.amount ?? 0) > 0)
+      .filter((r) => Number(r.amount_inc_gst ?? r.amount ?? 0) !== 0)
       .map((r) => ({
         id: r.id,
         date: r.created_at?.slice(0, 10),
@@ -132,6 +138,8 @@ function invoiceLinesForUnit(unit: ProofUnit, revenueRows: Stage1RevenueRow[] = 
         gstAmount: r.gst_amount != null ? Number(r.gst_amount) : undefined,
         gstOverridden: false,
         proofName: r.reference ?? undefined,
+        source: r.source ?? undefined,
+        sourceQuoteId: r.source_quote_id ?? undefined,
       }));
   }
   return (unit.invoiceAmount ?? 0) > 0
@@ -259,7 +267,11 @@ function LineTable({
           ) : lines.map((l, i) => {
             const s = splitLine(l);
             return (
-              <TableRow key={i}>
+              <TableRow
+                key={i}
+                className={l.onOpenSource ? "cursor-pointer hover:bg-muted/60" : undefined}
+                onClick={l.onOpenSource}
+              >
                 <TableCell className="text-muted-foreground">{l.date || "—"}</TableCell>
                 <TableCell>{l.supplier || l.ref || "—"}</TableCell>
                 {showFromJob && (
@@ -272,7 +284,13 @@ function LineTable({
                 <TableCell className="text-right tabular-nums">${fmt(s.gross)}</TableCell>
                 <TableCell className="text-right tabular-nums">${fmt(s.gst)}</TableCell>
                 <TableCell className="text-right tabular-nums">${fmt(s.net)}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{l.proof || "—"}</TableCell>
+                <TableCell className="text-xs">
+                  {l.onOpenSource ? (
+                    <button type="button" className="text-primary underline underline-offset-2" onClick={(event) => { event.stopPropagation(); l.onOpenSource?.(); }}>
+                      {l.attachmentLabel || l.proof || "Open document"}
+                    </button>
+                  ) : "—"}
+                </TableCell>
                 <TableCell className="text-right">
                   <Button
                     size="sm"
@@ -335,7 +353,7 @@ function PaymentTable({
   outstanding,
   onAdd,
 }: {
-  payments: { date?: string; client: string; description: string; amount: number; onEdit: () => void }[];
+  payments: { date?: string; client: string; description: string; amount: number; onEdit: () => void; onOpenSource?: () => void; attachmentLabel?: string }[];
   outstanding: number;
   onAdd: () => void;
 }) {
@@ -349,19 +367,23 @@ function PaymentTable({
             <TableHead>Client</TableHead>
             <TableHead>Description</TableHead>
             <TableHead className="text-right">Total Amount</TableHead>
+            <TableHead>Attachment</TableHead>
             <TableHead className="text-right">Edit</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {payments.length > 0 ? (
             payments.map((payment, index) => (
-            <TableRow key={index}>
+            <TableRow key={index} className={payment.onOpenSource ? "cursor-pointer hover:bg-muted/60" : undefined} onClick={payment.onOpenSource}>
               <TableCell className="text-muted-foreground">{payment.date || "—"}</TableCell>
               <TableCell>{payment.client}</TableCell>
               <TableCell>{payment.description}</TableCell>
               <TableCell className="text-right tabular-nums">${fmt(payment.amount)}</TableCell>
+              <TableCell className="text-xs">
+                {payment.onOpenSource ? <button type="button" className="text-primary underline underline-offset-2" onClick={(event) => { event.stopPropagation(); payment.onOpenSource?.(); }}>{payment.attachmentLabel || "Open document"}</button> : "—"}
+              </TableCell>
               <TableCell className="text-right">
-                <Button size="sm" variant="outline" onClick={payment.onEdit}>
+                <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); payment.onEdit(); }}>
                   Edit
                 </Button>
               </TableCell>
@@ -369,7 +391,7 @@ function PaymentTable({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={4} className="text-xs text-muted-foreground italic">
+              <TableCell colSpan={5} className="text-xs text-muted-foreground italic">
                 No client payments recorded for this job yet.
               </TableCell>
               <TableCell className="text-right">
@@ -389,6 +411,7 @@ function PaymentTable({
               ${fmt(totalPayments)}
             </TableCell>
             <TableCell />
+            <TableCell />
           </TableRow>
           <TableRow>
             <TableCell colSpan={3} className="font-semibold">
@@ -397,6 +420,7 @@ function PaymentTable({
             <TableCell className="text-right font-semibold tabular-nums">
               ${fmt(outstanding)}
             </TableCell>
+            <TableCell />
             <TableCell />
           </TableRow>
         </TableFooter>
@@ -455,7 +479,12 @@ function TransactionDialog({
           </div>
           <div className="space-y-1">
             <Label>Attachment</Label>
-            <Input value={draft.proof} onChange={(e) => patch({ proof: e.target.value })} placeholder="Photo or document" />
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf"
+              onChange={(e) => patch({ file: e.target.files?.[0] })}
+            />
+            <p className="text-xs text-muted-foreground">Photo or PDF, up to 10 MB.</p>
           </div>
         </div>
         <DialogFooter>
@@ -473,11 +502,13 @@ function TransactionDialog({
 
 export function DetailedJobCostReport({
   unit,
+  runId,
   open,
   onOpenChange,
   onSave,
 }: {
   unit: ProofUnit | null;
+  runId: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSave?: (unit: ProofUnit) => Promise<void> | void;
@@ -491,6 +522,7 @@ export function DetailedJobCostReport({
   const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
   const [transactionSaving, setTransactionSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [attachments, setAttachments] = useState<EvidenceRecord[]>([]);
   const transactionSavingRef = useRef(false);
 
   useEffect(() => {
@@ -504,7 +536,7 @@ export function DetailedJobCostReport({
       const [rev, cost] = await Promise.all([
         supabase
           .from("stage1_revenue_events")
-          .select("id,amount,amount_inc_gst,amount_ex_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
+          .select("id,source_quote_id,amount,amount_inc_gst,amount_ex_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
           .eq("stage1_job_id", stage1JobId)
           .order("created_at", { ascending: true }),
         supabase
@@ -524,10 +556,31 @@ export function DetailedJobCostReport({
     };
   }, [open, stage1JobId]);
 
+  useEffect(() => {
+    if (!open || !runId) {
+      setAttachments([]);
+      return;
+    }
+    let cancelled = false;
+    void listRunEvidence(runId)
+      .then((items) => { if (!cancelled) setAttachments(items); })
+      .catch(() => { if (!cancelled) setAttachments([]); });
+    return () => { cancelled = true; };
+  }, [open, runId]);
+
   if (!unit) return null;
 
   const dateOnly = (iso?: string | null) => (iso ? iso.slice(0, 10) : undefined);
   const closeTransactionDialog = () => setTransactionDraft(null);
+  const attachmentFor = (linkRef: string) => attachments.find((item) => item.linkRef === linkRef);
+  const openAttachment = async (record: EvidenceRecord) => {
+    const result = await getEvidenceUrl(record.id);
+    if (!result) {
+      toast.error("The attachment could not be opened.");
+      return;
+    }
+    window.open(result.url, "_blank", "noopener,noreferrer");
+  };
   const openInvoiceDialog = (line?: InvoiceLine, index?: number) =>
     setTransactionDraft({
       kind: "invoice",
@@ -537,6 +590,7 @@ export function DetailedJobCostReport({
       description: line?.description ?? "Invoice" + (unit.jobSite ? ` - ${unit.jobSite}` : ""),
       amount: line?.amount != null ? String(line.amount) : "",
       proof: line?.proofName ?? "",
+      file: undefined,
     });
   const openPaymentDialog = (line?: PaymentLine, index?: number) =>
     setTransactionDraft({
@@ -547,6 +601,7 @@ export function DetailedJobCostReport({
       description: line?.description ?? "Payment received",
       amount: line?.amount != null ? String(line.amount) : "",
       proof: line?.proofName ?? "",
+      file: undefined,
     });
   const openCostDialog = (line?: CostLine, index?: number) =>
     setTransactionDraft({
@@ -557,6 +612,7 @@ export function DetailedJobCostReport({
       description: line?.description ?? "",
       amount: line?.amount != null ? String(line.amount) : "",
       proof: line?.docName ?? "",
+      file: undefined,
     });
   const openGbDialog = (expense?: GBExpense, index?: number) =>
     setTransactionDraft({
@@ -567,6 +623,7 @@ export function DetailedJobCostReport({
       description: expense?.description ?? "",
       amount: expense?.amount != null ? String(expense.amount) : "",
       proof: expense?.receiptName ?? "",
+      file: undefined,
     });
   const saveTransaction = async () => {
     if (!transactionDraft || !onSave || transactionSavingRef.current) return;
@@ -576,6 +633,12 @@ export function DetailedJobCostReport({
       const parsedAmount = transactionDraft.amount === "" ? undefined : Number(transactionDraft.amount);
       const amount = parsedAmount !== undefined && Number.isFinite(parsedAmount) ? parsedAmount : undefined;
       let next: ProofUnit = { ...unit };
+      let attachmentTarget: {
+        linkType: "revenue_line" | "cost_line" | "general_cost";
+        linkRef: string;
+        label: string;
+        evidenceType: "invoice" | "supplier_receipt" | "other";
+      } | null = null;
       if (transactionDraft.kind === "invoice") {
         const invoiceLines = [...invoiceLinesForUnit(unit, revenueRows)];
         const existing = transactionDraft.index == null ? undefined : invoiceLines[transactionDraft.index];
@@ -593,6 +656,7 @@ export function DetailedJobCostReport({
         };
         if (transactionDraft.index == null) invoiceLines.push(line);
         else invoiceLines[transactionDraft.index] = line;
+        attachmentTarget = { linkType: "revenue_line", linkRef: line.id, label: line.ref || "Client invoice", evidenceType: "invoice" };
         next = applyInvoiceSummary(next, invoiceLines);
       } else if (transactionDraft.kind === "payment") {
         const paymentLines = [...paymentLinesForUnit(unit, revenueRows)];
@@ -608,6 +672,7 @@ export function DetailedJobCostReport({
         };
         if (transactionDraft.index == null) paymentLines.push(line);
         else paymentLines[transactionDraft.index] = line;
+        attachmentTarget = { linkType: "revenue_line", linkRef: line.id, label: line.description || "Client payment", evidenceType: "other" };
         next = applyPaymentSummary(next, paymentLines);
       } else if (transactionDraft.kind === "cost") {
         const lines = [...(next.costLines ?? [])];
@@ -625,6 +690,7 @@ export function DetailedJobCostReport({
         };
         if (transactionDraft.index == null) lines.push(line);
         else lines[transactionDraft.index] = line;
+        attachmentTarget = { linkType: "cost_line", linkRef: line.id, label: line.description || "Job cost", evidenceType: "supplier_receipt" };
         next = { ...next, costLines: lines };
       } else {
         const expenses = [...(next.gbExpenses ?? [])];
@@ -642,10 +708,25 @@ export function DetailedJobCostReport({
         };
         if (transactionDraft.index == null) expenses.push(expense);
         else expenses[transactionDraft.index] = expense;
+        attachmentTarget = { linkType: "general_cost", linkRef: expense.id, label: expense.description || "General business expense", evidenceType: "supplier_receipt" };
         next = { ...next, gbExpenses: expenses };
       }
       closeTransactionDialog();
       await onSave(next);
+      if (transactionDraft.file && runId && attachmentTarget) {
+        const saved = await addEvidence({
+          runId,
+          linkType: attachmentTarget.linkType,
+          linkRef: attachmentTarget.linkRef,
+          linkLabel: attachmentTarget.label,
+          evidenceType: attachmentTarget.evidenceType,
+          file: transactionDraft.file,
+        });
+        setAttachments((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+        toast.success("Attachment saved.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The transaction could not be saved.");
     } finally {
       transactionSavingRef.current = false;
       setTransactionSaving(false);
@@ -659,9 +740,13 @@ export function DetailedJobCostReport({
   const invoiceLines = invoiceLinesForUnit(unit, revenueRows);
   const paymentLines = paymentLinesForUnit(unit, revenueRows);
   const incomeLines: Line[] = invoiceLines
-    .filter((line) => (line.amount ?? 0) > 0)
+    .filter((line) => (line.amount ?? 0) !== 0)
     .map((line, index) => {
       const treatment = line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst");
+      const attached = attachmentFor(line.id);
+      const documentUrl = line.source === "stage1_quote_conversion" && line.sourceQuoteId && runId
+        ? `/stage-1/quote/${line.sourceQuoteId}?runId=${encodeURIComponent(runId)}`
+        : null;
       return {
         date: line.date,
         ref: line.ref,
@@ -672,7 +757,11 @@ export function DetailedJobCostReport({
         gstTreatment: treatment,
         gstOverride: line.gstAmount,
         overridden: line.gstOverridden,
-        proof: line.proofName || line.ref || "Recorded",
+        proof: attached?.fileName,
+        attachmentLabel: documentUrl ? "Open invoice" : attached?.fileName,
+        onOpenSource: documentUrl
+          ? () => window.open(documentUrl, "_blank", "noopener,noreferrer")
+          : attached ? () => void openAttachment(attached) : undefined,
         onEdit: line.source === "stage1_quote_conversion" ? undefined : () => openInvoiceDialog(line, index),
       };
     });
@@ -683,6 +772,7 @@ export function DetailedJobCostReport({
     .filter((l) => (l.amount ?? 0) > 0)
     .map((l, i) => {
       const treatment = l.gstTreatment ?? (l.gstIncluded ? "gst_included" : "no_gst");
+      const attached = attachmentFor(l.id);
       return {
         date: l.date ? dateOnly(l.date) : dateOnly(costRows[i]?.created_at),
         ref: l.docName ?? costRows[i]?.notes ?? undefined,
@@ -693,7 +783,9 @@ export function DetailedJobCostReport({
         gstTreatment: treatment,
         gstOverride: l.gstAmount,
         overridden: l.gstOverridden,
-        proof: l.docName || costRows[i]?.notes || "Recorded",
+        proof: attached?.fileName,
+        attachmentLabel: attached?.fileName,
+        onOpenSource: attached ? () => void openAttachment(attached) : undefined,
         onEdit: () => openCostDialog(l, i),
       };
     });
@@ -725,13 +817,16 @@ export function DetailedJobCostReport({
   const gbLines: Line[] = [];
   for (const [i, g] of (unit.gbExpenses ?? []).entries()) {
     if (!g.amount) continue;
+    const attached = attachmentFor(g.id);
     gbLines.push({
       date: g.expenseDate,
       ref: g.supplier,
       description: g.description,
       gross: g.amount,
       gstIncluded: g.gstIncluded !== false,
-      proof: g.receiptName,
+      proof: attached?.fileName,
+      attachmentLabel: attached?.fileName,
+      onOpenSource: attached ? () => void openAttachment(attached) : undefined,
       onEdit: () => openGbDialog(g, i),
     });
   }
@@ -748,13 +843,18 @@ export function DetailedJobCostReport({
       : incomeAsPerQuote - paymentReceived;
   const paymentRows = paymentLines
     .filter((line) => (line.amount ?? 0) > 0)
-    .map((line, index) => ({
-      date: line.date,
-      client: line.client ?? unit.client,
-      description: line.description ?? line.method ?? "Payment received",
-      amount: line.amount ?? 0,
-      onEdit: () => openPaymentDialog(line, index),
-    }));
+    .map((line, index) => {
+      const attached = attachmentFor(line.id);
+      return {
+        date: line.date,
+        client: line.client ?? unit.client,
+        description: line.description ?? line.method ?? "Payment received",
+        amount: line.amount ?? 0,
+        attachmentLabel: attached?.fileName,
+        onOpenSource: attached ? () => void openAttachment(attached) : undefined,
+        onEdit: () => openPaymentDialog(line, index),
+      };
+    });
   const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
   const displayedStatus = unit.status === "Completed" ? "Completed" : "Active";
   const changeJobStatus = async (status: "Active" | "Completed") => {
@@ -795,10 +895,7 @@ export function DetailedJobCostReport({
               <div>
                 <div className="text-xs text-muted-foreground">Client</div>
                 <div className="font-medium">{unit.client}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Job / Site Location</div>
-                <div>{unit.jobSite ?? "—"}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{unit.jobSite ?? "—"}</div>
               </div>
               <div>
                 <Label htmlFor="job-status" className="text-xs text-muted-foreground">Status</Label>

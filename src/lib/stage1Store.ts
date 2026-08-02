@@ -262,7 +262,7 @@ export async function fetchStage1Units(
   if (jobIds.length > 0) {
     const { data: revenueRows, error: revenueRowsErr } = await supabase
       .from("stage1_revenue_events")
-      .select("id,stage1_job_id,amount,amount_inc_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
+      .select("id,stage1_job_id,source_quote_id,amount,amount_inc_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
       .in("stage1_job_id", jobIds)
       .order("created_at", { ascending: true });
     if (!revenueRowsErr) {
@@ -271,7 +271,7 @@ export async function fetchStage1Units(
         if (!jobId) return;
         const type = typeof r.revenue_type === "string" ? r.revenue_type : "invoice";
         const amount = numValue(r.amount_inc_gst ?? r.amount);
-        if (amount <= 0) return;
+        if (amount === 0) return;
         if (type === "payment") {
           const list = paymentLinesByJob.get(jobId) ?? [];
           list.push({
@@ -298,6 +298,7 @@ export async function fetchStage1Units(
             gstOverridden: false,
             proofName: typeof r.reference === "string" ? r.reference : undefined,
             source: typeof r.source === "string" ? r.source : undefined,
+            sourceQuoteId: typeof r.source_quote_id === "string" ? r.source_quote_id : undefined,
           });
           invoiceLinesByJob.set(jobId, list);
         }
@@ -1018,7 +1019,7 @@ async function doSyncStage1Units(
     const revenueRows: Record<string, unknown>[] = [];
     for (const line of invoiceLinesForWrite(u)) {
       if (line.source === "stage1_quote_conversion") continue;
-      if ((line.amount ?? 0) <= 0) continue;
+      if ((line.amount ?? 0) === 0) continue;
       const split = computeGstSplit({
         inclusive: line.amount,
         treatment: line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst"),
@@ -1026,7 +1027,7 @@ async function doSyncStage1Units(
         overridden: line.gstOverridden,
       });
       revenueRows.push({
-        id: newCanonicalId(),
+        id: line.id,
         stage1_job_id: jobId,
         amount: split.exGst,
         amount_inc_gst: line.amount,
@@ -1044,7 +1045,7 @@ async function doSyncStage1Units(
     for (const line of paymentLinesForWrite(u)) {
       if ((line.amount ?? 0) <= 0) continue;
       revenueRows.push({
-        id: newCanonicalId(),
+        id: line.id,
         stage1_job_id: jobId,
         amount: line.amount,
         amount_inc_gst: line.amount,
@@ -1171,7 +1172,7 @@ amount_ex_gst: (() => {
     const gbRows = (u.gbExpenses ?? [])
       .filter((e) => (e.amount ?? 0) > 0 || e.supplier || e.description || e.receiptName)
       .map((e) => ({
-        id: newCanonicalId(),
+        id: e.id,
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         expense_date: e.expenseDate || null,
