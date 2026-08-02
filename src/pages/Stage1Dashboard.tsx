@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SEED_UNITS,
   computeScorecard,
@@ -1643,6 +1643,7 @@ function QuoteDetailDialog({
 
 function Stage1DashboardInner() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const isDemo = searchParams.get("demo") === "1";
   const { user, loading: authLoading } = useAuth();
   const [activeRunId, setActiveRunId] = useState<string | null>(() =>
@@ -4296,7 +4297,7 @@ function Stage1DashboardInner() {
             { k: "Quotes sent", v: quotesSent },
             { k: "Quotes accepted", v: quotesAccepted },
           ]}
-          onClick={() => setDrill("conversions")}
+          onClick={() => navigate(activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}` : "/stage-1/quotes")}
         />
         <KpiCard
           label="Active Jobs"
