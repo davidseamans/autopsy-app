@@ -11,7 +11,6 @@ import { computeGstSplit } from "@/lib/gst";
 import { AuthGate } from "@/components/AuthGate";
 import { useAuth } from "@/lib/auth";
 import {
-  createQuote,
   setQuoteOutcome,
   convertQuoteToJob,
   loadStage1Board,
@@ -107,7 +106,6 @@ type LeadActivity = {
   method: string;
   attempts: number;
   contacts_made: number;
-  quotes_generated: number;
   notes: string;
   created_at: string;
 };
@@ -1388,61 +1386,25 @@ function LogActivityDialog({
   open,
   onOpenChange,
   onSave,
-  nextQuoteNumberStart,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: LeadActivity, newQuotes: Quote[]) => void;
-  nextQuoteNumberStart: number;
+  onSave: (a: LeadActivity) => void;
 }) {
   const [date, setDate] = useState("");
   const [method, setMethod] = useState(METHOD_OPTIONS[0]);
   const [attempts, setAttempts] = useState<string>("");
   const [contacts, setContacts] = useState<string>("");
-  const [quotes, setQuotes] = useState<string>("");
   const [notes, setNotes] = useState("");
-  type QRow = {
-    client: string;
-    site: string;
-    amount: string;
-    followUp: string;
-    status: "Sent";
-  };
-  const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
-  const [rows, setRows] = useState<QRow[]>([]);
 
   useEffect(() => {
     if (open) {
       setDate(""); setMethod(METHOD_OPTIONS[0]);
-      setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
-      setRows([]);
+      setAttempts(""); setContacts(""); setNotes("");
     }
   }, [open]);
 
-  const qGen = Math.max(0, parseInt(quotes || "0", 10) || 0);
-
-  // Keep rows count in sync with Quotes Generated input
-  useEffect(() => {
-    setRows((prev) => {
-      if (qGen === prev.length) return prev;
-      if (qGen > prev.length) {
-        return [...prev, ...Array.from({ length: qGen - prev.length }, blankRow)];
-      }
-      return prev.slice(0, qGen);
-    });
-  }, [qGen]);
-
-  const rowComplete = (r: QRow) => {
-    const amt = Number(r.amount);
-    if (!r.client.trim()) return false;
-    if (!r.site.trim()) return false;
-    if (isNaN(amt) || amt <= 0) return false;
-    if (!r.followUp) return false;
-    return true;
-  };
-  const completeCount = rows.filter(rowComplete).length;
-  const countOk = completeCount === qGen;
-  const canSave = !!date && !!method && countOk;
+  const canSave = !!date && !!method;
 
   const save = () => {
     const activityId = `act-${Date.now()}`;
@@ -1452,29 +1414,11 @@ function LogActivityDialog({
       method,
       attempts: Number(attempts) || 0,
       contacts_made: Number(contacts) || 0,
-      quotes_generated: qGen,
       notes: notes.trim(),
       created_at: new Date().toISOString(),
     };
-    const newQuotes: Quote[] = rows.map((r, i) => ({
-      number: `Q-${nextQuoteNumberStart + i}`,
-      client: r.client.trim(),
-      site: r.site.trim(),
-      value: Number(r.amount),
-      status: r.status as QuoteStatus,
-      quoteDate: date,
-      followUp: r.followUp,
-      reason: "",
-      sourceActivityId: activityId,
-      sourceActivityDate: date,
-      method,
-      createdAt: new Date().toISOString(),
-    }));
-    onSave(a, newQuotes);
+    onSave(a);
   };
-
-  const updateRow = (i: number, patch: Partial<QRow>) =>
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1483,7 +1427,6 @@ function LogActivityDialog({
           <DialogTitle>Log Activity</DialogTitle>
           <DialogDescription>
             Record a dated lead-generation activity. Aggregates into Lead Method Performance.
-            When Quotes Generated is greater than zero, enter matching quote details below.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1505,7 +1448,7 @@ function LogActivityDialog({
               {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <Label htmlFor="la-att">Attempts</Label>
               <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
@@ -1514,72 +1457,11 @@ function LogActivityDialog({
               <Label htmlFor="la-con">Contacts Made</Label>
               <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="la-qt">Quotes Generated</Label>
-              <Input id="la-qt" type="number" min={0} value={quotes} onChange={(e) => setQuotes(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">
-                How many actual quotes did you issue from this activity session?
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                If greater than zero, you must enter one quote record for each quote before saving.
-              </p>
-            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="la-notes">Notes</Label>
             <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
           </div>
-
-          {qGen > 0 && (
-            <div className="space-y-2 rounded-md border p-3">
-              <div>
-                <div className="text-sm font-semibold">Quote Details Required</div>
-                <p className="text-xs text-muted-foreground">
-                  You entered {qGen} quote{qGen === 1 ? "" : "s"} generated. Enter {qGen} quote record{qGen === 1 ? "" : "s"} before saving this activity.
-                </p>
-              </div>
-              {rows.map((r, i) => (
-                <div key={i} className="rounded-md border p-3 space-y-2 bg-muted/30">
-                  <div className="text-xs font-medium text-muted-foreground">Quote {i + 1} of {qGen}</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Client <span className="text-destructive">*</span></Label>
-                      <Input value={r.client} onChange={(e) => updateRow(i, { client: e.target.value })} placeholder="e.g. M. Patel" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Job Location <span className="text-destructive">*</span></Label>
-                      <Input value={r.site} onChange={(e) => updateRow(i, { site: e.target.value })} placeholder="e.g. Unit 4, Buderim" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Quote Amount <span className="text-destructive">*</span></Label>
-                      <Input type="number" min={0} step="0.01" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })} placeholder="0.00" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">
-                        Follow-up Date <span className="text-destructive">*</span>
-                      </Label>
-                      <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
-                      <p className="text-[11px] text-muted-foreground">
-                        {r.followUp ? isoToAU(r.followUp) : "dd/mm/yyyy"}
-                      </p>
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <Label className="text-xs">Initial Status</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Quotes created from Log Activity are saved as <span className="font-medium text-foreground">Sent</span>.
-                        Update status later from the Quote Conversion Board.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!countOk && (
-                <p className="text-xs text-destructive">
-                  Quotes Generated must match the number of completed quote records. ({completeCount} of {qGen} complete)
-                </p>
-              )}
-            </div>
-          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -2854,7 +2736,7 @@ function Stage1DashboardInner() {
       }).length;
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
       const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
-      const quotesSum = (baseline?.quotes ?? 0) + acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
+      const quotesSum = (baseline?.quotes ?? 0) + qs.length;
       const leads = (baseline?.leads ?? 0) + acts.length;
       const noteParts: string[] = [];
       if (baseline?.notes) noteParts.push(baseline.notes);
@@ -2978,14 +2860,6 @@ function Stage1DashboardInner() {
     ? `${ledgerTotals.totalGmPct}%`
     : "—";
   const displayMarginTone = marginTone35(ledgerTotals.totalGmPct);
-
-  const nextQuoteNumberStart = useMemo(() => {
-    const nums = quotes
-      .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
-      .filter((n) => !isNaN(n));
-    const max = nums.length ? Math.max(...nums) : 1000;
-    return max + 1;
-  }, [quotes]);
 
   const handleAcceptAndConvert = async (q: Quote) => {
     if (!requireBusinessRegistration("convert quotes to jobs")) return;
@@ -4729,7 +4603,7 @@ function Stage1DashboardInner() {
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
-        onLogActivity={() => { if (requireBusinessRegistration("create quotes")) setLogActOpen(true); }}
+        onLogActivity={() => { if (requireBusinessRegistration("log lead activity")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
@@ -4754,26 +4628,10 @@ function Stage1DashboardInner() {
       <LogActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        nextQuoteNumberStart={nextQuoteNumberStart}
-        onSave={async (a, newQuotes) => {
-          if (!requireBusinessRegistration("create quotes")) return;
+        onSave={(a) => {
+          if (!requireBusinessRegistration("log lead activity")) return;
           setActivities((prev) => [...prev, a]);
           setLogActOpen(false);
-          for (const nq of newQuotes) {
-            const res = await createQuote({
-              client: nq.client,
-              site: nq.site,
-              value: nq.value,
-              followUp: nq.followUp,
-              quoteNotes: nq.notes,
-            });
-            if (res.ok && res.quote) {
-              const saved = { ...res.quote, method: nq.method, sourceActivityId: nq.sourceActivityId, sourceActivityDate: a.activity_date };
-              setQuotes((prev) => [saved, ...prev]);
-            } else {
-              toast({ title: "Quote not saved", description: res.error ?? "Backend write failed." });
-            }
-          }
         }}
       />
       <DetailedJobCostReport

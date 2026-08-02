@@ -51,6 +51,9 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(dashboard).toContain("Lead Method Performance");
     expect(dashboard).toContain("Log Activity");
     expect(dashboard).not.toContain("Record Leads");
+    expect(dashboard).not.toContain("Quotes Generated");
+    expect(dashboard).not.toContain("Quote Details Required");
+    expect(dashboard).not.toContain("matching quote details");
     expect(existsSync(resolve("src/pages/Stage1Leads.tsx"))).toBe(false);
   });
 
