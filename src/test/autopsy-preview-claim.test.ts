@@ -46,7 +46,7 @@ describe("Flight Deck preview ownership handoff", () => {
     expect(verdict).toContain("previewClaimRequired");
     expect(verdict).toContain("Save result and start First 5 Jobs");
     expect(verdict).toContain("/autopsy/claim/");
-    expect(verdict).toContain("/launchpad?runId=");
+    expect(verdict).toContain("/stage-1?runId=");
     expect(claimPage).toContain("Sign in or create my account");
     expect(claimPage).toContain("/api/autopsy-claim");
   });

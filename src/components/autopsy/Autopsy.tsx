@@ -2636,8 +2636,8 @@ function CandidateVerdict({
   const first5JobsHref = runId
     ? previewClaimRequired
       ? `/autopsy/claim/${runId}?embedded=flight-deck`
-      : `/launchpad?runId=${encodeURIComponent(runId)}${embeddedFlightDeck ? "&embedded=flight-deck" : ""}`
-    : "/launchpad";
+      : `/stage-1?runId=${encodeURIComponent(runId)}${embeddedFlightDeck ? "&embedded=flight-deck" : ""}`
+    : "/stage-1";
 
   const speakVerdict = useCallback(async () => {
     if (!session?.access_token || verdictSpeakingRef.current) return;

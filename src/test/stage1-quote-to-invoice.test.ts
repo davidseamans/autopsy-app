@@ -60,7 +60,7 @@ describe("Stage 1 quote to invoice contract", () => {
 
   it("uses an apprentice-friendly hours and charge-out-rate quote", () => {
     const documents = readFileSync(resolve("src/lib/stage1Documents.ts"), "utf8");
-    const quotePage = readFileSync(resolve("src/pages/LaunchpadQuoteNew.tsx"), "utf8");
+    const quotePage = readFileSync(resolve("src/pages/Stage1QuoteNew.tsx"), "utf8");
     const quoteDocument = readFileSync(resolve("src/pages/Stage1QuoteDocument.tsx"), "utf8");
     expect(quotePage).toContain("Your charge-out rate, ex GST");
     expect(quotePage).toContain("Estimated hours");

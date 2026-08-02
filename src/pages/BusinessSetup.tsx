@@ -33,10 +33,9 @@ const empty: FormState = { businessName: "", contactName: "", phone: "", email: 
 export default function BusinessSetup() {
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const fromLaunchpad = searchParams.get("from") === "launchpad";
   const returnTo = runId
-    ? `${fromLaunchpad ? "/launchpad" : "/stage-1"}?runId=${encodeURIComponent(runId)}`
-    : fromLaunchpad ? "/launchpad" : "/stage-1";
+    ? `/stage-1?runId=${encodeURIComponent(runId)}`
+    : "/stage-1";
   const [form, setForm] = useState<FormState>(empty);
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [history, setHistory] = useState<IdentityAuditRow[]>([]);

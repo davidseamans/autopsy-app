@@ -45,16 +45,19 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
 
   it("uses one cumulative total rather than individual lead creation", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
-    const page = readFileSync(resolve("src/pages/LaunchpadLeads.tsx"), "utf8");
+    const page = readFileSync(resolve("src/pages/Stage1Leads.tsx"), "utf8");
     expect(funnel).toContain('rpc("set_stage1_lead_count"');
     expect(funnel).not.toContain("create_stage1_lead");
     expect(page).toContain("Total leads received");
     expect(page).not.toContain("Customer or prospect");
+    expect(page).not.toContain("Create a quote");
+    expect(page).not.toContain("Quotes created");
   });
 
   it("captures customer details at quote creation and preserves quote-to-job routing", () => {
     const documents = readFileSync(resolve("src/lib/stage1Documents.ts"), "utf8");
-    const quotePage = readFileSync(resolve("src/pages/LaunchpadQuoteNew.tsx"), "utf8");
+    const quotePage = readFileSync(resolve("src/pages/Stage1QuoteNew.tsx"), "utf8");
+    const quotesPage = readFileSync(resolve("src/pages/Stage1Quotes.tsx"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     expect(documents).toContain('rpc("create_stage1_guided_quote"');
     expect(documents).toContain("p_run_id: input.runId");
@@ -62,11 +65,25 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(documents).toContain("p_clean_type_code: input.cleanTypeCode");
     expect(quotePage).not.toContain('searchParams.get("leadId")');
     expect(quotePage).toContain("Customer and work details begin here");
+    expect(quotesPage).toContain("Create a quote");
+    expect(quotesPage).toContain("An accepted quote becomes a First 5 Jobs job");
     expect(quoteMigration).toContain("create or replace function public.create_stage1_quote");
     expect(quoteMigration).toContain("insert into public.stage1_leads");
     expect(quoteMigration).toContain("insert into public.stage1_quotes");
     expect(lineageMigration).toContain("source_stage1_quote_id");
     expect(lineageMigration).toContain("v_quote.stage1_lead_id, v_quote.id");
-    expect(dashboard).toContain("/launchpad/leads?runId=");
+    expect(dashboard).toContain("/stage-1/leads?runId=");
+  });
+
+  it("keeps Stage 1 navigation separate from Core and carries the run context", () => {
+    const shell = readFileSync(resolve("src/components/AppShell.tsx"), "utf8");
+    const routes = readFileSync(resolve("src/App.tsx"), "utf8");
+    expect(shell).toContain('{ title: "Leads", url: "/stage-1/leads" }');
+    expect(shell).toContain('{ title: "Quotes", url: "/stage-1/quotes" }');
+    expect(shell).not.toContain('{ title: "Launchpad"');
+    expect(shell).toContain("encodeURIComponent(runId)");
+    expect(routes).toContain('path="/stage-1/quotes/new"');
+    expect(routes).toContain('path="/launchpad"');
+    expect(routes).toContain('LegacyStage1Redirect to="/stage-1"');
   });
 });

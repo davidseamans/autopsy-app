@@ -1760,7 +1760,7 @@ function QuoteDetailDialog({
 }
 
 function Stage1DashboardInner() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isDemo = searchParams.get("demo") === "1";
   const { user, loading: authLoading } = useAuth();
   const [activeRunId, setActiveRunId] = useState<string | null>(() =>
@@ -1818,6 +1818,12 @@ function Stage1DashboardInner() {
     setStage1RunId(nextRunId);
     setActiveRunId(nextRunId);
   }, [searchParams]);
+  useEffect(() => {
+    if (!activeRunId || searchParams.get("runId")) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("runId", activeRunId);
+    setSearchParams(next, { replace: true });
+  }, [activeRunId, searchParams, setSearchParams]);
   useEffect(() => {
     if (activeRunId || !user?.id) return;
     let cancelled = false;
@@ -3130,7 +3136,7 @@ function Stage1DashboardInner() {
         <div className="flex items-center gap-2">
           {!isDemo && activeRunId && bd.canOperate ? (
             <Button asChild className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
-              <Link to={`/launchpad/leads?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> Leads &amp; Quotes</Link>
+              <Link to={`/stage-1/leads?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> Record Leads</Link>
             </Button>
           ) : null}
           {activeRunId ? (

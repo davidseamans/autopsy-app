@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,12 +22,12 @@ import Pipeline from "@/pages/crm/Pipeline";
 import Quotes from "@/pages/crm/Quotes";
 import Jobs from "@/pages/crm/Jobs";
 import NotFound from "./pages/NotFound.tsx";
-import Launchpad from "@/pages/Launchpad";
 import BusinessSetup from "@/pages/BusinessSetup";
-import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
+import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
 import Stage1QuoteDocument from "@/pages/Stage1QuoteDocument";
 import AutopsyClaim from "@/pages/AutopsyClaim";
-import LaunchpadLeads from "@/pages/LaunchpadLeads";
+import Stage1Leads from "@/pages/Stage1Leads";
+import Stage1Quotes from "@/pages/Stage1Quotes";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
@@ -42,12 +42,17 @@ const BusinessSetupRoute = () => (
 );
 const Stage1QuoteNewRoute = () => (
   <AuthGate>
-    <LaunchpadQuoteNew />
+    <Stage1QuoteNew />
   </AuthGate>
 );
 const Stage1LeadsRoute = () => (
   <AuthGate>
-    <LaunchpadLeads />
+    <Stage1Leads />
+  </AuthGate>
+);
+const Stage1QuotesRoute = () => (
+  <AuthGate>
+    <Stage1Quotes />
   </AuthGate>
 );
 const Stage1QuoteDocumentRoute = () => (
@@ -55,6 +60,11 @@ const Stage1QuoteDocumentRoute = () => (
     <Stage1QuoteDocument />
   </AuthGate>
 );
+
+const LegacyStage1Redirect = ({ to }: { to: string }) => {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+};
 
 const PaidAutopsyRoute = () => {
   const params = new URLSearchParams(window.location.search);
@@ -96,10 +106,13 @@ const App = () => (
               <Route path="/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
               <Route path="/stage-1" element={<Stage1Dashboard />} />
-              <Route path="/launchpad" element={<Launchpad />} />
-              <Route path="/launchpad/leads" element={<Stage1LeadsRoute />} />
-              <Route path="/launchpad/quote/new" element={<Stage1QuoteNewRoute />} />
+              <Route path="/stage-1/leads" element={<Stage1LeadsRoute />} />
+              <Route path="/stage-1/quotes" element={<Stage1QuotesRoute />} />
+              <Route path="/stage-1/quotes/new" element={<Stage1QuoteNewRoute />} />
               <Route path="/stage-1/quote/:quoteId" element={<Stage1QuoteDocumentRoute />} />
+              <Route path="/launchpad" element={<LegacyStage1Redirect to="/stage-1" />} />
+              <Route path="/launchpad/leads" element={<LegacyStage1Redirect to="/stage-1/leads" />} />
+              <Route path="/launchpad/quote/new" element={<LegacyStage1Redirect to="/stage-1/quotes/new" />} />
               <Route path="/business-setup" element={<BusinessSetupRoute />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/accounts" element={<Accounts />} />

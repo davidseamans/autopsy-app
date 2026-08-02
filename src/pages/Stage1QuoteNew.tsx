@@ -26,11 +26,11 @@ const isoAfterDays = (days: number) => {
 const blankLine = (): QuoteLineDraft => ({ description: "", estimatedHours: 1 });
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 
-export default function LaunchpadQuoteNew() {
+export default function Stage1QuoteNew() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const backTo = runId ? `/launchpad/leads?runId=${encodeURIComponent(runId)}` : "/launchpad/leads";
+  const backTo = runId ? `/stage-1/quotes?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes";
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
