@@ -3134,11 +3134,6 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
-          {!isDemo && activeRunId && bd.canOperate ? (
-            <Button asChild className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
-              <Link to={`/stage-1/leads?runId=${encodeURIComponent(activeRunId)}`}><Plus className="h-4 w-4" /> Record Leads</Link>
-            </Button>
-          ) : null}
           {activeRunId ? (
             <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>

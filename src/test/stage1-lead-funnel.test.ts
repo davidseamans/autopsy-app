@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -43,15 +43,15 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(indexMigration).toContain("public.stage1_funnel_totals(created_by)");
   });
 
-  it("uses one cumulative total rather than individual lead creation", () => {
+  it("keeps candidate lead entry in the existing dashboard drilldown", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
-    const page = readFileSync(resolve("src/pages/Stage1Leads.tsx"), "utf8");
+    const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     expect(funnel).toContain('rpc("set_stage1_lead_count"');
     expect(funnel).not.toContain("create_stage1_lead");
-    expect(page).toContain("Total leads received");
-    expect(page).not.toContain("Customer or prospect");
-    expect(page).not.toContain("Create a quote");
-    expect(page).not.toContain("Quotes created");
+    expect(dashboard).toContain("Lead Method Performance");
+    expect(dashboard).toContain("Log Activity");
+    expect(dashboard).not.toContain("Record Leads");
+    expect(existsSync(resolve("src/pages/Stage1Leads.tsx"))).toBe(false);
   });
 
   it("captures customer details at quote creation and preserves quote-to-job routing", () => {
@@ -72,14 +72,14 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(quoteMigration).toContain("insert into public.stage1_quotes");
     expect(lineageMigration).toContain("source_stage1_quote_id");
     expect(lineageMigration).toContain("v_quote.stage1_lead_id, v_quote.id");
-    expect(dashboard).toContain("/stage-1/leads?runId=");
+    expect(dashboard).toContain("Lead Method Performance");
   });
 
   it("keeps Stage 1 navigation separate from Core and carries the run context", () => {
     const shell = readFileSync(resolve("src/components/AppShell.tsx"), "utf8");
     const routes = readFileSync(resolve("src/App.tsx"), "utf8");
-    expect(shell).toContain('{ title: "Leads", url: "/stage-1/leads" }');
     expect(shell).toContain('{ title: "Quotes", url: "/stage-1/quotes" }');
+    expect(shell).not.toContain('{ title: "Leads", url: "/stage-1/leads" }');
     expect(shell).not.toContain('{ title: "Launchpad"');
     expect(shell).toContain("encodeURIComponent(runId)");
     expect(routes).toContain('path="/stage-1/quotes/new"');
