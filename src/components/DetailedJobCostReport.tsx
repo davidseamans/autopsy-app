@@ -242,7 +242,7 @@ function LineTable({
             <TableHead className="text-right">Gross incl. GST</TableHead>
             <TableHead className="text-right">GST</TableHead>
             <TableHead className="text-right">Net ex GST</TableHead>
-            <TableHead>Proof</TableHead>
+            <TableHead>Attachment</TableHead>
             <TableHead className="text-right">Edit</TableHead>
           </TableRow>
         </TableHeader>
@@ -454,8 +454,8 @@ function TransactionDialog({
             <Input type="number" value={draft.amount} onChange={(e) => patch({ amount: e.target.value })} />
           </div>
           <div className="space-y-1">
-            <Label>Proof</Label>
-            <Input value={draft.proof} onChange={(e) => patch({ proof: e.target.value })} />
+            <Label>Attachment</Label>
+            <Input value={draft.proof} onChange={(e) => patch({ proof: e.target.value })} placeholder="Photo or document" />
           </div>
         </div>
         <DialogFooter>
@@ -490,6 +490,7 @@ export function DetailedJobCostReport({
   const [costRows, setCostRows] = useState<Stage1CostRow[]>([]);
   const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
   const [transactionSaving, setTransactionSaving] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
   const transactionSavingRef = useRef(false);
 
   useEffect(() => {
@@ -755,6 +756,16 @@ export function DetailedJobCostReport({
       onEdit: () => openPaymentDialog(line, index),
     }));
   const jobNumber = unit.jobSequenceNumber != null ? `J-${unit.jobSequenceNumber}` : `J-${unit.n}`;
+  const displayedStatus = unit.status === "Completed" ? "Completed" : "Active";
+  const changeJobStatus = async (status: "Active" | "Completed") => {
+    if (!onSave || statusSaving || displayedStatus === status) return;
+    setStatusSaving(true);
+    try {
+      await onSave({ ...unit, status: status === "Completed" ? "Completed" : "In Progress" });
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -788,6 +799,19 @@ export function DetailedJobCostReport({
               <div>
                 <div className="text-xs text-muted-foreground">Job / Site Location</div>
                 <div>{unit.jobSite ?? "—"}</div>
+              </div>
+              <div>
+                <Label htmlFor="job-status" className="text-xs text-muted-foreground">Status</Label>
+                <select
+                  id="job-status"
+                  value={displayedStatus}
+                  disabled={statusSaving}
+                  onChange={(event) => void changeJobStatus(event.target.value as "Active" | "Completed")}
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-medium"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Completed">Completed</option>
+                </select>
               </div>
             </div>
           </section>
@@ -844,7 +868,7 @@ export function DetailedJobCostReport({
               <div><p className="text-xs text-muted-foreground">Hours variance</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 && unit.actualLabourHours != null ? `${unit.actualLabourHours - (unit.quotedLabourHours ?? 0) >= 0 ? "+" : ""}${unit.actualLabourHours - (unit.quotedLabourHours ?? 0)} hours` : "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Clean type</p><p className="font-medium">{unit.quotedCleanTypeLabel ?? "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Consumables budget</p><p className="font-medium">{(unit.quotedConsumablesBudget ?? 0) > 0 ? `$${fmt(unit.quotedConsumablesBudget ?? 0)}` : "—"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Actual consumables</p><p className="font-medium">{(unit.costMaterials ?? 0) > 0 ? `$${fmt(unit.costMaterials ?? 0)}` : "Not yet recorded"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Actual consumables</p><p className="font-medium">{(unit.costMaterials ?? 0) > 0 ? `$${fmt(unit.costMaterials ?? 0)}` : "—"}</p></div>
             </div>
             <LineTable
               lines={costLines}
@@ -873,11 +897,7 @@ export function DetailedJobCostReport({
               totalLabel="General Business Expenses"
               total={gbT}
             />
-            <p className="text-xs text-muted-foreground">
-              General business expenses are recorded separately from job costs. They do not change
-              this job's gross margin. They may affect whole-business viability, but they do not
-              decide whether this job counts toward Stage 1 margin proof.
-            </p>
+            <p className="text-xs text-muted-foreground">General business expenses remain separate from this job's gross margin.</p>
           </section>
           <TransactionDialog
             draft={transactionDraft}

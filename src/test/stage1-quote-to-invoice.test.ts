@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/20260801041235_stage1_quote_to_invoice.sql"),
   "utf8",
 );
+const sequenceMigration = readFileSync(
+  resolve("supabase/migrations/20260802070359_repair_stage1_job_sequence_and_quote_lineage.sql"),
+  "utf8",
+);
 
 describe("Stage 1 quote to invoice contract", () => {
   it("keeps the commercial document chain in Stage 1", () => {
@@ -32,6 +36,31 @@ describe("Stage 1 quote to invoice contract", () => {
     expect(migration).toContain("stage1_revenue_events_source_quote_invoice_key");
     expect(migration).toContain("source_quote_id = v_quote.id");
     expect(migration).toContain("v_quote.stage1_job_id");
+  });
+
+  it("assigns stable job numbers and restores the source quote on every job", () => {
+    const documents = readFileSync(resolve("src/lib/stage1Documents.ts"), "utf8");
+    const store = readFileSync(resolve("src/lib/stage1Store.ts"), "utf8");
+    expect(sequenceMigration).toContain("stage1_jobs_run_sequence_key");
+    expect(sequenceMigration).toContain("stage1_jobs_assign_sequence");
+    expect(sequenceMigration).toContain("job_sequence_number set not null");
+    expect(documents).not.toContain("`J-${row.job_sequence_number}`");
+    expect(store).toContain("quote_sequence_number");
+    expect(store).toContain("sourceQuote: quoteNumberByJob.get");
+    expect(store).toContain("sourceQuote: c.sourceQuote ?? cached.sourceQuote");
+  });
+
+  it("uses operational language and completes a job from its summary report", () => {
+    const report = readFileSync(resolve("src/components/DetailedJobCostReport.tsx"), "utf8");
+    const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
+    expect(report).toContain("<TableHead>Attachment</TableHead>");
+    expect(report).toContain("<Label>Attachment</Label>");
+    expect(report).toContain('<option value="Completed">Completed</option>');
+    expect(dashboard).toContain('["Completed", "Paid"].includes(u.status)');
+    expect(report).not.toContain("<TableHead>Proof</TableHead>");
+    expect(dashboard).not.toContain("<TableHead>Proof Type</TableHead>");
+    expect(dashboard).not.toContain("Revenue not yet proven");
+    expect(dashboard).not.toContain("Not Yet Recorded");
   });
 
   it("locks accepted commercial terms and snapshots invoice identity", () => {

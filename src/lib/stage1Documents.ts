@@ -124,7 +124,9 @@ export async function acceptStage1Quote(quoteId: string) {
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.job_id) throw new Error("The job was not created.");
-  return { jobId: String(row.job_id), jobNumber: `J-${row.job_sequence_number}` };
+  const sequence = Number(row.job_sequence_number);
+  if (!Number.isInteger(sequence) || sequence <= 0) throw new Error("The job was created without a valid job number.");
+  return { jobId: String(row.job_id), jobNumber: `J-${sequence}` };
 }
 
 export async function createInvoiceFromQuote(quoteId: string, dueDate: string) {

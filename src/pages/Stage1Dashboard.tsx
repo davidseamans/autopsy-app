@@ -503,9 +503,7 @@ type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: a
 type Stage1DashboardDisplay = { [key: string]: any };
 type Stage1JobDetailDisplay = { [key: string]: any };
 
-// Render a Supabase-derived direct-cost value using maturity-oriented wording.
-// Prefers an explicit display string (direct_cost_display); a missing/zero cost
-// renders as "Not Yet Recorded" rather than a dash.
+// Render a Supabase-derived direct-cost value compactly.
 function renderDirectCost(
   value: number | null | undefined,
   opts?: { display?: string | null },
@@ -516,7 +514,7 @@ function renderDirectCost(
     const n = typeof value === "number" ? value : Number(value);
     if (Number.isFinite(n) && n > 0) return `$${fmtMoney(n)}`;
   }
-  return "Not Yet Recorded";
+  return "—";
 }
 
 function marginTone35(pct: number | null): string {
@@ -612,48 +610,23 @@ function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct:
     return { label: "GM proven", tone: gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600", pct: gmPct };
   }
   if (revenue > 0 && costs === 0) {
-    return { label: "Cost not yet proven", tone: "text-muted-foreground", pct: null };
+    return { label: "—", tone: "text-muted-foreground", pct: null };
   }
   if (revenue === 0) {
-    return { label: "Revenue not yet proven", tone: "text-muted-foreground", pct: null };
+    return { label: "—", tone: "text-muted-foreground", pct: null };
   }
-  return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
+  return { label: "—", tone: "text-muted-foreground", pct: null };
 }
 
 // ---------------------------------------------------------------------------
-// Stage 1 sandbox commercial proof model — display helpers
-// Proof type and payment status are DISTINCT axes. Both are derived from the
-// persisted public.stage1_job_margin_summary projection on the unit, falling
-// back to the documented rules when the view did not supply an explicit value.
+// Stage 1 payment-status display helper.
 // ---------------------------------------------------------------------------
-const PROOF_TYPE_LABELS: Record<string, string> = {
-  not_yet_proven: "Not yet proven",
-  revenue_recorded: "Revenue recorded",
-  commercial_proof_recorded: "Commercial proof recorded",
-  completed_job: "Completed job",
-};
-
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  not_invoiced: "Not invoiced",
+  not_invoiced: "—",
   unpaid: "Unpaid",
   part_paid: "Part-paid",
   paid: "Paid",
 };
-
-function deriveStage1ProofType(u: ProofUnit): string {
-  if (u.sandboxProofType && PROOF_TYPE_LABELS[u.sandboxProofType]) {
-    return PROOF_TYPE_LABELS[u.sandboxProofType];
-  }
-  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
-  const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
-  const statusLc = (u.status ?? "").toLowerCase();
-  const completed = statusLc.includes("complete") || u.sandboxProofType === "completed_job";
-  if (revenue > 0 && cost > 0) {
-    return completed ? "Completed job" : "Commercial proof recorded";
-  }
-  if (revenue > 0) return "Revenue recorded";
-  return "Not yet proven";
-}
 
 function deriveStage1PaymentStatus(u: ProofUnit): string {
   if (u.sandboxPaymentStatus && PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus]) {
@@ -661,7 +634,7 @@ function deriveStage1PaymentStatus(u: ProofUnit): string {
   }
   const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
   const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
-  if (revenue <= 0) return "Not invoiced";
+  if (revenue <= 0) return "—";
   if (paid >= revenue) return "Paid";
   if (paid > 0) return "Part-paid";
   return "Unpaid";
@@ -1085,7 +1058,6 @@ function DrillBody({
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Proof Type</TableHead>
                   <TableHead>Payment Status</TableHead>
                   <TableHead className="text-right">Details</TableHead>
                 </TableRow>
@@ -1100,9 +1072,7 @@ function DrillBody({
                   const gmStatus = deriveStage1GmStatus(u);
                   const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-                  const proofTypeLabel = deriveStage1ProofType(u);
                   const paymentStatusLabel = deriveStage1PaymentStatus(u);
-                  const hasVariation = stage1VariationRecorded(u);
                   return (
                     <TableRow
                       key={u.stage1JobId ?? `n-${u.n}`}
@@ -1138,14 +1108,6 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs">{proofTypeLabel}</span>
-                          {hasVariation && (
-                            <Badge variant="outline" className="w-fit text-[10px]">Variation recorded</Badge>
-                          )}
-                        </div>
-                      </TableCell>
                       <TableCell className="text-xs">{paymentStatusLabel}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -1172,7 +1134,6 @@ function DrillBody({
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
               const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-              const proofTypeLabel = deriveStage1ProofType(u);
               const paymentStatusLabel = deriveStage1PaymentStatus(u);
               const hasVariation = stage1VariationRecorded(u);
               return (
@@ -1194,7 +1155,6 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
-                  <div className="flex justify-between text-xs"><span>Proof type</span><span>{proofTypeLabel}</span></div>
                   <div className="flex justify-between text-xs"><span>Payment status</span><span>{paymentStatusLabel}</span></div>
                   {hasVariation && (
                     <Badge variant="outline" className="text-[10px]">Variation recorded</Badge>
@@ -2846,8 +2806,8 @@ function Stage1DashboardInner() {
   const quotesOutstanding = Math.max(0, quotesSent - quotesAccepted - quotesRejected);
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
   // Jobs in the ledger are only those created from accepted, converted quotes.
-  const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
-  const completedJobs = units.filter((u) => u.status === "Paid").length;
+  const completedJobs = units.filter((u) => ["Completed", "Paid"].includes(u.status)).length;
+  const activeJobs = units.filter((u) => !["Completed", "Paid", "Voided", "Cancelled"].includes(u.status)).length;
   const displayMarginText = ledgerTotals.totalGmPct !== null
     ? `${ledgerTotals.totalGmPct}%`
     : "—";

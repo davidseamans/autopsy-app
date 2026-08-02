@@ -192,6 +192,10 @@ export async function fetchStage1Units(
     consumablesSellAmount: number;
     cleanTypeLabel?: string;
   }>();
+  const quoteNumberByJob = new Map<string, string>();
+  const jobIdByQuote = new Map<string, string>(
+    [...quoteIdByJob.entries()].map(([jobId, quoteId]) => [quoteId, jobId]),
+  );
   const quoteIds = [...new Set(quoteIdByJob.values())];
   if (quoteIds.length > 0) {
     const [quoteLinesResult, quoteResult] = await Promise.all([
@@ -201,7 +205,7 @@ export async function fetchStage1Units(
         .in("stage1_quote_id", quoteIds),
       supabase
         .from("stage1_quotes")
-        .select("id,clean_type_label,estimated_consumables_cost,consumables_sell_amount")
+        .select("id,quote_sequence_number,clean_type_label,estimated_consumables_cost,consumables_sell_amount")
         .in("id", quoteIds),
     ]);
     if (!quoteLinesResult.error) {
@@ -219,6 +223,10 @@ export async function fetchStage1Units(
         (quoteResult.data ?? []).forEach((quote: Record<string, unknown>) => {
           const quoteId = String(quote.id ?? "");
           if (!quoteId) return;
+          const jobId = jobIdByQuote.get(quoteId);
+          if (jobId && quote.quote_sequence_number != null) {
+            quoteNumberByJob.set(jobId, `Q-${Number(quote.quote_sequence_number)}`);
+          }
           budgetByQuote.set(quoteId, {
             consumablesBudget: numValue(quote.estimated_consumables_cost),
             consumablesSellAmount: numValue(quote.consumables_sell_amount),
@@ -432,6 +440,7 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       stage1JobId: String(s.stage1_job_id ?? ""),
       client: typeof s.client_name === "string" ? s.client_name : "",
       jobSite: typeof s.job_title === "string" ? s.job_title : undefined,
+      sourceQuote: quoteNumberByJob.get(String(s.stage1_job_id ?? "")),
       proofType: "Completed Job",
       status: fromCanonicalStatus(typeof s.job_status === "string" ? s.job_status : null),
       gm,
@@ -517,6 +526,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       jobSequenceNumber: c.jobSequenceNumber ?? cached.jobSequenceNumber,
       client: c.client || cached.client,
       jobSite: c.jobSite ?? cached.jobSite,
+      sourceQuote: c.sourceQuote ?? cached.sourceQuote,
+      quotedLabourHours: c.quotedLabourHours ?? cached.quotedLabourHours,
+      quotedChargeOutRate: c.quotedChargeOutRate ?? cached.quotedChargeOutRate,
+      quotedConsumablesBudget: c.quotedConsumablesBudget ?? cached.quotedConsumablesBudget,
+      quotedConsumablesSellAmount: c.quotedConsumablesSellAmount ?? cached.quotedConsumablesSellAmount,
+      quotedCleanTypeLabel: c.quotedCleanTypeLabel ?? cached.quotedCleanTypeLabel,
       // Preserve a richer cached status (e.g. "Paid") when it maps to the same
       // canonical status; otherwise take canonical.
       status: toCanonicalStatus(cached.status) === toCanonicalStatus(c.status) ? cached.status : c.status,
