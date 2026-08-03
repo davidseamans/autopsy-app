@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { loadStage1Funnel, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
 import { toast } from "@/components/ui/sonner";
+import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 type QuoteFilter = "outstanding" | "rejected" | "accepted";
@@ -13,7 +14,7 @@ const isRejected = (status: string) => ["rejected", "declined", "expired"].inclu
 const quoteBucket = (quote: Stage1QuoteSummary): QuoteFilter => quote.status === "accepted" ? "accepted" : isRejected(quote.status) ? "rejected" : "outstanding";
 
 export default function Stage1Quotes() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
   const first5JobsPath = runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
   const quotePath = runId ? `/stage-1/quotes/new?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes/new";
@@ -22,6 +23,13 @@ export default function Stage1Quotes() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<QuoteFilter>("outstanding");
   const [workingQuoteId, setWorkingQuoteId] = useState<string | null>(null);
+  const tourActive = searchParams.get("tour") === "quotes";
+  const [tourStep, setTourStep] = useState(0);
+  const closeTour = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("tour");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const refresh = useCallback(async () => {
     if (!runId) {
@@ -77,7 +85,7 @@ export default function Stage1Quotes() {
   return (
     <div className="container max-w-5xl py-10 space-y-6">
       <Button asChild variant="ghost" size="sm"><Link to={first5JobsPath}><ArrowLeft className="mr-1 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && (tourStep === 0 || tourStep === 1) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Quotes</p>
           <h1 className="text-3xl font-semibold tracking-tight">Quotes</h1>
@@ -89,18 +97,19 @@ export default function Stage1Quotes() {
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 0 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} onClick={() => setFilter("outstanding")} />
         <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} onClick={() => setFilter("rejected")} />
         <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} onClick={() => setFilter("accepted")} />
       </div>
 
-      <Card>
+      <Card className={tourActive && (tourStep === 2 || tourStep === 3) ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter.charAt(0).toUpperCase() + filter.slice(1)} quotes</CardTitle><CardDescription>Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
+      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(runId ? `/stage-1?runId=${encodeURIComponent(runId)}&tour=jobs` : "/stage-1?tour=jobs"); }} /> : null}
     </div>
   );
 }

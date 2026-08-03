@@ -55,8 +55,12 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("requestRef.current?.abort()");
     expect(guide).toContain("playbackId !== playbackIdRef.current");
     expect(guide).toContain("This is your real Leads card");
-    expect(guide).toContain("This Conversions card is fed by your real quote records");
-    expect(guide).toContain("First 5 Jobs creates the job and its invoice");
+    expect(guide).toContain("This is the real Leads drill-down");
+    expect(guide).toContain("The Conversions card opens your real Quotes area");
+    expect(guide).toContain("Jane will never do that for you");
+    expect(guide).toContain("stage1-tour-position");
+    expect(guide).toContain("Drag this tour to a comfortable position");
+    expect(guide).toContain("Use Print or save PDF");
     expect(page).toContain("Tour your actual First 5 Jobs screen");
     expect(page).toContain("&tour=1");
   });
