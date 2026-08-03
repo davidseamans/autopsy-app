@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { loadStage1Funnel, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
 import { toast } from "@/components/ui/sonner";
-import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { STAGE1_DEMO_QUOTES } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
@@ -129,7 +129,8 @@ export default function Stage1Quotes() {
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
-      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quote/demo-q-1004?demo=1&tour=document" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}&tour=jobs` : "/stage-1?tour=jobs"); }} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder" : quotePath); }} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "quotes"); setSearchParams(next); }} /> : null}
     </div>
   );
 }

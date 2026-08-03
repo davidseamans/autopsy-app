@@ -13,7 +13,7 @@ import {
   fetchStage1QuoteDocument,
   type Stage1QuoteDocument as QuoteDocument,
 } from "@/lib/stage1Documents";
-import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { STAGE1_DEMO_PROFILE, STAGE1_DEMO_QUOTE_DOCUMENT } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
@@ -165,6 +165,7 @@ export default function Stage1QuoteDocument() {
         <footer className="mt-8 border-t pt-6 text-sm"><p className="font-semibold">Payment terms</p><p className="mt-1 text-slate-600">{quote.paymentTerms}</p>{!invoiceDocument ? <p className="mt-5 text-xs text-slate-500">Acceptance confirms that the customer agrees to the work, price and terms shown in this quote.</p> : null}</footer>
       </article>
       {tourActive ? <Stage1WelcomeGuide mode="document" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1?demo=1&tour=jobs")} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "document"); setSearchParams(next); }} /> : null}
     </div>
   );
 }

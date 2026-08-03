@@ -61,8 +61,10 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
     expect(guide).toContain("Use Print or save PDF");
-    expect(guide).toContain("This demonstration cannot accept the quote");
-    expect(guide).toContain("Complete the Job Cost Summary");
+    expect(guide).toContain("uses the same production form");
+    expect(guide).toContain("Open the Job Cost Summary");
+    expect(guide).toContain("Review and send the final invoice");
+    expect(guide).toContain("Resume 5 Jobs Tour");
     expect(page).toContain("Tour your actual First 5 Jobs screen");
     expect(page).toContain("&tour=1");
   });
@@ -71,6 +73,8 @@ describe("First 5 Jobs orientation", () => {
     const demo = read("src/lib/stage1Demo.ts");
     const quotes = read("src/pages/Stage1Quotes.tsx");
     const document = read("src/pages/Stage1QuoteDocument.tsx");
+    const builder = read("src/pages/Stage1QuoteNew.tsx");
+    const dashboard = read("src/pages/Stage1Dashboard.tsx");
 
     expect(demo).toContain("demo-q-1004");
     expect(demo).toContain('status: "rejected"');
@@ -78,5 +82,9 @@ describe("First 5 Jobs orientation", () => {
     expect(quotes).toContain("This is sample data. No status was changed.");
     expect(quotes).toContain('disabled={isDemo || working || status === "accepted"}');
     expect(document).toContain('disabled={isDemo || working}');
+    expect(builder).toContain("STAGE1_DEMO_CLEAN_TYPES");
+    expect(builder).toContain('disabled={isDemo || !formReady');
+    expect(dashboard).toContain("tourInteractive={isDemo || tourActive}");
+    expect(dashboard).toContain("readOnly={isDemo}");
   });
 });

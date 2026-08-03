@@ -1,6 +1,7 @@
 import type { Stage1QuoteSummary } from "@/lib/stage1Funnel";
 import type { Stage1QuoteDocument } from "@/lib/stage1Documents";
 import type { PublicBusinessProfile } from "@/lib/businessIdentity";
+import type { Stage1CleanTypePricingRule } from "@/lib/stage1Pricing";
 
 export const STAGE1_DEMO_QUOTES: Stage1QuoteSummary[] = [
   { id: "demo-q-1004", number: "Q-1004", clientName: "Paddington Property Group", status: "sent", totalIncGst: 1450, issuedAt: "2026-07-11", jobId: null },
@@ -53,3 +54,9 @@ export const STAGE1_DEMO_PROFILE: PublicBusinessProfile = {
   verifiedAt: "2026-07-01T00:00:00.000Z",
   verified: true,
 };
+
+export const STAGE1_DEMO_CLEAN_TYPES: Stage1CleanTypePricingRule[] = [
+  { code: "routine", label: "Routine clean", guidance: "Regular cleaning with ordinary consumables use.", ruleVersion: 1, consumablesCostPerHour: 2.5, minimumConsumablesCost: 15, targetConsumablesMarginPct: 30 },
+  { code: "initial", label: "Initial or heavy clean", guidance: "A first, deep or heavier clean using more supplies.", ruleVersion: 1, consumablesCostPerHour: 3.5, minimumConsumablesCost: 25, targetConsumablesMarginPct: 30 },
+  { code: "specialist", label: "Specialist or high-consumable clean", guidance: "Work expected to use specialist products or substantially more supplies.", ruleVersion: 1, consumablesCostPerHour: 5, minimumConsumablesCost: 40, targetConsumablesMarginPct: 30 },
+];

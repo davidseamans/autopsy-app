@@ -10,7 +10,10 @@ const dashboardSlides = [
   { title: "See what produced the leads", narration: "This is the real Leads drill-down. Sources are grouped by method, with dated activity and quantities underneath. Use Log Activity when you have done genuine marketing work. Customer details still begin only when an opportunity is ready to quote." },
   { title: "Quote real opportunities", narration: "The Conversions card opens your real Quotes area. There you can create a quote, see what is outstanding, accepted or rejected, and open a document to print it or save it as a PDF for email. Changing a quote to Accepted creates the job, so Jane will never do that for you." },
   { title: "Track active work", narration: "This is your real Active Jobs card. Click it to open the job register. A job begins when you deliberately accept a quote. Open the job and use its Job Cost Summary to enter actual hours, costs, payments and attachments." },
-  { title: "Complete the Job Cost Summary", narration: "This sample completed job shows the source quote, estimated and actual hours, customer invoice, direct costs, payments and attachments in one place. The generated final invoice appears under Client Invoices and can be opened from its line." },
+  { title: "Open the Job Cost Summary", narration: "This sample completed job carries its job number, source quote, client and site into one detailed report. The apprentice updates the job here rather than chasing information across several screens." },
+  { title: "Review and send the final invoice", narration: "Client Invoices contains the invoice generated from the accepted quotation, plus any legitimate extra charge or credit note. Open the invoice line to inspect its source document, then print or save the final invoice for the customer." },
+  { title: "Enter the real job costs", narration: "Job Costs compares estimated and actual hours and records the real direct costs of completing the work. Attach a phone photo or PDF to the relevant line. This is enough discipline to learn the margin without turning five jobs into an accounting bureaucracy." },
+  { title: "Record payment and finish the job", narration: "Record the customer's payment against the job and mark the work Completed only when it is genuinely finished. The report then shows revenue, direct cost, gross profit and margin from the real job." },
   { title: "Use the Job Summary", narration: "Job Summary shows each job as an operating result: quoted value, invoices, costs, hours and margin. Open a line to complete the Job Cost Summary and prepare or review the final invoice." },
   { title: "Use Debtors separately", narration: "Debtors answers a different question: who owes you money and how much. Job Summary tells you how the work performed. Debtors tells you what still needs to be collected. Switch between them here whenever you need either view." },
 ] as const;
@@ -21,7 +24,14 @@ const quotesSlides = [
   { title: "Rejected quotes", narration: "Rejected keeps the work you did not win. That is useful learning, but First 5 Jobs does not turn it into a complicated sales system." },
   { title: "Accepted and converted", narration: "Accepted shows quotes that became jobs. Changing a real quote to Accepted creates the job, so Jane will never press that control for you." },
   { title: "Create a written quote", narration: "Create a quote captures the customer, service address, type of clean, estimated work and charge-out rate. First 5 Jobs calculates the quote and keeps the document attached to the opportunity." },
-  { title: "Open the sample quotation", narration: "Open this sample quote to see the customer document. You can print it, or save it as a PDF and attach it to an email. This demonstration cannot accept the quote or change any candidate record." },
+] as const;
+
+const builderSlides = [
+  { title: "Your business details", narration: "The quote starts with verified Business Details. These are locked into the document so the apprentice does not repeatedly type the ABN, registered identity and contact details." },
+  { title: "Customer and work", narration: "Enter the customer, contact details, service address, validity date and any useful notes or exclusions. This information follows the quote into the job." },
+  { title: "Choose the clean", narration: "Choose one plain type of clean. That single decision applies the cleaning sleeve's controlled supplies allowance without asking the apprentice to allocate millilitres of detergent." },
+  { title: "Estimate hours and price", narration: "Break the work into a few understandable tasks, estimate the hours and enter one charge-out rate. First 5 Jobs calculates labour, supplies, subtotal, GST and the total customer price." },
+  { title: "Generate the quotation", narration: "Create written quote produces the customer document and adds it to Outstanding quotes. In this sample workspace the button is disabled, but the calculation is live and uses the same production form." },
 ] as const;
 
 const documentSlides = [
@@ -30,9 +40,9 @@ const documentSlides = [
   { title: "From quotation to job", narration: "In a real workspace, Customer accepted creates the job and carries this quote into the Job Cost Summary. Continue the tour to inspect sample jobs, actual costs and the final invoice process." },
 ] as const;
 
-export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", initialStep = 0, onJourneyAction }: { onClose: () => void; onStepChange: (step: number) => void; mode?: "dashboard" | "quotes" | "document"; initialStep?: number; onJourneyAction?: (step: number) => void }) {
+export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", initialStep = 0, onJourneyAction }: { onClose: () => void; onStepChange: (step: number) => void; mode?: "dashboard" | "quotes" | "builder" | "document"; initialStep?: number; onJourneyAction?: (step: number) => void }) {
   const { session } = useAuth();
-  const slides = mode === "quotes" ? quotesSlides : mode === "document" ? documentSlides : dashboardSlides;
+  const slides = mode === "quotes" ? quotesSlides : mode === "builder" ? builderSlides : mode === "document" ? documentSlides : dashboardSlides;
   const [index, setIndex] = useState(Math.min(initialStep, slides.length - 1));
   const [speaking, setSpeaking] = useState(false);
   const [loadingVoice, setLoadingVoice] = useState(false);
@@ -125,12 +135,16 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
   const slide = slides[index];
 
   const positioned = position ? { left: position.left, top: position.top } : undefined;
-  return <aside ref={panelRef} style={positioned} className={`fixed z-[80] max-h-[calc(100vh-1rem)] w-[calc(100%-1.5rem)] max-w-2xl overflow-auto rounded-xl border border-sky-300 bg-white shadow-2xl ${position ? "" : "inset-x-3 bottom-3 mx-auto md:bottom-6"}`}>
+  return <aside ref={panelRef} style={positioned} className={`fixed z-[200] max-h-[calc(100vh-1rem)] w-[calc(100%-1.5rem)] max-w-2xl overflow-auto rounded-xl border border-sky-300 bg-white shadow-2xl ${position ? "" : "inset-x-3 bottom-3 mx-auto md:bottom-6"}`}>
     <div className="bg-[#061b34] px-5 py-4 text-white">
       <div onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} className="mb-3 hidden min-h-10 cursor-grab touch-none select-none items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 text-xs font-semibold text-slate-100 active:cursor-grabbing md:flex"><GripHorizontal className="h-5 w-5" /> Grab here to move the tour</div>
       <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#52d8c2]">Jane · live First 5 Jobs tour</p><h2 className="mt-1 text-xl font-semibold">{slide.title}</h2><p className="mt-1 text-xs text-slate-300">Step {index + 1} of {slides.length} · highlighted on your live screen</p></div><Button type="button" size="icon" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={close} aria-label="Close live tour"><X className="h-4 w-4" /></Button></div>
       <Progress value={((index + 1) / slides.length) * 100} className="mt-3 h-1.5" />
     </div>
-    <div className="space-y-3 px-5 py-4"><p className="text-sm leading-6">{slide.narration}</p>{voiceError ? <p className="text-xs text-amber-700">Jane’s words are on screen. Continue reading or try the voice again.</p> : null}<div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice} className="gap-2">{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing Jane…" : speaking ? "Pause Jane" : index === 0 ? "Start Jane" : "Hear this step"}</Button><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={index === 0} onClick={() => void speak(index - 1)}><ArrowLeft className="mr-1 h-4 w-4" /> Previous</Button>{onJourneyAction && ((mode === "dashboard" && index === 3) || ((mode === "quotes" || mode === "document") && index === slides.length - 1)) ? <Button type="button" size="sm" onClick={() => onJourneyAction(index)}>{mode === "dashboard" ? "Open Quotes" : mode === "quotes" ? "Open sample quote" : "Continue to Jobs"}<ArrowRight className="ml-1 h-4 w-4" /></Button> : index < slides.length - 1 ? <Button type="button" size="sm" onClick={() => void speak(index + 1)}>Next <ArrowRight className="ml-1 h-4 w-4" /></Button> : <Button type="button" size="sm" onClick={close}>Finish</Button>}</div></div></div>
+    <div className="space-y-3 px-5 py-4"><p className="text-sm leading-6">{slide.narration}</p>{voiceError ? <p className="text-xs text-amber-700">Jane’s words are on screen. Continue reading or try the voice again.</p> : null}<div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice} className="gap-2">{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing Jane…" : speaking ? "Pause Jane" : index === 0 ? "Start Jane" : "Hear this step"}</Button><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={index === 0} onClick={() => void speak(index - 1)}><ArrowLeft className="mr-1 h-4 w-4" /> Previous</Button>{onJourneyAction && ((mode === "dashboard" && index === 3) || ((mode === "quotes" || mode === "builder" || mode === "document") && index === slides.length - 1)) ? <Button type="button" size="sm" onClick={() => onJourneyAction(index)}>{mode === "dashboard" ? "Open Quotes" : mode === "quotes" ? "Open quote builder" : mode === "builder" ? "View generated quote" : "Continue to Jobs"}<ArrowRight className="ml-1 h-4 w-4" /></Button> : index < slides.length - 1 ? <Button type="button" size="sm" onClick={() => void speak(index + 1)}>Next <ArrowRight className="ml-1 h-4 w-4" /></Button> : <Button type="button" size="sm" onClick={close}>Finish</Button>}</div></div></div>
   </aside>;
+}
+
+export function Stage1TourResume({ onClick }: { onClick: () => void }) {
+  return <Button type="button" onClick={onClick} className="fixed bottom-5 right-5 z-[200] gap-2 rounded-full bg-[#061b34] px-5 text-white shadow-2xl hover:bg-[#0a3158]"><Play className="h-4 w-4" /> Resume 5 Jobs Tour</Button>;
 }

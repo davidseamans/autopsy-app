@@ -67,7 +67,7 @@ import {
   Compass,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
-import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1188,6 +1188,7 @@ function DrillCurtain({
   onOpenQuoteDetail,
   units,
   onOpenUnit,
+  tourInteractive = false,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
@@ -1201,10 +1202,11 @@ function DrillCurtain({
   onOpenQuoteDetail: (n: string) => void;
   units: ProofUnit[];
   onOpenUnit: (n: number) => void;
+  tourInteractive?: boolean;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
-    <Sheet open={!!drill} onOpenChange={onOpenChange}>
+    <Sheet open={!!drill} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
@@ -1646,9 +1648,15 @@ function Stage1DashboardInner() {
     if (!tourActive) return;
     if (tourStep === 2) setDrill("leads");
     else if (tourStep === 4) setDrill("jobs");
-    else if (tourStep === 5 && isDemo) { setDrill(null); setReportN(1); setReportOpen(true); }
-    else if (tourStep === 6) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
-    else if (tourStep === 7) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
+    else if (tourStep >= 5 && tourStep <= 8 && isDemo) {
+      setDrill(null);
+      setReportN(1);
+      setReportOpen(true);
+      const target = tourStep === 5 ? "job-summary" : tourStep === 6 ? "client-invoices" : tourStep === 7 ? "job-costs" : "client-payments";
+      window.setTimeout(() => document.querySelector(`[data-stage1-tour="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    }
+    else if (tourStep === 9) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
+    else if (tourStep === 10) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
     else setDrill(null);
   }, [isDemo, tourActive, tourStep]);
   const [logActOpen, setLogActOpen] = useState(false);
@@ -4339,7 +4347,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className={`space-y-3 ${tourActive && (tourStep === 6 || tourStep === 7) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <section className={`space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4620,6 +4628,7 @@ function Stage1DashboardInner() {
         onOpenQuoteDetail={handleOpenQuoteDetail}
         units={units}
         onOpenUnit={(n) => { setDrill(null); openUnit(n); }}
+        tourInteractive={isDemo || tourActive}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
@@ -4653,8 +4662,11 @@ function Stage1DashboardInner() {
             prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
           );
         }}
+        tourInteractive={isDemo || tourActive}
+        readOnly={isDemo}
       />
       {tourActive ? <Stage1WelcomeGuide initialStep={initialTourStep} onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes` : "/stage-1/quotes?tour=quotes")} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "1"); setSearchParams(next); }} /> : null}
     </div>
   );
 }

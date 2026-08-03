@@ -16,6 +16,8 @@ import {
   type Stage1CleanTypePricingRule,
 } from "@/lib/stage1Documents";
 import { calculateGuidedQuoteTotals } from "@/lib/stage1Pricing";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { STAGE1_DEMO_CLEAN_TYPES, STAGE1_DEMO_PROFILE } from "@/lib/stage1Demo";
 
 const isoAfterDays = (days: number) => {
   const date = new Date();
@@ -28,27 +30,36 @@ const money = (value: number) => value.toLocaleString("en-AU", { style: "currenc
 
 export default function Stage1QuoteNew() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const backTo = runId ? `/stage-1/quotes?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes";
+  const isDemo = searchParams.get("demo") === "1";
+  const tourActive = searchParams.get("tour") === "builder";
+  const [tourStep, setTourStep] = useState(0);
+  const backTo = isDemo ? "/stage-1/quotes?demo=1" : runId ? `/stage-1/quotes?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes";
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [clientName, setClientName] = useState("");
-  const [clientContactName, setClientContactName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [siteAddress, setSiteAddress] = useState("");
-  const [serviceDescription, setServiceDescription] = useState("");
+  const [clientName, setClientName] = useState(isDemo ? "Paddington Property Group" : "");
+  const [clientContactName, setClientContactName] = useState(isDemo ? "Alex Morgan" : "");
+  const [clientEmail, setClientEmail] = useState(isDemo ? "alex@example.com" : "");
+  const [clientPhone, setClientPhone] = useState(isDemo ? "0400 000 000" : "");
+  const [siteAddress, setSiteAddress] = useState(isDemo ? "Sample commercial premises, Paddington QLD" : "");
+  const [serviceDescription, setServiceDescription] = useState(isDemo ? "Initial office clean including floors, amenities and common areas." : "");
   const [validUntil, setValidUntil] = useState(isoAfterDays(14));
   const [paymentTerms, setPaymentTerms] = useState("Payment Due on Completion");
-  const [cleanTypeCode, setCleanTypeCode] = useState("");
+  const [cleanTypeCode, setCleanTypeCode] = useState(isDemo ? "initial" : "");
   const [cleanTypeRules, setCleanTypeRules] = useState<Stage1CleanTypePricingRule[]>([]);
-  const [chargeOutRateExGst, setChargeOutRateExGst] = useState(0);
-  const [items, setItems] = useState<QuoteLineDraft[]>([blankLine()]);
+  const [chargeOutRateExGst, setChargeOutRateExGst] = useState(isDemo ? 80 : 0);
+  const [items, setItems] = useState<QuoteLineDraft[]>(isDemo ? [{ description: "Floors and common areas", estimatedHours: 6 }, { description: "Amenities and detailed initial clean", estimatedHours: 10 }] : [blankLine()]);
 
   useEffect(() => {
+    if (isDemo) {
+      setProfile(STAGE1_DEMO_PROFILE);
+      setCleanTypeRules(STAGE1_DEMO_CLEAN_TYPES);
+      setLoading(false);
+      return;
+    }
     if (!runId) {
       setError("Open the quote form from your First 5 Jobs sales activity page.");
       setLoading(false);
@@ -63,7 +74,7 @@ export default function Stage1QuoteNew() {
       })
       .catch((loadError) => setError(describeDocumentError(loadError)))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [isDemo, runId]);
 
   const totals = useMemo(() => {
     const selectedRule = cleanTypeRules.find((rule) => rule.code === cleanTypeCode) ?? null;
@@ -88,6 +99,10 @@ export default function Stage1QuoteNew() {
   };
 
   async function issueQuote() {
+    if (isDemo) {
+      toast.info("This sample calculation is read only. No quotation was created.");
+      return;
+    }
     if (!formReady || saving) return;
     setSaving(true);
     try {
@@ -131,7 +146,7 @@ export default function Stage1QuoteNew() {
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       {profile ? (
-        <Card>
+        <Card className={tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
           <CardHeader><CardTitle className="text-base">From</CardTitle><CardDescription>Locked from your verified Business Details.</CardDescription></CardHeader>
           <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
             <p><span className="text-muted-foreground">Business:</span> {profile.businessName}</p>
@@ -143,7 +158,7 @@ export default function Stage1QuoteNew() {
         </Card>
       ) : null}
 
-      <Card>
+      <Card className={tourActive && tourStep === 1 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="text-base">Customer and work</CardTitle><CardDescription>Capture these details because this opportunity is now ready to quote.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field id="client-name" label="Customer or business" value={clientName} onChange={setClientName} required />
@@ -168,7 +183,7 @@ export default function Stage1QuoteNew() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tourActive && tourStep === 2 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="text-base">Choose the type of clean</CardTitle><CardDescription>Make one choice. First 5 Jobs will allow for the expected supplies automatically.</CardDescription></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Type of clean">
           {cleanTypeRules.map((rule) => {
@@ -190,7 +205,7 @@ export default function Stage1QuoteNew() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={tourActive && (tourStep === 3 || tourStep === 4) ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="text-base">Estimate the work</CardTitle><CardDescription>Break the job into a few plain work items. Enter the hours you expect, then use one hourly charge-out rate for the whole quote.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
           <div className="max-w-xs space-y-1.5">
@@ -222,7 +237,9 @@ export default function Stage1QuoteNew() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end"><Button onClick={() => void issueQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Create written quote</Button></div>
+      <div className="flex justify-end"><Button onClick={() => void issueQuote()} disabled={isDemo || !formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Create written quote</Button></div>
+      {tourActive ? <Stage1WelcomeGuide mode="builder" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document")} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "builder"); setSearchParams(next); }} /> : null}
     </div>
   );
 }

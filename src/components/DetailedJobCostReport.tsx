@@ -226,6 +226,7 @@ function LineTable({
   totalLabel,
   total,
   nettMargin,
+  readOnly = false,
 }: {
   lines: Line[];
   supplierLabel: string;
@@ -235,6 +236,7 @@ function LineTable({
   totalLabel: string;
   total: { gross: number; gst: number; net: number };
   nettMargin?: { amount: number | null; pct: number | null; tone: string };
+  readOnly?: boolean;
 }) {
   const labelColSpan = 3 + (showFromJob ? 1 : 0) + (showCategory ? 1 : 0);
   return (
@@ -295,6 +297,7 @@ function LineTable({
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={readOnly}
                     onClick={(e) => {
                       e.stopPropagation();
                       l.onEdit?.();
@@ -352,10 +355,12 @@ function PaymentTable({
   payments,
   outstanding,
   onAdd,
+  readOnly = false,
 }: {
   payments: { date?: string; client: string; description: string; amount: number; onEdit: () => void; onOpenSource?: () => void; attachmentLabel?: string }[];
   outstanding: number;
   onAdd: () => void;
+  readOnly?: boolean;
 }) {
   const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
   return (
@@ -383,7 +388,7 @@ function PaymentTable({
                 {payment.onOpenSource ? <button type="button" className="text-primary underline underline-offset-2" onClick={(event) => { event.stopPropagation(); payment.onOpenSource?.(); }}>{payment.attachmentLabel || "Open document"}</button> : "—"}
               </TableCell>
               <TableCell className="text-right">
-                <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); payment.onEdit(); }}>
+                <Button size="sm" variant="outline" disabled={readOnly} onClick={(event) => { event.stopPropagation(); payment.onEdit(); }}>
                   Edit
                 </Button>
               </TableCell>
@@ -395,7 +400,7 @@ function PaymentTable({
                 No client payments recorded for this job yet.
               </TableCell>
               <TableCell className="text-right">
-                <Button size="sm" variant="outline" onClick={() => onAdd()}>
+                <Button size="sm" variant="outline" disabled={readOnly} onClick={() => onAdd()}>
                   Add
                 </Button>
               </TableCell>
@@ -436,6 +441,8 @@ function TransactionDialog({
   onDraftChange,
   onOpenChange,
   onSave,
+  tourInteractive = false,
+  readOnly = false,
 }: {
   draft: TransactionDraft | null;
   open: boolean;
@@ -512,6 +519,8 @@ export function DetailedJobCostReport({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSave?: (unit: ProofUnit) => Promise<void> | void;
+  tourInteractive?: boolean;
+  readOnly?: boolean;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
@@ -868,7 +877,7 @@ export function DetailedJobCostReport({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-none sm:w-[90vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
@@ -879,7 +888,7 @@ export function DetailedJobCostReport({
           </SheetHeader>
 
           {/* Section 1 — Job Summary */}
-          <section className="space-y-2">
+          <section className="scroll-mt-6 space-y-2" data-stage1-tour="job-summary">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               1. Job Summary
             </h3>
@@ -902,7 +911,7 @@ export function DetailedJobCostReport({
                 <select
                   id="job-status"
                   value={displayedStatus}
-                  disabled={statusSaving}
+                  disabled={readOnly || statusSaving}
                   onChange={(event) => void changeJobStatus(event.target.value as "Active" | "Completed")}
                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-medium"
                 >
@@ -914,12 +923,12 @@ export function DetailedJobCostReport({
           </section>
 
           {/* Section 2 — Client Invoices */}
-          <section className="space-y-2">
+          <section className="scroll-mt-6 space-y-2" data-stage1-tour="client-invoices">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 2. Client Invoices
               </h3>
-              <Button size="sm" variant="outline" onClick={() => openInvoiceDialog()}>
+              <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openInvoiceDialog()}>
                 Add Client Invoice
               </Button>
             </div>
@@ -929,16 +938,17 @@ export function DetailedJobCostReport({
               emptyText="No customer invoices recorded for this job yet."
               totalLabel="Client Invoices"
               total={incomeT}
+              readOnly={readOnly}
             />
           </section>
 
           {/* Section 2a — Client Payments */}
-          <section className="space-y-2">
+          <section className="scroll-mt-6 space-y-2" data-stage1-tour="client-payments">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 2a. Client Payments
               </h3>
-              <Button size="sm" variant="outline" onClick={() => openPaymentDialog()}>
+              <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openPaymentDialog()}>
                 Add Client Payment
               </Button>
             </div>
@@ -946,16 +956,17 @@ export function DetailedJobCostReport({
               payments={paymentRows}
               outstanding={outstanding}
               onAdd={() => openPaymentDialog()}
+              readOnly={readOnly}
             />
           </section>
 
           {/* Section 3 — Job Costs */}
-          <section className="space-y-2">
+          <section className="scroll-mt-6 space-y-2" data-stage1-tour="job-costs">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 3. Job Costs
               </h3>
-              <Button size="sm" variant="outline" onClick={() => openCostDialog()}>
+              <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openCostDialog()}>
                 Add Job Cost
               </Button>
             </div>
@@ -974,6 +985,7 @@ export function DetailedJobCostReport({
               totalLabel="Job Costs"
               total={costT}
               nettMargin={{ amount: grossProfit, pct: gmPct, tone: gmTone }}
+              readOnly={readOnly}
             />
           </section>
 
@@ -983,7 +995,7 @@ export function DetailedJobCostReport({
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 4. General Business Expenses
               </h3>
-              <Button size="sm" variant="outline" onClick={() => openGbDialog()}>
+              <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openGbDialog()}>
                 Add General Business Expense
               </Button>
             </div>
@@ -993,6 +1005,7 @@ export function DetailedJobCostReport({
               emptyText="No general business expenses recorded yet."
               totalLabel="General Business Expenses"
               total={gbT}
+              readOnly={readOnly}
             />
             <p className="text-xs text-muted-foreground">General business expenses remain separate from this job's gross margin.</p>
           </section>
