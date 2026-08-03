@@ -26,7 +26,10 @@ export default function Stage1Quotes() {
   const [filter, setFilter] = useState<QuoteFilter>("outstanding");
   const [workingQuoteId, setWorkingQuoteId] = useState<string | null>(null);
   const tourActive = searchParams.get("tour") === "quotes";
-  const [tourStep, setTourStep] = useState(0);
+  const tourStepParam = searchParams.get("step");
+  const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
+  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
+  const [tourStep, setTourStep] = useState(initialTourStep);
   const closeTour = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete("tour");
@@ -129,7 +132,7 @@ export default function Stage1Quotes() {
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
-      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder" : quotePath); }} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="quotes" initialStep={initialTourStep} onClose={closeTour} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1?demo=1&tour=1&step=3")} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder" : quotePath); }} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "quotes"); setSearchParams(next); }} /> : null}
     </div>
   );

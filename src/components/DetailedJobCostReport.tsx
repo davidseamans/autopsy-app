@@ -513,6 +513,8 @@ export function DetailedJobCostReport({
   open,
   onOpenChange,
   onSave,
+  tourInteractive = false,
+  readOnly = false,
 }: {
   unit: ProofUnit | null;
   runId: string | null;

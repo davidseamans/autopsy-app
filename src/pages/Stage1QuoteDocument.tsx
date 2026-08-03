@@ -26,7 +26,10 @@ export default function Stage1QuoteDocument() {
   const runId = searchParams.get("runId") ?? "";
   const isDemo = searchParams.get("demo") === "1";
   const tourActive = searchParams.get("tour") === "document";
-  const [tourStep, setTourStep] = useState(0);
+  const tourStepParam = searchParams.get("step");
+  const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
+  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
+  const [tourStep, setTourStep] = useState(initialTourStep);
   const [quote, setQuote] = useState<QuoteDocument | null>(null);
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +167,7 @@ export default function Stage1QuoteDocument() {
 
         <footer className="mt-8 border-t pt-6 text-sm"><p className="font-semibold">Payment terms</p><p className="mt-1 text-slate-600">{quote.paymentTerms}</p>{!invoiceDocument ? <p className="mt-5 text-xs text-slate-500">Acceptance confirms that the customer agrees to the work, price and terms shown in this quote.</p> : null}</footer>
       </article>
-      {tourActive ? <Stage1WelcomeGuide mode="document" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1?demo=1&tour=jobs")} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="document" initialStep={initialTourStep} onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1/quotes/new?demo=1&tour=builder&step=4")} onJourneyAction={() => window.location.assign("/stage-1?demo=1&tour=jobs")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "document"); setSearchParams(next); }} /> : null}
     </div>
   );
