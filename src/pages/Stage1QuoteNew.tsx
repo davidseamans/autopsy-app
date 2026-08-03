@@ -237,7 +237,7 @@ export default function Stage1QuoteNew() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end"><Button onClick={() => void issueQuote()} disabled={isDemo || !formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Create written quote</Button></div>
+      {!isDemo ? <div className="flex justify-end"><Button onClick={() => void issueQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Generate Quote</Button></div> : null}
       {tourActive ? <Stage1WelcomeGuide mode="builder" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "builder"); setSearchParams(next); }} /> : null}
     </div>

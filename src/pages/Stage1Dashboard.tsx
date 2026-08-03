@@ -1209,6 +1209,7 @@ function DrillCurtain({
     <Sheet open={!!drill} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
         side="right"
+        onInteractOutside={(event) => { if (tourInteractive) event.preventDefault(); }}
         className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
       >
         <div className="p-6 space-y-4">
@@ -4627,7 +4628,7 @@ function Stage1DashboardInner() {
         onUpdateQuote={handleUpdateQuote}
         onOpenQuoteDetail={handleOpenQuoteDetail}
         units={units}
-        onOpenUnit={(n) => { setDrill(null); openUnit(n); }}
+        onOpenUnit={(n) => { setDrill(null); if (isDemo) openReport(n); else openUnit(n); }}
         tourInteractive={isDemo || tourActive}
       />
       <QuoteActivityDialog

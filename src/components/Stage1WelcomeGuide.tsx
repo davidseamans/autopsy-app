@@ -31,7 +31,7 @@ const builderSlides = [
   { title: "Customer and work", narration: "Enter the customer, contact details, service address, validity date and any useful notes or exclusions. This information follows the quote into the job." },
   { title: "Choose the clean", narration: "Choose one plain type of clean. That single decision applies the cleaning sleeve's controlled supplies allowance without asking the apprentice to allocate millilitres of detergent." },
   { title: "Estimate hours and price", narration: "Break the work into a few understandable tasks, estimate the hours and enter one charge-out rate. First 5 Jobs calculates labour, supplies, subtotal, GST and the total customer price." },
-  { title: "Generate the quotation", narration: "Create written quote produces the customer document and adds it to Outstanding quotes. In this sample workspace the button is disabled, but the calculation is live and uses the same production form." },
+  { title: "Generate the quotation", narration: "In the live workspace, Generate Quote produces the customer document and adds it to Outstanding quotes. This sample calculation is read only and moves directly to the finished quotation so there is no pretend commercial action to press." },
 ] as const;
 
 const documentSlides = [
@@ -117,8 +117,13 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
       audio.onended = () => {
         if (playbackId !== playbackIdRef.current) return;
         stopVoice();
-        const needsDeliberateNavigation = mode === "dashboard" && nextIndex === 3;
-        if (!needsDeliberateNavigation && nextIndex < slides.length - 1) void speak(nextIndex + 1);
+        const navigationCheckpoint = (mode === "dashboard" && nextIndex === 3)
+          || ((mode === "quotes" || mode === "builder" || mode === "document") && nextIndex === slides.length - 1);
+        if (navigationCheckpoint && onJourneyAction) {
+          onJourneyAction(nextIndex);
+          return;
+        }
+        if (nextIndex < slides.length - 1) void speak(nextIndex + 1);
       };
       audio.onerror = () => { if (playbackId !== playbackIdRef.current) return; stopVoice(); setVoiceError(true); };
       setLoadingVoice(false);
