@@ -1651,8 +1651,9 @@ function Stage1DashboardInner() {
     else if (tourStep === 4) setDrill("jobs");
     else if (tourStep >= 5 && tourStep <= 8 && isDemo) {
       setDrill(null);
-      setReportN(1);
-      setReportOpen(true);
+      if (tourStep === 5) {
+        window.setTimeout(() => { setReportN(1); setReportOpen(true); }, 350);
+      }
       const target = tourStep === 5 ? "job-summary" : tourStep === 6 ? "client-invoices" : tourStep === 7 ? "job-costs" : "client-payments";
       window.setTimeout(() => document.querySelector(`[data-stage1-tour="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
     }
@@ -4628,7 +4629,11 @@ function Stage1DashboardInner() {
         onUpdateQuote={handleUpdateQuote}
         onOpenQuoteDetail={handleOpenQuoteDetail}
         units={units}
-        onOpenUnit={(n) => { setDrill(null); if (isDemo) openReport(n); else openUnit(n); }}
+        onOpenUnit={(n) => {
+          setDrill(null);
+          if (isDemo) window.setTimeout(() => openReport(n), 350);
+          else openUnit(n);
+        }}
         tourInteractive={isDemo || tourActive}
       />
       <QuoteActivityDialog

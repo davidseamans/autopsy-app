@@ -54,9 +54,9 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("Jane · live First 5 Jobs tour");
     expect(guide).toContain("requestRef.current?.abort()");
     expect(guide).toContain("playbackId !== playbackIdRef.current");
-    expect(guide).toContain("This is your real Leads card");
-    expect(guide).toContain("This is the real Leads drill-down");
-    expect(guide).toContain("The Conversions card opens your real Quotes area");
+    expect(guide).toContain("This is the Leads card");
+    expect(guide).toContain("This is the Leads drill-down");
+    expect(guide).toContain("The Conversions card opens Quotes");
     expect(guide).toContain("Jane will never do that for you");
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
@@ -66,6 +66,10 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("Review and send the final invoice");
     expect(guide).toContain("Resume 5 Jobs Tour");
     expect(guide).toContain("navigationCheckpoint");
+    expect(guide).toContain("> Back</Button>");
+    expect(guide).toContain('speaking ? "Pause"');
+    expect(guide).toContain('"Forward"');
+    expect(guide).not.toMatch(/\breal\b/i);
     expect(page).toContain("Tour your actual First 5 Jobs screen");
     expect(page).toContain("&tour=1");
   });
@@ -90,7 +94,7 @@ describe("First 5 Jobs orientation", () => {
     expect(builder).toContain("{!isDemo ?");
     expect(dashboard).toContain("tourInteractive={isDemo || tourActive}");
     expect(dashboard).toContain("readOnly={isDemo}");
-    expect(dashboard).toContain("if (isDemo) openReport(n)");
+    expect(dashboard).toContain("if (isDemo) window.setTimeout(() => openReport(n), 350)");
     expect(dashboard).toContain("if (tourInteractive) event.preventDefault()");
   });
 });
