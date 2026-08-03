@@ -67,6 +67,7 @@ import {
   Compass,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
+import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -655,6 +656,7 @@ function KpiCard({
   accent,
   tone,
   onClick,
+  highlighted = false,
 }: {
   label: string;
   primary: React.ReactNode;
@@ -663,6 +665,7 @@ function KpiCard({
   accent: "blue" | "green" | "violet" | "amber";
   tone?: string;
   onClick?: () => void;
+  highlighted?: boolean;
 }) {
   const accentStyles = {
     blue: {
@@ -713,7 +716,7 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card}`}>
+      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         {content}
       </div>
     );
@@ -721,7 +724,7 @@ function KpiCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card}`}
+      className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}
     >
       {content}
     </button>
@@ -1598,6 +1601,13 @@ function Stage1DashboardInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const isDemo = searchParams.get("demo") === "1";
+  const tourActive = searchParams.get("tour") === "1";
+  const [tourStep, setTourStep] = useState(0);
+  const closeTour = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("tour");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const { user, loading: authLoading } = useAuth();
   const [activeRunId, setActiveRunId] = useState<string | null>(() =>
     searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
@@ -2970,7 +2980,7 @@ function Stage1DashboardInner() {
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10">
+      <header className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10 ${tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div>
           <p className="text-xs uppercase tracking-widest text-[#52d8c2]">Stage 1 command centre</p>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">First 5 Jobs</h1>
@@ -4267,6 +4277,7 @@ function Stage1DashboardInner() {
           primary={totalLeads}
           secondaries={[{ k: "Total leads", v: totalLeads }]}
           onClick={() => setDrill("leads")}
+          highlighted={tourActive && tourStep === 1}
         />
         <KpiCard
           label="Conversions"
@@ -4280,6 +4291,7 @@ function Stage1DashboardInner() {
             { k: "Quotes outstanding", v: quotesOutstanding },
           ]}
           onClick={() => navigate(activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}` : "/stage-1/quotes")}
+          highlighted={tourActive && tourStep === 2}
         />
         <KpiCard
           label="Active Jobs"
@@ -4291,6 +4303,7 @@ function Stage1DashboardInner() {
             { k: "Completed jobs", v: completedJobs },
           ]}
           onClick={() => setDrill("jobs")}
+          highlighted={tourActive && tourStep === 3}
         />
         <KpiCard
           label="Gross Margin"
@@ -4314,7 +4327,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className="space-y-3">
+      <section className={`space-y-3 ${tourActive && tourStep === 4 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4629,6 +4642,7 @@ function Stage1DashboardInner() {
           );
         }}
       />
+      {tourActive ? <Stage1WelcomeGuide onClose={closeTour} onStepChange={setTourStep} /> : null}
     </div>
   );
 }

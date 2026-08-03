@@ -7,7 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/components/ui/sonner";
-import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { fetchBusinessIdentity } from "@/lib/businessIdentity";
 import {
   fetchStage1Onboarding,
@@ -108,7 +107,7 @@ export default function Stage1Orientation() {
             <p>You have passed Autopsy because you are ready to test a real business. First 5 Jobs is a controlled six-week start—not a classroom exercise and not a full accounting system.</p>
             <p>Record how many leads you receive. Prepare a written quote when an opportunity is real. An accepted quote becomes a job and an invoice. Finish each job in the Job Cost Summary with the actual hours, costs, payments and any useful attachments.</p>
             <p>Keep it lean. Buy what booked work needs, learn from the figures, and complete five genuine jobs before adding complexity.</p>
-            <Stage1WelcomeGuide />
+            <Button asChild className="gap-2 bg-[#082849] text-white hover:bg-[#0b345c]"><Link to={`/stage-1?runId=${encodeURIComponent(runId)}&tour=1`}><PlayCircle className="h-4 w-4" /> Tour your actual First 5 Jobs screen</Link></Button>
             <CheckLine id="welcome" checked={progress.welcomeAcknowledged} onChange={(checked) => setProgress((current) => ({ ...current, welcomeAcknowledged: checked }))} label="I understand how First 5 Jobs works." />
           </CardContent>
         </Card>
