@@ -43,10 +43,15 @@ describe("First 5 Jobs orientation", () => {
 
   it("uses video for welcome and Snagit Step for maintainable instructions", () => {
     const pack = read("docs/product/FIRST-5-JOBS-ONBOARDING-PRODUCTION-PACK-v1.md");
+    const guide = read("src/components/Stage1WelcomeGuide.tsx");
 
-    expect(pack).toContain("Welcome video");
+    expect(pack).toContain("In-app guided walkthrough");
     expect(pack).toContain("Snagit Step guide");
     expect(pack).toContain("Do not combine both into one long recording");
     expect(pack).toContain("Never collect or retain a TFN");
+    expect(guide).toContain("/api/autopsy-speech");
+    expect(guide).toContain("John · First 5 Jobs handover");
+    expect(guide).toContain("Accepted quote creates the job");
+    expect(guide).toContain("First 5 Jobs creates the job and its invoice");
   });
 });

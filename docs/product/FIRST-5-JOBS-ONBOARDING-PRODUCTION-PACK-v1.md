@@ -4,10 +4,10 @@
 
 Use two complementary formats:
 
-- **Welcome video:** John supplies tone, confidence and the reason behind First 5 Jobs. This can be recorded with any reliable screen recorder; Snagit is not required.
+- **In-app guided walkthrough:** John supplies tone, confidence and the reason behind First 5 Jobs through the existing governed voice. Five editable visual steps replace a frozen hosted video.
 - **Snagit Step guide:** a quiet, numbered click guide for ABN and business-name setup. It is easier to scan, print and update when a government page changes.
 
-Do not combine both into one long recording. Record the video only after the orientation UI has been accepted, so the footage does not immediately become obsolete.
+Do not combine both into one long recording. If a promotional video is produced later, record it only after the orientation UI has been accepted, so the footage does not immediately become obsolete.
 
 ## Completion rules
 
@@ -36,7 +36,7 @@ Only the four checklist choices and completion time are retained. Never collect 
 >
 > First, choose the ABN and business-name path that applies to you. Then complete Business Details. Once your active ABN and GST registration are verified, you can begin.
 
-## Welcome-video shot list
+## Guided-walkthrough visual sequence
 
 1. John to camera: opening and why the candidate is here.
 2. First 5 Jobs dashboard: point to Leads, Conversions, Active Jobs and Gross Margin.
