@@ -98,7 +98,7 @@ export default function Stage1QuoteNew() {
     setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
   };
 
-  async function issueQuote() {
+  async function generateAndOpenQuote() {
     if (isDemo) {
       toast.info("This sample calculation is read only. No quotation was created.");
       return;
@@ -121,7 +121,7 @@ export default function Stage1QuoteNew() {
         chargeOutRateExGst,
         items,
       });
-      toast.success(`${created.quoteNumber} created.`);
+      toast.success(`${created.quoteNumber} generated and ready to send.`);
       navigate(`/stage-1/quote/${created.quoteId}?runId=${encodeURIComponent(runId)}`);
     } catch (saveError) {
       toast.error(describeDocumentError(saveError));
@@ -237,7 +237,7 @@ export default function Stage1QuoteNew() {
         </CardContent>
       </Card>
 
-      {!isDemo ? <div className="flex justify-end"><Button onClick={() => void issueQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Generate Quote</Button></div> : null}
+      {!isDemo ? <div className="flex justify-end"><Button onClick={() => void generateAndOpenQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Generate and Open Quote</Button></div> : null}
       {tourActive ? <Stage1WelcomeGuide mode="builder" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "builder"); setSearchParams(next); }} /> : null}
     </div>

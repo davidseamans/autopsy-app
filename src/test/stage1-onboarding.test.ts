@@ -61,7 +61,7 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
     expect(guide).toContain("Use Print or save PDF");
-    expect(guide).toContain("This sample calculation is read only");
+    expect(guide).toContain("There is no separate draft or issue step");
     expect(guide).toContain("Open the Job Cost Summary");
     expect(guide).toContain("Review and send the final invoice");
     expect(guide).toContain("Resume 5 Jobs Tour");
@@ -84,7 +84,9 @@ describe("First 5 Jobs orientation", () => {
     expect(quotes).toContain('disabled={isDemo || working || status === "accepted"}');
     expect(document).toContain('disabled={isDemo || working}');
     expect(builder).toContain("STAGE1_DEMO_CLEAN_TYPES");
-    expect(builder).toContain("Generate Quote");
+    expect(builder).toContain("Generate and Open Quote");
+    expect(builder).toContain("generateAndOpenQuote");
+    expect(builder).toContain('navigate(`/stage-1/quote/${created.quoteId}');
     expect(builder).toContain("{!isDemo ?");
     expect(dashboard).toContain("tourInteractive={isDemo || tourActive}");
     expect(dashboard).toContain("readOnly={isDemo}");
