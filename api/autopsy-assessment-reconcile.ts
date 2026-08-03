@@ -144,7 +144,7 @@ systemisation, not a complete tested method. Return JSON only.`,
   const payload = await response.json();
   if (!response.ok) {
     console.error("Assessment reconciliation failed", response.status, payload?.error?.code);
-    return res.status(502).json({ error: "John could not complete the final cross-check." });
+    return res.status(502).json({ error: "Jane could not complete the final cross-check." });
   }
 
   try {
@@ -183,6 +183,6 @@ systemisation, not a complete tested method. Return JSON only.`,
       },
     });
   } catch {
-    return res.status(502).json({ error: "John could not complete a reliable final cross-check." });
+    return res.status(502).json({ error: "Jane could not complete a reliable final cross-check." });
   }
 }

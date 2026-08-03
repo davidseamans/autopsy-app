@@ -15,7 +15,7 @@ type RequestBody = { stage?: string; experience?: string; industry?: string; mes
 const CONSTITUTIONAL_KERNEL = `AUTOPSY CONSTITUTIONAL KERNEL — ${CONSTITUTIONAL_KERNEL_VERSION}
 
 Purpose:
-John is a constitutional thinking partner. He defaults to listening, contextual memory, reflection and thoughtful inquiry. Advice requires scoped permission. Assessment requires explicit invocation. Evidence improves understanding but never grants authority. Core and Sleeves provide context but cannot define the operator. Silence is a valid outcome. The operator retains complete ownership of goals, decisions and direction.
+Jane is a constitutional thinking partner. She defaults to listening, contextual memory, reflection and thoughtful inquiry. Advice requires scoped permission. Assessment requires explicit invocation. Evidence improves understanding but never grants authority. Core and Sleeves provide context but cannot define the operator. Silence is a valid outcome. The operator retains complete ownership of goals, decisions and direction.
 
 Authority boundaries:
 - The operator owns objectives, priorities, pace, accepted complexity, decisions and direction.
@@ -79,7 +79,7 @@ const CONTRACT_INSTRUCTION = `Return only one valid JSON object matching this co
 Contract rules:
 - Default to LISTEN, REFLECT or INQUIRE, not GUIDE or ASSESS.
 - GUIDE requires guidance_permission=granted and a non-null guidance_scope bounded to the current subject.
-- offered means John may ask whether guidance would be useful but may not prescribe.
+- offered means Jane may ask whether guidance would be useful but may not prescribe.
 - withdrawn means immediately return to non-directive behaviour.
 - ASSESS requires assessment_authorized=true from an explicit request or authorised assessment interaction.
 - maturity_interpretation must be null unless mode=ASSESS and assessment_authorized=true.
@@ -174,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const first = await generateContract(apiKey, makeInput(context, history));
     if (!first.contract) {
       console.error("Constitutional contract generation failed", first.error);
-      return res.status(502).json({ error: "John could not form a governed reply. Please try again." });
+      return res.status(502).json({ error: "Jane could not form a governed reply. Please try again." });
     }
 
     let contract = first.contract;
@@ -186,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn("Constitutional policy gate rejected draft", JSON.stringify({ violations: policy.violations }));
       const second = await generateContract(apiKey, makeInput(context, history, buildRegenerationInstruction(policy.violations)));
       if (!second.contract) {
-        return res.status(502).json({ error: "John's reply was withheld because it did not meet the constitutional standard." });
+        return res.status(502).json({ error: "Jane's reply was withheld because it did not meet the constitutional standard." });
       }
       contract = second.contract;
       policy = validateTurnContract(contract);
@@ -194,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!policy.pass) {
       console.error("Constitutional policy gate failed closed", JSON.stringify({ violations: policy.violations }));
-      return res.status(422).json({ error: "John's reply was withheld because it did not meet the constitutional standard." });
+      return res.status(422).json({ error: "Jane's reply was withheld because it did not meet the constitutional standard." });
     }
 
     res.setHeader("X-Autopsy-Kernel-Version", CONSTITUTIONAL_KERNEL_VERSION);

@@ -50,7 +50,9 @@ describe("First 5 Jobs orientation", () => {
     expect(pack).toContain("Do not combine both into one long recording");
     expect(pack).toContain("Never collect or retain a TFN");
     expect(guide).toContain("/api/autopsy-speech");
-    expect(guide).toContain("John · First 5 Jobs handover");
+    expect(guide).toContain("Jane · First 5 Jobs handover");
+    expect(guide).toContain("requestRef.current?.abort()");
+    expect(guide).toContain("playbackId !== playbackIdRef.current");
     expect(guide).toContain("Accepted quote creates the job");
     expect(guide).toContain("First 5 Jobs creates the job and its invoice");
   });

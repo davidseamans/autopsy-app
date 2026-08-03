@@ -4,7 +4,7 @@
 
 Use two complementary formats:
 
-- **In-app guided walkthrough:** John supplies tone, confidence and the reason behind First 5 Jobs through the existing governed voice. Five editable visual steps replace a frozen hosted video.
+- **In-app guided walkthrough:** Jane supplies tone, confidence and the reason behind First 5 Jobs through the existing governed voice. Five editable visual steps replace a frozen hosted video.
 - **Snagit Step guide:** a quiet, numbered click guide for ABN and business-name setup. It is easier to scan, print and update when a government page changes.
 
 Do not combine both into one long recording. If a promotional video is produced later, record it only after the orientation UI has been accepted, so the footage does not immediately become obsolete.
@@ -13,7 +13,7 @@ Do not combine both into one long recording. If a promotional video is produced 
 
 The candidate completes orientation when they:
 
-1. acknowledge John’s First 5 Jobs handover;
+1. acknowledge Jane’s First 5 Jobs handover;
 2. choose whether they already have an ABN or need to apply;
 3. choose whether they will trade under their legal name or register a different business name; and
 4. acknowledge the operating standards.
@@ -22,7 +22,7 @@ Orientation records understanding. It is not another assessment. Verified Busine
 
 Only the four checklist choices and completion time are retained. Never collect or retain a TFN, identity document or raw video response.
 
-## John’s welcome script
+## Jane’s welcome script
 
 **Target:** 2–3 minutes. Calm, direct and commercial.
 
@@ -38,11 +38,11 @@ Only the four checklist choices and completion time are retained. Never collect 
 
 ## Guided-walkthrough visual sequence
 
-1. John to camera: opening and why the candidate is here.
+1. Jane opens and explains why the candidate is here.
 2. First 5 Jobs dashboard: point to Leads, Conversions, Active Jobs and Gross Margin.
 3. Quotes screen: create quote, then show Accepted becoming a job.
 4. Job Cost Summary: show actual hours, costs, invoice, payment and attachment.
-5. Return to John: six weeks, five genuine jobs, keep it lean.
+5. Return to Jane: six weeks, five genuine jobs, keep it lean.
 
 Use a test account and invented customer details. Never display a real TFN, ABN application, email inbox, password manager, bank details or browser autofill suggestions.
 

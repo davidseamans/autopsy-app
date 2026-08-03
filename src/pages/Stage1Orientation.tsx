@@ -91,7 +91,7 @@ export default function Stage1Orientation() {
       <header className="space-y-3">
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · orientation</p>
         <h1 className="text-3xl font-semibold tracking-tight">Before your first job</h1>
-        <p className="text-muted-foreground">A short handover from John, then choose the setup path that applies to you.</p>
+        <p className="text-muted-foreground">A short handover from Jane, then choose the setup path that applies to you.</p>
       </header>
 
       {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
@@ -101,7 +101,7 @@ export default function Stage1Orientation() {
           <CardHeader>
             <div className="flex items-start gap-3">
               <span className="rounded-full bg-[#082849] p-2 text-white"><PlayCircle className="h-5 w-5" /></span>
-              <div><CardTitle>Welcome from John</CardTitle><CardDescription className="mt-1">Watch the guided handover or read the same words below.</CardDescription></div>
+              <div><CardTitle>Welcome from Jane</CardTitle><CardDescription className="mt-1">Watch the guided handover or read the same words below.</CardDescription></div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-6">

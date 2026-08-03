@@ -78,7 +78,7 @@ describe("candidate-readiness verdict contract", () => {
     expect(candidateView).toContain("<strong>Run ID:</strong>");
     expect(candidateView).toContain("<strong>Completed:</strong>");
     expect(candidateView).toContain("<strong>Internal total:</strong>");
-    expect(candidateView).not.toMatch(/Talk it through with John|Start a new Autopsy|out of 36|\/ 6/);
+    expect(candidateView).not.toMatch(/Talk it through with Jane|Start a new Autopsy|out of 36|\/ 6/);
   });
 
   it("does not treat completed answers as an active finalisation request", () => {

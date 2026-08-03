@@ -42,8 +42,13 @@ export function Stage1WelcomeGuide() {
   const [voiceError, setVoiceError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlRef = useRef<string | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const playbackIdRef = useRef(0);
 
   function stopVoice() {
+    playbackIdRef.current += 1;
+    requestRef.current?.abort();
+    requestRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
@@ -56,6 +61,9 @@ export function Stage1WelcomeGuide() {
 
   async function speak(nextIndex: number) {
     stopVoice();
+    const playbackId = playbackIdRef.current;
+    const controller = new AbortController();
+    requestRef.current = controller;
     setIndex(nextIndex);
     setVoiceError(false);
     if (!session?.access_token) {
@@ -68,17 +76,22 @@ export function Stage1WelcomeGuide() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ text: slides[nextIndex].narration }),
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("voice");
-      const url = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      if (playbackId !== playbackIdRef.current) return;
+      const url = URL.createObjectURL(blob);
       urlRef.current = url;
       const audio = new Audio(url);
       audioRef.current = audio;
       audio.onended = () => {
+        if (playbackId !== playbackIdRef.current) return;
         stopVoice();
         if (nextIndex < slides.length - 1) void speak(nextIndex + 1);
       };
       audio.onerror = () => {
+        if (playbackId !== playbackIdRef.current) return;
         stopVoice();
         setVoiceError(true);
       };
@@ -86,6 +99,7 @@ export function Stage1WelcomeGuide() {
       setSpeaking(true);
       await audio.play();
     } catch {
+      if (playbackId !== playbackIdRef.current || controller.signal.aborted) return;
       stopVoice();
       setVoiceError(true);
     }
@@ -105,18 +119,18 @@ export function Stage1WelcomeGuide() {
   const slide = slides[index];
 
   return <>
-    <Button type="button" onClick={begin} className="gap-2 bg-[#082849] text-white hover:bg-[#0b345c]"><Play className="h-4 w-4" /> Watch and hear John</Button>
+    <Button type="button" onClick={begin} className="gap-2 bg-[#082849] text-white hover:bg-[#0b345c]"><Play className="h-4 w-4" /> Watch and hear Jane</Button>
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-3xl overflow-hidden p-0">
         <div className="bg-[#061b34] px-6 py-5 text-white">
-          <DialogHeader><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#52d8c2]">John · First 5 Jobs handover</p><DialogTitle className="text-2xl text-white">{slide.title}</DialogTitle><DialogDescription className="text-slate-300">Step {index + 1} of {slides.length}</DialogDescription></DialogHeader>
+          <DialogHeader><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#52d8c2]">Jane · First 5 Jobs handover</p><DialogTitle className="text-2xl text-white">{slide.title}</DialogTitle><DialogDescription className="text-slate-300">Step {index + 1} of {slides.length}</DialogDescription></DialogHeader>
           <Progress value={((index + 1) / slides.length) * 100} className="mt-4 h-1.5" />
         </div>
         <div className="grid gap-6 p-6 md:grid-cols-[1.1fr_0.9fr]">
           <GuideVisual kind={slide.visual} />
           <div className="flex flex-col justify-between gap-5">
-            <div><p className="text-sm leading-7 text-foreground">{slide.narration}</p>{voiceError ? <p className="mt-3 text-xs text-amber-700">John’s words are on screen. You can continue reading or try the voice again.</p> : null}</div>
-            <Button type="button" variant="outline" className="w-fit gap-2" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice}>{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing John’s voice…" : speaking ? "Pause John" : "Hear this step"}</Button>
+            <div><p className="text-sm leading-7 text-foreground">{slide.narration}</p>{voiceError ? <p className="mt-3 text-xs text-amber-700">Jane’s words are on screen. You can continue reading or try the voice again.</p> : null}</div>
+            <Button type="button" variant="outline" className="w-fit gap-2" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice}>{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing Jane’s voice…" : speaking ? "Pause Jane" : "Hear this step"}</Button>
           </div>
         </div>
         <DialogFooter className="border-t px-6 py-4 sm:justify-between">
