@@ -13,6 +13,8 @@ import {
   fetchStage1QuoteDocument,
   type Stage1QuoteDocument as QuoteDocument,
 } from "@/lib/stage1Documents";
+import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { STAGE1_DEMO_PROFILE, STAGE1_DEMO_QUOTE_DOCUMENT } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 const auDate = (value: string | null) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU") : "—";
@@ -20,8 +22,11 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function Stage1QuoteDocument() {
   const { quoteId = "" } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
+  const isDemo = searchParams.get("demo") === "1";
+  const tourActive = searchParams.get("tour") === "document";
+  const [tourStep, setTourStep] = useState(0);
   const [quote, setQuote] = useState<QuoteDocument | null>(null);
   const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +35,11 @@ export default function Stage1QuoteDocument() {
   const [showInvoice, setShowInvoice] = useState(false);
 
   const reload = useCallback(async () => {
+    if (isDemo) {
+      setQuote(STAGE1_DEMO_QUOTE_DOCUMENT);
+      setProfile(STAGE1_DEMO_PROFILE);
+      return;
+    }
     if (!quoteId || !runId) throw new Error("The quote or Autopsy run is missing.");
     const [document, identity] = await Promise.all([
       fetchStage1QuoteDocument(quoteId),
@@ -40,7 +50,7 @@ export default function Stage1QuoteDocument() {
     setQuote(document);
     setProfile(identity.profile);
     if (document.invoice) setShowInvoice(true);
-  }, [quoteId, runId]);
+  }, [isDemo, quoteId, runId]);
 
   useEffect(() => {
     void reload()
@@ -79,7 +89,7 @@ export default function Stage1QuoteDocument() {
 
   if (loading) return <div className="container max-w-4xl py-10 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading document…</div>;
 
-  const backTo = runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
+  const backTo = isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
   if (error || !quote || !profile) {
     return <div className="container max-w-4xl py-10 space-y-4"><Button asChild variant="ghost"><Link to={backTo}><ArrowLeft className="mr-1 h-4 w-4" /> Back</Link></Button><Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error ?? "Document not found."}</CardContent></Card></div>;
   }
@@ -98,17 +108,17 @@ export default function Stage1QuoteDocument() {
 
   return (
     <div className="container max-w-5xl py-8 space-y-5">
-      <div className="print:hidden flex flex-wrap items-center justify-between gap-3">
+      <div className={`print:hidden flex flex-wrap items-center justify-between gap-3 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <Button asChild variant="ghost"><Link to={backTo}><ArrowLeft className="mr-1 h-4 w-4" /> First 5 Jobs</Link></Button>
         <div className="flex flex-wrap gap-2">
           {quote.invoice ? <Button variant="outline" onClick={() => setShowInvoice((current) => !current)}>{showInvoice ? "View original quote" : "View tax invoice"}</Button> : null}
           <Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" /> Print or save PDF</Button>
-          {quote.status !== "accepted" ? <Button onClick={() => void accept()} disabled={working}><Briefcase className="mr-2 h-4 w-4" /> Customer accepted — create job</Button> : null}
+          {quote.status !== "accepted" ? <Button onClick={() => void accept()} disabled={isDemo || working}><Briefcase className="mr-2 h-4 w-4" /> Customer accepted — create job</Button> : null}
           {quote.status === "accepted" && !quote.invoice ? <Button onClick={() => void invoice()} disabled={working}><FileCheck2 className="mr-2 h-4 w-4" /> Create tax invoice</Button> : null}
         </div>
       </div>
 
-      <article className="rounded-xl border bg-white p-6 text-slate-950 shadow-sm print:border-0 print:p-0 print:shadow-none sm:p-10">
+      <article className={`rounded-xl border bg-white p-6 text-slate-950 shadow-sm print:border-0 print:p-0 print:shadow-none sm:p-10 ${tourActive && (tourStep === 0 || tourStep === 2) ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <header className="flex flex-col justify-between gap-8 border-b pb-7 sm:flex-row">
           <div>
             <p className="text-2xl font-bold">{issuer.businessName}</p>
@@ -154,6 +164,7 @@ export default function Stage1QuoteDocument() {
 
         <footer className="mt-8 border-t pt-6 text-sm"><p className="font-semibold">Payment terms</p><p className="mt-1 text-slate-600">{quote.paymentTerms}</p>{!invoiceDocument ? <p className="mt-5 text-xs text-slate-500">Acceptance confirms that the customer agrees to the work, price and terms shown in this quote.</p> : null}</footer>
       </article>
+      {tourActive ? <Stage1WelcomeGuide mode="document" onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyAction={() => window.location.assign("/stage-1?demo=1&tour=jobs")} /> : null}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { loadStage1Funnel, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
 import { toast } from "@/components/ui/sonner";
 import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { STAGE1_DEMO_QUOTES } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 type QuoteFilter = "outstanding" | "rejected" | "accepted";
@@ -16,7 +17,8 @@ const quoteBucket = (quote: Stage1QuoteSummary): QuoteFilter => quote.status ===
 export default function Stage1Quotes() {
   const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const first5JobsPath = runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
+  const isDemo = searchParams.get("demo") === "1";
+  const first5JobsPath = isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
   const quotePath = runId ? `/stage-1/quotes/new?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes/new";
   const [quotes, setQuotes] = useState<Stage1QuoteSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +34,12 @@ export default function Stage1Quotes() {
   }, [searchParams, setSearchParams]);
 
   const refresh = useCallback(async () => {
+    if (isDemo) {
+      setQuotes(STAGE1_DEMO_QUOTES);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     if (!runId) {
       setError("Open Quotes from your First 5 Jobs page.");
       setLoading(false);
@@ -46,7 +54,15 @@ export default function Stage1Quotes() {
     } finally {
       setLoading(false);
     }
-  }, [runId]);
+  }, [isDemo, runId]);
+
+  useEffect(() => {
+    if (!tourActive) return;
+    if (tourStep === 1) setFilter("outstanding");
+    if (tourStep === 2) setFilter("rejected");
+    if (tourStep === 3) setFilter("accepted");
+    if (tourStep >= 4) setFilter("outstanding");
+  }, [tourActive, tourStep]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -59,6 +75,10 @@ export default function Stage1Quotes() {
   const filteredQuotes = useMemo(() => quotes.filter((quote) => quoteBucket(quote) === filter), [filter, quotes]);
 
   async function changeStatus(quote: Stage1QuoteSummary, next: QuoteFilter) {
+    if (isDemo) {
+      toast.info("This is sample data. No status was changed.");
+      return;
+    }
     if (workingQuoteId || quoteBucket(quote) === next) return;
     setWorkingQuoteId(quote.id);
     try {
@@ -85,46 +105,46 @@ export default function Stage1Quotes() {
   return (
     <div className="container max-w-5xl py-10 space-y-6">
       <Button asChild variant="ghost" size="sm"><Link to={first5JobsPath}><ArrowLeft className="mr-1 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
-      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && (tourStep === 0 || tourStep === 1) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && tourStep === 4 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Quotes</p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Quotes {isDemo ? "· Sample workspace" : ""}</p>
           <h1 className="text-3xl font-semibold tracking-tight">Quotes</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Customer and work details begin here. An accepted quote becomes a First 5 Jobs job.</p>
         </div>
-        <Button asChild><Link to={quotePath}><Plus className="mr-2 h-4 w-4" /> Create a quote</Link></Button>
+        {isDemo ? <Button type="button" onClick={() => toast.info("Jane is demonstrating the real quote workflow. Sample data cannot be changed.")}><Plus className="mr-2 h-4 w-4" /> Create a quote</Button> : <Button asChild><Link to={quotePath}><Plus className="mr-2 h-4 w-4" /> Create a quote</Link></Button>}
       </header>
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
       <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 0 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
-        <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} onClick={() => setFilter("outstanding")} />
-        <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} onClick={() => setFilter("rejected")} />
-        <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} onClick={() => setFilter("accepted")} />
+        <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 1} onClick={() => setFilter("outstanding")} />
+        <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("rejected")} />
+        <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("accepted")} />
       </div>
 
-      <Card className={tourActive && (tourStep === 2 || tourStep === 3) ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+      <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter.charAt(0).toUpperCase() + filter.slice(1)} quotes</CardTitle><CardDescription>Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
-          {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
+          {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
-      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(runId ? `/stage-1?runId=${encodeURIComponent(runId)}&tour=jobs` : "/stage-1?tour=jobs"); }} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="quotes" onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quote/demo-q-1004?demo=1&tour=document" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}&tour=jobs` : "/stage-1?tour=jobs"); }} /> : null}
     </div>
   );
 }
 
-function FunnelCount({ label, value, active, onClick }: { label: string; value: number; active: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="text-left"><Card className={active ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardContent className="pt-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card></button>;
+function FunnelCount({ label, value, active, highlighted, onClick }: { label: string; value: number; active: boolean; highlighted?: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={`text-left ${highlighted ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}><Card className={active ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardContent className="pt-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card></button>;
 }
 
-function QuoteRow({ quote, runId, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; working: boolean; onStatusChange: (status: QuoteFilter) => void }) {
-  const documentPath = `/stage-1/quote/${quote.id}?runId=${encodeURIComponent(runId)}`;
+function QuoteRow({ quote, runId, isDemo, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; isDemo: boolean; working: boolean; onStatusChange: (status: QuoteFilter) => void }) {
+  const documentPath = isDemo ? `/stage-1/quote/${quote.id}?demo=1` : `/stage-1/quote/${quote.id}?runId=${encodeURIComponent(runId)}`;
   const status = quoteBucket(quote);
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as QuoteFilter)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
+        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={isDemo || working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as QuoteFilter)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
         <p className="text-sm text-muted-foreground">{money(quote.totalIncGst)} · {new Date(quote.issuedAt).toLocaleDateString("en-AU")}</p>
       </div>
       <Button asChild variant="outline" size="sm"><Link to={documentPath}>Open quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button>

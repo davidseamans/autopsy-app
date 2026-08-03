@@ -167,9 +167,9 @@ const DEMO_QUOTES: Quote[] = [
 ];
 
 const DEMO_UNITS: ProofUnit[] = [
-  { n: 1, jobNumber: "J-1", jobSequenceNumber: 1, client: "Riverstone Dental Centre", jobSite: "Paddington, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1001", sandboxRevenueAmount: 1850, sandboxTotalDirectCost: 1050, sandboxGrossProfit: 800, sandboxGrossMarginPct: 43 },
-  { n: 2, jobNumber: "J-2", jobSequenceNumber: 2, client: "Milton Legal Chambers", jobSite: "Milton, QLD", proofType: "Recurring Job", status: "In Progress", gm: 45, evidence: true, lifecycle: "active", sourceQuote: "Q-1002", sandboxRevenueAmount: 2400, sandboxTotalDirectCost: 1320, sandboxGrossProfit: 1080, sandboxGrossMarginPct: 45 },
-  { n: 3, jobNumber: "J-3", jobSequenceNumber: 3, client: "Newstead Allied Health", jobSite: "Newstead, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1003", sandboxRevenueAmount: 1600, sandboxTotalDirectCost: 920, sandboxGrossProfit: 680, sandboxGrossMarginPct: 43 },
+  { n: 1, jobNumber: "J-1", jobSequenceNumber: 1, client: "Riverstone Dental Centre", jobSite: "Sample premises, Paddington QLD", proofType: "Completed Job", status: "Completed", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1001", quoteValue: 2035, quotedLabourHours: 20, quotedChargeOutRate: 90, quotedConsumablesBudget: 55, quotedCleanTypeLabel: "Initial or heavy clean", actualLabourHours: 19, invoiceAmount: 2035, invoiceDate: "2026-07-18", invoiceRef: "INV-1", invoiceStatus: "Sent", invoiceLines: [{ id: "demo-invoice-1", date: "2026-07-18", ref: "INV-1", description: "Final invoice generated from accepted quote Q-1001", amount: 2035, gstIncluded: true, gstTreatment: "gst_included", source: "quote_conversion", sourceQuoteId: "demo-q-1001" }], costMaterials: 85, costLabour: 950, costOther: 15, costLines: [{ id: "demo-cost-1", description: "Cleaning materials and consumables", amount: 85, gstIncluded: true, gstTreatment: "gst_included", date: "2026-07-18" }], paymentStatus: "Not Paid", sandboxRevenueAmount: 2035, sandboxOutstandingAmount: 2035, sandboxTotalDirectCost: 1050, sandboxGrossProfit: 985, sandboxGrossMarginPct: 48 },
+  { n: 2, jobNumber: "J-2", jobSequenceNumber: 2, client: "Milton Legal Chambers", jobSite: "Sample premises, Milton QLD", proofType: "Recurring Job", status: "In Progress", gm: 45, evidence: true, lifecycle: "active", sourceQuote: "Q-1002", quoteValue: 2640, quotedLabourHours: 24, quotedChargeOutRate: 95, quotedConsumablesBudget: 65, actualLabourHours: 12, sandboxRevenueAmount: 2640, sandboxTotalDirectCost: 1320, sandboxGrossProfit: 1320, sandboxGrossMarginPct: 50 },
+  { n: 3, jobNumber: "J-3", jobSequenceNumber: 3, client: "Newstead Allied Health", jobSite: "Sample premises, Newstead QLD", proofType: "Recurring Job", status: "Scheduled", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1003", quoteValue: 1760, quotedLabourHours: 16, quotedChargeOutRate: 95, quotedConsumablesBudget: 45, scheduledDate: "2026-07-24", sandboxRevenueAmount: 1760, sandboxTotalDirectCost: 920, sandboxGrossProfit: 840, sandboxGrossMarginPct: 48 },
 ];
 
 // Canonical Stage 1 snapshot shape, returned by the read-only Supabase RPC
@@ -1646,10 +1646,11 @@ function Stage1DashboardInner() {
     if (!tourActive) return;
     if (tourStep === 2) setDrill("leads");
     else if (tourStep === 4) setDrill("jobs");
-    else if (tourStep === 5) { setDrill(null); setLedgerView("summary"); }
-    else if (tourStep === 6) { setDrill(null); setLedgerView("debtors"); }
+    else if (tourStep === 5 && isDemo) { setDrill(null); setReportN(1); setReportOpen(true); }
+    else if (tourStep === 6) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
+    else if (tourStep === 7) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
     else setDrill(null);
-  }, [tourActive, tourStep]);
+  }, [isDemo, tourActive, tourStep]);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>(isDemo ? DEMO_QUOTES : SEED_QUOTES);
@@ -4338,7 +4339,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className={`space-y-3 ${tourActive && (tourStep === 5 || tourStep === 6) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <section className={`space-y-3 ${tourActive && (tourStep === 6 || tourStep === 7) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4653,7 +4654,7 @@ function Stage1DashboardInner() {
           );
         }}
       />
-      {tourActive ? <Stage1WelcomeGuide initialStep={initialTourStep} onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => navigate(activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes` : "/stage-1/quotes?tour=quotes")} /> : null}
+      {tourActive ? <Stage1WelcomeGuide initialStep={initialTourStep} onClose={closeTour} onStepChange={setTourStep} onJourneyAction={() => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes` : "/stage-1/quotes?tour=quotes")} /> : null}
     </div>
   );
 }

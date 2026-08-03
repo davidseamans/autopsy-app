@@ -59,9 +59,24 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("The Conversions card opens your real Quotes area");
     expect(guide).toContain("Jane will never do that for you");
     expect(guide).toContain("stage1-tour-position");
-    expect(guide).toContain("Drag this tour to a comfortable position");
+    expect(guide).toContain("Grab here to move the tour");
     expect(guide).toContain("Use Print or save PDF");
+    expect(guide).toContain("This demonstration cannot accept the quote");
+    expect(guide).toContain("Complete the Job Cost Summary");
     expect(page).toContain("Tour your actual First 5 Jobs screen");
     expect(page).toContain("&tour=1");
+  });
+
+  it("keeps the guided sample workspace isolated from candidate transactions", () => {
+    const demo = read("src/lib/stage1Demo.ts");
+    const quotes = read("src/pages/Stage1Quotes.tsx");
+    const document = read("src/pages/Stage1QuoteDocument.tsx");
+
+    expect(demo).toContain("demo-q-1004");
+    expect(demo).toContain('status: "rejected"');
+    expect(demo).toContain('status: "accepted"');
+    expect(quotes).toContain("This is sample data. No status was changed.");
+    expect(quotes).toContain('disabled={isDemo || working || status === "accepted"}');
+    expect(document).toContain('disabled={isDemo || working}');
   });
 });
