@@ -25,6 +25,8 @@ describe("First 5 Jobs orientation", () => {
     expect(page).toContain("I need to apply for an ABN");
     expect(page).toContain("Trade under my own legal name");
     expect(page).toContain("Register a different business name");
+    expect(page).toContain("John Smith Cleaning is different from John Smith");
+    expect(page).toContain("Old unregistered trading names do not count");
     expect(page).toContain("BuildOS never asks for or stores your TFN");
     expect(migration).not.toMatch(/\btfn\s+(text|varchar|character)/i);
   });

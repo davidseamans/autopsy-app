@@ -61,11 +61,12 @@ Produce two short Step documents, not one long document.
 
 ### Guide B — Choose a business name
 
-1. Explain that a sole trader may trade under their personal legal name, and a partnership may use all partners’ legal names.
-2. Explain that a different customer-facing name must be registered.
-3. Open the [ASIC registration guide](https://www.asic.gov.au/for-business-and-companies/business-names/register-a-business-name/how-to-register-a-business-name-with-asic/).
-4. Optionally show the approved private service, clearly labelled as private and potentially more expensive.
-5. Return to BuildOS Business Details.
+1. Explain that a sole trader named **John Smith** may trade as **John Smith**, and a partnership may use all partners’ legal names.
+2. Explain that **John Smith Cleaning** is different from **John Smith**, so it must be registered as a business name.
+3. Acknowledge that candidates may call this a “trading name”, but explain that the current registration is a **business name**; old unregistered trading names do not count.
+4. Open the [ASIC registration guide](https://www.asic.gov.au/for-business-and-companies/business-names/register-a-business-name/how-to-register-a-business-name-with-asic/).
+5. Optionally show the approved private service, clearly labelled as private and potentially more expensive.
+6. Return to BuildOS Business Details.
 
 Number the clickable controls and use one sentence per step. Avoid screenshots containing personal information. Review links and screenshots quarterly and whenever a government page changes.
 

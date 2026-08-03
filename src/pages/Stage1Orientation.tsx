@@ -121,10 +121,11 @@ export default function Stage1Orientation() {
         </CardContent></Card>
 
         <ChoiceCard title="2. Choose how you will trade" description="Use the path that matches the name customers will see." value={progress.businessNamePath} onChange={(value) => setProgress((current) => ({ ...current, businessNamePath: value as BusinessNamePath }))} options={[
-          ["own_legal_name", "Trade under my own legal name", "A sole trader can trade under their personal legal name; a partnership can use all partners’ legal names."],
-          ["register_business_name", "Register a different business name", "A different customer-facing name must be registered before it is used."],
+          ["own_legal_name", "Trade under my own legal name", "A sole trader named John Smith can trade as John Smith. A partnership can use all partners’ legal names."],
+          ["register_business_name", "Register a different business name", "John Smith Cleaning is different from John Smith, so it must be registered as a business name before it is used."],
         ]} />
         <Card><CardContent className="pt-6 space-y-3 text-sm text-muted-foreground">
+          <p>People often call this a “trading name”. The current registered name is a <strong className="font-medium text-foreground">business name</strong>. Old unregistered trading names do not count as registered business names.</p>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline"><a href={ASIC_NAME_URL} target="_blank" rel="noreferrer">ASIC registration guide <ExternalLink className="ml-2 h-4 w-4" /></a></Button>
             <Button asChild variant="outline"><a href={PRIVATE_NAME_URL} target="_blank" rel="noreferrer">Private registration service <ExternalLink className="ml-2 h-4 w-4" /></a></Button>
