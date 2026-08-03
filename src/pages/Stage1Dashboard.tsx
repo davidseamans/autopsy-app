@@ -17,6 +17,7 @@ import {
 } from "@/lib/jobProvisioning";
 import { getActiveRunId, getStage1RunId, setStage1RunId } from "@/lib/progression";
 import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
+import { fetchStage1Onboarding } from "@/lib/stage1Onboarding";
 import {
   fetchStage1Units,
   loadStage1UnitsCache,
@@ -63,6 +64,7 @@ import {
   IdCard,
   Loader2,
   Plus,
+  Compass,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 
@@ -1601,10 +1603,25 @@ function Stage1DashboardInner() {
     searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
   );
   const bd = useBusinessDetails(activeRunId, isDemo);
+  const [orientationComplete, setOrientationComplete] = useState(isDemo);
+  const [orientationLoaded, setOrientationLoaded] = useState(isDemo);
+  useEffect(() => {
+    if (isDemo) return;
+    if (!activeRunId) {
+      setOrientationComplete(false);
+      setOrientationLoaded(true);
+      return;
+    }
+    setOrientationLoaded(false);
+    void fetchStage1Onboarding(activeRunId)
+      .then((progress) => setOrientationComplete(Boolean(progress.completedAt)))
+      .catch(() => setOrientationComplete(false))
+      .finally(() => setOrientationLoaded(true));
+  }, [activeRunId, isDemo]);
   const [bdOpen, setBdOpen] = useState(false);
   useEffect(() => {
-    if (!isDemo && activeRunId && bd.loaded && !bd.canOperate) setBdOpen(true);
-  }, [activeRunId, bd.canOperate, bd.loaded, isDemo]);
+    if (!isDemo && activeRunId && orientationLoaded && orientationComplete && bd.loaded && !bd.canOperate) setBdOpen(true);
+  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, orientationComplete, orientationLoaded]);
   const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
@@ -2979,6 +2996,18 @@ function Stage1DashboardInner() {
           )}
         </div>
       </header>
+
+      {!isDemo && orientationLoaded && activeRunId && (
+        <Card className={orientationComplete ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
+          <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <Compass className={orientationComplete ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
+              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review John’s handover or your ABN and business-name pathway at any time." : "John will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
+            </div>
+            <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
+          </CardContent>
+        </Card>
+      )}
 
       {(isDemo || (bd.loaded && bd.complete)) && (
         <p className="text-xs text-muted-foreground -mt-2">

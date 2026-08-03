@@ -27,6 +27,7 @@ import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
 import Stage1QuoteDocument from "@/pages/Stage1QuoteDocument";
 import AutopsyClaim from "@/pages/AutopsyClaim";
 import Stage1Quotes from "@/pages/Stage1Quotes";
+import Stage1Orientation from "@/pages/Stage1Orientation";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
@@ -52,6 +53,11 @@ const Stage1QuotesRoute = () => (
 const Stage1QuoteDocumentRoute = () => (
   <AuthGate>
     <Stage1QuoteDocument />
+  </AuthGate>
+);
+const Stage1OrientationRoute = () => (
+  <AuthGate>
+    <Stage1Orientation />
   </AuthGate>
 );
 
@@ -100,6 +106,7 @@ const App = () => (
               <Route path="/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
               <Route path="/stage-1" element={<Stage1Dashboard />} />
+              <Route path="/stage-1/orientation" element={<Stage1OrientationRoute />} />
               <Route path="/stage-1/leads" element={<LegacyStage1Redirect to="/stage-1" />} />
               <Route path="/stage-1/quotes" element={<Stage1QuotesRoute />} />
               <Route path="/stage-1/quotes/new" element={<Stage1QuoteNewRoute />} />
