@@ -405,7 +405,7 @@ function ChargeOutRateExercise() {
       <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><p className="font-semibold text-rose-950">What happens when I cut the price?</p><p className="mt-1 text-sm text-rose-800">Choose a discount. The work and business costs have not disappeared.</p></div>
-          <div className="flex flex-wrap gap-2">{[10, 20, 30].map((percent) => <Button key={percent} type="button" size="sm" variant={cutPercent === percent ? "default" : "outline"} onClick={() => setCutPercent(percent)}>Cut {percent}%</Button>)}</div>
+          <div className="flex flex-nowrap items-center gap-2">{[10, 20, 30].map((percent) => <Button key={percent} type="button" size="sm" className="whitespace-nowrap" variant={cutPercent === percent ? "default" : "outline"} onClick={() => setCutPercent(percent)}>Cut {percent}%</Button>)}</div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <Consequence label="Reduced customer rate, incl GST" value={money(cut.reducedCustomerRateIncludingGst)} />
@@ -421,7 +421,7 @@ function ChargeOutRateExercise() {
 }
 
 function RateField({ label, value, onChange, prefix, suffix }: { label: string; value: number; onChange: (value: string) => void; prefix?: string; suffix?: string }) {
-  return <Label className="space-y-2 text-xs leading-4"><span>{label}</span><span className="flex items-center rounded-md border bg-white px-3"><span className="text-muted-foreground">{prefix}</span><Input type="number" min="0" step="1" value={value} onChange={(event) => onChange(event.target.value)} className="border-0 px-2 shadow-none focus-visible:ring-0" /><span className="text-muted-foreground">{suffix}</span></span></Label>;
+  return <Label className="grid grid-rows-[2rem_auto] gap-2 text-xs leading-4"><span className="flex items-end">{label}</span><span className="flex items-center rounded-md border bg-white px-3"><span className="text-muted-foreground">{prefix}</span><Input type="number" min="0" step="1" value={value} onChange={(event) => onChange(event.target.value)} className="border-0 px-2 shadow-none focus-visible:ring-0" /><span className="text-muted-foreground">{suffix}</span></span></Label>;
 }
 
 function Consequence({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
