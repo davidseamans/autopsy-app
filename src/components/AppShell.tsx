@@ -16,6 +16,7 @@ const navGroups = [
     items: [
       { title: "First 5 Jobs", url: "/stage-1" },
       { title: "Quotes", url: "/stage-1/quotes" },
+      { title: "Technical Guide", url: "/stage-1/technical-guide" },
       { title: "Business Details", url: "/business-setup" },
     ],
   },

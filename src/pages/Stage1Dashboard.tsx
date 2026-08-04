@@ -66,6 +66,7 @@ import {
   Plus,
   Compass,
   BookOpen,
+  ShieldAlert,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
@@ -3061,6 +3062,23 @@ function Stage1DashboardInner() {
             </div>
             <Button asChild variant="outline" className="shrink-0 border-violet-300 bg-white">
               <Link to={`/stage-1/learning?runId=${encodeURIComponent(activeRunId)}`}>Open learning library</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(isDemo || (orientationLoaded && orientationComplete && activeRunId)) && (
+        <Card className="border-teal-200 bg-teal-50/40">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-teal-700" />
+              <div>
+                <p className="font-semibold">Cleaning Technical Guide</p>
+                <p className="mt-1 text-sm text-muted-foreground">Start with what you can see, answer a few short questions and find the safe next step.</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="min-h-11 shrink-0 border-teal-300 bg-white">
+              <Link to={isDemo ? "/stage-1/technical-guide?demo=1" : `/stage-1/technical-guide?runId=${encodeURIComponent(activeRunId ?? "")}`}>Open technical guide</Link>
             </Button>
           </CardContent>
         </Card>
