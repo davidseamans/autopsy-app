@@ -16,12 +16,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   fetchStage1LearningProgress,
   saveStage1LessonCompletion,
   type Stage1LessonProgress,
 } from "@/lib/stage1Learning";
+import {
+  calculateChargeOutRate,
+  calculatePriceCutConsequence,
+  type ChargeOutRateInputs,
+} from "@/lib/stage1ChargeOutRate";
 
 type QuizQuestion = {
   prompt: string;
@@ -40,6 +46,7 @@ type Lesson = {
   available: boolean;
   sections?: { title: string; body: string; script?: string; points?: string[] }[];
   quiz?: QuizQuestion[];
+  interactive?: "charge_out_rate";
 };
 
 const lessons: Lesson[] = [
@@ -194,6 +201,7 @@ const lessons: Lesson[] = [
     promise: "Build a rate that pays for the work and the business around it.",
     duration: "8 minutes",
     available: true,
+    interactive: "charge_out_rate",
     sections: [
       {
         title: "Your wage is only one part of the price",
@@ -304,6 +312,7 @@ export default function Stage1Learning() {
       <header className="space-y-2"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Lesson {selectedLesson.number} · {selectedLesson.duration}</p><h1 className="text-3xl font-semibold tracking-tight">{selectedLesson.title}</h1><p className="text-muted-foreground">{selectedLesson.promise}</p></header>
       <Card className="border-sky-200 bg-sky-50/40"><CardHeader><CardTitle className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-sky-700" /> Jane’s practical briefing</CardTitle><CardDescription>Read this lesson at your own pace. Audio and field demonstrations can be added without changing the lesson record.</CardDescription></CardHeader></Card>
       {selectedLesson.sections?.map((section) => <Card key={section.title}><CardHeader><CardTitle className="text-xl">{section.title}</CardTitle></CardHeader><CardContent className="space-y-4 text-sm leading-6"><p>{section.body}</p>{section.points ? <ul className="list-disc space-y-2 pl-5">{section.points.map((point) => <li key={point}>{point}</li>)}</ul> : null}{section.script ? <blockquote className="rounded-lg border-l-4 border-sky-600 bg-sky-50 p-4 text-base font-medium leading-7">“{section.script}”</blockquote> : null}</CardContent></Card>)}
+      {selectedLesson.interactive === "charge_out_rate" ? <ChargeOutRateExercise /> : null}
       <Card><CardHeader><CardTitle>Quick check</CardTitle><CardDescription>Choose the best practical answer. Two correct answers out of three completes the lesson.</CardDescription></CardHeader><CardContent className="space-y-6">{selectedLesson.quiz?.map((question, index) => <div key={question.prompt} className="space-y-3"><p className="font-medium">{index + 1}. {question.prompt}</p><RadioGroup value={answers[index] ?? ""} onValueChange={(value) => setAnswers((current) => ({ ...current, [index]: value }))}>{question.options.map((option) => <Label key={option.key} htmlFor={`${selectedLesson.key}-${index}-${option.key}`} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><RadioGroupItem id={`${selectedLesson.key}-${index}-${option.key}`} value={option.key} className="mt-0.5" /><span>{option.label}</span></Label>)}</RadioGroup>{submitted ? <p className={`text-sm ${answers[index] === question.correct ? "text-emerald-700" : "text-amber-700"}`}>{answers[index] === question.correct ? "Correct. " : "Not quite. "}{question.explanation}</p> : null}</div>)}
         {!submitted ? <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== quizCount}>Check my answers</Button> : passed ? <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-emerald-800">You understood the lesson: {score} of {quizCount}</p><p className="text-sm text-emerald-700">This records lesson completion only. It does not change your Autopsy result or progression gate.</p></div><Button onClick={() => void completeLesson()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Complete lesson</Button></div> : <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-amber-900">Review the explanations and try again.</p><p className="text-sm text-amber-800">You scored {score} of {quizCount}. Nothing negative is recorded.</p></div><Button variant="outline" onClick={() => { setAnswers({}); setSubmitted(false); }}><RotateCcw className="mr-2 h-4 w-4" /> Try again</Button></div>}
       </CardContent></Card>
@@ -324,4 +333,97 @@ export default function Stage1Learning() {
 
 function Summary({ icon: Icon, label, value }: { icon: typeof BookOpen; label: string; value: string }) {
   return <Card><CardContent className="flex items-center gap-3 p-4"><span className="rounded-lg bg-sky-50 p-2 text-sky-700"><Icon className="h-5 w-5" /></span><div><p className="text-2xl font-semibold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>;
+}
+
+const defaultRateInputs: ChargeOutRateInputs = {
+  desiredHourlyEarnings: 35,
+  billableHoursPerWeek: 25,
+  weeklyBusinessCosts: 300,
+  unbilledHoursPerWeek: 5,
+  safetyMarginPercent: 15,
+};
+
+const money = (value: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(value);
+
+function ChargeOutRateExercise() {
+  const [inputs, setInputs] = useState(defaultRateInputs);
+  const [cutPercent, setCutPercent] = useState(20);
+  const result = calculateChargeOutRate(inputs);
+  const cut = calculatePriceCutConsequence(inputs, cutPercent);
+  const components = [
+    { label: "Pay for cleaning", value: result.cleaningPayPerBillableHour, colour: "bg-sky-600" },
+    { label: "Unbilled time", value: result.unbilledTimePerBillableHour, colour: "bg-violet-500" },
+    { label: "Business costs", value: result.businessCostsPerBillableHour, colour: "bg-amber-500" },
+    { label: "Safety margin", value: result.safetyMarginPerBillableHour, colour: "bg-emerald-600" },
+  ];
+  const chartTotal = Math.max(1, result.chargeOutRateExGst);
+
+  function update(field: keyof ChargeOutRateInputs, raw: string) {
+    const value = raw === "" ? 0 : Number(raw);
+    setInputs((current) => ({ ...current, [field]: Number.isFinite(value) ? Math.max(0, value) : 0 }));
+  }
+
+  return <Card className="border-violet-300 bg-violet-50/30">
+    <CardHeader>
+      <CardTitle>Build your working charge-out rate</CardTitle>
+      <CardDescription>Change the five figures and watch where the customer rate goes. This is a learning estimate only. It will not update your quotes or save these figures.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-7">
+      <div className="rounded-lg border bg-white p-4 text-sm leading-6">
+        <p className="font-semibold">Worked example</p>
+        <p className="mt-1 text-muted-foreground">Someone wants to earn $35 for each working hour, expects 25 billable hours and 5 unbilled business hours each week, carries $300 of weekly business costs and adds a 15% safety margin.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <RateField label="Desired earnings per working hour" prefix="$" value={inputs.desiredHourlyEarnings} onChange={(value) => update("desiredHourlyEarnings", value)} />
+        <RateField label="Billable cleaning hours each week" value={inputs.billableHoursPerWeek} onChange={(value) => update("billableHoursPerWeek", value)} />
+        <RateField label="Weekly business costs" prefix="$" value={inputs.weeklyBusinessCosts} onChange={(value) => update("weeklyBusinessCosts", value)} />
+        <RateField label="Unbilled business hours each week" value={inputs.unbilledHoursPerWeek} onChange={(value) => update("unbilledHoursPerWeek", value)} />
+        <RateField label="Safety margin added on top" suffix="%" value={inputs.safetyMarginPercent} onChange={(value) => update("safetyMarginPercent", value)} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
+        <div className="rounded-xl border bg-white p-5">
+          <p className="font-semibold">What one billable hour has to carry</p>
+          <div className="mt-4 flex h-8 overflow-hidden rounded-full bg-muted">
+            {components.map((component) => <div key={component.label} className={component.colour} style={{ width: `${Math.max(2, (component.value / chartTotal) * 100)}%` }} title={`${component.label}: ${money(component.value)}`} />)}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {components.map((component) => <div key={component.label} className="flex items-center justify-between gap-3 text-sm"><span className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${component.colour}`} />{component.label}</span><strong>{money(component.value)}</strong></div>)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#082849] p-5 text-white">
+          <p className="text-sm text-sky-100">Working charge-out rate</p>
+          <p className="mt-2 text-3xl font-semibold">{money(result.chargeOutRateExGst)}</p>
+          <p className="text-sm text-sky-100">per billable hour, ex GST</p>
+          <div className="my-4 border-t border-white/20" />
+          <p className="text-sm text-sky-100">Customer rate including GST</p>
+          <p className="mt-1 text-2xl font-semibold">{money(result.customerRateIncludingGst)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div><p className="font-semibold text-rose-950">What happens when I cut the price?</p><p className="mt-1 text-sm text-rose-800">Choose a discount. The work and business costs have not disappeared.</p></div>
+          <div className="flex flex-wrap gap-2">{[10, 20, 30].map((percent) => <Button key={percent} type="button" size="sm" variant={cutPercent === percent ? "default" : "outline"} onClick={() => setCutPercent(percent)}>Cut {percent}%</Button>)}</div>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <Consequence label="Reduced customer rate, incl GST" value={money(cut.reducedCustomerRateIncludingGst)} />
+          <Consequence label="Available pay per working hour" value={money(cut.availableHourlyEarnings)} danger={cut.hourlyEarningsShortfall > 0} />
+          <Consequence label="Below your desired hourly earnings" value={money(cut.hourlyEarningsShortfall)} danger={cut.hourlyEarningsShortfall > 0} />
+        </div>
+        <p className="mt-4 text-sm font-medium text-rose-900">A {cutPercent}% price cut reduces the money available for your work to {money(cut.availableHourlyEarnings)} per hour after the weekly business costs in this example.</p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">This calculator teaches the relationship between time, costs and price. It does not prescribe a market rate and does not transfer a rate into the quotation system.</p>
+    </CardContent>
+  </Card>;
+}
+
+function RateField({ label, value, onChange, prefix, suffix }: { label: string; value: number; onChange: (value: string) => void; prefix?: string; suffix?: string }) {
+  return <Label className="space-y-2 text-xs leading-4"><span>{label}</span><span className="flex items-center rounded-md border bg-white px-3"><span className="text-muted-foreground">{prefix}</span><Input type="number" min="0" step="1" value={value} onChange={(event) => onChange(event.target.value)} className="border-0 px-2 shadow-none focus-visible:ring-0" /><span className="text-muted-foreground">{suffix}</span></span></Label>;
+}
+
+function Consequence({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return <div className="rounded-lg border bg-white p-3"><p className="text-xs text-muted-foreground">{label}</p><p className={`mt-1 text-xl font-semibold ${danger ? "text-rose-700" : ""}`}>{value}</p></div>;
 }
