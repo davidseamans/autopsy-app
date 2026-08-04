@@ -30,12 +30,12 @@ export const showerSurfaceOptions: GuideOption[] = [
 ];
 
 export const showerLocationOptions: GuideOption[] = [
-  { key: "screen", label: "Screen or door" },
-  { key: "wall-floor", label: "Wall or floor" },
-  { key: "edge-seal", label: "Edge or seal" },
-  { key: "track", label: "Track or corner" },
-  { key: "fixture", label: "Tap or fitting" },
-  { key: "unsure", label: "I’m not sure" },
+  { key: "screen", label: "Screen or door", description: "The broad glass or acrylic panel" },
+  { key: "wall-floor", label: "Wall or floor", description: "Tiles, grout or the shower base" },
+  { key: "edge-seal", label: "Edge or seal", description: "Flexible seals and panel edges" },
+  { key: "track", label: "Track or corner", description: "Channels, joins and hidden corners" },
+  { key: "fixture", label: "Tap or fitting", description: "Metal controls, handles and fittings" },
+  { key: "unsure", label: "I’m not sure", description: "Stop and identify the exact area first" },
 ];
 
 export const previousProductOptions: GuideOption[] = [

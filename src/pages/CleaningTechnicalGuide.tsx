@@ -75,6 +75,31 @@ function QuestionStep({ title, hint, options, value, onSelect }: { title: string
   );
 }
 
+function ShowerLocationMap({ value, onSelect }: { value?: string; onSelect: (key: string) => void }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Where is it located?</h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">Tap the closest area on the shower map. The exact location changes what should be checked next.</p>
+      </div>
+      <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-4">
+        <div className="mx-auto grid max-w-sm grid-cols-2 gap-2 rounded-2xl border-4 border-slate-300 bg-white p-3 shadow-inner" aria-label="Shower area map">
+          <MapChoice optionKey="wall-floor" label="Wall tiles" selected={value === "wall-floor"} onSelect={onSelect} className="col-span-2 min-h-20" />
+          <MapChoice optionKey="fixture" label="Tap or fitting" selected={value === "fixture"} onSelect={onSelect} className="min-h-20" />
+          <MapChoice optionKey="screen" label="Screen or door" selected={value === "screen"} onSelect={onSelect} className="row-span-2 min-h-32" />
+          <MapChoice optionKey="edge-seal" label="Edge or seal" selected={value === "edge-seal"} onSelect={onSelect} className="min-h-16" />
+          <MapChoice optionKey="track" label="Track or corner" selected={value === "track"} onSelect={onSelect} className="col-span-2 min-h-16" />
+        </div>
+      </div>
+      <button type="button" onClick={() => onSelect("unsure")} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-left text-sm font-semibold text-slate-700 hover:border-sky-300">I’m not sure where it is</button>
+    </section>
+  );
+}
+
+function MapChoice({ optionKey, label, selected, onSelect, className }: { optionKey: string; label: string; selected: boolean; onSelect: (key: string) => void; className: string }) {
+  return <button type="button" aria-pressed={selected} onClick={() => onSelect(optionKey)} className={`${className} rounded-xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.98] ${selected ? "border-sky-700 bg-sky-100 text-sky-950 ring-2 ring-sky-200" : "border-slate-300 bg-slate-50 text-slate-700 hover:border-sky-400 hover:bg-sky-50"}`}>{label}</button>;
+}
+
 export default function CleaningTechnicalGuide() {
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
@@ -94,6 +119,12 @@ export default function CleaningTechnicalGuide() {
       ? "The condition needs identification"
       : `${observationSummary(answers.observation ?? "")} — provisional inspection result`;
   const progress = Math.round(((step + 1) / steps.length) * 100);
+  const answerTrail = [
+    answers.observation ? { step: 1, label: observationSummary(answers.observation) } : null,
+    answers.surface ? { step: 2, label: showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
+    answers.location ? { step: 3, label: showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
+    answers.previousProduct ? { step: 4, label: previousProductOptions.find((option) => option.key === answers.previousProduct)?.label ?? "Product" } : null,
+  ].filter((item): item is { step: number; label: string } => Boolean(item));
 
   const selectAnswer = (key: keyof Answers, value: string) => {
     setAnswers((current) => ({ ...current, [key]: value }));
@@ -139,6 +170,7 @@ export default function CleaningTechnicalGuide() {
 
         <Card className="overflow-hidden border-slate-200 shadow-sm">
           <CardContent className="p-4 sm:p-6">
+            {answerTrail.length > 0 ? <div className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Your answers">{answerTrail.map((item) => <button type="button" key={item.step} onClick={() => setStep(item.step)} className="min-h-10 shrink-0 rounded-full border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-900">{item.label} · Change</button>)}</div> : null}
             {step === 0 ? (
               <section className="space-y-5">
                 <div>
@@ -162,7 +194,7 @@ export default function CleaningTechnicalGuide() {
 
             {step === 1 ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={showerObservationOptions} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
             {step === 2 ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on glass, grout, metal or acrylic." options={showerSurfaceOptions} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
-            {step === 3 ? <QuestionStep title="Where is it located?" hint="Hidden edges, seals, tracks and fittings can point to a different cleaning condition." options={showerLocationOptions} value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : null}
+            {step === 3 ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : null}
             {step === 4 ? <QuestionStep title="What has already been used?" hint="Do not add another product when an existing chemical is unknown." options={previousProductOptions} value={answers.previousProduct} onSelect={(value) => selectAnswer("previousProduct", value)} /> : null}
 
             {step === 5 ? (
