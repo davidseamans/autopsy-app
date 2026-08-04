@@ -29,6 +29,7 @@ import AutopsyClaim from "@/pages/AutopsyClaim";
 import Stage1Quotes from "@/pages/Stage1Quotes";
 import Stage1Orientation from "@/pages/Stage1Orientation";
 import Stage1Learning from "@/pages/Stage1Learning";
+import CleaningTechnicalGuide from "@/pages/CleaningTechnicalGuide";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
@@ -64,6 +65,11 @@ const Stage1OrientationRoute = () => (
 const Stage1LearningRoute = () => (
   <AuthGate>
     <Stage1Learning />
+  </AuthGate>
+);
+const CleaningTechnicalGuideRoute = () => (
+  <AuthGate>
+    <CleaningTechnicalGuide />
   </AuthGate>
 );
 
@@ -114,6 +120,7 @@ const App = () => (
               <Route path="/stage-1" element={<Stage1Dashboard />} />
               <Route path="/stage-1/orientation" element={<Stage1OrientationRoute />} />
               <Route path="/stage-1/learning" element={<Stage1LearningRoute />} />
+              <Route path="/stage-1/technical-guide" element={<CleaningTechnicalGuideRoute />} />
               <Route path="/stage-1/leads" element={<LegacyStage1Redirect to="/stage-1" />} />
               <Route path="/stage-1/quotes" element={<Stage1QuotesRoute />} />
               <Route path="/stage-1/quotes/new" element={<Stage1QuoteNewRoute />} />
