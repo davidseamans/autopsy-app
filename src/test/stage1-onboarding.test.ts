@@ -137,7 +137,7 @@ describe("First 5 Jobs orientation", () => {
     expect(learning).toContain('title: "Present well—do not compete by being cheap"');
     expect(learning).toContain('key: "charge_out_rate"');
     expect(learning).toContain('title: "Your work rate is not your charge-out rate"');
-    expect(learning).toContain('label="Available now" value="5"');
+    expect(learning).toContain('label="Available now" value="8"');
     expect(migration).toContain("'presentation_before_discounting'");
     expect(migration).toContain("'charge_out_rate'");
     expect(migration).toContain("security invoker");
@@ -168,6 +168,27 @@ describe("First 5 Jobs orientation", () => {
     expect(migration).toContain("'inspect_and_quote'");
     expect(migration).toContain("security invoker");
     expect(migration).toContain("current_user_can_use_stage1_run(p_run_id)");
+    expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
+  });
+
+  it("completes the course with governed follow-up, rejection and job-closeout practice", () => {
+    const learning = read("src/pages/Stage1Learning.tsx");
+    const practices = read("src/components/stage1-learning/FinalLessonPractices.tsx");
+    const migration = read("supabase/migrations/20260804170000_unlock_stage1_learning_lessons_6_8.sql");
+
+    expect(learning).toContain('key: "follow_up"');
+    expect(learning).toContain('key: "rejected_quote"');
+    expect(learning).toContain('key: "complete_professionally"');
+    expect(learning).toContain('label="Available now" value="8"');
+    expect(practices).toContain("Practice: follow up quote Q-12");
+    expect(practices).toContain("Practice: the customer chose another supplier");
+    expect(practices).toContain("Practice: close out the completed job");
+    expect(practices).toContain("An operationally completed job and a financially closed job are not always the same thing");
+    expect(practices).not.toMatch(/supabase|localStorage|sessionStorage|createStage1Quote|updateStage1Quote|recordStage1Payment/);
+    expect(migration).toContain("'follow_up'");
+    expect(migration).toContain("'rejected_quote'");
+    expect(migration).toContain("'complete_professionally'");
+    expect(migration).toContain("security invoker");
     expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
   });
 });
