@@ -137,7 +137,7 @@ describe("First 5 Jobs orientation", () => {
     expect(learning).toContain('title: "Present well—do not compete by being cheap"');
     expect(learning).toContain('key: "charge_out_rate"');
     expect(learning).toContain('title: "Your work rate is not your charge-out rate"');
-    expect(learning).toContain('label="Available now" value="4"');
+    expect(learning).toContain('label="Available now" value="5"');
     expect(migration).toContain("'presentation_before_discounting'");
     expect(migration).toContain("'charge_out_rate'");
     expect(migration).toContain("security invoker");
@@ -154,5 +154,20 @@ describe("First 5 Jobs orientation", () => {
     expect(calculator).toContain("calculateChargeOutRate");
     expect(calculator).toContain("calculatePriceCutConsequence");
     expect(calculator).not.toMatch(/supabase|localStorage|sessionStorage|quote/i);
+  });
+
+  it("adds a quote-preparation workshop without creating or changing a quote", () => {
+    const learning = read("src/pages/Stage1Learning.tsx");
+    const migration = read("supabase/migrations/20260804150000_unlock_stage1_learning_lesson_5.sql");
+
+    expect(learning).toContain('key: "inspect_and_quote"');
+    expect(learning).toContain('interactive: "inspect_and_quote"');
+    expect(learning).toContain("Practice inspection: a small weekly office clean");
+    expect(learning).toContain("Quote-readiness check");
+    expect(learning).toContain("does not save customer information, set a price or transfer anything into the quotation system");
+    expect(migration).toContain("'inspect_and_quote'");
+    expect(migration).toContain("security invoker");
+    expect(migration).toContain("current_user_can_use_stage1_run(p_run_id)");
+    expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
   });
 });
