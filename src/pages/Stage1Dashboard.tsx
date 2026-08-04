@@ -65,6 +65,7 @@ import {
   Loader2,
   Plus,
   Compass,
+  BookOpen,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
@@ -96,7 +97,8 @@ const DEMO_METHOD_BASELINE: typeof METHOD_BASELINE = [
 ];
 const METHOD_OPTIONS = [
   "Phone Outreach",
-  "Referral Request",
+  "Customer Referral",
+  "Personal Referral",
   "Local Flyer",
   "Email Outreach",
   "Walk-in",
@@ -3043,6 +3045,23 @@ function Stage1DashboardInner() {
               <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Jane’s handover or your ABN and business-name pathway at any time." : "Jane will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
             </div>
             <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDemo && orientationLoaded && orientationComplete && activeRunId && (
+        <Card className="border-violet-200 bg-violet-50/40">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <BookOpen className="mt-0.5 h-5 w-5 text-violet-700" />
+              <div>
+                <p className="font-semibold">Getting Your First Five Jobs</p>
+                <p className="mt-1 text-sm text-muted-foreground">Short practical lessons, scripts and quick checks for finding and winning your first work.</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="shrink-0 border-violet-300 bg-white">
+              <Link to={`/stage-1/learning?runId=${encodeURIComponent(activeRunId)}`}>Open learning library</Link>
+            </Button>
           </CardContent>
         </Card>
       )}
