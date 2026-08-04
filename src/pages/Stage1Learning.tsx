@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -46,7 +47,7 @@ type Lesson = {
   available: boolean;
   sections?: { title: string; body: string; script?: string; points?: string[] }[];
   quiz?: QuizQuestion[];
-  interactive?: "charge_out_rate";
+  interactive?: "charge_out_rate" | "inspect_and_quote";
 };
 
 const lessons: Lesson[] = [
@@ -246,7 +247,60 @@ const lessons: Lesson[] = [
       },
     ],
   },
-  { key: "inspect_and_quote", version: 1, number: 5, title: "Inspect and prepare the quote", promise: "Define the work before promising a price.", duration: "Coming next", available: false },
+  {
+    key: "inspect_and_quote",
+    version: 1,
+    number: 5,
+    title: "Inspect and prepare the quote",
+    promise: "Define the work before promising a price.",
+    duration: "9 minutes",
+    available: true,
+    interactive: "inspect_and_quote",
+    sections: [
+      {
+        title: "A quote begins with an inspection",
+        body: "Do not guess from a short phone call or a few photographs when you can inspect the work. Look at the site, ask what result the customer expects and note anything that changes the time, supplies, access or responsibility.",
+        points: ["The areas and tasks to be cleaned", "The condition and expected standard", "Access, parking, keys and permitted working times", "Anything fragile, hazardous, unusually high or difficult to reach", "Who supplies water, power and specialist products"],
+      },
+      {
+        title: "Turn the inspection into a clear scope",
+        body: "Write what is included, how often it will be done and what is excluded. A customer should not have to guess whether windows, ovens, high areas or moving heavy furniture are part of the price.",
+      },
+      {
+        title: "Estimate the tasks before the total",
+        body: "Break the work into a few plain work items and estimate the hours needed. The estimate does not need to be perfect. It needs to be considered, recorded and capable of being compared with the actual job later.",
+      },
+      {
+        title: "Uncertainty must be resolved or written down",
+        body: "If part of the request is unclear, inspect and clarify it before including it. If it is outside the quote, say so plainly. Silence is not an exclusion and an assumption is not an agreement.",
+        script: "I have included the floors, bathrooms, kitchen and bins we inspected. The external and high windows are not included in this quote. I can inspect and price those separately if you would like.",
+      },
+      {
+        title: "The quote is a promise",
+        body: "Before generating the written quote, check the customer details, service address, work items, estimated hours, clean type, exclusions, price, GST, validity period and payment terms. Generate it only when those details describe the job you are prepared to deliver.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "A customer asks for ‘the windows’ but does not explain which windows or how they can be reached. What should you do?",
+        options: [{ key: "a", label: "Include every window and hope the estimate is enough" }, { key: "b", label: "Clarify and inspect the window work, or exclude it clearly from this quote" }, { key: "c", label: "Leave windows unmentioned" }],
+        correct: "b",
+        explanation: "Unclear work should be resolved before pricing or identified plainly as excluded.",
+      },
+      {
+        prompt: "What is the best way to estimate the time for a quote?",
+        options: [{ key: "a", label: "Break the inspected work into plain tasks and estimate each part" }, { key: "b", label: "Use the same hours for every customer" }, { key: "c", label: "Start with the customer’s budget and make the hours fit" }],
+        correct: "a",
+        explanation: "Task-based estimates are easier to explain and compare with the completed job.",
+      },
+      {
+        prompt: "When is a written quote ready to generate?",
+        options: [{ key: "a", label: "As soon as the customer asks for a price" }, { key: "b", label: "After the work, access, hours, exclusions and customer details are clear" }, { key: "c", label: "After buying all possible equipment" }],
+        correct: "b",
+        explanation: "The quote should describe a job you understand and are prepared to deliver.",
+      },
+    ],
+  },
   { key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "Coming next", available: false },
   { key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "Coming next", available: false },
   { key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "Coming next", available: false },
@@ -313,6 +367,7 @@ export default function Stage1Learning() {
       <Card className="border-sky-200 bg-sky-50/40"><CardHeader><CardTitle className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-sky-700" /> Jane’s practical briefing</CardTitle><CardDescription>Read this lesson at your own pace. Audio and field demonstrations can be added without changing the lesson record.</CardDescription></CardHeader></Card>
       {selectedLesson.sections?.map((section) => <Card key={section.title}><CardHeader><CardTitle className="text-xl">{section.title}</CardTitle></CardHeader><CardContent className="space-y-4 text-sm leading-6"><p>{section.body}</p>{section.points ? <ul className="list-disc space-y-2 pl-5">{section.points.map((point) => <li key={point}>{point}</li>)}</ul> : null}{section.script ? <blockquote className="rounded-lg border-l-4 border-sky-600 bg-sky-50 p-4 text-base font-medium leading-7">“{section.script}”</blockquote> : null}</CardContent></Card>)}
       {selectedLesson.interactive === "charge_out_rate" ? <ChargeOutRateExercise /> : null}
+      {selectedLesson.interactive === "inspect_and_quote" ? <InspectionPractice /> : null}
       <Card><CardHeader><CardTitle>Quick check</CardTitle><CardDescription>Choose the best practical answer. Two correct answers out of three completes the lesson.</CardDescription></CardHeader><CardContent className="space-y-6">{selectedLesson.quiz?.map((question, index) => <div key={question.prompt} className="space-y-3"><p className="font-medium">{index + 1}. {question.prompt}</p><RadioGroup value={answers[index] ?? ""} onValueChange={(value) => setAnswers((current) => ({ ...current, [index]: value }))}>{question.options.map((option) => <Label key={option.key} htmlFor={`${selectedLesson.key}-${index}-${option.key}`} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><RadioGroupItem id={`${selectedLesson.key}-${index}-${option.key}`} value={option.key} className="mt-0.5" /><span>{option.label}</span></Label>)}</RadioGroup>{submitted ? <p className={`text-sm ${answers[index] === question.correct ? "text-emerald-700" : "text-amber-700"}`}>{answers[index] === question.correct ? "Correct. " : "Not quite. "}{question.explanation}</p> : null}</div>)}
         {!submitted ? <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== quizCount}>Check my answers</Button> : passed ? <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-emerald-800">You understood the lesson: {score} of {quizCount}</p><p className="text-sm text-emerald-700">This records lesson completion only. It does not change your Autopsy result or progression gate.</p></div><Button onClick={() => void completeLesson()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Complete lesson</Button></div> : <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-amber-900">Review the explanations and try again.</p><p className="text-sm text-amber-800">You scored {score} of {quizCount}. Nothing negative is recorded.</p></div><Button variant="outline" onClick={() => { setAnswers({}); setSubmitted(false); }}><RotateCcw className="mr-2 h-4 w-4" /> Try again</Button></div>}
       </CardContent></Card>
@@ -324,7 +379,7 @@ export default function Stage1Learning() {
     <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and checks for finding, quoting and completing your first work. Take them in order or return when the next situation arises.</p></header>
     {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
     {!error ? <>
-      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="4" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
+      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="5" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
       <div className="space-y-3">{lessons.map((lesson) => { const completion = completed.get(lesson.key); return <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{lesson.title}</h2>{completion ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Complete</span> : null}</div><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}</p></div>{lesson.available ? <Button variant={completion ? "outline" : "default"} onClick={() => openLesson(lesson)}>{completion ? "Review" : "Start lesson"}<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>; })}</div>
       <p className="flex items-start gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground"><Circle className="mt-0.5 h-4 w-4 shrink-0" /> This library supports practice. Course completion is not Autopsy scoring and does not automatically admit anyone to Core.</p>
     </> : null}
@@ -426,4 +481,83 @@ function RateField({ label, value, onChange, prefix, suffix }: { label: string; 
 
 function Consequence({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
   return <div className="rounded-lg border bg-white p-3"><p className="text-xs text-muted-foreground">{label}</p><p className={`mt-1 text-xl font-semibold ${danger ? "text-rose-700" : ""}`}>{value}</p></div>;
+}
+
+const practiceTasks = ["Floors", "Bathrooms", "Kitchen", "Bins", "Internal glass"];
+
+function InspectionPractice() {
+  const [tasks, setTasks] = useState<string[]>(["Floors", "Bathrooms", "Kitchen", "Bins"]);
+  const [hours, setHours] = useState(4);
+  const [cleanType, setCleanType] = useState<"" | "Routine" | "Initial or heavy" | "Specialist">("");
+  const [windows, setWindows] = useState<"" | "Clarify and inspect" | "Exclude in writing" | "Include without checking">("");
+  const [access, setAccess] = useState<"" | "Confirmed" | "Assumed">("");
+
+  const scopeReady = tasks.length > 0;
+  const hoursReady = hours > 0;
+  const cleanTypeReady = cleanType !== "";
+  const windowsReady = windows === "Clarify and inspect" || windows === "Exclude in writing";
+  const accessReady = access === "Confirmed";
+  const readyCount = [scopeReady, hoursReady, cleanTypeReady, windowsReady, accessReady].filter(Boolean).length;
+
+  function toggleTask(task: string) {
+    setTasks((current) => current.includes(task) ? current.filter((item) => item !== task) : [...current, task]);
+  }
+
+  return <Card className="border-teal-300 bg-teal-50/30">
+    <CardHeader>
+      <CardTitle>Practice inspection: a small weekly office clean</CardTitle>
+      <CardDescription>The customer wants the floors, bathrooms, kitchen and bins cleaned. They also say “the windows could use attention” without explaining which windows. Build a quote-ready inspection brief. This practice is not saved and does not create a quote.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-7">
+      <PracticeStep number="1" title="Confirm the work items" description="Select only the tasks you are prepared to include in the regular scope.">
+        <div className="flex flex-wrap gap-2">{practiceTasks.map((task) => <Button key={task} type="button" size="sm" variant={tasks.includes(task) ? "default" : "outline"} onClick={() => toggleTask(task)}>{tasks.includes(task) ? "Included: " : "Add: "}{task}</Button>)}</div>
+      </PracticeStep>
+
+      <PracticeStep number="2" title="Estimate the total cleaning hours" description="Build the estimate from the inspected tasks. This example starts at four hours.">
+        <div className="flex max-w-xs items-center gap-3"><Input aria-label="Estimated cleaning hours" type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(Math.max(0, Number(event.target.value) || 0))} /><span className="text-sm text-muted-foreground">hours</span></div>
+      </PracticeStep>
+
+      <PracticeStep number="3" title="Choose the clean type" description="The clean type allows for the expected level of supplies. It does not replace the inspection.">
+        <ChoiceRow options={["Routine", "Initial or heavy", "Specialist"]} selected={cleanType} onSelect={(value) => setCleanType(value as typeof cleanType)} />
+      </PracticeStep>
+
+      <PracticeStep number="4" title="Resolve the vague window request" description="Choose how you would prevent an unclear request becoming an unpaid promise.">
+        <ChoiceRow options={["Clarify and inspect", "Exclude in writing", "Include without checking"]} selected={windows} onSelect={(value) => setWindows(value as typeof windows)} />
+        {windows === "Include without checking" ? <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">That creates an uncontrolled promise. Inspect and clarify the work, or state the exclusion plainly.</p> : null}
+      </PracticeStep>
+
+      <PracticeStep number="5" title="Confirm access" description="Do not assume keys, parking, permitted times or someone being present.">
+        <ChoiceRow options={["Confirmed", "Assumed"]} selected={access} onSelect={(value) => setAccess(value as typeof access)} />
+        {access === "Assumed" ? <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">An access assumption can waste the booked time. Confirm it before generating the quote.</p> : null}
+      </PracticeStep>
+
+      <div className={`rounded-xl border p-5 ${readyCount === 5 ? "border-emerald-300 bg-emerald-50" : "bg-white"}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div><p className="font-semibold">Quote-readiness check</p><p className="mt-1 text-sm text-muted-foreground">{readyCount} of 5 inspection decisions are ready.</p></div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${readyCount === 5 ? "bg-emerald-700 text-white" : "bg-muted text-muted-foreground"}`}>{readyCount === 5 ? "Ready to prepare" : "Still incomplete"}</span>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <ReadinessLine ready={scopeReady} label={tasks.length ? `Scope: ${tasks.join(", ")}` : "Work items not selected"} />
+          <ReadinessLine ready={hoursReady} label={hoursReady ? `Estimated time: ${hours} hours` : "Estimated time missing"} />
+          <ReadinessLine ready={cleanTypeReady} label={cleanTypeReady ? `Clean type: ${cleanType}` : "Clean type missing"} />
+          <ReadinessLine ready={windowsReady} label={windowsReady ? `Windows: ${windows}` : "Window request unresolved"} />
+          <ReadinessLine ready={accessReady} label={accessReady ? "Access confirmed" : "Access not confirmed"} />
+        </div>
+        {readyCount === 5 ? <p className="mt-4 text-sm font-medium text-emerald-900">The inspection brief is coherent. In First 5 Jobs, you would now enter the customer details, these work items and hours, the clean type, exclusions and your charge-out rate—then review the total before generating the written quote.</p> : null}
+      </div>
+      <p className="text-xs text-muted-foreground">This exercise teaches quote preparation only. It does not save customer information, set a price or transfer anything into the quotation system.</p>
+    </CardContent>
+  </Card>;
+}
+
+function PracticeStep({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
+  return <section className="rounded-xl border bg-white p-5"><div className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#082849] text-sm font-semibold text-white">{number}</span><div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></div></div><div className="mt-4">{children}</div></section>;
+}
+
+function ChoiceRow({ options, selected, onSelect }: { options: string[]; selected: string; onSelect: (value: string) => void }) {
+  return <div className="flex flex-wrap gap-2">{options.map((option) => <Button key={option} type="button" size="sm" variant={selected === option ? "default" : "outline"} onClick={() => onSelect(option)}>{option}</Button>)}</div>;
+}
+
+function ReadinessLine({ ready, label }: { ready: boolean; label: string }) {
+  return <div className="flex items-start gap-2 text-sm"><CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${ready ? "text-emerald-700" : "text-muted-foreground/40"}`} /><span className={ready ? "" : "text-muted-foreground"}>{label}</span></div>;
 }
