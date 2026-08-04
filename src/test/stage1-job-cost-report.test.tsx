@@ -64,8 +64,7 @@ describe("First 5 Jobs sample report", () => {
     const onJourneyBack = vi.fn();
     render(
       <Stage1WelcomeGuide
-        initialStep={4}
-        journeyBackStep={4}
+        mode="jobs"
         onClose={vi.fn()}
         onStepChange={vi.fn()}
         onJourneyBack={onJourneyBack}
@@ -74,5 +73,18 @@ describe("First 5 Jobs sample report", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(onJourneyBack).toHaveBeenCalledOnce();
+  });
+
+  it("keeps one global step count when the route changes", () => {
+    render(
+      <Stage1WelcomeGuide
+        mode="quotes"
+        onClose={vi.fn()}
+        onStepChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Step 4 of 24/)).toBeInTheDocument();
+    expect(screen.getByText("Quote genuine opportunities")).toBeInTheDocument();
   });
 });

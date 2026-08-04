@@ -66,6 +66,9 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("Review and send the final invoice");
     expect(guide).toContain("Resume 5 Jobs Tour");
     expect(guide).toContain("navigationCheckpoint");
+    expect(guide).toContain("TOTAL_TOUR_STEPS");
+    expect(guide).toContain('quotes: { slides: [dashboardSlides[3], ...quotesSlides], offset: 3 }');
+    expect(guide).toContain("autoPlay");
     expect(guide).toContain("> Back</Button>");
     expect(guide).toContain('speaking ? "Pause"');
     expect(guide).toContain('"Forward"');

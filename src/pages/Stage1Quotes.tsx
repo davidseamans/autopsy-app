@@ -26,6 +26,7 @@ export default function Stage1Quotes() {
   const [filter, setFilter] = useState<QuoteFilter>("outstanding");
   const [workingQuoteId, setWorkingQuoteId] = useState<string | null>(null);
   const tourActive = searchParams.get("tour") === "quotes";
+  const tourAutoPlay = searchParams.get("autoplay") === "1";
   const tourStepParam = searchParams.get("step");
   const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
   const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
@@ -33,6 +34,8 @@ export default function Stage1Quotes() {
   const closeTour = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete("tour");
+    next.delete("step");
+    next.delete("autoplay");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -61,10 +64,10 @@ export default function Stage1Quotes() {
 
   useEffect(() => {
     if (!tourActive) return;
-    if (tourStep === 1) setFilter("outstanding");
-    if (tourStep === 2) setFilter("rejected");
-    if (tourStep === 3) setFilter("accepted");
-    if (tourStep >= 4) setFilter("outstanding");
+    if (tourStep === 2) setFilter("outstanding");
+    if (tourStep === 3) setFilter("rejected");
+    if (tourStep === 4) setFilter("accepted");
+    if (tourStep >= 5) setFilter("outstanding");
   }, [tourActive, tourStep]);
 
   useEffect(() => { void refresh(); }, [refresh]);
@@ -108,7 +111,7 @@ export default function Stage1Quotes() {
   return (
     <div className="container max-w-5xl py-10 space-y-6">
       <Button asChild variant="ghost" size="sm"><Link to={first5JobsPath}><ArrowLeft className="mr-1 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
-      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && tourStep === 4 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && (tourStep === 0 || tourStep === 5) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Quotes {isDemo ? "· Sample workspace" : ""}</p>
           <h1 className="text-3xl font-semibold tracking-tight">Quotes</h1>
@@ -120,10 +123,10 @@ export default function Stage1Quotes() {
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
-      <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 0 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
-        <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 1} onClick={() => setFilter("outstanding")} />
-        <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("rejected")} />
-        <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("accepted")} />
+      <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+        <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("outstanding")} />
+        <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
+        <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 4} onClick={() => setFilter("accepted")} />
       </div>
 
       <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
@@ -132,7 +135,7 @@ export default function Stage1Quotes() {
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
-      {tourActive ? <Stage1WelcomeGuide mode="quotes" initialStep={initialTourStep} onClose={closeTour} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1?demo=1&tour=1&step=3")} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder" : quotePath); }} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="quotes" initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1?demo=1&tour=1&step=2&autoplay=1")} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder&autoplay=1" : `${quotePath}${quotePath.includes("?") ? "&" : "?"}tour=builder&autoplay=1`); }} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "quotes"); setSearchParams(next); }} /> : null}
     </div>
   );

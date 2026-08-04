@@ -40,9 +40,21 @@ const documentSlides = [
   { title: "From quotation to job", narration: "In the working system, Customer accepted creates the job and carries the quote into the Job Cost Summary. The demonstration now continues into sample jobs, costs and the final invoice process." },
 ] as const;
 
-export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", initialStep = 0, onJourneyAction, onJourneyBack, journeyBackStep = 0 }: { onClose: () => void; onStepChange: (step: number) => void; mode?: "dashboard" | "quotes" | "builder" | "document"; initialStep?: number; onJourneyAction?: (step: number) => void; onJourneyBack?: () => void; journeyBackStep?: number }) {
+type TourMode = "dashboard" | "quotes" | "builder" | "document" | "jobs";
+type TourSlide = { title: string; narration: string };
+
+const TOTAL_TOUR_STEPS = dashboardSlides.length + quotesSlides.length + builderSlides.length + documentSlides.length;
+const tourSegments: Record<TourMode, { slides: readonly TourSlide[]; offset: number }> = {
+  dashboard: { slides: dashboardSlides.slice(0, 3), offset: 0 },
+  quotes: { slides: [dashboardSlides[3], ...quotesSlides], offset: 3 },
+  builder: { slides: builderSlides, offset: 9 },
+  document: { slides: documentSlides, offset: 14 },
+  jobs: { slides: dashboardSlides.slice(4), offset: 17 },
+};
+
+export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", initialStep = 0, autoPlay = false, onJourneyAction, onJourneyBack }: { onClose: () => void; onStepChange: (step: number) => void; mode?: TourMode; initialStep?: number; autoPlay?: boolean; onJourneyAction?: (step: number) => void; onJourneyBack?: () => void }) {
   const { session } = useAuth();
-  const slides = mode === "quotes" ? quotesSlides : mode === "builder" ? builderSlides : mode === "document" ? documentSlides : dashboardSlides;
+  const { slides, offset } = tourSegments[mode];
   const [index, setIndex] = useState(Math.min(initialStep, slides.length - 1));
   const [speaking, setSpeaking] = useState(false);
   const [loadingVoice, setLoadingVoice] = useState(false);
@@ -51,6 +63,7 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
   const urlRef = useRef<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const playbackIdRef = useRef(0);
+  const speakRef = useRef<(step: number) => void>(() => undefined);
   const panelRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(() => {
@@ -70,9 +83,14 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
   }
 
   useEffect(() => {
-    onStepChange(Math.min(initialStep, slides.length - 1));
-    return () => stopVoice();
-  }, [initialStep, onStepChange, slides.length]);
+    const startingStep = Math.min(initialStep, slides.length - 1);
+    onStepChange(startingStep);
+    const timer = autoPlay ? window.setTimeout(() => speakRef.current(startingStep), 350) : null;
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      stopVoice();
+    };
+  }, [autoPlay, initialStep, onStepChange, slides.length]);
 
   function startDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (window.innerWidth < 768 || !panelRef.current) return;
@@ -117,8 +135,7 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
       audio.onended = () => {
         if (playbackId !== playbackIdRef.current) return;
         stopVoice();
-        const navigationCheckpoint = (mode === "dashboard" && nextIndex === 3)
-          || ((mode === "quotes" || mode === "builder" || mode === "document") && nextIndex === slides.length - 1);
+        const navigationCheckpoint = mode !== "jobs" && nextIndex === slides.length - 1;
         if (navigationCheckpoint && onJourneyAction) {
           onJourneyAction(nextIndex);
           return;
@@ -135,11 +152,11 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
       setVoiceError(true);
     }
   }
+  speakRef.current = (step) => void speak(step);
 
   function close() { stopVoice(); onClose(); }
   const slide = slides[index];
-  const journeyCheckpoint = (mode === "dashboard" && index === 3)
-    || ((mode === "quotes" || mode === "builder" || mode === "document") && index === slides.length - 1);
+  const journeyCheckpoint = mode !== "jobs" && index === slides.length - 1;
   const forward = () => {
     if (journeyCheckpoint && onJourneyAction) { stopVoice(); onJourneyAction(index); return; }
     if (index < slides.length - 1) { void speak(index + 1); return; }
@@ -150,10 +167,10 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
   return <aside ref={panelRef} style={positioned} className={`fixed z-[200] max-h-[calc(100vh-1rem)] w-[calc(100%-1.5rem)] max-w-2xl overflow-auto rounded-xl border border-sky-300 bg-white shadow-2xl ${position ? "" : "inset-x-3 bottom-3 mx-auto md:bottom-6"}`}>
     <div className="bg-[#061b34] px-5 py-4 text-white">
       <div onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} className="mb-3 hidden min-h-10 cursor-grab touch-none select-none items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 text-xs font-semibold text-slate-100 active:cursor-grabbing md:flex"><GripHorizontal className="h-5 w-5" /> Grab here to move the tour</div>
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#52d8c2]">Jane · live First 5 Jobs tour</p><h2 className="mt-1 text-xl font-semibold">{slide.title}</h2><p className="mt-1 text-xs text-slate-300">Step {index + 1} of {slides.length} · highlighted on your live screen</p></div><Button type="button" size="icon" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={close} aria-label="Close live tour"><X className="h-4 w-4" /></Button></div>
-      <Progress value={((index + 1) / slides.length) * 100} className="mt-3 h-1.5" />
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#52d8c2]">Jane · live First 5 Jobs tour</p><h2 className="mt-1 text-xl font-semibold">{slide.title}</h2><p className="mt-1 text-xs text-slate-300">Step {offset + index + 1} of {TOTAL_TOUR_STEPS} · highlighted on your live screen</p></div><Button type="button" size="icon" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={close} aria-label="Close live tour"><X className="h-4 w-4" /></Button></div>
+      <Progress value={((offset + index + 1) / TOTAL_TOUR_STEPS) * 100} className="mt-3 h-1.5" />
     </div>
-    <div className="space-y-3 px-5 py-4"><p className="text-sm leading-6">{slide.narration}</p>{voiceError ? <p className="text-xs text-amber-700">Jane’s words are on screen. Continue reading or try the voice again.</p> : null}<div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" disabled={index === 0 && !onJourneyBack} onClick={() => { if (index === journeyBackStep && onJourneyBack) { stopVoice(); onJourneyBack(); return; } if (index > 0) void speak(index - 1); }}><ArrowLeft className="mr-1 h-4 w-4" /> Back</Button><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice} className="gap-2">{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing Jane…" : speaking ? "Pause" : index === 0 ? "Play" : "Resume"}</Button><Button type="button" size="sm" onClick={forward}>{index === slides.length - 1 && !journeyCheckpoint ? "Finish" : "Forward"}<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div></div>
+    <div className="space-y-3 px-5 py-4"><p className="text-sm leading-6">{slide.narration}</p>{voiceError ? <p className="text-xs text-amber-700">Jane’s words are on screen. Continue reading or try the voice again.</p> : null}<div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" disabled={index === 0 && !onJourneyBack} onClick={() => { if (index === 0 && onJourneyBack) { stopVoice(); onJourneyBack(); return; } if (index > 0) void speak(index - 1); }}><ArrowLeft className="mr-1 h-4 w-4" /> Back</Button><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => speaking ? stopVoice() : void speak(index)} disabled={loadingVoice} className="gap-2">{loadingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : speaking ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}{loadingVoice ? "Preparing Jane…" : speaking ? "Pause" : offset + index === 0 ? "Play" : "Resume"}</Button><Button type="button" size="sm" onClick={forward}>{index === slides.length - 1 && !journeyCheckpoint ? "Finish" : "Forward"}<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div></div>
   </aside>;
 }
 

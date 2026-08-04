@@ -34,6 +34,7 @@ export default function Stage1QuoteNew() {
   const runId = searchParams.get("runId") ?? "";
   const isDemo = searchParams.get("demo") === "1";
   const tourActive = searchParams.get("tour") === "builder";
+  const tourAutoPlay = searchParams.get("autoplay") === "1";
   const tourStepParam = searchParams.get("step");
   const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
   const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
@@ -241,7 +242,7 @@ export default function Stage1QuoteNew() {
       </Card>
 
       {!isDemo ? <div className="flex justify-end"><Button onClick={() => void generateAndOpenQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Generate and Open Quote</Button></div> : null}
-      {tourActive ? <Stage1WelcomeGuide mode="builder" initialStep={initialTourStep} onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1/quotes?demo=1&tour=quotes&step=4")} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document")} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="builder" initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); next.delete("step"); next.delete("autoplay"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1/quotes?demo=1&tour=quotes&step=5&autoplay=1")} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document&autoplay=1")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "builder"); setSearchParams(next); }} /> : null}
     </div>
   );

@@ -1606,15 +1606,17 @@ function Stage1DashboardInner() {
   const isDemo = searchParams.get("demo") === "1";
   const tourMode = searchParams.get("tour");
   const tourActive = tourMode === "1" || tourMode === "jobs";
+  const tourAutoPlay = searchParams.get("autoplay") === "1";
   const tourStepParam = searchParams.get("step");
   const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
-  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0
-    ? requestedTourStep
-    : tourMode === "jobs" ? 4 : 0;
-  const [tourStep, setTourStep] = useState(initialTourStep);
+  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
+  const [tourStep, setTourStep] = useState(tourMode === "jobs" ? initialTourStep + 4 : initialTourStep);
+  const handleTourStepChange = useCallback((step: number) => setTourStep(tourMode === "jobs" ? step + 4 : step), [tourMode]);
   const closeTour = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete("tour");
+    next.delete("step");
+    next.delete("autoplay");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
   const { user, loading: authLoading } = useAuth();
@@ -4675,7 +4677,7 @@ function Stage1DashboardInner() {
         tourInteractive={isDemo || tourActive}
         readOnly={isDemo}
       />
-      {tourActive ? <Stage1WelcomeGuide initialStep={initialTourStep} journeyBackStep={tourMode === "jobs" ? 4 : 0} onClose={closeTour} onStepChange={setTourStep} onJourneyBack={tourMode === "jobs" ? () => navigate("/stage-1/quote/demo-q-1004?demo=1&tour=document&step=2") : undefined} onJourneyAction={() => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes` : "/stage-1/quotes?tour=quotes")} /> : null}
+      {tourActive ? <Stage1WelcomeGuide mode={tourMode === "jobs" ? "jobs" : "dashboard"} initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={handleTourStepChange} onJourneyBack={tourMode === "jobs" ? () => navigate("/stage-1/quote/demo-q-1004?demo=1&tour=document&step=2&autoplay=1") : undefined} onJourneyAction={tourMode === "jobs" ? undefined : () => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes&autoplay=1" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes&autoplay=1` : "/stage-1/quotes?tour=quotes&autoplay=1")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "1"); setSearchParams(next); }} /> : null}
     </div>
   );
