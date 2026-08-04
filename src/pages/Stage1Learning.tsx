@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,12 +17,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import {
   fetchStage1LearningProgress,
   saveStage1LessonCompletion,
   type Stage1LessonProgress,
 } from "@/lib/stage1Learning";
+import {
+  calculateChargeOutRate,
+  calculatePriceCutConsequence,
+  type ChargeOutRateInputs,
+} from "@/lib/stage1ChargeOutRate";
+import { FollowUpPractice, JobCloseoutPractice, RejectedQuotePractice } from "@/components/stage1-learning/FinalLessonPractices";
 
 type QuizQuestion = {
   prompt: string;
@@ -40,6 +48,7 @@ type Lesson = {
   available: boolean;
   sections?: { title: string; body: string; script?: string; points?: string[] }[];
   quiz?: QuizQuestion[];
+  interactive?: "charge_out_rate" | "inspect_and_quote" | "follow_up" | "rejected_quote" | "complete_professionally";
 };
 
 const lessons: Lesson[] = [
@@ -137,12 +146,205 @@ const lessons: Lesson[] = [
       },
     ],
   },
-  { key: "presentation_before_discounting", version: 1, number: 3, title: "Present well—do not compete by being cheap", promise: "Protect the price by improving trust and presentation.", duration: "Coming next", available: false },
-  { key: "charge_out_rate", version: 1, number: 4, title: "Your work rate is not your charge-out rate", promise: "Build a rate that pays for the work and the business around it.", duration: "Coming next", available: false },
-  { key: "inspect_and_quote", version: 1, number: 5, title: "Inspect and prepare the quote", promise: "Define the work before promising a price.", duration: "Coming next", available: false },
-  { key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "Coming next", available: false },
-  { key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "Coming next", available: false },
-  { key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "Coming next", available: false },
+  {
+    key: "presentation_before_discounting",
+    version: 1,
+    number: 3,
+    title: "Present well—do not compete by being cheap",
+    promise: "Protect the price by improving trust and presentation.",
+    duration: "7 minutes",
+    available: true,
+    sections: [
+      {
+        title: "The customer is buying confidence",
+        body: "A customer is not only buying hours of cleaning. They are deciding whether you will arrive, understand the work, respect the property and finish what was agreed. Clear communication and a professional quote make the price easier to trust.",
+        points: ["Arrive when you said you would", "Ask sensible questions", "Take useful notes", "Explain what is included", "Send a clear written quote"],
+      },
+      {
+        title: "Do not make cheap your main offer",
+        body: "A low price can win the wrong job and leave too little money to complete it properly. The price you establish now may follow you for some time. Improve the presentation before cutting the price.",
+      },
+      {
+        title: "If the customer questions the price",
+        body: "Stay calm and explain the work behind the quote. If the customer needs a lower total, change the scope clearly instead of quietly doing the same work for less.",
+        script: "I understand you are watching the cost. This price covers the work we discussed and the time needed to do it properly. If you would like a lower total, we can look at which parts of the work should be removed or done less often.",
+      },
+      {
+        title: "Presentation is practical",
+        body: "Professional does not mean expensive clothes or a complicated sales performance. It means being prepared, dependable and clear enough that the customer knows what will happen next.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "A customer says the quote is higher than expected. What is the best first response?",
+        options: [{ key: "a", label: "Immediately cut the price" }, { key: "b", label: "Explain the scope and discuss changing the work if the total must fall" }, { key: "c", label: "Tell the customer cheaper cleaners are unreliable" }],
+        correct: "b",
+        explanation: "Protect the price by explaining the work. If the total changes, the scope should change clearly as well.",
+      },
+      {
+        prompt: "Which action does most to support a professional price?",
+        options: [{ key: "a", label: "A clear inspection and written quote" }, { key: "b", label: "Promising to beat every competitor" }, { key: "c", label: "Buying equipment before any job is booked" }],
+        correct: "a",
+        explanation: "Preparation, clarity and follow-through give the customer a reason to trust the quote.",
+      },
+      {
+        prompt: "What is the main risk of making cheap your selling point?",
+        options: [{ key: "a", label: "The customer may ask too many questions" }, { key: "b", label: "The quote may look too professional" }, { key: "c", label: "The job may not leave enough money to deliver properly and continue" }],
+        correct: "c",
+        explanation: "A job that cannot support proper delivery is not a useful foundation for the business.",
+      },
+    ],
+  },
+  {
+    key: "charge_out_rate",
+    version: 1,
+    number: 4,
+    title: "Your work rate is not your charge-out rate",
+    promise: "Build a rate that pays for the work and the business around it.",
+    duration: "8 minutes",
+    available: true,
+    interactive: "charge_out_rate",
+    sections: [
+      {
+        title: "Your wage is only one part of the price",
+        body: "The amount you want to earn for an hour of cleaning is your work rate. The customer charge must also help pay for the business around that hour. That customer charge is your charge-out rate.",
+      },
+      {
+        title: "What the charge-out rate carries",
+        body: "Not every working hour can be billed to a customer. Travel, quoting, messages, buying supplies, bookkeeping and gaps between jobs still consume time or money.",
+        points: ["Your pay for doing the work", "Unbilled business time", "Travel and vehicle costs", "Supplies and equipment", "Insurance, administration and tax obligations", "A margin that lets the business continue"],
+      },
+      {
+        title: "Use the quote to test the total",
+        body: "Estimate the hours honestly, apply the charge-out rate, and then look at the whole quote. Ask whether the price covers the work, the supplies and the responsibility you are accepting. First 5 Jobs helps you compare the estimate with what actually happened.",
+      },
+      {
+        title: "A simple example",
+        body: "If you want to earn $35 for each hour you clean, charging the customer $35 leaves nothing for the business around the job. The correct charge-out rate must be higher. The exact rate depends on your costs and the work; the principle does not change.",
+      },
+      {
+        title: "Do not hide a weak rate with more hours",
+        body: "Working longer does not repair a price that was too low. Start with a considered rate, record the result, and improve it from the first five jobs instead of guessing forever.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "What is the difference between a work rate and a charge-out rate?",
+        options: [{ key: "a", label: "There is no difference" }, { key: "b", label: "The work rate is what you want to earn; the charge-out rate must also carry business costs and margin" }, { key: "c", label: "The charge-out rate is always the competitor’s price" }],
+        correct: "b",
+        explanation: "The customer rate has to support both the person doing the work and the business that makes the work possible.",
+      },
+      {
+        prompt: "Which time is usually not billed directly to one cleaning customer?",
+        options: [{ key: "a", label: "Cleaning the customer’s floors" }, { key: "b", label: "Cleaning the customer’s windows when quoted" }, { key: "c", label: "Preparing quotes and organising supplies" }],
+        correct: "c",
+        explanation: "Unbilled business time still has to be supported by the work the business sells.",
+      },
+      {
+        prompt: "You want to earn $35 per cleaning hour. Why is charging exactly $35 risky?",
+        options: [{ key: "a", label: "It leaves nothing for the costs and unbilled work around the job" }, { key: "b", label: "Customers only accept round numbers" }, { key: "c", label: "Every cleaning job must use the same rate" }],
+        correct: "a",
+        explanation: "A sustainable quote must carry more than the operator’s desired hourly pay.",
+      },
+    ],
+  },
+  {
+    key: "inspect_and_quote",
+    version: 1,
+    number: 5,
+    title: "Inspect and prepare the quote",
+    promise: "Define the work before promising a price.",
+    duration: "9 minutes",
+    available: true,
+    interactive: "inspect_and_quote",
+    sections: [
+      {
+        title: "A quote begins with an inspection",
+        body: "Do not guess from a short phone call or a few photographs when you can inspect the work. Look at the site, ask what result the customer expects and note anything that changes the time, supplies, access or responsibility.",
+        points: ["The areas and tasks to be cleaned", "The condition and expected standard", "Access, parking, keys and permitted working times", "Anything fragile, hazardous, unusually high or difficult to reach", "Who supplies water, power and specialist products"],
+      },
+      {
+        title: "Turn the inspection into a clear scope",
+        body: "Write what is included, how often it will be done and what is excluded. A customer should not have to guess whether windows, ovens, high areas or moving heavy furniture are part of the price.",
+      },
+      {
+        title: "Estimate the tasks before the total",
+        body: "Break the work into a few plain work items and estimate the hours needed. The estimate does not need to be perfect. It needs to be considered, recorded and capable of being compared with the actual job later.",
+      },
+      {
+        title: "Uncertainty must be resolved or written down",
+        body: "If part of the request is unclear, inspect and clarify it before including it. If it is outside the quote, say so plainly. Silence is not an exclusion and an assumption is not an agreement.",
+        script: "I have included the floors, bathrooms, kitchen and bins we inspected. The external and high windows are not included in this quote. I can inspect and price those separately if you would like.",
+      },
+      {
+        title: "The quote is a promise",
+        body: "Before generating the written quote, check the customer details, service address, work items, estimated hours, clean type, exclusions, price, GST, validity period and payment terms. Generate it only when those details describe the job you are prepared to deliver.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "A customer asks for ‘the windows’ but does not explain which windows or how they can be reached. What should you do?",
+        options: [{ key: "a", label: "Include every window and hope the estimate is enough" }, { key: "b", label: "Clarify and inspect the window work, or exclude it clearly from this quote" }, { key: "c", label: "Leave windows unmentioned" }],
+        correct: "b",
+        explanation: "Unclear work should be resolved before pricing or identified plainly as excluded.",
+      },
+      {
+        prompt: "What is the best way to estimate the time for a quote?",
+        options: [{ key: "a", label: "Break the inspected work into plain tasks and estimate each part" }, { key: "b", label: "Use the same hours for every customer" }, { key: "c", label: "Start with the customer’s budget and make the hours fit" }],
+        correct: "a",
+        explanation: "Task-based estimates are easier to explain and compare with the completed job.",
+      },
+      {
+        prompt: "When is a written quote ready to generate?",
+        options: [{ key: "a", label: "As soon as the customer asks for a price" }, { key: "b", label: "After the work, access, hours, exclusions and customer details are clear" }, { key: "c", label: "After buying all possible equipment" }],
+        correct: "b",
+        explanation: "The quote should describe a job you understand and are prepared to deliver.",
+      },
+    ],
+  },
+  {
+    key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "7 minutes", available: true, interactive: "follow_up",
+    sections: [
+      { title: "Following up is part of quoting", body: "A clear written quote does not remove the need to follow up. Confirm that it arrived, ask whether anything needs explaining and then ask directly whether the customer would like to proceed." },
+      { title: "Use a short, calm structure", body: "Identify the quote, confirm receipt, answer questions and ask for the decision. Do not repeat the entire sales presentation or apologise for contacting them.", script: "Hi, it’s Jane from Jane’s Cleaning. I’m following up on the quote for your office clean. Did it reach you, and is there anything you would like me to explain? If everything is clear, would you like me to book the work?" },
+      { title: "A delay needs a next step", body: "If the customer needs more time, agree on one reasonable follow-up date. Do not keep calling without permission and do not leave the quote outstanding forever." },
+      { title: "Do not negotiate against yourself", body: "Silence or hesitation is not a request for a discount. Ask what is preventing the decision. If the scope or price must change, make the change openly and issue a clear revised quote." },
+    ],
+    quiz: [
+      { prompt: "What is the strongest way to finish a quote follow-up?", options: [{ key: "a", label: "Would you like me to book the work?" }, { key: "b", label: "I can probably make it cheaper if you want" }, { key: "c", label: "Call me sometime" }], correct: "a", explanation: "A direct, respectful decision question gives the customer an easy next step." },
+      { prompt: "The customer says they need a few days. What should you do?", options: [{ key: "a", label: "Call every day" }, { key: "b", label: "Agree on one reasonable follow-up date" }, { key: "c", label: "Immediately reduce the price" }], correct: "b", explanation: "A mutually understood next step is persistent without becoming intrusive." },
+      { prompt: "The customer hesitates but has not mentioned price. What should you do first?", options: [{ key: "a", label: "Offer 20% off" }, { key: "b", label: "Withdraw the quote" }, { key: "c", label: "Ask whether anything is unclear or preventing the decision" }], correct: "c", explanation: "Find the actual concern before changing the scope or price." },
+    ],
+  },
+  {
+    key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "7 minutes", available: true, interactive: "rejected_quote",
+    sections: [
+      { title: "A rejected quote is an honest outcome", body: "The customer is allowed to say no. Your job is to close the conversation professionally, learn what is useful and leave the relationship intact." },
+      { title: "Ask once for practical feedback", body: "Thank the customer and ask one short question. They may mention price, scope, timing, confidence, another supplier or no reason at all. Accept the answer without cross-examination.", script: "Thanks for letting me know. So I can improve future quotes, was there one main reason you decided not to proceed? No problem if you would rather not say." },
+      { title: "Do not rescue every rejection with a discount", body: "A lower price only makes sense if the scope or commercial decision genuinely changes. Chasing every rejection downwards trains the business to win work it cannot afford to deliver." },
+      { title: "Record the result and move on", body: "Mark the quote rejected and record the useful reason in plain language. Do not keep it outstanding to make the numbers look better, and do not turn feedback into an argument." },
+    ],
+    quiz: [
+      { prompt: "What is the best first response when a customer rejects the quote?", options: [{ key: "a", label: "Thank them and accept the decision" }, { key: "b", label: "Explain why they are wrong" }, { key: "c", label: "Cut the price immediately" }], correct: "a", explanation: "Professional acceptance protects the relationship and makes useful feedback more likely." },
+      { prompt: "How should you ask for feedback?", options: [{ key: "a", label: "Demand a detailed justification" }, { key: "b", label: "Ask one short optional question about the main reason" }, { key: "c", label: "Send a long survey" }], correct: "b", explanation: "One respectful question is enough. The customer is not obliged to teach the business." },
+      { prompt: "What should happen to the quote record after a clear rejection?", options: [{ key: "a", label: "Leave it outstanding forever" }, { key: "b", label: "Delete it" }, { key: "c", label: "Mark it rejected and record any useful reason" }], correct: "c", explanation: "Accurate status and concise feedback make the conversion figures useful." },
+    ],
+  },
+  {
+    key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "9 minutes", available: true, interactive: "complete_professionally",
+    sections: [
+      { title: "Completion includes the records", body: "Finishing the cleaning is not the end of the job. Record the actual hours and costs, confirm the work with the customer, issue the final invoice and keep the payment record current." },
+      { title: "Compare estimate with actual", body: "The first five jobs are where estimates become experience. A variance is not automatically a failure. Record it honestly and understand whether the scope, pace, access, condition or estimate caused it." },
+      { title: "Invoice from the completed work", body: "Check the customer, billing address, work and any approved additional charges or credits. The final invoice should agree with what was quoted and legitimately changed—not with what you wish the job had earned." },
+      { title: "Close the money loop", body: "Record the payment when received and keep unpaid invoices visible. Do not mark a job financially complete while money is still owing." },
+      { title: "Ask for the next opportunity", body: "After the customer confirms they are satisfied, ask whether they need ongoing work or know one person who may value the same service. A referral request is earned by delivery, not inserted mechanically into every conversation.", script: "I’m glad the work is complete and you’re happy with it. If you know someone who would value dependable cleaning, I’d appreciate an introduction." },
+    ],
+    quiz: [
+      { prompt: "Why compare actual hours with estimated hours?", options: [{ key: "a", label: "To improve the next estimate and understand what changed" }, { key: "b", label: "To hide overruns" }, { key: "c", label: "To change the accepted quote automatically" }], correct: "a", explanation: "Recorded variance turns the first jobs into practical estimating knowledge." },
+      { prompt: "When should a payment be recorded?", options: [{ key: "a", label: "When the invoice is issued" }, { key: "b", label: "When the money is actually received" }, { key: "c", label: "When the customer says they will pay" }], correct: "b", explanation: "An invoice and a payment are different events. The debtor remains visible until money is received." },
+      { prompt: "When is the best time to ask for a referral?", options: [{ key: "a", label: "Before inspecting the first job" }, { key: "b", label: "While arguing about an unpaid invoice" }, { key: "c", label: "After the customer confirms they are satisfied" }], correct: "c", explanation: "A referral request should follow demonstrated delivery and a satisfied customer." },
+    ],
+  },
 ];
 
 export default function Stage1Learning() {
@@ -205,6 +407,11 @@ export default function Stage1Learning() {
       <header className="space-y-2"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Lesson {selectedLesson.number} · {selectedLesson.duration}</p><h1 className="text-3xl font-semibold tracking-tight">{selectedLesson.title}</h1><p className="text-muted-foreground">{selectedLesson.promise}</p></header>
       <Card className="border-sky-200 bg-sky-50/40"><CardHeader><CardTitle className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-sky-700" /> Jane’s practical briefing</CardTitle><CardDescription>Read this lesson at your own pace. Audio and field demonstrations can be added without changing the lesson record.</CardDescription></CardHeader></Card>
       {selectedLesson.sections?.map((section) => <Card key={section.title}><CardHeader><CardTitle className="text-xl">{section.title}</CardTitle></CardHeader><CardContent className="space-y-4 text-sm leading-6"><p>{section.body}</p>{section.points ? <ul className="list-disc space-y-2 pl-5">{section.points.map((point) => <li key={point}>{point}</li>)}</ul> : null}{section.script ? <blockquote className="rounded-lg border-l-4 border-sky-600 bg-sky-50 p-4 text-base font-medium leading-7">“{section.script}”</blockquote> : null}</CardContent></Card>)}
+      {selectedLesson.interactive === "charge_out_rate" ? <ChargeOutRateExercise /> : null}
+      {selectedLesson.interactive === "inspect_and_quote" ? <InspectionPractice /> : null}
+      {selectedLesson.interactive === "follow_up" ? <FollowUpPractice /> : null}
+      {selectedLesson.interactive === "rejected_quote" ? <RejectedQuotePractice /> : null}
+      {selectedLesson.interactive === "complete_professionally" ? <JobCloseoutPractice /> : null}
       <Card><CardHeader><CardTitle>Quick check</CardTitle><CardDescription>Choose the best practical answer. Two correct answers out of three completes the lesson.</CardDescription></CardHeader><CardContent className="space-y-6">{selectedLesson.quiz?.map((question, index) => <div key={question.prompt} className="space-y-3"><p className="font-medium">{index + 1}. {question.prompt}</p><RadioGroup value={answers[index] ?? ""} onValueChange={(value) => setAnswers((current) => ({ ...current, [index]: value }))}>{question.options.map((option) => <Label key={option.key} htmlFor={`${selectedLesson.key}-${index}-${option.key}`} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><RadioGroupItem id={`${selectedLesson.key}-${index}-${option.key}`} value={option.key} className="mt-0.5" /><span>{option.label}</span></Label>)}</RadioGroup>{submitted ? <p className={`text-sm ${answers[index] === question.correct ? "text-emerald-700" : "text-amber-700"}`}>{answers[index] === question.correct ? "Correct. " : "Not quite. "}{question.explanation}</p> : null}</div>)}
         {!submitted ? <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== quizCount}>Check my answers</Button> : passed ? <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-emerald-800">You understood the lesson: {score} of {quizCount}</p><p className="text-sm text-emerald-700">This records lesson completion only. It does not change your Autopsy result or progression gate.</p></div><Button onClick={() => void completeLesson()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Complete lesson</Button></div> : <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-amber-900">Review the explanations and try again.</p><p className="text-sm text-amber-800">You scored {score} of {quizCount}. Nothing negative is recorded.</p></div><Button variant="outline" onClick={() => { setAnswers({}); setSubmitted(false); }}><RotateCcw className="mr-2 h-4 w-4" /> Try again</Button></div>}
       </CardContent></Card>
@@ -216,7 +423,7 @@ export default function Stage1Learning() {
     <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and checks for finding, quoting and completing your first work. Take them in order or return when the next situation arises.</p></header>
     {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
     {!error ? <>
-      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="2" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
+      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="8" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
       <div className="space-y-3">{lessons.map((lesson) => { const completion = completed.get(lesson.key); return <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{lesson.title}</h2>{completion ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Complete</span> : null}</div><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}</p></div>{lesson.available ? <Button variant={completion ? "outline" : "default"} onClick={() => openLesson(lesson)}>{completion ? "Review" : "Start lesson"}<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>; })}</div>
       <p className="flex items-start gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground"><Circle className="mt-0.5 h-4 w-4 shrink-0" /> This library supports practice. Course completion is not Autopsy scoring and does not automatically admit anyone to Core.</p>
     </> : null}
@@ -225,4 +432,176 @@ export default function Stage1Learning() {
 
 function Summary({ icon: Icon, label, value }: { icon: typeof BookOpen; label: string; value: string }) {
   return <Card><CardContent className="flex items-center gap-3 p-4"><span className="rounded-lg bg-sky-50 p-2 text-sky-700"><Icon className="h-5 w-5" /></span><div><p className="text-2xl font-semibold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>;
+}
+
+const defaultRateInputs: ChargeOutRateInputs = {
+  desiredHourlyEarnings: 35,
+  billableHoursPerWeek: 25,
+  weeklyBusinessCosts: 300,
+  unbilledHoursPerWeek: 5,
+  safetyMarginPercent: 15,
+};
+
+const money = (value: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(value);
+
+function ChargeOutRateExercise() {
+  const [inputs, setInputs] = useState(defaultRateInputs);
+  const [cutPercent, setCutPercent] = useState(20);
+  const result = calculateChargeOutRate(inputs);
+  const cut = calculatePriceCutConsequence(inputs, cutPercent);
+  const components = [
+    { label: "Pay for cleaning", value: result.cleaningPayPerBillableHour, colour: "bg-sky-600" },
+    { label: "Unbilled time", value: result.unbilledTimePerBillableHour, colour: "bg-violet-500" },
+    { label: "Business costs", value: result.businessCostsPerBillableHour, colour: "bg-amber-500" },
+    { label: "Safety margin", value: result.safetyMarginPerBillableHour, colour: "bg-emerald-600" },
+  ];
+  const chartTotal = Math.max(1, result.chargeOutRateExGst);
+
+  function update(field: keyof ChargeOutRateInputs, raw: string) {
+    const value = raw === "" ? 0 : Number(raw);
+    setInputs((current) => ({ ...current, [field]: Number.isFinite(value) ? Math.max(0, value) : 0 }));
+  }
+
+  return <Card className="border-violet-300 bg-violet-50/30">
+    <CardHeader>
+      <CardTitle>Build your working charge-out rate</CardTitle>
+      <CardDescription>Change the five figures and watch where the customer rate goes. This is a learning estimate only. It will not update your quotes or save these figures.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-7">
+      <div className="rounded-lg border bg-white p-4 text-sm leading-6">
+        <p className="font-semibold">Worked example</p>
+        <p className="mt-1 text-muted-foreground">Someone wants to earn $35 for each working hour, expects 25 billable hours and 5 unbilled business hours each week, carries $300 of weekly business costs and adds a 15% safety margin.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <RateField label="Desired earnings per working hour" prefix="$" value={inputs.desiredHourlyEarnings} onChange={(value) => update("desiredHourlyEarnings", value)} />
+        <RateField label="Billable cleaning hours each week" value={inputs.billableHoursPerWeek} onChange={(value) => update("billableHoursPerWeek", value)} />
+        <RateField label="Weekly business costs" prefix="$" value={inputs.weeklyBusinessCosts} onChange={(value) => update("weeklyBusinessCosts", value)} />
+        <RateField label="Unbilled business hours each week" value={inputs.unbilledHoursPerWeek} onChange={(value) => update("unbilledHoursPerWeek", value)} />
+        <RateField label="Safety margin added on top" suffix="%" value={inputs.safetyMarginPercent} onChange={(value) => update("safetyMarginPercent", value)} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
+        <div className="rounded-xl border bg-white p-5">
+          <p className="font-semibold">What one billable hour has to carry</p>
+          <div className="mt-4 flex h-8 overflow-hidden rounded-full bg-muted">
+            {components.map((component) => <div key={component.label} className={component.colour} style={{ width: `${Math.max(2, (component.value / chartTotal) * 100)}%` }} title={`${component.label}: ${money(component.value)}`} />)}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {components.map((component) => <div key={component.label} className="flex items-center justify-between gap-3 text-sm"><span className="flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${component.colour}`} />{component.label}</span><strong>{money(component.value)}</strong></div>)}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[#082849] p-5 text-white">
+          <p className="text-sm text-sky-100">Working charge-out rate</p>
+          <p className="mt-2 text-3xl font-semibold">{money(result.chargeOutRateExGst)}</p>
+          <p className="text-sm text-sky-100">per billable hour, ex GST</p>
+          <div className="my-4 border-t border-white/20" />
+          <p className="text-sm text-sky-100">Customer rate including GST</p>
+          <p className="mt-1 text-2xl font-semibold">{money(result.customerRateIncludingGst)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div><p className="font-semibold text-rose-950">What happens when I cut the price?</p><p className="mt-1 text-sm text-rose-800">Choose a discount. The work and business costs have not disappeared.</p></div>
+          <div className="flex flex-nowrap items-center gap-2">{[10, 20, 30].map((percent) => <Button key={percent} type="button" size="sm" className="whitespace-nowrap" variant={cutPercent === percent ? "default" : "outline"} onClick={() => setCutPercent(percent)}>Cut {percent}%</Button>)}</div>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <Consequence label="Reduced customer rate, incl GST" value={money(cut.reducedCustomerRateIncludingGst)} />
+          <Consequence label="Available pay per working hour" value={money(cut.availableHourlyEarnings)} danger={cut.hourlyEarningsShortfall > 0} />
+          <Consequence label="Below your desired hourly earnings" value={money(cut.hourlyEarningsShortfall)} danger={cut.hourlyEarningsShortfall > 0} />
+        </div>
+        <p className="mt-4 text-sm font-medium text-rose-900">A {cutPercent}% price cut reduces the money available for your work to {money(cut.availableHourlyEarnings)} per hour after the weekly business costs in this example.</p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">This calculator teaches the relationship between time, costs and price. It does not prescribe a market rate and does not transfer a rate into the quotation system.</p>
+    </CardContent>
+  </Card>;
+}
+
+function RateField({ label, value, onChange, prefix, suffix }: { label: string; value: number; onChange: (value: string) => void; prefix?: string; suffix?: string }) {
+  return <Label className="grid grid-rows-[2rem_auto] gap-2 text-xs leading-4"><span className="flex items-end">{label}</span><span className="flex items-center rounded-md border bg-white px-3"><span className="text-muted-foreground">{prefix}</span><Input type="number" min="0" step="1" value={value} onChange={(event) => onChange(event.target.value)} className="border-0 px-2 shadow-none focus-visible:ring-0" /><span className="text-muted-foreground">{suffix}</span></span></Label>;
+}
+
+function Consequence({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return <div className="rounded-lg border bg-white p-3"><p className="text-xs text-muted-foreground">{label}</p><p className={`mt-1 text-xl font-semibold ${danger ? "text-rose-700" : ""}`}>{value}</p></div>;
+}
+
+const practiceTasks = ["Floors", "Bathrooms", "Kitchen", "Bins", "Internal glass"];
+
+function InspectionPractice() {
+  const [tasks, setTasks] = useState<string[]>(["Floors", "Bathrooms", "Kitchen", "Bins"]);
+  const [hours, setHours] = useState(4);
+  const [cleanType, setCleanType] = useState<"" | "Routine" | "Initial or heavy" | "Specialist">("");
+  const [windows, setWindows] = useState<"" | "Clarify and inspect" | "Exclude in writing" | "Include without checking">("");
+  const [access, setAccess] = useState<"" | "Confirmed" | "Assumed">("");
+
+  const scopeReady = tasks.length > 0;
+  const hoursReady = hours > 0;
+  const cleanTypeReady = cleanType !== "";
+  const windowsReady = windows === "Clarify and inspect" || windows === "Exclude in writing";
+  const accessReady = access === "Confirmed";
+  const readyCount = [scopeReady, hoursReady, cleanTypeReady, windowsReady, accessReady].filter(Boolean).length;
+
+  function toggleTask(task: string) {
+    setTasks((current) => current.includes(task) ? current.filter((item) => item !== task) : [...current, task]);
+  }
+
+  return <Card className="border-teal-300 bg-teal-50/30">
+    <CardHeader>
+      <CardTitle>Practice inspection: a small weekly office clean</CardTitle>
+      <CardDescription>The customer wants the floors, bathrooms, kitchen and bins cleaned. They also say “the windows could use attention” without explaining which windows. Build a quote-ready inspection brief. This practice is not saved and does not create a quote.</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-7">
+      <PracticeStep number="1" title="Confirm the work items" description="Select only the tasks you are prepared to include in the regular scope.">
+        <div className="flex flex-wrap gap-2">{practiceTasks.map((task) => <Button key={task} type="button" size="sm" variant={tasks.includes(task) ? "default" : "outline"} onClick={() => toggleTask(task)}>{tasks.includes(task) ? "Included: " : "Add: "}{task}</Button>)}</div>
+      </PracticeStep>
+
+      <PracticeStep number="2" title="Estimate the total cleaning hours" description="Build the estimate from the inspected tasks. This example starts at four hours.">
+        <div className="flex max-w-xs items-center gap-3"><Input aria-label="Estimated cleaning hours" type="number" min="0" step="0.5" value={hours} onChange={(event) => setHours(Math.max(0, Number(event.target.value) || 0))} /><span className="text-sm text-muted-foreground">hours</span></div>
+      </PracticeStep>
+
+      <PracticeStep number="3" title="Choose the clean type" description="The clean type allows for the expected level of supplies. It does not replace the inspection.">
+        <ChoiceRow options={["Routine", "Initial or heavy", "Specialist"]} selected={cleanType} onSelect={(value) => setCleanType(value as typeof cleanType)} />
+      </PracticeStep>
+
+      <PracticeStep number="4" title="Resolve the vague window request" description="Choose how you would prevent an unclear request becoming an unpaid promise.">
+        <ChoiceRow options={["Clarify and inspect", "Exclude in writing", "Include without checking"]} selected={windows} onSelect={(value) => setWindows(value as typeof windows)} />
+        {windows === "Include without checking" ? <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">That creates an uncontrolled promise. Inspect and clarify the work, or state the exclusion plainly.</p> : null}
+      </PracticeStep>
+
+      <PracticeStep number="5" title="Confirm access" description="Do not assume keys, parking, permitted times or someone being present.">
+        <ChoiceRow options={["Confirmed", "Assumed"]} selected={access} onSelect={(value) => setAccess(value as typeof access)} />
+        {access === "Assumed" ? <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">An access assumption can waste the booked time. Confirm it before generating the quote.</p> : null}
+      </PracticeStep>
+
+      <div className={`rounded-xl border p-5 ${readyCount === 5 ? "border-emerald-300 bg-emerald-50" : "bg-white"}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div><p className="font-semibold">Quote-readiness check</p><p className="mt-1 text-sm text-muted-foreground">{readyCount} of 5 inspection decisions are ready.</p></div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${readyCount === 5 ? "bg-emerald-700 text-white" : "bg-muted text-muted-foreground"}`}>{readyCount === 5 ? "Ready to prepare" : "Still incomplete"}</span>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <ReadinessLine ready={scopeReady} label={tasks.length ? `Scope: ${tasks.join(", ")}` : "Work items not selected"} />
+          <ReadinessLine ready={hoursReady} label={hoursReady ? `Estimated time: ${hours} hours` : "Estimated time missing"} />
+          <ReadinessLine ready={cleanTypeReady} label={cleanTypeReady ? `Clean type: ${cleanType}` : "Clean type missing"} />
+          <ReadinessLine ready={windowsReady} label={windowsReady ? `Windows: ${windows}` : "Window request unresolved"} />
+          <ReadinessLine ready={accessReady} label={accessReady ? "Access confirmed" : "Access not confirmed"} />
+        </div>
+        {readyCount === 5 ? <p className="mt-4 text-sm font-medium text-emerald-900">The inspection brief is coherent. In First 5 Jobs, you would now enter the customer details, these work items and hours, the clean type, exclusions and your charge-out rate—then review the total before generating the written quote.</p> : null}
+      </div>
+      <p className="text-xs text-muted-foreground">This exercise teaches quote preparation only. It does not save customer information, set a price or transfer anything into the quotation system.</p>
+    </CardContent>
+  </Card>;
+}
+
+function PracticeStep({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
+  return <section className="rounded-xl border bg-white p-5"><div className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#082849] text-sm font-semibold text-white">{number}</span><div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></div></div><div className="mt-4">{children}</div></section>;
+}
+
+function ChoiceRow({ options, selected, onSelect }: { options: string[]; selected: string; onSelect: (value: string) => void }) {
+  return <div className="flex flex-wrap gap-2">{options.map((option) => <Button key={option} type="button" size="sm" variant={selected === option ? "default" : "outline"} onClick={() => onSelect(option)}>{option}</Button>)}</div>;
+}
+
+function ReadinessLine({ ready, label }: { ready: boolean; label: string }) {
+  return <div className="flex items-start gap-2 text-sm"><CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${ready ? "text-emerald-700" : "text-muted-foreground/40"}`} /><span className={ready ? "" : "text-muted-foreground"}>{label}</span></div>;
 }
