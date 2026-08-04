@@ -143,4 +143,16 @@ describe("First 5 Jobs orientation", () => {
     expect(migration).toContain("security invoker");
     expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
   });
+
+  it("keeps the Lesson 4 calculator inside learning and outside quoting", () => {
+    const learning = read("src/pages/Stage1Learning.tsx");
+    const calculator = read("src/lib/stage1ChargeOutRate.ts");
+
+    expect(learning).toContain("Build your working charge-out rate");
+    expect(learning).toContain("What happens when I cut the price?");
+    expect(learning).toContain("will not update your quotes or save these figures");
+    expect(calculator).toContain("calculateChargeOutRate");
+    expect(calculator).toContain("calculatePriceCutConsequence");
+    expect(calculator).not.toMatch(/supabase|localStorage|sessionStorage|quote/i);
+  });
 });
