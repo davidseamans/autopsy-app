@@ -19,6 +19,8 @@ describe("Cleaning Technical Guide Stage Pack", () => {
     expect(page).toContain("Never mix cleaning products");
     expect(page).toContain("Do not apply another chemical");
     expect(page).toContain("the treatment method remains locked");
+    expect(page).toContain("Shower area map");
+    expect(page).toContain("Your answers");
     expect(model).toContain("I’m not sure");
   });
 
