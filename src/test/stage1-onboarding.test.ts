@@ -100,4 +100,32 @@ describe("First 5 Jobs orientation", () => {
     expect(dashboard).toContain("if (isDemo) window.setTimeout(() => openReport(n), 350)");
     expect(dashboard).toContain("if (tourInteractive) event.preventDefault()");
   });
+
+  it("adds a versioned First 5 Jobs learning library without changing progression", () => {
+    const routes = read("src/App.tsx");
+    const dashboard = read("src/pages/Stage1Dashboard.tsx");
+    const learning = read("src/pages/Stage1Learning.tsx");
+    const client = read("src/lib/stage1Learning.ts");
+    const migration = read("supabase/migrations/20260804100000_stage1_learning_library.sql");
+
+    expect(routes).toContain('path="/stage-1/learning"');
+    expect(dashboard).toContain("Open learning library");
+    expect(learning).toContain("Getting Your First Five Jobs");
+    expect(learning).toContain("Where your first leads are");
+    expect(learning).toContain("What to say");
+    expect(learning).toContain("Two correct answers out of three completes the lesson");
+    expect(learning).toContain("does not change your Autopsy result or progression gate");
+    expect(client).toContain('STAGE1_COURSE_KEY = "getting_your_first_five_jobs"');
+    expect(migration).toContain("enable row level security");
+    expect(migration).toContain("owner_user_id = (select auth.uid())");
+    expect(migration).toContain("current_user_can_use_stage1_run(autopsy_run_id)");
+    expect(migration).toContain("security invoker");
+    expect(migration).not.toMatch(/transcript\s+(text|json|jsonb)|raw_audio\s+(text|json|jsonb)|maturity_score/i);
+  });
+
+  it("includes customer and personal referrals in the Stage 1 lead methods", () => {
+    const dashboard = read("src/pages/Stage1Dashboard.tsx");
+    expect(dashboard).toContain('"Customer Referral"');
+    expect(dashboard).toContain('"Personal Referral"');
+  });
 });
