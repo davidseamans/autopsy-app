@@ -128,4 +128,19 @@ describe("First 5 Jobs orientation", () => {
     expect(dashboard).toContain('"Customer Referral"');
     expect(dashboard).toContain('"Personal Referral"');
   });
+
+  it("adds Sprint 2 lessons on presentation and charge-out rates", () => {
+    const learning = read("src/pages/Stage1Learning.tsx");
+    const migration = read("supabase/migrations/20260804130000_unlock_stage1_learning_lessons_3_4.sql");
+
+    expect(learning).toContain('key: "presentation_before_discounting"');
+    expect(learning).toContain('title: "Present well—do not compete by being cheap"');
+    expect(learning).toContain('key: "charge_out_rate"');
+    expect(learning).toContain('title: "Your work rate is not your charge-out rate"');
+    expect(learning).toContain('label="Available now" value="4"');
+    expect(migration).toContain("'presentation_before_discounting'");
+    expect(migration).toContain("'charge_out_rate'");
+    expect(migration).toContain("security invoker");
+    expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
+  });
 });
