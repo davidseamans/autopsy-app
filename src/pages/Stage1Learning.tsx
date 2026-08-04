@@ -29,6 +29,7 @@ import {
   calculatePriceCutConsequence,
   type ChargeOutRateInputs,
 } from "@/lib/stage1ChargeOutRate";
+import { FollowUpPractice, JobCloseoutPractice, RejectedQuotePractice } from "@/components/stage1-learning/FinalLessonPractices";
 
 type QuizQuestion = {
   prompt: string;
@@ -47,7 +48,7 @@ type Lesson = {
   available: boolean;
   sections?: { title: string; body: string; script?: string; points?: string[] }[];
   quiz?: QuizQuestion[];
-  interactive?: "charge_out_rate" | "inspect_and_quote";
+  interactive?: "charge_out_rate" | "inspect_and_quote" | "follow_up" | "rejected_quote" | "complete_professionally";
 };
 
 const lessons: Lesson[] = [
@@ -301,9 +302,49 @@ const lessons: Lesson[] = [
       },
     ],
   },
-  { key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "Coming next", available: false },
-  { key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "Coming next", available: false },
-  { key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "Coming next", available: false },
+  {
+    key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "7 minutes", available: true, interactive: "follow_up",
+    sections: [
+      { title: "Following up is part of quoting", body: "A clear written quote does not remove the need to follow up. Confirm that it arrived, ask whether anything needs explaining and then ask directly whether the customer would like to proceed." },
+      { title: "Use a short, calm structure", body: "Identify the quote, confirm receipt, answer questions and ask for the decision. Do not repeat the entire sales presentation or apologise for contacting them.", script: "Hi, it’s Jane from Jane’s Cleaning. I’m following up on the quote for your office clean. Did it reach you, and is there anything you would like me to explain? If everything is clear, would you like me to book the work?" },
+      { title: "A delay needs a next step", body: "If the customer needs more time, agree on one reasonable follow-up date. Do not keep calling without permission and do not leave the quote outstanding forever." },
+      { title: "Do not negotiate against yourself", body: "Silence or hesitation is not a request for a discount. Ask what is preventing the decision. If the scope or price must change, make the change openly and issue a clear revised quote." },
+    ],
+    quiz: [
+      { prompt: "What is the strongest way to finish a quote follow-up?", options: [{ key: "a", label: "Would you like me to book the work?" }, { key: "b", label: "I can probably make it cheaper if you want" }, { key: "c", label: "Call me sometime" }], correct: "a", explanation: "A direct, respectful decision question gives the customer an easy next step." },
+      { prompt: "The customer says they need a few days. What should you do?", options: [{ key: "a", label: "Call every day" }, { key: "b", label: "Agree on one reasonable follow-up date" }, { key: "c", label: "Immediately reduce the price" }], correct: "b", explanation: "A mutually understood next step is persistent without becoming intrusive." },
+      { prompt: "The customer hesitates but has not mentioned price. What should you do first?", options: [{ key: "a", label: "Offer 20% off" }, { key: "b", label: "Withdraw the quote" }, { key: "c", label: "Ask whether anything is unclear or preventing the decision" }], correct: "c", explanation: "Find the actual concern before changing the scope or price." },
+    ],
+  },
+  {
+    key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "7 minutes", available: true, interactive: "rejected_quote",
+    sections: [
+      { title: "A rejected quote is an honest outcome", body: "The customer is allowed to say no. Your job is to close the conversation professionally, learn what is useful and leave the relationship intact." },
+      { title: "Ask once for practical feedback", body: "Thank the customer and ask one short question. They may mention price, scope, timing, confidence, another supplier or no reason at all. Accept the answer without cross-examination.", script: "Thanks for letting me know. So I can improve future quotes, was there one main reason you decided not to proceed? No problem if you would rather not say." },
+      { title: "Do not rescue every rejection with a discount", body: "A lower price only makes sense if the scope or commercial decision genuinely changes. Chasing every rejection downwards trains the business to win work it cannot afford to deliver." },
+      { title: "Record the result and move on", body: "Mark the quote rejected and record the useful reason in plain language. Do not keep it outstanding to make the numbers look better, and do not turn feedback into an argument." },
+    ],
+    quiz: [
+      { prompt: "What is the best first response when a customer rejects the quote?", options: [{ key: "a", label: "Thank them and accept the decision" }, { key: "b", label: "Explain why they are wrong" }, { key: "c", label: "Cut the price immediately" }], correct: "a", explanation: "Professional acceptance protects the relationship and makes useful feedback more likely." },
+      { prompt: "How should you ask for feedback?", options: [{ key: "a", label: "Demand a detailed justification" }, { key: "b", label: "Ask one short optional question about the main reason" }, { key: "c", label: "Send a long survey" }], correct: "b", explanation: "One respectful question is enough. The customer is not obliged to teach the business." },
+      { prompt: "What should happen to the quote record after a clear rejection?", options: [{ key: "a", label: "Leave it outstanding forever" }, { key: "b", label: "Delete it" }, { key: "c", label: "Mark it rejected and record any useful reason" }], correct: "c", explanation: "Accurate status and concise feedback make the conversion figures useful." },
+    ],
+  },
+  {
+    key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "9 minutes", available: true, interactive: "complete_professionally",
+    sections: [
+      { title: "Completion includes the records", body: "Finishing the cleaning is not the end of the job. Record the actual hours and costs, confirm the work with the customer, issue the final invoice and keep the payment record current." },
+      { title: "Compare estimate with actual", body: "The first five jobs are where estimates become experience. A variance is not automatically a failure. Record it honestly and understand whether the scope, pace, access, condition or estimate caused it." },
+      { title: "Invoice from the completed work", body: "Check the customer, billing address, work and any approved additional charges or credits. The final invoice should agree with what was quoted and legitimately changed—not with what you wish the job had earned." },
+      { title: "Close the money loop", body: "Record the payment when received and keep unpaid invoices visible. Do not mark a job financially complete while money is still owing." },
+      { title: "Ask for the next opportunity", body: "After the customer confirms they are satisfied, ask whether they need ongoing work or know one person who may value the same service. A referral request is earned by delivery, not inserted mechanically into every conversation.", script: "I’m glad the work is complete and you’re happy with it. If you know someone who would value dependable cleaning, I’d appreciate an introduction." },
+    ],
+    quiz: [
+      { prompt: "Why compare actual hours with estimated hours?", options: [{ key: "a", label: "To improve the next estimate and understand what changed" }, { key: "b", label: "To hide overruns" }, { key: "c", label: "To change the accepted quote automatically" }], correct: "a", explanation: "Recorded variance turns the first jobs into practical estimating knowledge." },
+      { prompt: "When should a payment be recorded?", options: [{ key: "a", label: "When the invoice is issued" }, { key: "b", label: "When the money is actually received" }, { key: "c", label: "When the customer says they will pay" }], correct: "b", explanation: "An invoice and a payment are different events. The debtor remains visible until money is received." },
+      { prompt: "When is the best time to ask for a referral?", options: [{ key: "a", label: "Before inspecting the first job" }, { key: "b", label: "While arguing about an unpaid invoice" }, { key: "c", label: "After the customer confirms they are satisfied" }], correct: "c", explanation: "A referral request should follow demonstrated delivery and a satisfied customer." },
+    ],
+  },
 ];
 
 export default function Stage1Learning() {
@@ -368,6 +409,9 @@ export default function Stage1Learning() {
       {selectedLesson.sections?.map((section) => <Card key={section.title}><CardHeader><CardTitle className="text-xl">{section.title}</CardTitle></CardHeader><CardContent className="space-y-4 text-sm leading-6"><p>{section.body}</p>{section.points ? <ul className="list-disc space-y-2 pl-5">{section.points.map((point) => <li key={point}>{point}</li>)}</ul> : null}{section.script ? <blockquote className="rounded-lg border-l-4 border-sky-600 bg-sky-50 p-4 text-base font-medium leading-7">“{section.script}”</blockquote> : null}</CardContent></Card>)}
       {selectedLesson.interactive === "charge_out_rate" ? <ChargeOutRateExercise /> : null}
       {selectedLesson.interactive === "inspect_and_quote" ? <InspectionPractice /> : null}
+      {selectedLesson.interactive === "follow_up" ? <FollowUpPractice /> : null}
+      {selectedLesson.interactive === "rejected_quote" ? <RejectedQuotePractice /> : null}
+      {selectedLesson.interactive === "complete_professionally" ? <JobCloseoutPractice /> : null}
       <Card><CardHeader><CardTitle>Quick check</CardTitle><CardDescription>Choose the best practical answer. Two correct answers out of three completes the lesson.</CardDescription></CardHeader><CardContent className="space-y-6">{selectedLesson.quiz?.map((question, index) => <div key={question.prompt} className="space-y-3"><p className="font-medium">{index + 1}. {question.prompt}</p><RadioGroup value={answers[index] ?? ""} onValueChange={(value) => setAnswers((current) => ({ ...current, [index]: value }))}>{question.options.map((option) => <Label key={option.key} htmlFor={`${selectedLesson.key}-${index}-${option.key}`} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><RadioGroupItem id={`${selectedLesson.key}-${index}-${option.key}`} value={option.key} className="mt-0.5" /><span>{option.label}</span></Label>)}</RadioGroup>{submitted ? <p className={`text-sm ${answers[index] === question.correct ? "text-emerald-700" : "text-amber-700"}`}>{answers[index] === question.correct ? "Correct. " : "Not quite. "}{question.explanation}</p> : null}</div>)}
         {!submitted ? <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== quizCount}>Check my answers</Button> : passed ? <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-emerald-800">You understood the lesson: {score} of {quizCount}</p><p className="text-sm text-emerald-700">This records lesson completion only. It does not change your Autopsy result or progression gate.</p></div><Button onClick={() => void completeLesson()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Complete lesson</Button></div> : <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-amber-900">Review the explanations and try again.</p><p className="text-sm text-amber-800">You scored {score} of {quizCount}. Nothing negative is recorded.</p></div><Button variant="outline" onClick={() => { setAnswers({}); setSubmitted(false); }}><RotateCcw className="mr-2 h-4 w-4" /> Try again</Button></div>}
       </CardContent></Card>
@@ -379,7 +423,7 @@ export default function Stage1Learning() {
     <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and checks for finding, quoting and completing your first work. Take them in order or return when the next situation arises.</p></header>
     {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
     {!error ? <>
-      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="5" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
+      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="8" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
       <div className="space-y-3">{lessons.map((lesson) => { const completion = completed.get(lesson.key); return <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{lesson.title}</h2>{completion ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Complete</span> : null}</div><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}</p></div>{lesson.available ? <Button variant={completion ? "outline" : "default"} onClick={() => openLesson(lesson)}>{completion ? "Review" : "Start lesson"}<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>; })}</div>
       <p className="flex items-start gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground"><Circle className="mt-0.5 h-4 w-4 shrink-0" /> This library supports practice. Course completion is not Autopsy scoring and does not automatically admit anyone to Core.</p>
     </> : null}
