@@ -137,8 +137,107 @@ const lessons: Lesson[] = [
       },
     ],
   },
-  { key: "presentation_before_discounting", version: 1, number: 3, title: "Present well—do not compete by being cheap", promise: "Protect the price by improving trust and presentation.", duration: "Coming next", available: false },
-  { key: "charge_out_rate", version: 1, number: 4, title: "Your work rate is not your charge-out rate", promise: "Build a rate that pays for the work and the business around it.", duration: "Coming next", available: false },
+  {
+    key: "presentation_before_discounting",
+    version: 1,
+    number: 3,
+    title: "Present well—do not compete by being cheap",
+    promise: "Protect the price by improving trust and presentation.",
+    duration: "7 minutes",
+    available: true,
+    sections: [
+      {
+        title: "The customer is buying confidence",
+        body: "A customer is not only buying hours of cleaning. They are deciding whether you will arrive, understand the work, respect the property and finish what was agreed. Clear communication and a professional quote make the price easier to trust.",
+        points: ["Arrive when you said you would", "Ask sensible questions", "Take useful notes", "Explain what is included", "Send a clear written quote"],
+      },
+      {
+        title: "Do not make cheap your main offer",
+        body: "A low price can win the wrong job and leave too little money to complete it properly. The price you establish now may follow you for some time. Improve the presentation before cutting the price.",
+      },
+      {
+        title: "If the customer questions the price",
+        body: "Stay calm and explain the work behind the quote. If the customer needs a lower total, change the scope clearly instead of quietly doing the same work for less.",
+        script: "I understand you are watching the cost. This price covers the work we discussed and the time needed to do it properly. If you would like a lower total, we can look at which parts of the work should be removed or done less often.",
+      },
+      {
+        title: "Presentation is practical",
+        body: "Professional does not mean expensive clothes or a complicated sales performance. It means being prepared, dependable and clear enough that the customer knows what will happen next.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "A customer says the quote is higher than expected. What is the best first response?",
+        options: [{ key: "a", label: "Immediately cut the price" }, { key: "b", label: "Explain the scope and discuss changing the work if the total must fall" }, { key: "c", label: "Tell the customer cheaper cleaners are unreliable" }],
+        correct: "b",
+        explanation: "Protect the price by explaining the work. If the total changes, the scope should change clearly as well.",
+      },
+      {
+        prompt: "Which action does most to support a professional price?",
+        options: [{ key: "a", label: "A clear inspection and written quote" }, { key: "b", label: "Promising to beat every competitor" }, { key: "c", label: "Buying equipment before any job is booked" }],
+        correct: "a",
+        explanation: "Preparation, clarity and follow-through give the customer a reason to trust the quote.",
+      },
+      {
+        prompt: "What is the main risk of making cheap your selling point?",
+        options: [{ key: "a", label: "The customer may ask too many questions" }, { key: "b", label: "The quote may look too professional" }, { key: "c", label: "The job may not leave enough money to deliver properly and continue" }],
+        correct: "c",
+        explanation: "A job that cannot support proper delivery is not a useful foundation for the business.",
+      },
+    ],
+  },
+  {
+    key: "charge_out_rate",
+    version: 1,
+    number: 4,
+    title: "Your work rate is not your charge-out rate",
+    promise: "Build a rate that pays for the work and the business around it.",
+    duration: "8 minutes",
+    available: true,
+    sections: [
+      {
+        title: "Your wage is only one part of the price",
+        body: "The amount you want to earn for an hour of cleaning is your work rate. The customer charge must also help pay for the business around that hour. That customer charge is your charge-out rate.",
+      },
+      {
+        title: "What the charge-out rate carries",
+        body: "Not every working hour can be billed to a customer. Travel, quoting, messages, buying supplies, bookkeeping and gaps between jobs still consume time or money.",
+        points: ["Your pay for doing the work", "Unbilled business time", "Travel and vehicle costs", "Supplies and equipment", "Insurance, administration and tax obligations", "A margin that lets the business continue"],
+      },
+      {
+        title: "Use the quote to test the total",
+        body: "Estimate the hours honestly, apply the charge-out rate, and then look at the whole quote. Ask whether the price covers the work, the supplies and the responsibility you are accepting. First 5 Jobs helps you compare the estimate with what actually happened.",
+      },
+      {
+        title: "A simple example",
+        body: "If you want to earn $35 for each hour you clean, charging the customer $35 leaves nothing for the business around the job. The correct charge-out rate must be higher. The exact rate depends on your costs and the work; the principle does not change.",
+      },
+      {
+        title: "Do not hide a weak rate with more hours",
+        body: "Working longer does not repair a price that was too low. Start with a considered rate, record the result, and improve it from the first five jobs instead of guessing forever.",
+      },
+    ],
+    quiz: [
+      {
+        prompt: "What is the difference between a work rate and a charge-out rate?",
+        options: [{ key: "a", label: "There is no difference" }, { key: "b", label: "The work rate is what you want to earn; the charge-out rate must also carry business costs and margin" }, { key: "c", label: "The charge-out rate is always the competitor’s price" }],
+        correct: "b",
+        explanation: "The customer rate has to support both the person doing the work and the business that makes the work possible.",
+      },
+      {
+        prompt: "Which time is usually not billed directly to one cleaning customer?",
+        options: [{ key: "a", label: "Cleaning the customer’s floors" }, { key: "b", label: "Cleaning the customer’s windows when quoted" }, { key: "c", label: "Preparing quotes and organising supplies" }],
+        correct: "c",
+        explanation: "Unbilled business time still has to be supported by the work the business sells.",
+      },
+      {
+        prompt: "You want to earn $35 per cleaning hour. Why is charging exactly $35 risky?",
+        options: [{ key: "a", label: "It leaves nothing for the costs and unbilled work around the job" }, { key: "b", label: "Customers only accept round numbers" }, { key: "c", label: "Every cleaning job must use the same rate" }],
+        correct: "a",
+        explanation: "A sustainable quote must carry more than the operator’s desired hourly pay.",
+      },
+    ],
+  },
   { key: "inspect_and_quote", version: 1, number: 5, title: "Inspect and prepare the quote", promise: "Define the work before promising a price.", duration: "Coming next", available: false },
   { key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "Coming next", available: false },
   { key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "Coming next", available: false },
@@ -216,7 +315,7 @@ export default function Stage1Learning() {
     <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and checks for finding, quoting and completing your first work. Take them in order or return when the next situation arises.</p></header>
     {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
     {!error ? <>
-      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="2" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
+      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="4" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
       <div className="space-y-3">{lessons.map((lesson) => { const completion = completed.get(lesson.key); return <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{lesson.title}</h2>{completion ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Complete</span> : null}</div><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}</p></div>{lesson.available ? <Button variant={completion ? "outline" : "default"} onClick={() => openLesson(lesson)}>{completion ? "Review" : "Start lesson"}<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>; })}</div>
       <p className="flex items-start gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground"><Circle className="mt-0.5 h-4 w-4 shrink-0" /> This library supports practice. Course completion is not Autopsy scoring and does not automatically admit anyone to Core.</p>
     </> : null}
