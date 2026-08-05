@@ -14,7 +14,7 @@ import {
   type Stage1QuoteDocument as QuoteDocument,
 } from "@/lib/stage1Documents";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
-import { STAGE1_DEMO_PROFILE, STAGE1_DEMO_QUOTE_DOCUMENT } from "@/lib/stage1Demo";
+import { getStage1DemoQuoteDocument, STAGE1_DEMO_PROFILE } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 const auDate = (value: string | null) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU") : "—";
@@ -40,8 +40,10 @@ export default function Stage1QuoteDocument() {
 
   const reload = useCallback(async () => {
     if (isDemo) {
-      setQuote(STAGE1_DEMO_QUOTE_DOCUMENT);
+      const document = getStage1DemoQuoteDocument(quoteId);
+      setQuote(document);
       setProfile(STAGE1_DEMO_PROFILE);
+      if (document.invoice) setShowInvoice(true);
       return;
     }
     if (!quoteId || !runId) throw new Error("The quote or Autopsy run is missing.");

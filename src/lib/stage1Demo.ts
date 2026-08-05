@@ -41,6 +41,56 @@ export const STAGE1_DEMO_QUOTE_DOCUMENT: Stage1QuoteDocument = {
   invoice: null,
 };
 
+export const STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT: Stage1QuoteDocument = {
+  id: "demo-q-1001",
+  runId: "demo",
+  number: "Q-1001",
+  status: "accepted",
+  issuedAt: "2026-07-08",
+  validUntil: "2026-07-22",
+  clientName: "Riverstone Dental Centre",
+  clientContactName: "Jordan Lee",
+  clientEmail: "accounts@example.com",
+  clientPhone: "0400 000 001",
+  siteAddress: "Sample premises, Paddington QLD",
+  serviceDescription: "Initial dental-centre clean including treatment rooms, floors, amenities and common areas.",
+  paymentTerms: "Payment due on completion.",
+  cleanTypeCode: "initial",
+  cleanTypeLabel: "Initial or heavy clean",
+  pricingRuleVersion: 0,
+  labourServiceAmountExGst: 1800,
+  estimatedConsumablesCost: 35,
+  consumablesSellAmount: 50,
+  subtotalExGst: 1850,
+  gstAmount: 185,
+  totalIncGst: 2035,
+  jobId: "demo-j-1",
+  jobNumber: "J-1",
+  lines: [
+    { id: "demo-q1001-line-1", position: 1, description: "Treatment rooms, floors and common areas", estimatedHours: 12, chargeOutRateExGst: 90, lineTotalExGst: 1080 },
+    { id: "demo-q1001-line-2", position: 2, description: "Amenities and detailed initial clean", estimatedHours: 8, chargeOutRateExGst: 90, lineTotalExGst: 720 },
+  ],
+  invoice: {
+    id: "demo-invoice-1",
+    number: "INV-1",
+    issuedAt: "2026-07-18",
+    dueDate: "2026-07-18",
+    status: "sent",
+    issuerBusinessName: "Sample Cleaning Business",
+    issuerRegisteredName: "Sample Operator",
+    issuerAbn: "00 000 000 000",
+    issuerContactName: "Sample Apprentice",
+    issuerPhone: "0400 000 000",
+    issuerEmail: "sample@example.com",
+  },
+};
+
+export function getStage1DemoQuoteDocument(quoteId: string) {
+  return quoteId === STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.id
+    ? STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT
+    : STAGE1_DEMO_QUOTE_DOCUMENT;
+}
+
 export const STAGE1_DEMO_PROFILE: PublicBusinessProfile = {
   id: "demo-business",
   businessName: "Sample Cleaning Business",

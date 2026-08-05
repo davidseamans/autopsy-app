@@ -441,8 +441,6 @@ function TransactionDialog({
   onDraftChange,
   onOpenChange,
   onSave,
-  tourInteractive = false,
-  readOnly = false,
 }: {
   draft: TransactionDraft | null;
   open: boolean;
@@ -515,6 +513,7 @@ export function DetailedJobCostReport({
   onSave,
   tourInteractive = false,
   readOnly = false,
+  demoMode = false,
 }: {
   unit: ProofUnit | null;
   runId: string | null;
@@ -523,6 +522,7 @@ export function DetailedJobCostReport({
   onSave?: (unit: ProofUnit) => Promise<void> | void;
   tourInteractive?: boolean;
   readOnly?: boolean;
+  demoMode?: boolean;
 }) {
   // Detail rows live in the Stage 1 sandbox tables. Hydrate them on open from
   // the SAME persisted source as the ledger (keyed on stage1_job_id), so the
@@ -537,7 +537,7 @@ export function DetailedJobCostReport({
   const transactionSavingRef = useRef(false);
 
   useEffect(() => {
-    if (!open || !stage1JobId) {
+    if (!open || !stage1JobId || demoMode) {
       setRevenueRows([]);
       setCostRows([]);
       return;
@@ -565,10 +565,10 @@ export function DetailedJobCostReport({
     return () => {
       cancelled = true;
     };
-  }, [open, stage1JobId]);
+  }, [demoMode, open, stage1JobId]);
 
   useEffect(() => {
-    if (!open || !runId) {
+    if (!open || !runId || demoMode) {
       setAttachments([]);
       return;
     }
@@ -577,7 +577,7 @@ export function DetailedJobCostReport({
       .then((items) => { if (!cancelled) setAttachments(items); })
       .catch(() => { if (!cancelled) setAttachments([]); });
     return () => { cancelled = true; };
-  }, [open, runId]);
+  }, [demoMode, open, runId]);
 
   if (!unit) return null;
 
@@ -755,8 +755,10 @@ export function DetailedJobCostReport({
     .map((line, index) => {
       const treatment = line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst");
       const attached = attachmentFor(line.id);
-      const documentUrl = line.source === "stage1_quote_conversion" && line.sourceQuoteId && runId
-        ? `/stage-1/quote/${line.sourceQuoteId}?runId=${encodeURIComponent(runId)}`
+      const documentUrl = line.source === "stage1_quote_conversion" && line.sourceQuoteId && (demoMode || runId)
+        ? demoMode
+          ? `/stage-1/quote/${line.sourceQuoteId}?demo=1`
+          : `/stage-1/quote/${line.sourceQuoteId}?runId=${encodeURIComponent(runId ?? "")}`
         : null;
       return {
         date: line.date,
