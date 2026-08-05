@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CookingPot,
   Droplets,
+  ExternalLink,
   HelpCircle,
   RotateCcw,
   Search,
@@ -19,22 +20,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  cleaningAreaOptions,
-  observationSummary,
   previousProductOptions,
-  searchMatchesShower,
-  showerLocationOptions,
-  showerObservationOptions,
-  showerSurfaceOptions,
   type GuideOption,
+  type GuideAnswers,
 } from "@/lib/cleaningTechnicalGuide";
-
-type Answers = {
-  observation?: string;
-  surface?: string;
-  location?: string;
-  previousProduct?: string;
-};
+import {
+  areaConfigs,
+  cleaningAreaOptionsV1,
+  findAreaForSearch,
+  resolveAreaProcedure,
+  type GuideAreaKey,
+} from "@/lib/cleaningTechnicalGuideV1";
 
 const areaIcons = {
   shower: Bath,
@@ -109,25 +105,21 @@ export default function CleaningTechnicalGuide() {
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
   const [searchAttempted, setSearchAttempted] = useState(false);
-  const [answers, setAnswers] = useState<Answers>({});
+  const [selectedArea, setSelectedArea] = useState<GuideAreaKey | null>(null);
+  const [answers, setAnswers] = useState<GuideAnswers>({});
 
   const steps = ["Area", "What you see", "Surface", "Location", "Already used", "Safe next step"];
-  const previousProductRequiresStop = answers.previousProduct === "unknown" || answers.previousProduct === "mixed";
-  const uncertainCondition = answers.observation === "unsure" || answers.surface === "unsure" || answers.location === "unsure";
-  const resultTitle = previousProductRequiresStop
-    ? "Stop before using another product"
-    : uncertainCondition
-      ? "The condition needs identification"
-      : `${observationSummary(answers.observation ?? "")} — provisional inspection result`;
+  const area = selectedArea ? areaConfigs[selectedArea] : null;
+  const procedure = selectedArea ? resolveAreaProcedure(selectedArea, answers) : resolveAreaProcedure("shower", { observation: "damage" });
   const progress = Math.round(((step + 1) / steps.length) * 100);
   const answerTrail = [
-    answers.observation ? { step: 1, label: observationSummary(answers.observation) } : null,
-    answers.surface ? { step: 2, label: showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
-    answers.location ? { step: 3, label: showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
+    answers.observation ? { step: 1, label: area?.observations.find((option) => option.key === answers.observation)?.label ?? "Observation" } : null,
+    answers.surface ? { step: 2, label: area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
+    answers.location ? { step: 3, label: area?.locations.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
     answers.previousProduct ? { step: 4, label: previousProductOptions.find((option) => option.key === answers.previousProduct)?.label ?? "Product" } : null,
   ].filter((item): item is { step: number; label: string } => Boolean(item));
 
-  const selectAnswer = (key: keyof Answers, value: string) => {
+  const selectAnswer = (key: keyof GuideAnswers, value: string) => {
     setAnswers((current) => ({ ...current, [key]: value }));
     setStep((current) => Math.min(current + 1, 5));
   };
@@ -135,13 +127,19 @@ export default function CleaningTechnicalGuide() {
   const reset = () => {
     setStep(0);
     setAnswers({});
+    setSelectedArea(null);
     setSearch("");
     setSearchAttempted(false);
   };
 
   const runSearch = () => {
     setSearchAttempted(true);
-    if (searchMatchesShower(search)) setStep(1);
+    const matchedArea = findAreaForSearch(search);
+    if (matchedArea) {
+      setSelectedArea(matchedArea);
+      setAnswers({});
+      setStep(1);
+    }
   };
 
   return (
@@ -162,10 +160,10 @@ export default function CleaningTechnicalGuide() {
           <p className="mt-2 text-xs text-slate-300">Step {step + 1} of {steps.length} · {steps[step]}</p>
         </header>
 
-        <Card className="border-amber-300 bg-amber-50">
-          <CardContent className="flex gap-3 p-4 text-sm text-amber-950">
+        <Card className="border-sky-200 bg-sky-50">
+          <CardContent className="flex gap-3 p-4 text-sm text-sky-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p><strong>Prototype only.</strong> The question flow is ready for testing. Cleaning treatments are not published until an experienced contributor and an independent technical reviewer verify them.</p>
+            <p><strong>Technical Guide v1 review build.</strong> Shower, toilet, kitchen and window pathways now include pictures, processes and expected outcomes. Field-method direction is approved. Draft procedures remain visibly marked until independent safety and surface-compatibility review is recorded.</p>
           </CardContent>
         </Card>
 
@@ -179,58 +177,70 @@ export default function CleaningTechnicalGuide() {
                   <p className="mt-1 text-sm text-slate-600">Tap an area or search using the words you would normally use.</p>
                 </div>
                 <div className="flex gap-2">
-                  <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try shower, body fat or soap scum" aria-label="Search cleaning issue" />
+                  <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try body fat, toilet hinge, kitchen grease or window track" aria-label="Search cleaning issue" />
                   <Button type="button" onClick={runSearch} className="min-h-12 min-w-12 px-3" aria-label="Search"><Search className="h-5 w-5" /></Button>
                 </div>
-                {searchAttempted && !searchMatchesShower(search) ? <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">That topic is not in the shower pilot yet. Try <strong>shower</strong>, <strong>body fat</strong> or <strong>soap scum</strong>.</p> : null}
+                {searchAttempted && !findAreaForSearch(search) ? <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">That term is not in the first guide yet. Try <strong>shower</strong>, <strong>toilet hinge</strong>, <strong>kitchen grease</strong> or <strong>window track</strong>.</p> : null}
                 <div className="grid grid-cols-2 gap-3">
-                  {cleaningAreaOptions.map((option) => {
+                  {cleaningAreaOptionsV1.map((option) => {
                     const Icon = areaIcons[option.key as keyof typeof areaIcons] ?? HelpCircle;
-                    const enabled = option.key === "shower";
-                    return <button key={option.key} type="button" disabled={!enabled} onClick={() => setStep(1)} className="min-h-32 rounded-xl border border-slate-200 bg-white p-4 text-left disabled:bg-slate-50 disabled:opacity-60 enabled:hover:border-sky-400 enabled:hover:bg-sky-50"><Icon className="h-7 w-7 text-sky-700" /><span className="mt-3 block text-base font-semibold">{option.label}</span><span className="mt-1 block text-xs leading-snug text-slate-600">{option.description}</span></button>;
+                    return <button key={option.key} type="button" onClick={() => { setSelectedArea(option.key as GuideAreaKey); setAnswers({}); setStep(1); }} className="min-h-32 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-sky-400 hover:bg-sky-50"><Icon className="h-7 w-7 text-sky-700" /><span className="mt-3 block text-base font-semibold">{option.label}</span><span className="mt-1 block text-xs leading-snug text-slate-600">{option.description}</span></button>;
                   })}
                 </div>
               </section>
             ) : null}
 
-            {step === 1 ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={showerObservationOptions} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
-            {step === 2 ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on glass, grout, metal or acrylic." options={showerSurfaceOptions} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
-            {step === 3 ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : null}
+            {step === 1 && area ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={area.observations} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
+            {step === 2 && area ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on different materials and finishes." options={area.surfaces} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
+            {step === 3 && area ? (selectedArea === "shower" ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : <QuestionStep title="Where exactly is it?" hint="Choose the closest location. Access and nearby materials change the safe method." options={area.locations} value={answers.location} onSelect={(value) => selectAnswer("location", value)} />) : null}
             {step === 4 ? <QuestionStep title="What has already been used?" hint="Do not add another product when an existing chemical is unknown." options={previousProductOptions} value={answers.previousProduct} onSelect={(value) => selectAnswer("previousProduct", value)} /> : null}
 
             {step === 5 ? (
               <section className="space-y-5">
                 <div className="flex items-start gap-3">
-                  {previousProductRequiresStop || uncertainCondition ? <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-amber-700" /> : <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-emerald-700" />}
-                  <div><Badge variant="outline">Provisional result</Badge><h2 className="mt-2 text-2xl font-semibold tracking-tight">{resultTitle}</h2></div>
+                  {procedure.status === "Stop and escalate" ? <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-amber-700" /> : <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-emerald-700" />}
+                  <div>
+                    <div className="flex flex-wrap gap-2"><Badge variant="outline">{procedure.status}</Badge><Badge variant="secondary">{procedure.confidence}</Badge></div>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{procedure.title}</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedure.likelyCondition}</p>
+                  </div>
                 </div>
 
                 <div className="grid gap-3">
                   <ResultBlock title="What the guide recorded" items={[
-                    `You saw: ${observationSummary(answers.observation ?? "")}.`,
-                    `Surface: ${showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
-                    `Location: ${showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
+                    `Area: ${area?.label ?? "not identified"}.`,
+                    `You saw: ${area?.observations.find((option) => option.key === answers.observation)?.label ?? "not identified"}.`,
+                    `Surface: ${area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
+                    `Location: ${area?.locations.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
                   ]} />
-                  <ResultBlock title="Before you start" items={[
-                    "Keep the area ventilated and follow the product label and SDS.",
-                    "Confirm the surface before applying any treatment.",
-                    "Never mix cleaning products or add a product over an unknown residue.",
-                  ]} />
-                  <ResultBlock title="Safe next step" items={previousProductRequiresStop || uncertainCondition ? [
-                    "Do not apply another chemical.",
-                    "Identify the surface and any product already used.",
-                    "Ask a supervisor, product manufacturer or other competent person before continuing.",
-                  ] : [
-                    "Photograph or note the condition before treatment if the customer may need an explanation.",
-                    "Pause here: the treatment method remains locked until the pilot guidance is technically verified.",
-                    "Use a supervisor-approved method or the product manufacturer’s surface instructions.",
-                  ]} />
-                  <ResultBlock title="Stop and get help if…" items={[
-                    "the surface is damaged, unknown or vulnerable;",
-                    "there is unknown chemical residue, biological waste or a strong unexplained odour;",
-                    "mould-like growth is extensive or the source may be structural; or",
-                    "safe access, ventilation or protective equipment is not available.",
-                  ]} />
+                  <ResultBlock title="Purpose" items={[procedure.purpose]} />
+                  <ResultBlock title="What you need" items={procedure.tools} />
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-slate-950">Process</h3>
+                    {procedure.steps.map((procedureStep, index) => (
+                      <article key={procedureStep.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        {procedureStep.image ? <img src={procedureStep.image} alt="" loading="lazy" width="1200" height="900" className="aspect-[4/3] w-full object-cover" /> : null}
+                        <div className="p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">Step {index + 1}</p>
+                          <h4 className="mt-1 font-semibold text-slate-950">{procedureStep.title}</h4>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedureStep.instruction}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <ResultBlock title="Expected outcome" items={procedure.expectedOutcome} />
+                  <ResultBlock title="Stop and get help if…" items={procedure.stopConditions} />
+                  <ResultBlock title="What to tell the customer" items={[procedure.customerExplanation]} />
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <h3 className="font-semibold text-violet-950">Review control</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-violet-900">{procedure.reviewNote}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <h3 className="font-semibold text-slate-950">Authority and safety sources</h3>
+                    <div className="mt-2 grid gap-2">
+                      {procedure.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 text-sm font-medium text-sky-800 hover:bg-sky-50"><span>{source.label}</span><ExternalLink className="h-4 w-4 shrink-0" /></a>)}
+                    </div>
+                  </div>
                 </div>
                 <Button type="button" onClick={reset} variant="outline" className="min-h-12 w-full"><RotateCcw className="mr-2 h-4 w-4" /> Start another search</Button>
               </section>
