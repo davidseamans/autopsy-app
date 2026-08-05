@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CookingPot,
   Droplets,
+  ExternalLink,
   HelpCircle,
   RotateCcw,
   Search,
@@ -23,18 +24,13 @@ import {
   observationSummary,
   previousProductOptions,
   searchMatchesShower,
+  resolveShowerProcedure,
   showerLocationOptions,
   showerObservationOptions,
   showerSurfaceOptions,
   type GuideOption,
+  type GuideAnswers,
 } from "@/lib/cleaningTechnicalGuide";
-
-type Answers = {
-  observation?: string;
-  surface?: string;
-  location?: string;
-  previousProduct?: string;
-};
 
 const areaIcons = {
   shower: Bath,
@@ -109,16 +105,10 @@ export default function CleaningTechnicalGuide() {
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
   const [searchAttempted, setSearchAttempted] = useState(false);
-  const [answers, setAnswers] = useState<Answers>({});
+  const [answers, setAnswers] = useState<GuideAnswers>({});
 
   const steps = ["Area", "What you see", "Surface", "Location", "Already used", "Safe next step"];
-  const previousProductRequiresStop = answers.previousProduct === "unknown" || answers.previousProduct === "mixed";
-  const uncertainCondition = answers.observation === "unsure" || answers.surface === "unsure" || answers.location === "unsure";
-  const resultTitle = previousProductRequiresStop
-    ? "Stop before using another product"
-    : uncertainCondition
-      ? "The condition needs identification"
-      : `${observationSummary(answers.observation ?? "")} — provisional inspection result`;
+  const procedure = resolveShowerProcedure(answers);
   const progress = Math.round(((step + 1) / steps.length) * 100);
   const answerTrail = [
     answers.observation ? { step: 1, label: observationSummary(answers.observation) } : null,
@@ -127,7 +117,7 @@ export default function CleaningTechnicalGuide() {
     answers.previousProduct ? { step: 4, label: previousProductOptions.find((option) => option.key === answers.previousProduct)?.label ?? "Product" } : null,
   ].filter((item): item is { step: number; label: string } => Boolean(item));
 
-  const selectAnswer = (key: keyof Answers, value: string) => {
+  const selectAnswer = (key: keyof GuideAnswers, value: string) => {
     setAnswers((current) => ({ ...current, [key]: value }));
     setStep((current) => Math.min(current + 1, 5));
   };
@@ -162,10 +152,10 @@ export default function CleaningTechnicalGuide() {
           <p className="mt-2 text-xs text-slate-300">Step {step + 1} of {steps.length} · {steps[step]}</p>
         </header>
 
-        <Card className="border-amber-300 bg-amber-50">
-          <CardContent className="flex gap-3 p-4 text-sm text-amber-950">
+        <Card className="border-sky-200 bg-sky-50">
+          <CardContent className="flex gap-3 p-4 text-sm text-sky-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p><strong>Prototype only.</strong> The question flow is ready for testing. Cleaning treatments are not published until an experienced contributor and an independent technical reviewer verify them.</p>
+            <p><strong>Expert review build.</strong> The first shower procedures now include processes and outcomes. Draft procedures remain visibly marked until field review and independent safety and surface-compatibility review are recorded.</p>
           </CardContent>
         </Card>
 
@@ -201,8 +191,12 @@ export default function CleaningTechnicalGuide() {
             {step === 5 ? (
               <section className="space-y-5">
                 <div className="flex items-start gap-3">
-                  {previousProductRequiresStop || uncertainCondition ? <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-amber-700" /> : <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-emerald-700" />}
-                  <div><Badge variant="outline">Provisional result</Badge><h2 className="mt-2 text-2xl font-semibold tracking-tight">{resultTitle}</h2></div>
+                  {procedure.status === "Stop and escalate" ? <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-amber-700" /> : <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-emerald-700" />}
+                  <div>
+                    <div className="flex flex-wrap gap-2"><Badge variant="outline">{procedure.status}</Badge><Badge variant="secondary">{procedure.confidence}</Badge></div>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{procedure.title}</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedure.likelyCondition}</p>
+                  </div>
                 </div>
 
                 <div className="grid gap-3">
@@ -211,26 +205,34 @@ export default function CleaningTechnicalGuide() {
                     `Surface: ${showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
                     `Location: ${showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
                   ]} />
-                  <ResultBlock title="Before you start" items={[
-                    "Keep the area ventilated and follow the product label and SDS.",
-                    "Confirm the surface before applying any treatment.",
-                    "Never mix cleaning products or add a product over an unknown residue.",
-                  ]} />
-                  <ResultBlock title="Safe next step" items={previousProductRequiresStop || uncertainCondition ? [
-                    "Do not apply another chemical.",
-                    "Identify the surface and any product already used.",
-                    "Ask a supervisor, product manufacturer or other competent person before continuing.",
-                  ] : [
-                    "Photograph or note the condition before treatment if the customer may need an explanation.",
-                    "Pause here: the treatment method remains locked until the pilot guidance is technically verified.",
-                    "Use a supervisor-approved method or the product manufacturer’s surface instructions.",
-                  ]} />
-                  <ResultBlock title="Stop and get help if…" items={[
-                    "the surface is damaged, unknown or vulnerable;",
-                    "there is unknown chemical residue, biological waste or a strong unexplained odour;",
-                    "mould-like growth is extensive or the source may be structural; or",
-                    "safe access, ventilation or protective equipment is not available.",
-                  ]} />
+                  <ResultBlock title="Purpose" items={[procedure.purpose]} />
+                  <ResultBlock title="What you need" items={procedure.tools} />
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-slate-950">Process</h3>
+                    {procedure.steps.map((procedureStep, index) => (
+                      <article key={procedureStep.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        {procedureStep.image ? <img src={procedureStep.image} alt="" loading="lazy" width="1200" height="900" className="aspect-[4/3] w-full object-cover" /> : null}
+                        <div className="p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">Step {index + 1}</p>
+                          <h4 className="mt-1 font-semibold text-slate-950">{procedureStep.title}</h4>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedureStep.instruction}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <ResultBlock title="Expected outcome" items={procedure.expectedOutcome} />
+                  <ResultBlock title="Stop and get help if…" items={procedure.stopConditions} />
+                  <ResultBlock title="What to tell the customer" items={[procedure.customerExplanation]} />
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <h3 className="font-semibold text-violet-950">Review control</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-violet-900">{procedure.reviewNote}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <h3 className="font-semibold text-slate-950">Authority and safety sources</h3>
+                    <div className="mt-2 grid gap-2">
+                      {procedure.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 text-sm font-medium text-sky-800 hover:bg-sky-50"><span>{source.label}</span><ExternalLink className="h-4 w-4 shrink-0" /></a>)}
+                    </div>
+                  </div>
                 </div>
                 <Button type="button" onClick={reset} variant="outline" className="min-h-12 w-full"><RotateCcw className="mr-2 h-4 w-4" /> Start another search</Button>
               </section>
