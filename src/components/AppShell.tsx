@@ -43,10 +43,10 @@ export default function AppShell() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const runId = searchParams.get("runId");
-  const stage1Context = runId
-    ? `?runId=${encodeURIComponent(runId)}`
-    : searchParams.get("demo") === "1"
-      ? "?demo=1"
+  const stage1Context = searchParams.get("demo") === "1"
+    ? "?demo=1"
+    : runId
+      ? `?runId=${encodeURIComponent(runId)}`
       : "";
   const embeddedFlightDeck =
     new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
