@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { searchMatchesShower } from "@/lib/cleaningTechnicalGuide";
+import { searchMatchesShower, showerObservationOptions } from "@/lib/cleaningTechnicalGuide";
 
 describe("Cleaning Technical Guide Stage Pack", () => {
   it("recognises ordinary shower search language and field aliases", () => {
@@ -9,6 +9,12 @@ describe("Cleaning Technical Guide Stage Pack", () => {
     expect(searchMatchesShower("bodyfat")).toBe(true);
     expect(searchMatchesShower("soap scum")).toBe(true);
     expect(searchMatchesShower("carpet stain")).toBe(false);
+  });
+
+  it("provides an original reference image for each observable shower condition", () => {
+    const observableConditions = showerObservationOptions.filter((option) => option.key !== "unsure");
+    expect(observableConditions).toHaveLength(5);
+    expect(observableConditions.every((option) => option.image?.startsWith("/technical-guide/shower/"))).toBe(true);
   });
 
   it("preserves the bounded 5JD Sleeve controls", () => {

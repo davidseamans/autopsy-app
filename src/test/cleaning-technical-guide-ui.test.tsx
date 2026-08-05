@@ -4,6 +4,16 @@ import { describe, expect, it } from "vitest";
 import CleaningTechnicalGuide from "@/pages/CleaningTechnicalGuide";
 
 describe("Cleaning Technical Guide touch journey", () => {
+  it("shows observation reference images without replacing the plain-language choices", () => {
+    const { container } = render(<MemoryRouter initialEntries={["/stage-1/technical-guide?demo=1"]}><CleaningTechnicalGuide /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Shower Screens, tiles, grout, seals and tracks" }));
+
+    expect(screen.getByRole("button", { name: "Greasy or sticky film" })).toBeInTheDocument();
+    expect(container.querySelectorAll('img[src^="/technical-guide/shower/"]')).toHaveLength(5);
+    expect(container.querySelector('img[src="/technical-guide/shower/greasy-film.webp"]')).toHaveAttribute("loading", "lazy");
+  });
+
   it("routes an unknown prior product to a clear stop result", () => {
     render(
       <MemoryRouter initialEntries={["/stage-1/technical-guide?demo=1"]}>

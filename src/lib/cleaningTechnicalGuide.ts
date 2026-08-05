@@ -2,6 +2,7 @@ export type GuideOption = {
   key: string;
   label: string;
   description?: string;
+  image?: string;
 };
 
 export const cleaningAreaOptions: GuideOption[] = [
@@ -12,11 +13,11 @@ export const cleaningAreaOptions: GuideOption[] = [
 ];
 
 export const showerObservationOptions: GuideOption[] = [
-  { key: "greasy-film", label: "Greasy or sticky film" },
-  { key: "white-marks", label: "White or chalky marks" },
-  { key: "dark-spots", label: "Dark spots or growth" },
-  { key: "seals-tracks", label: "Dirt around seals or tracks" },
-  { key: "damage", label: "Damage or discolouration" },
+  { key: "greasy-film", label: "Greasy or sticky film", image: "/technical-guide/shower/greasy-film.webp" },
+  { key: "white-marks", label: "White or chalky marks", image: "/technical-guide/shower/white-marks.webp" },
+  { key: "dark-spots", label: "Dark spots or growth", image: "/technical-guide/shower/dark-spots.webp" },
+  { key: "seals-tracks", label: "Dirt around seals or tracks", image: "/technical-guide/shower/seals-tracks.webp" },
+  { key: "damage", label: "Damage or discolouration", image: "/technical-guide/shower/damage-discolouration.webp" },
   { key: "unsure", label: "I’m not sure" },
 ];
 
