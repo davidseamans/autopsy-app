@@ -19,12 +19,20 @@ export function AuthGate({
   children,
   heading,
   description,
+  allowDemo = false,
 }: {
   children: ReactNode;
   heading?: string;
   description?: string;
+  allowDemo?: boolean;
 }) {
   const { session, loading } = useAuth();
+  const demonstrationOnly = allowDemo
+    && new URLSearchParams(window.location.search).get("demo") === "1";
+
+  if (demonstrationOnly) {
+    return <>{children}</>;
+  }
 
   if (loading) {
     return (
