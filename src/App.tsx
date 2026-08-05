@@ -43,32 +43,32 @@ const BusinessSetupRoute = () => (
   </AuthGate>
 );
 const Stage1QuoteNewRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <Stage1QuoteNew />
   </AuthGate>
 );
 const Stage1QuotesRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <Stage1Quotes />
   </AuthGate>
 );
 const Stage1QuoteDocumentRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <Stage1QuoteDocument />
   </AuthGate>
 );
 const Stage1OrientationRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <Stage1Orientation />
   </AuthGate>
 );
 const Stage1LearningRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <Stage1Learning />
   </AuthGate>
 );
 const CleaningTechnicalGuideRoute = () => (
-  <AuthGate>
+  <AuthGate allowDemo>
     <CleaningTechnicalGuide />
   </AuthGate>
 );

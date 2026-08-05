@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import AppShell from "@/components/AppShell";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 function renderShell(path: string) {
   render(
@@ -31,5 +33,16 @@ describe("Stage 1 navigation context", () => {
     expect(screen.getAllByRole("link", { name: "Quotes" })[0]).toHaveAttribute("href", "/stage-1/quotes?demo=1");
     expect(screen.getByRole("link", { name: "Technical Guide" })).toHaveAttribute("href", "/stage-1/technical-guide?demo=1");
     expect(screen.getByRole("link", { name: "Leads" })).toHaveAttribute("href", "/leads");
+  });
+
+  it("opens only Stage 1 demonstration routes without an account session", () => {
+    const app = readFileSync(resolve("src/App.tsx"), "utf8");
+    const gate = readFileSync(resolve("src/components/AuthGate.tsx"), "utf8");
+
+    expect(app.match(/<AuthGate allowDemo>/g)).toHaveLength(6);
+    expect(gate).toContain('new URLSearchParams(window.location.search).get("demo") === "1"');
+    expect(gate).toContain("if (demonstrationOnly)");
+    expect(app).toContain("const BusinessSetupRoute = () => (\n  <AuthGate>");
+    expect(app).toContain("const FirstConversationRoute = () => (\n  <AuthGate>");
   });
 });
