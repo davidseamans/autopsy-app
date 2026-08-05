@@ -4,7 +4,7 @@ import type { PublicBusinessProfile } from "@/lib/businessIdentity";
 import type { Stage1CleanTypePricingRule } from "@/lib/stage1Pricing";
 
 export const STAGE1_DEMO_QUOTES: Stage1QuoteSummary[] = [
-  { id: "demo-q-1004", number: "Q-1004", clientName: "Paddington Property Group", status: "sent", totalIncGst: 1450, issuedAt: "2026-07-11", jobId: null },
+  { id: "demo-q-1004", number: "Q-1004", clientName: "Paddington Property Group", status: "sent", totalIncGst: 1496, issuedAt: "2026-07-11", jobId: null },
   { id: "demo-q-1006", number: "Q-1006", clientName: "West End Studios", status: "rejected", totalIncGst: 980, issuedAt: "2026-07-12", jobId: null },
   { id: "demo-q-1001", number: "Q-1001", clientName: "Riverstone Dental Centre", status: "accepted", totalIncGst: 2035, issuedAt: "2026-07-08", jobId: "demo-j-1" },
 ];
@@ -27,11 +27,11 @@ export const STAGE1_DEMO_QUOTE_DOCUMENT: Stage1QuoteDocument = {
   cleanTypeLabel: "Initial or heavy clean",
   pricingRuleVersion: 1,
   labourServiceAmountExGst: 1280,
-  estimatedConsumablesCost: 45,
-  consumablesSellAmount: 38.18,
-  subtotalExGst: 1318.18,
-  gstAmount: 131.82,
-  totalIncGst: 1450,
+  estimatedConsumablesCost: 56,
+  consumablesSellAmount: 80,
+  subtotalExGst: 1360,
+  gstAmount: 136,
+  totalIncGst: 1496,
   jobId: null,
   jobNumber: null,
   lines: [
