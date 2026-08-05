@@ -41,7 +41,13 @@ const navGroups = [
 
 export default function AppShell() {
   const location = useLocation();
-  const runId = new URLSearchParams(location.search).get("runId");
+  const searchParams = new URLSearchParams(location.search);
+  const runId = searchParams.get("runId");
+  const stage1Context = runId
+    ? `?runId=${encodeURIComponent(runId)}`
+    : searchParams.get("demo") === "1"
+      ? "?demo=1"
+      : "";
   const embeddedFlightDeck =
     new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
 
@@ -70,8 +76,8 @@ export default function AppShell() {
                 {group.items.map((item) => (
                   <NavLink
                     key={item.url}
-                    to={group.label === "5JD / Stage 1" && runId
-                      ? `${item.url}?runId=${encodeURIComponent(runId)}`
+                    to={group.label === "5JD / Stage 1"
+                      ? `${item.url}${stage1Context}`
                       : item.url}
                     className={({ isActive }) =>
                       `rounded-md px-3 py-1.5 ${isActive ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted"}`
