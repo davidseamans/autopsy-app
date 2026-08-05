@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   STAGE1_DEMO_CLEAN_TYPES,
+  STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT,
   STAGE1_DEMO_QUOTE_DOCUMENT,
   STAGE1_DEMO_QUOTES,
 } from "@/lib/stage1Demo";
@@ -22,5 +23,13 @@ describe("Stage 1 demonstration transaction", () => {
     expect(STAGE1_DEMO_QUOTE_DOCUMENT.gstAmount).toBe(calculated.gst);
     expect(STAGE1_DEMO_QUOTE_DOCUMENT.totalIncGst).toBe(calculated.total);
     expect(STAGE1_DEMO_QUOTES.find((quote) => quote.id === STAGE1_DEMO_QUOTE_DOCUMENT.id)?.totalIncGst).toBe(calculated.total);
+  });
+
+  it("preserves the accepted quote, job and generated invoice lineage", () => {
+    expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.number).toBe("Q-1001");
+    expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.jobNumber).toBe("J-1");
+    expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.invoice?.number).toBe("INV-1");
+    expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.totalIncGst).toBe(2035);
+    expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.subtotalExGst + STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.gstAmount).toBe(2035);
   });
 });
