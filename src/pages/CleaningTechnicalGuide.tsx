@@ -48,9 +48,10 @@ function TouchChoice({ option, selected, onSelect }: { option: GuideOption; sele
     <button
       type="button"
       onClick={onSelect}
-      className={`min-h-14 w-full rounded-xl border px-4 py-3 text-left transition active:scale-[0.99] ${selected ? "border-sky-700 bg-sky-50 ring-2 ring-sky-200" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/40"}`}
+      className={`min-h-14 w-full overflow-hidden rounded-xl border text-left transition active:scale-[0.99] ${selected ? "border-sky-700 bg-sky-50 ring-2 ring-sky-200" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/40"}`}
     >
-      <span className="flex items-center justify-between gap-3">
+      {option.image ? <img src={option.image} alt="" loading="lazy" width="800" height="800" className="aspect-[4/3] w-full object-cover" /> : null}
+      <span className="flex items-center justify-between gap-3 px-4 py-3">
         <span>
           <span className="block text-base font-semibold text-slate-950">{option.label}</span>
           {option.description ? <span className="mt-0.5 block text-sm leading-snug text-slate-600">{option.description}</span> : null}
