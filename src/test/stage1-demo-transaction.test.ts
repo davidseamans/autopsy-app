@@ -6,6 +6,7 @@ import {
   STAGE1_DEMO_QUOTES,
 } from "@/lib/stage1Demo";
 import { calculateGuidedQuoteTotals } from "@/lib/stage1Pricing";
+import Stage1DashboardSource from "@/pages/Stage1Dashboard?raw";
 
 describe("Stage 1 demonstration transaction", () => {
   it("carries one calculation unchanged from the quote builder into the issued document", () => {
@@ -31,5 +32,12 @@ describe("Stage 1 demonstration transaction", () => {
     expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.invoice?.number).toBe("INV-1");
     expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.totalIncGst).toBe(2035);
     expect(STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.subtotalExGst + STAGE1_DEMO_ACCEPTED_QUOTE_DOCUMENT.gstAmount).toBe(2035);
+  });
+
+  it("carries the completed sample job through payment without leaving money owing", () => {
+    expect(Stage1DashboardSource).toContain('paymentStatus: "Paid"');
+    expect(Stage1DashboardSource).toContain('paymentAmount: 2035');
+    expect(Stage1DashboardSource).toContain('description: "Payment received in full"');
+    expect(Stage1DashboardSource).toContain('sandboxOutstandingAmount: 0');
   });
 });
