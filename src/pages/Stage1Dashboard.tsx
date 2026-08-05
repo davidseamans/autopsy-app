@@ -70,6 +70,13 @@ import {
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
+import {
+  createStage1LeadActivity,
+  loadStage1LeadActivities,
+  type NewStage1LeadActivity,
+  type Stage1LeadActivity,
+} from "@/lib/stage1Funnel";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -92,9 +99,11 @@ const isoToAU = (iso: string) => {
 // dated activity records on top of this baseline.
 const METHOD_BASELINE: { method: string; attempts: number; contacts: number; leads: number; quotes: number; jobs: number; notes: string }[] = [];
 const DEMO_METHOD_BASELINE: typeof METHOD_BASELINE = [
-  { method: "Referral Request", attempts: 12, contacts: 10, leads: 9, quotes: 4, jobs: 1, notes: "Introductions from established local contacts" },
-  { method: "Phone Outreach", attempts: 30, contacts: 14, leads: 8, quotes: 3, jobs: 1, notes: "Targeted calls to nearby commercial premises" },
-  { method: "Local Flyer", attempts: 250, contacts: 11, leads: 8, quotes: 3, jobs: 1, notes: "Focused distribution around selected business precincts" },
+  { method: "Referral Request", attempts: 0, contacts: 0, leads: 0, quotes: 4, jobs: 1, notes: "Introductions from established local contacts" },
+  { method: "Customer Referral", attempts: 0, contacts: 0, leads: 0, quotes: 0, jobs: 0, notes: "Introductions from satisfied customers" },
+  { method: "Personal Referral", attempts: 0, contacts: 0, leads: 0, quotes: 0, jobs: 0, notes: "Introductions from personal contacts" },
+  { method: "Phone Outreach", attempts: 0, contacts: 0, leads: 0, quotes: 3, jobs: 1, notes: "Targeted calls to nearby commercial premises" },
+  { method: "Local Flyer", attempts: 0, contacts: 0, leads: 0, quotes: 3, jobs: 1, notes: "Focused distribution around selected business precincts" },
 ];
 const METHOD_OPTIONS = [
   "Phone Outreach",
@@ -106,15 +115,14 @@ const METHOD_OPTIONS = [
   "Other",
 ];
 
-type LeadActivity = {
-  id: string;
-  activity_date: string; // yyyy-mm-dd
-  method: string;
-  attempts: number;
-  contacts_made: number;
-  notes: string;
-  created_at: string;
-};
+const DEMO_LEAD_ACTIVITIES: Stage1LeadActivity[] = [
+  { id: "demo-lead-1", activity_date: "2026-08-01", method: "Referral Request", attempts: 4, contacts_made: 4, leads_generated: 3, created_at: "2026-08-01T09:00:00Z" },
+  { id: "demo-lead-2", activity_date: "2026-08-04", method: "Phone Outreach", attempts: 10, contacts_made: 4, leads_generated: 2, created_at: "2026-08-04T09:00:00Z" },
+  { id: "demo-lead-3", activity_date: "2026-08-09", method: "Local Flyer", attempts: 80, contacts_made: 3, leads_generated: 2, created_at: "2026-08-09T09:00:00Z" },
+  { id: "demo-lead-4", activity_date: "2026-08-12", method: "Customer Referral", attempts: 3, contacts_made: 3, leads_generated: 2, created_at: "2026-08-12T09:00:00Z" },
+  { id: "demo-lead-5", activity_date: "2026-08-18", method: "Phone Outreach", attempts: 12, contacts_made: 5, leads_generated: 3, created_at: "2026-08-18T09:00:00Z" },
+  { id: "demo-lead-6", activity_date: "2026-08-26", method: "Personal Referral", attempts: 4, contacts_made: 4, leads_generated: 3, created_at: "2026-08-26T09:00:00Z" },
+];
 
 const QUOTE_STATUSES = ["Sent", "Accepted", "Declined", "Expired", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -829,9 +837,15 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   },
 };
 
+function LeadSummary({ label, value }: { label: string; value: string | number }) {
+  return <div className="rounded-xl border bg-slate-50 p-3"><div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1 text-xl font-semibold leading-tight">{value}</div></div>;
+}
+
 function DrillBody({
   kind,
   methodRows,
+  activities,
+  stageStartedAt,
   quotes,
   selectedQuoteNumber,
   onSelectQuote,
@@ -842,6 +856,8 @@ function DrillBody({
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
+  activities: Stage1LeadActivity[];
+  stageStartedAt: string | null;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
@@ -869,6 +885,12 @@ function DrillBody({
     <div className="space-y-4">
       {kind === "leads" && (
         <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <LeadSummary label="Total leads" value={methodRows.reduce((sum, row) => sum + row.leads, 0)} />
+            <LeadSummary label="Methods used" value={methodRows.filter((row) => row.leads > 0 || row.attempts > 0).length} />
+            <LeadSummary label="Total attempts" value={methodRows.reduce((sum, row) => sum + row.attempts, 0)} />
+            <LeadSummary label="Best source" value={methodRows.slice().sort((a, b) => b.leads - a.leads)[0]?.method ?? "—"} />
+          </div>
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <Table>
@@ -905,6 +927,7 @@ function DrillBody({
               </div>
             ))}
           </div>
+          <Stage1LeadMatrix activities={activities} startedAt={stageStartedAt} methods={methodRows.map((row) => row.method)} />
         </>
       )}
 
@@ -1182,6 +1205,8 @@ function DrillCurtain({
   drill,
   onOpenChange,
   methodRows,
+  activities,
+  stageStartedAt,
   onLogActivity,
   quotes,
   selectedQuoteNumber,
@@ -1196,6 +1221,8 @@ function DrillCurtain({
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
+  activities: Stage1LeadActivity[];
+  stageStartedAt: string | null;
   onLogActivity: () => void;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
@@ -1239,6 +1266,8 @@ function DrillCurtain({
             <DrillBody
               kind={drill}
               methodRows={methodRows}
+              activities={activities}
+              stageStartedAt={stageStartedAt}
               quotes={quotes}
               selectedQuoteNumber={selectedQuoteNumber}
               onSelectQuote={onSelectQuote}
@@ -1351,33 +1380,30 @@ function LogActivityDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: LeadActivity) => void;
+  onSave: (a: NewStage1LeadActivity) => void;
 }) {
   const [date, setDate] = useState("");
   const [method, setMethod] = useState(METHOD_OPTIONS[0]);
   const [attempts, setAttempts] = useState<string>("");
   const [contacts, setContacts] = useState<string>("");
-  const [notes, setNotes] = useState("");
+  const [leads, setLeads] = useState<string>("");
 
   useEffect(() => {
     if (open) {
       setDate(""); setMethod(METHOD_OPTIONS[0]);
-      setAttempts(""); setContacts(""); setNotes("");
+      setAttempts(""); setContacts(""); setLeads("");
     }
   }, [open]);
 
   const canSave = !!date && !!method;
 
   const save = () => {
-    const activityId = `act-${Date.now()}`;
-    const a: LeadActivity = {
-      id: activityId,
+    const a: NewStage1LeadActivity = {
       activity_date: date,
       method,
       attempts: Number(attempts) || 0,
       contacts_made: Number(contacts) || 0,
-      notes: notes.trim(),
-      created_at: new Date().toISOString(),
+      leads_generated: Number(leads) || 0,
     };
     onSave(a);
   };
@@ -1410,7 +1436,7 @@ function LogActivityDialog({
               {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1.5">
               <Label htmlFor="la-att">Attempts</Label>
               <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
@@ -1419,10 +1445,10 @@ function LogActivityDialog({
               <Label htmlFor="la-con">Contacts Made</Label>
               <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="la-notes">Notes</Label>
-            <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
+            <div className="space-y-1.5">
+              <Label htmlFor="la-leads">Leads Generated</Label>
+              <Input id="la-leads" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} />
+            </div>
           </div>
         </div>
         <DialogFooter className="gap-2">
@@ -1671,7 +1697,15 @@ function Stage1DashboardInner() {
     else setDrill(null);
   }, [isDemo, tourActive, tourStep]);
   const [logActOpen, setLogActOpen] = useState(false);
-  const [activities, setActivities] = useState<LeadActivity[]>([]);
+  const [activities, setActivities] = useState<Stage1LeadActivity[]>(isDemo ? DEMO_LEAD_ACTIVITIES : []);
+  useEffect(() => {
+    if (isDemo || !activeRunId) return;
+    let cancelled = false;
+    loadStage1LeadActivities(activeRunId)
+      .then((rows) => { if (!cancelled) setActivities(rows); })
+      .catch((error) => { if (!cancelled) toast({ title: "Lead activity could not be loaded", description: error instanceof Error ? error.message : String(error), variant: "destructive" }); });
+    return () => { cancelled = true; };
+  }, [activeRunId, isDemo]);
   const [quotes, setQuotes] = useState<Quote[]>(isDemo ? DEMO_QUOTES : SEED_QUOTES);
   const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
   const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
@@ -2745,7 +2779,7 @@ function Stage1DashboardInner() {
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
       const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
       const quotesSum = (baseline?.quotes ?? 0) + qs.length;
-      const leads = (baseline?.leads ?? 0) + acts.length;
+      const leads = (baseline?.leads ?? 0) + acts.reduce((sum, activity) => sum + activity.leads_generated, 0);
       const noteParts: string[] = [];
       if (baseline?.notes) noteParts.push(baseline.notes);
       if (acts.length) noteParts.push(`${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`);
@@ -4664,6 +4698,8 @@ function Stage1DashboardInner() {
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
+        activities={activities}
+        stageStartedAt={isDemo ? "2026-08-01" : stage1Snapshot?.started_at ?? null}
         onLogActivity={() => { if (requireBusinessRegistration("log lead activity")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
@@ -4694,10 +4730,21 @@ function Stage1DashboardInner() {
       <LogActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={(a) => {
+        onSave={async (a) => {
           if (!requireBusinessRegistration("log lead activity")) return;
-          setActivities((prev) => [...prev, a]);
-          setLogActOpen(false);
+          if (isDemo) {
+            setActivities((prev) => [...prev, { ...a, id: `demo-${Date.now()}`, created_at: new Date().toISOString() }]);
+            setLogActOpen(false);
+            return;
+          }
+          if (!activeRunId) return;
+          try {
+            const saved = await createStage1LeadActivity(activeRunId, a);
+            setActivities((prev) => [...prev, saved]);
+            setLogActOpen(false);
+          } catch (error) {
+            toast({ title: "Lead activity was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+          }
         }}
       />
       <DetailedJobCostReport

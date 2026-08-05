@@ -46,10 +46,13 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
   it("keeps candidate lead entry in the existing dashboard drilldown", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
+    const matrix = readFileSync(resolve("src/components/Stage1LeadMatrix.tsx"), "utf8");
     expect(funnel).toContain('rpc("set_stage1_lead_count"');
     expect(funnel).not.toContain("create_stage1_lead");
     expect(dashboard).toContain("Lead Method Performance");
     expect(dashboard).toContain("Log Activity");
+    expect(dashboard).toContain("Leads Generated");
+    expect(matrix).toContain("Six-week lead-source graph");
     expect(dashboard).not.toContain("Record Leads");
     expect(dashboard).not.toContain("Quotes Generated");
     expect(dashboard).not.toContain("Quote Details Required");
