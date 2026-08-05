@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveShowerProcedure, searchMatchesShower, showerObservationOptions } from "@/lib/cleaningTechnicalGuide";
+import { areaConfigs, findAreaForSearch, resolveAreaProcedure } from "@/lib/cleaningTechnicalGuideV1";
 
 describe("Cleaning Technical Guide Stage Pack", () => {
   it("recognises ordinary shower search language and field aliases", () => {
@@ -21,7 +22,7 @@ describe("Cleaning Technical Guide Stage Pack", () => {
     const page = readFileSync(resolve("src/pages/CleaningTechnicalGuide.tsx"), "utf8");
     const model = readFileSync(resolve("src/lib/cleaningTechnicalGuide.ts"), "utf8");
     expect(page).toContain("Cleaning Sleeve · 5JD Stage Pack");
-    expect(page).toContain("Expert review build.");
+    expect(page).toContain("Technical Guide v1 review build.");
     expect(page).toContain("Expected outcome");
     expect(page).toContain("Authority and safety sources");
     expect(model).toContain("Do not add another chemical");
@@ -47,5 +48,22 @@ describe("Cleaning Technical Guide Stage Pack", () => {
     expect(shell).toContain('{ title: "Technical Guide", url: "/stage-1/technical-guide" }');
     expect(dashboard).toContain("Open technical guide");
     expect(shell).not.toContain('{ title: "Technical Guide", url: "/technical-guide" }');
+  });
+
+  it("releases the four bounded Cleaning Sleeve areas without moving the mechanism into Core", () => {
+    expect(Object.keys(areaConfigs)).toEqual(["shower", "toilet", "kitchen", "windows"]);
+    expect(findAreaForSearch("body fat")).toBe("shower");
+    expect(findAreaForSearch("toilet hinge")).toBe("toilet");
+    expect(findAreaForSearch("kitchen grease")).toBe("kitchen");
+    expect(findAreaForSearch("window track")).toBe("windows");
+    expect(findAreaForSearch("carpet stain")).toBeNull();
+  });
+
+  it("resolves every released area and preserves the shared uncertainty stop", () => {
+    expect(resolveAreaProcedure("toilet", { observation: "hinges", surface: "plastic", location: "seat-hinge", previousProduct: "nothing" }).key).toBe("toilet-hinges");
+    expect(resolveAreaProcedure("kitchen", { observation: "grease", surface: "tile-glass", location: "cooktop-splashback", previousProduct: "known" }).key).toBe("kitchen-grease");
+    expect(resolveAreaProcedure("windows", { observation: "track-debris", surface: "aluminium", location: "track", previousProduct: "nothing" }).key).toBe("window-track");
+    expect(resolveAreaProcedure("kitchen", { observation: "grease", surface: "unsure", location: "cabinet", previousProduct: "nothing" }).status).toBe("Stop and escalate");
+    expect(resolveAreaProcedure("windows", { observation: "damage", surface: "painted-timber", location: "frame", previousProduct: "nothing" }).status).toBe("Stop and escalate");
   });
 });

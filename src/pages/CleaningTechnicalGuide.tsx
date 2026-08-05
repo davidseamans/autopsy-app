@@ -20,17 +20,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  cleaningAreaOptions,
-  observationSummary,
   previousProductOptions,
-  searchMatchesShower,
-  resolveShowerProcedure,
-  showerLocationOptions,
-  showerObservationOptions,
-  showerSurfaceOptions,
   type GuideOption,
   type GuideAnswers,
 } from "@/lib/cleaningTechnicalGuide";
+import {
+  areaConfigs,
+  cleaningAreaOptionsV1,
+  findAreaForSearch,
+  resolveAreaProcedure,
+  type GuideAreaKey,
+} from "@/lib/cleaningTechnicalGuideV1";
 
 const areaIcons = {
   shower: Bath,
@@ -105,15 +105,17 @@ export default function CleaningTechnicalGuide() {
   const [step, setStep] = useState(0);
   const [search, setSearch] = useState("");
   const [searchAttempted, setSearchAttempted] = useState(false);
+  const [selectedArea, setSelectedArea] = useState<GuideAreaKey | null>(null);
   const [answers, setAnswers] = useState<GuideAnswers>({});
 
   const steps = ["Area", "What you see", "Surface", "Location", "Already used", "Safe next step"];
-  const procedure = resolveShowerProcedure(answers);
+  const area = selectedArea ? areaConfigs[selectedArea] : null;
+  const procedure = selectedArea ? resolveAreaProcedure(selectedArea, answers) : resolveAreaProcedure("shower", { observation: "damage" });
   const progress = Math.round(((step + 1) / steps.length) * 100);
   const answerTrail = [
-    answers.observation ? { step: 1, label: observationSummary(answers.observation) } : null,
-    answers.surface ? { step: 2, label: showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
-    answers.location ? { step: 3, label: showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
+    answers.observation ? { step: 1, label: area?.observations.find((option) => option.key === answers.observation)?.label ?? "Observation" } : null,
+    answers.surface ? { step: 2, label: area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
+    answers.location ? { step: 3, label: area?.locations.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
     answers.previousProduct ? { step: 4, label: previousProductOptions.find((option) => option.key === answers.previousProduct)?.label ?? "Product" } : null,
   ].filter((item): item is { step: number; label: string } => Boolean(item));
 
@@ -125,13 +127,19 @@ export default function CleaningTechnicalGuide() {
   const reset = () => {
     setStep(0);
     setAnswers({});
+    setSelectedArea(null);
     setSearch("");
     setSearchAttempted(false);
   };
 
   const runSearch = () => {
     setSearchAttempted(true);
-    if (searchMatchesShower(search)) setStep(1);
+    const matchedArea = findAreaForSearch(search);
+    if (matchedArea) {
+      setSelectedArea(matchedArea);
+      setAnswers({});
+      setStep(1);
+    }
   };
 
   return (
@@ -155,7 +163,7 @@ export default function CleaningTechnicalGuide() {
         <Card className="border-sky-200 bg-sky-50">
           <CardContent className="flex gap-3 p-4 text-sm text-sky-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p><strong>Expert review build.</strong> The first shower procedures now include processes and outcomes. Draft procedures remain visibly marked until field review and independent safety and surface-compatibility review are recorded.</p>
+            <p><strong>Technical Guide v1 review build.</strong> Shower, toilet, kitchen and window pathways now include pictures, processes and expected outcomes. Field-method direction is approved. Draft procedures remain visibly marked until independent safety and surface-compatibility review is recorded.</p>
           </CardContent>
         </Card>
 
@@ -169,23 +177,22 @@ export default function CleaningTechnicalGuide() {
                   <p className="mt-1 text-sm text-slate-600">Tap an area or search using the words you would normally use.</p>
                 </div>
                 <div className="flex gap-2">
-                  <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try shower, body fat or soap scum" aria-label="Search cleaning issue" />
+                  <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try body fat, toilet hinge, kitchen grease or window track" aria-label="Search cleaning issue" />
                   <Button type="button" onClick={runSearch} className="min-h-12 min-w-12 px-3" aria-label="Search"><Search className="h-5 w-5" /></Button>
                 </div>
-                {searchAttempted && !searchMatchesShower(search) ? <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">That topic is not in the shower pilot yet. Try <strong>shower</strong>, <strong>body fat</strong> or <strong>soap scum</strong>.</p> : null}
+                {searchAttempted && !findAreaForSearch(search) ? <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">That term is not in the first guide yet. Try <strong>shower</strong>, <strong>toilet hinge</strong>, <strong>kitchen grease</strong> or <strong>window track</strong>.</p> : null}
                 <div className="grid grid-cols-2 gap-3">
-                  {cleaningAreaOptions.map((option) => {
+                  {cleaningAreaOptionsV1.map((option) => {
                     const Icon = areaIcons[option.key as keyof typeof areaIcons] ?? HelpCircle;
-                    const enabled = option.key === "shower";
-                    return <button key={option.key} type="button" disabled={!enabled} onClick={() => setStep(1)} className="min-h-32 rounded-xl border border-slate-200 bg-white p-4 text-left disabled:bg-slate-50 disabled:opacity-60 enabled:hover:border-sky-400 enabled:hover:bg-sky-50"><Icon className="h-7 w-7 text-sky-700" /><span className="mt-3 block text-base font-semibold">{option.label}</span><span className="mt-1 block text-xs leading-snug text-slate-600">{option.description}</span></button>;
+                    return <button key={option.key} type="button" onClick={() => { setSelectedArea(option.key as GuideAreaKey); setAnswers({}); setStep(1); }} className="min-h-32 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-sky-400 hover:bg-sky-50"><Icon className="h-7 w-7 text-sky-700" /><span className="mt-3 block text-base font-semibold">{option.label}</span><span className="mt-1 block text-xs leading-snug text-slate-600">{option.description}</span></button>;
                   })}
                 </div>
               </section>
             ) : null}
 
-            {step === 1 ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={showerObservationOptions} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
-            {step === 2 ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on glass, grout, metal or acrylic." options={showerSurfaceOptions} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
-            {step === 3 ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : null}
+            {step === 1 && area ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={area.observations} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
+            {step === 2 && area ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on different materials and finishes." options={area.surfaces} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
+            {step === 3 && area ? (selectedArea === "shower" ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : <QuestionStep title="Where exactly is it?" hint="Choose the closest location. Access and nearby materials change the safe method." options={area.locations} value={answers.location} onSelect={(value) => selectAnswer("location", value)} />) : null}
             {step === 4 ? <QuestionStep title="What has already been used?" hint="Do not add another product when an existing chemical is unknown." options={previousProductOptions} value={answers.previousProduct} onSelect={(value) => selectAnswer("previousProduct", value)} /> : null}
 
             {step === 5 ? (
@@ -201,9 +208,10 @@ export default function CleaningTechnicalGuide() {
 
                 <div className="grid gap-3">
                   <ResultBlock title="What the guide recorded" items={[
-                    `You saw: ${observationSummary(answers.observation ?? "")}.`,
-                    `Surface: ${showerSurfaceOptions.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
-                    `Location: ${showerLocationOptions.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
+                    `Area: ${area?.label ?? "not identified"}.`,
+                    `You saw: ${area?.observations.find((option) => option.key === answers.observation)?.label ?? "not identified"}.`,
+                    `Surface: ${area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
+                    `Location: ${area?.locations.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
                   ]} />
                   <ResultBlock title="Purpose" items={[procedure.purpose]} />
                   <ResultBlock title="What you need" items={procedure.tools} />

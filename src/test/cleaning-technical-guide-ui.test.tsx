@@ -60,4 +60,28 @@ describe("Cleaning Technical Guide touch journey", () => {
 
     expect(screen.getByRole("heading", { name: "What are you seeing?" })).toBeInTheDocument();
   });
+
+  it("completes the toilet hinge pathway from the area chooser", () => {
+    render(<MemoryRouter initialEntries={["/stage-1/technical-guide?demo=1"]}><CleaningTechnicalGuide /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Toilet Bowl, seat hinges, fixings, base and seals" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grime around hinges or fixings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plastic seat or fitting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Seat, hinge or fixing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nothing yet" }));
+    expect(screen.getByRole("heading", { name: "Detail toilet hinges and concealed fixings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What to tell the customer" })).toBeInTheDocument();
+  });
+
+  it("searches directly into the kitchen and windows pathways", () => {
+    const { unmount } = render(<MemoryRouter initialEntries={["/stage-1/technical-guide?demo=1"]}><CleaningTechnicalGuide /></MemoryRouter>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search cleaning issue" }), { target: { value: "kitchen grease" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByRole("button", { name: "Greasy film or grease migration" })).toBeInTheDocument();
+    unmount();
+
+    render(<MemoryRouter initialEntries={["/stage-1/technical-guide?demo=1"]}><CleaningTechnicalGuide /></MemoryRouter>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search cleaning issue" }), { target: { value: "window track" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByRole("button", { name: "Dust, insects or debris in the track" })).toBeInTheDocument();
+  });
 });
