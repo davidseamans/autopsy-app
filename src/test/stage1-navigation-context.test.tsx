@@ -28,7 +28,7 @@ describe("Stage 1 navigation context", () => {
   });
 
   it("preserves the demonstration boundary without leaking it into Core", () => {
-    renderShell("/stage-1?demo=1");
+    renderShell("/stage-1?demo=1&runId=sample-run");
 
     expect(screen.getAllByRole("link", { name: "Quotes" })[0]).toHaveAttribute("href", "/stage-1/quotes?demo=1");
     expect(screen.getByRole("link", { name: "Technical Guide" })).toHaveAttribute("href", "/stage-1/technical-guide?demo=1");
