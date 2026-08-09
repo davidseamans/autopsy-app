@@ -27,13 +27,6 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(migration).not.toMatch(/public\.(leads|quotes|jobs)\s/i);
   });
 
-  it("stores no individual prospect details before quoting", () => {
-    expect(migration).toContain("Cumulative Stage 1 lead volume only");
-    expect(migration).not.toContain("client_name");
-    expect(migration).not.toContain("contact_email");
-    expect(migration).not.toContain("site_address");
-  });
-
   it("protects the total with verified Stage 1 ownership", () => {
     expect(migration).toContain("current_user_has_verified_business_identity");
     expect(migration).toContain("current_user_can_use_stage1_run");
@@ -48,12 +41,15 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     const matrix = readFileSync(resolve("src/components/Stage1LeadMatrix.tsx"), "utf8");
     expect(funnel).toContain('rpc("set_stage1_lead_count"');
-    expect(funnel).not.toContain("create_stage1_lead");
+    expect(funnel).toContain('rpc("create_stage1_lead"');
+    expect(funnel).toContain('.from("stage1_leads")');
     expect(dashboard).toContain("Lead Method Performance");
-    expect(dashboard).toContain("Log Activity");
-    expect(dashboard).toContain("Leads Generated");
+    expect(dashboard).toContain("Add Lead");
+    expect(dashboard).toContain("Lead / business name");
+    expect(dashboard).toContain("Contact name");
+    expect(dashboard).toContain("Site address");
     expect(matrix).toContain("Six-week lead-source graph");
-    expect(dashboard).not.toContain("Record Leads");
+    expect(dashboard).toContain("lead records");
     expect(dashboard).not.toContain("Quotes Generated");
     expect(dashboard).not.toContain("Quote Details Required");
     expect(dashboard).not.toContain("matching quote details");
@@ -63,6 +59,17 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(dashboard).not.toContain('setDrill("conversions")');
     expect(dashboard).toContain("/stage-1/quotes?runId=");
     expect(existsSync(resolve("src/pages/Stage1Leads.tsx"))).toBe(false);
+  });
+
+  it("derives lead totals, method drill-downs, and the graph from real lead records", () => {
+    const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
+    const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
+    const leadRecords = readFileSync(resolve("src/lib/stage1LeadRecords.ts"), "utf8");
+    expect(leadRecords).toContain("leadRecordsAsActivities");
+    expect(leadRecords).toContain("leads_generated: 1");
+    expect(dashboard).toContain("leadRecords.filter((lead) => lead.source === method).length");
+    expect(dashboard).toContain("setSelectedLeadMethod(r.method)");
+    expect(dashboard).toContain("leadRecordsAsActivities(leadRecords)");
   });
 
   it("captures customer details at quote creation and preserves quote-to-job routing", () => {
