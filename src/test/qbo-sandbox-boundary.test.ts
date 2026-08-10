@@ -5,6 +5,7 @@ import {
   QBO_ACCOUNTING_SCOPE,
   QBO_SANDBOX_API_ORIGIN,
   buildQboAuthorizationUrl,
+  buildQboCountUrl,
   buildQboReadUrl,
   createQboOAuthState,
   decryptQboSecret,
@@ -74,6 +75,14 @@ describe("QBO Phase 0 sandbox boundary", () => {
     expect(() => buildQboReadUrl("123456789", { entity: "JournalEntry" })).toThrow(/not allowlisted/);
     expect(() => buildQboReadUrl("123456789", { report: "TaxSummary" })).toThrow(/not allowlisted/);
     expect(() => buildQboReadUrl("not-a-realm", { entity: "Customer" })).toThrow(/Invalid QBO realmId/);
+  });
+
+  it("builds only allowlisted count queries at supported minor version 75", () => {
+    const url = buildQboCountUrl("123456789", "Invoice");
+    expect(url.origin).toBe(QBO_SANDBOX_API_ORIGIN);
+    expect(url.searchParams.get("query")).toBe("select count(*) from Invoice");
+    expect(url.searchParams.get("minorversion")).toBe("75");
+    expect(() => buildQboCountUrl("123456789", "PurchaseOrder")).toThrow(/count-allowlisted/);
   });
 
   it("publishes an explicit no-write capability contract", () => {
