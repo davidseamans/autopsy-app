@@ -119,6 +119,17 @@ export function buildQboReadUrl(
   return new URL(`${base}/reports/${request.report}`);
 }
 
+export function buildQboCountUrl(realmId: string, entity: string): URL {
+  if (!/^\d{1,30}$/.test(realmId)) throw new Error("Invalid QBO realmId");
+  if (!READ_ONLY_ENTITIES.has(entity) || entity === "CompanyInfo") {
+    throw new Error("QBO entity is not count-allowlisted for Phase 0");
+  }
+  const url = new URL(`${QBO_SANDBOX_API_ORIGIN}/v3/company/${realmId}/query`);
+  url.searchParams.set("query", `select count(*) from ${entity}`);
+  url.searchParams.set("minorversion", "75");
+  return url;
+}
+
 export function qboSandboxCapabilities() {
   return {
     environment: "sandbox" as const,

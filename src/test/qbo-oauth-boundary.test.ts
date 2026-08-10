@@ -8,6 +8,7 @@ import {
   protectQboTokens,
   qboConnectionRecord,
   qboOAuthStateExpiresAt,
+  refreshQboAccessToken,
   revokeQboToken,
   validateQboRealmId,
 } from "../../api/_lib/qbo-oauth";
@@ -97,17 +98,31 @@ describe("QBO sandbox OAuth boundary", () => {
     await expect(revokeQboToken(config, encrypted, request as typeof fetch)).resolves.toBeUndefined();
   });
 
+  it("refreshes with the decrypted refresh token and accepts the rotated pair", async () => {
+    const encrypted = protectQboTokens({ access_token: "old-access", refresh_token: "old-refresh", expires_in: 60, x_refresh_token_expires_in: 7200 }, config).refreshTokenEncrypted;
+    const request = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const body = init?.body as URLSearchParams;
+      expect(body.get("grant_type")).toBe("refresh_token");
+      expect(body.get("refresh_token")).toBe("old-refresh");
+      return new Response(JSON.stringify({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 3600, x_refresh_token_expires_in: 8_640_000 }), { status: 200 });
+    });
+    await expect(refreshQboAccessToken(config, encrypted, request as typeof fetch)).resolves.toMatchObject({ access_token: "new-access", refresh_token: "new-refresh" });
+  });
+
   it("keeps every connection endpoint authenticated or single-use-state-bound", () => {
     const connect = readFileSync(resolve("api/qbo/connect.ts"), "utf8");
     const callback = readFileSync(resolve("api/qbo/callback.ts"), "utf8");
     const status = readFileSync(resolve("api/qbo/status.ts"), "utf8");
     const disconnect = readFileSync(resolve("api/qbo/disconnect.ts"), "utf8");
+    const readProof = readFileSync(resolve("api/qbo/read-proof.ts"), "utf8");
     expect(connect).toContain("authenticateRequest(req)");
     expect(status).toContain("authenticateRequest(req)");
     expect(disconnect).toContain("authenticateRequest(req)");
+    expect(readProof).toContain("authenticateRequest(req)");
+    expect(readProof).toContain("writesPerformed: false");
     expect(callback).toContain('.from("qbo_oauth_states")');
     expect(callback).toContain(".delete()");
-    for (const endpoint of [connect, callback, status, disconnect]) {
+    for (const endpoint of [connect, callback, status, disconnect, readProof]) {
       expect(endpoint).toContain('res.setHeader("Cache-Control", "no-store")');
     }
   });
