@@ -67,6 +67,7 @@ import {
   Compass,
   BookOpen,
   ShieldAlert,
+  Download,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
@@ -80,6 +81,7 @@ import {
   type Stage1LeadActivity,
   type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
+import { downloadAccountantPack } from "@/lib/stage1AccountantPack";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3081,6 +3083,10 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={() => { downloadAccountantPack({ units, business: bd.profile, runId: activeRunId }); toast({ title: "Accountant Pack downloaded", description: "Check QBO and bank feeds before importing or entering transactions." }); }}>
+            <Download className="h-4 w-4" />
+            Accountant Pack
+          </Button>
           {activeRunId ? (
             <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
