@@ -48,6 +48,19 @@ describe("5JD QuickBooks Sandbox connection control", () => {
     expect(request.mock.calls[1][1]).toMatchObject({ method: "POST" });
   });
 
+  it("runs the read-only proof and displays counts without claiming writes", async () => {
+    const request = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ configured: true, connected: true, connection: { realmId: "123", connectedAt: "2026-08-10T00:00:00Z" } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tokenRefreshed: true, company: { name: "Sandbox AU", country: "AU" }, counts: { customers: 12, accounts: 30, invoices: 8, payments: 5 }, writesPerformed: false }), { status: 200 }));
+
+    render(<QboSandboxConnectionCard />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run read-only proof" }));
+
+    expect(await screen.findByText(/Read-only proof passed for Sandbox AU/)).toHaveTextContent("Token refreshed; no writes performed");
+    expect(request.mock.calls[1][0]).toBe("/api/qbo/read-proof");
+    expect(request.mock.calls[1][1]).toMatchObject({ method: "POST", headers: { Authorization: `Bearer ${accessToken}` } });
+  });
+
   it("is absent without an authenticated Autopsy session", async () => {
     authState.session = null;
     const { container } = render(<QboSandboxConnectionCard />);
