@@ -79,6 +79,32 @@ export async function exchangeQboAuthorizationCode(
   return token as QboTokenResponse;
 }
 
+export async function refreshQboAccessToken(
+  config: QboSandboxConfig,
+  encryptedRefreshToken: EncryptedQboSecret,
+  request: typeof fetch = fetch,
+): Promise<QboTokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: decryptQboSecret(encryptedRefreshToken, config.tokenEncryptionKey),
+  });
+  const response = await request(QBO_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: basicAuthorization(config),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  if (!response.ok) throw new Error(`Intuit token refresh failed (${response.status})`);
+  const token = (await response.json()) as Partial<QboTokenResponse>;
+  if (!token.access_token || !token.refresh_token) throw new Error("Intuit refresh response was incomplete");
+  requirePositiveSeconds(token.expires_in, "expires_in");
+  requirePositiveSeconds(token.x_refresh_token_expires_in, "x_refresh_token_expires_in");
+  return token as QboTokenResponse;
+}
+
 export function protectQboTokens(
   token: QboTokenResponse,
   config: QboSandboxConfig,
