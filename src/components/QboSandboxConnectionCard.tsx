@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Link2, Loader2, Unplug } from "lucide-react";
+import { CheckCircle2, Link2, Loader2, RefreshCw, Unplug } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,13 @@ interface QboStatus {
   configured: boolean;
   connected: boolean;
   connection: { realmId: string; connectedAt: string } | null;
+}
+
+interface QboReadProof {
+  tokenRefreshed: true;
+  company: { name: string; country: string | null };
+  counts: { customers: number; accounts: number; invoices: number; payments: number };
+  writesPerformed: false;
 }
 
 async function qboRequest<T>(path: string, token: string, method = "GET"): Promise<T> {
@@ -25,8 +32,9 @@ async function qboRequest<T>(path: string, token: string, method = "GET"): Promi
 export function QboSandboxConnectionCard({ navigateTo = (url) => window.location.assign(url) }: { navigateTo?: (url: string) => void }) {
   const { session } = useAuth();
   const [status, setStatus] = useState<QboStatus | null>(null);
-  const [busy, setBusy] = useState<"loading" | "connecting" | "disconnecting" | null>("loading");
+  const [busy, setBusy] = useState<"loading" | "connecting" | "disconnecting" | "proving" | null>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [proof, setProof] = useState<QboReadProof | null>(null);
   const callbackResult = new URLSearchParams(window.location.search).get("qbo");
 
   const loadStatus = useCallback(async () => {
@@ -72,6 +80,18 @@ export function QboSandboxConnectionCard({ navigateTo = (url) => window.location
     }
   };
 
+  const runReadProof = async () => {
+    setBusy("proving");
+    setError(null);
+    try {
+      setProof(await qboRequest<QboReadProof>("/api/qbo/read-proof", session.access_token, "POST"));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "QuickBooks Sandbox proof failed safely.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <Card className="border-cyan-200 bg-cyan-50/50">
       <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
@@ -90,16 +110,27 @@ export function QboSandboxConnectionCard({ navigateTo = (url) => window.location
                 : "Connect a dummy-data QuickBooks company for the controlled read-only test."}
             </p>
             {callbackResult === "connection_failed" ? <p className="mt-2 text-sm text-destructive">QuickBooks did not connect. Nothing was saved.</p> : null}
+            {proof ? (
+              <p className="mt-2 text-sm text-emerald-800">
+                Read-only proof passed for {proof.company.name}: {proof.counts.customers} customers, {proof.counts.accounts} accounts, {proof.counts.invoices} invoices and {proof.counts.payments} payments. Token refreshed; no writes performed.
+              </p>
+            ) : null}
             {error ? <p role="alert" className="mt-2 text-sm text-destructive">{error}</p> : null}
           </div>
         </div>
         {busy === "loading" ? (
           <Button variant="outline" disabled className="shrink-0 gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Checking</Button>
         ) : status?.connected ? (
-          <Button variant="outline" className="shrink-0 gap-2 border-cyan-300 bg-white" onClick={() => void disconnect()} disabled={busy !== null}>
-            {busy === "disconnecting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
-            Disconnect sandbox
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button className="shrink-0 gap-2 bg-cyan-800 text-white hover:bg-cyan-900" onClick={() => void runReadProof()} disabled={busy !== null}>
+              {busy === "proving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Run read-only proof
+            </Button>
+            <Button variant="outline" className="shrink-0 gap-2 border-cyan-300 bg-white" onClick={() => void disconnect()} disabled={busy !== null}>
+              {busy === "disconnecting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}
+              Disconnect sandbox
+            </Button>
+          </div>
         ) : (
           <Button className="shrink-0 gap-2 bg-cyan-800 text-white hover:bg-cyan-900" onClick={() => void connect()} disabled={busy !== null || status?.configured === false}>
             {busy === "connecting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
