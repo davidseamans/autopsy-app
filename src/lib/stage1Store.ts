@@ -175,12 +175,80 @@ export async function fetchStage1Units(
   // best-effort enrichment only; the view remains the authoritative source.
   const { data: jobs } = await supabase
     .from("stage1_jobs")
-    .select("id,notes")
+    .select("id,notes,source_stage1_quote_id")
     .eq("autopsy_run_id", runId);
   const jobNotes = new Map<string, string | undefined>();
+  const quoteIdByJob = new Map<string, string>();
   (jobs ?? []).forEach((j: Record<string, unknown>) => {
-    jobNotes.set(String(j.id), typeof j.notes === "string" ? j.notes : undefined);
+    const jobId = String(j.id);
+    jobNotes.set(jobId, typeof j.notes === "string" ? j.notes : undefined);
+    if (typeof j.source_stage1_quote_id === "string") quoteIdByJob.set(jobId, j.source_stage1_quote_id);
   });
+
+  const quotedWorkByJob = new Map<string, {
+    hours: number;
+    chargeOutRate: number;
+    consumablesBudget: number;
+    consumablesSellAmount: number;
+    cleanTypeLabel?: string;
+  }>();
+  const quoteNumberByJob = new Map<string, string>();
+  const jobIdByQuote = new Map<string, string>(
+    [...quoteIdByJob.entries()].map(([jobId, quoteId]) => [quoteId, jobId]),
+  );
+  const quoteIds = [...new Set(quoteIdByJob.values())];
+  if (quoteIds.length > 0) {
+    const [quoteLinesResult, quoteResult] = await Promise.all([
+      supabase
+        .from("stage1_quote_line_items")
+        .select("stage1_quote_id,quantity,unit_price_ex_gst,line_total_ex_gst")
+        .in("stage1_quote_id", quoteIds),
+      supabase
+        .from("stage1_quotes")
+        .select("id,quote_sequence_number,clean_type_label,estimated_consumables_cost,consumables_sell_amount")
+        .in("id", quoteIds),
+    ]);
+    if (!quoteLinesResult.error) {
+      const totalsByQuote = new Map<string, { hours: number; totalExGst: number }>();
+      (quoteLinesResult.data ?? []).forEach((line: Record<string, unknown>) => {
+        const quoteId = String(line.stage1_quote_id ?? "");
+        if (!quoteId) return;
+        const current = totalsByQuote.get(quoteId) ?? { hours: 0, totalExGst: 0 };
+        current.hours += numValue(line.quantity);
+        current.totalExGst += numValue(line.line_total_ex_gst);
+        totalsByQuote.set(quoteId, current);
+      });
+      const budgetByQuote = new Map<string, { consumablesBudget: number; consumablesSellAmount: number; cleanTypeLabel?: string }>();
+      if (!quoteResult.error) {
+        (quoteResult.data ?? []).forEach((quote: Record<string, unknown>) => {
+          const quoteId = String(quote.id ?? "");
+          if (!quoteId) return;
+          const jobId = jobIdByQuote.get(quoteId);
+          if (jobId && quote.quote_sequence_number != null) {
+            quoteNumberByJob.set(jobId, `Q-${Number(quote.quote_sequence_number)}`);
+          }
+          budgetByQuote.set(quoteId, {
+            consumablesBudget: numValue(quote.estimated_consumables_cost),
+            consumablesSellAmount: numValue(quote.consumables_sell_amount),
+            cleanTypeLabel: typeof quote.clean_type_label === "string" ? quote.clean_type_label : undefined,
+          });
+        });
+      }
+      quoteIdByJob.forEach((quoteId, jobId) => {
+        const quoted = totalsByQuote.get(quoteId);
+        if (quoted && quoted.hours > 0) {
+          const budget = budgetByQuote.get(quoteId);
+          quotedWorkByJob.set(jobId, {
+            hours: quoted.hours,
+            chargeOutRate: quoted.totalExGst / quoted.hours,
+            consumablesBudget: budget?.consumablesBudget ?? 0,
+            consumablesSellAmount: budget?.consumablesSellAmount ?? 0,
+            cleanTypeLabel: budget?.cleanTypeLabel,
+          });
+        }
+      });
+    }
+  }
 
   // Per-line cost detail (display-only) from stage1_job_costs.lines, plus the
   // proof name carried on the cost row's notes. These restore description /
@@ -194,7 +262,7 @@ export async function fetchStage1Units(
   if (jobIds.length > 0) {
     const { data: revenueRows, error: revenueRowsErr } = await supabase
       .from("stage1_revenue_events")
-      .select("id,stage1_job_id,amount,amount_inc_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
+      .select("id,stage1_job_id,source_quote_id,amount,amount_inc_gst,gst_treatment,gst_amount,revenue_type,source,reference,description,created_at")
       .in("stage1_job_id", jobIds)
       .order("created_at", { ascending: true });
     if (!revenueRowsErr) {
@@ -203,7 +271,7 @@ export async function fetchStage1Units(
         if (!jobId) return;
         const type = typeof r.revenue_type === "string" ? r.revenue_type : "invoice";
         const amount = numValue(r.amount_inc_gst ?? r.amount);
-        if (amount <= 0) return;
+        if (amount === 0) return;
         if (type === "payment") {
           const list = paymentLinesByJob.get(jobId) ?? [];
           list.push({
@@ -229,6 +297,8 @@ export async function fetchStage1Units(
             gstAmount: r.gst_amount != null ? Number(r.gst_amount) : undefined,
             gstOverridden: false,
             proofName: typeof r.reference === "string" ? r.reference : undefined,
+            source: typeof r.source === "string" ? r.source : undefined,
+            sourceQuoteId: typeof r.source_quote_id === "string" ? r.source_quote_id : undefined,
           });
           invoiceLinesByJob.set(jobId, list);
         }
@@ -304,6 +374,7 @@ export async function fetchStage1Units(
           : null;
     const jobSequenceNumber = parsedSeq != null && parsedSeq > 0 ? parsedSeq : undefined;
     const revenue = num("revenue_amount");
+    const actualLabourHours = num("labour_hours");
     const labourCost = num("labour_cost");
     const consumablesCost = num("consumables_cost");
     const travelCost = num("travel_cost");
@@ -338,6 +409,7 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
     const persistedPaymentLines = paymentLinesByJob.get(String(s.stage1_job_id ?? ""));
     const persistedInvoiceTotal = (persistedInvoiceLines ?? []).reduce((sum, line) => sum + (line.amount ?? 0), 0);
     const persistedPaymentTotal = (persistedPaymentLines ?? []).reduce((sum, line) => sum + (line.amount ?? 0), 0);
+    const quotedWork = quotedWorkByJob.get(String(s.stage1_job_id ?? ""));
     const costLines: CostLine[] = [];
     const pushCost = (label: string, amount: number) => {
       if (amount > 0) {
@@ -369,6 +441,7 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       stage1JobId: String(s.stage1_job_id ?? ""),
       client: typeof s.client_name === "string" ? s.client_name : "",
       jobSite: typeof s.job_title === "string" ? s.job_title : undefined,
+      sourceQuote: quoteNumberByJob.get(String(s.stage1_job_id ?? "")),
       proofType: "Completed Job",
       status: fromCanonicalStatus(typeof s.job_status === "string" ? s.job_status : null),
       gm,
@@ -377,6 +450,12 @@ const clientInvoicesIncGst = num("client_invoices_inc_gst");
       lifecycle: s.job_status === "cancelled" ? "voided" : "active",
       // Sandbox revenue/cost are stored ex-GST, so re-saves stay idempotent.
       quoteValue: revenue > 0 ? revenue : undefined,
+      quotedLabourHours: quotedWork?.hours,
+      quotedChargeOutRate: quotedWork?.chargeOutRate,
+      quotedConsumablesBudget: quotedWork?.consumablesBudget,
+      quotedConsumablesSellAmount: quotedWork?.consumablesSellAmount,
+      quotedCleanTypeLabel: quotedWork?.cleanTypeLabel,
+      actualLabourHours: actualLabourHours > 0 ? actualLabourHours : undefined,
       invoiceAmount: persistedInvoiceTotal > 0
         ? persistedInvoiceTotal
         : clientInvoicesIncGst > 0
@@ -448,6 +527,12 @@ export function mergeUnits(canonical: ProofUnit[], cache: ProofUnit[]): ProofUni
       jobSequenceNumber: c.jobSequenceNumber ?? cached.jobSequenceNumber,
       client: c.client || cached.client,
       jobSite: c.jobSite ?? cached.jobSite,
+      sourceQuote: c.sourceQuote ?? cached.sourceQuote,
+      quotedLabourHours: c.quotedLabourHours ?? cached.quotedLabourHours,
+      quotedChargeOutRate: c.quotedChargeOutRate ?? cached.quotedChargeOutRate,
+      quotedConsumablesBudget: c.quotedConsumablesBudget ?? cached.quotedConsumablesBudget,
+      quotedConsumablesSellAmount: c.quotedConsumablesSellAmount ?? cached.quotedConsumablesSellAmount,
+      quotedCleanTypeLabel: c.quotedCleanTypeLabel ?? cached.quotedCleanTypeLabel,
       // Preserve a richer cached status (e.g. "Paid") when it maps to the same
       // canonical status; otherwise take canonical.
       status: toCanonicalStatus(cached.status) === toCanonicalStatus(c.status) ? cached.status : c.status,
@@ -690,7 +775,7 @@ function serializeCostLines(lines: CostLine[] | undefined): Record<string, unkno
 
 function bucketDirectCosts(u: ProofUnit): DirectCostBuckets {
   const b: DirectCostBuckets = {
-    labourHours: 0,
+    labourHours: u.actualLabourHours ?? 0,
     labourRate: 0,
     labourCost: 0,
     consumablesCost: 0,
@@ -922,14 +1007,19 @@ async function doSyncStage1Units(
 
     // Revenue — invoice/payment sandbox events per job. Replace all rows to
     // keep the sandbox in lockstep with the report transaction lines.
-    const { error: revDelErr } = await supabase.from("stage1_revenue_events").delete().eq("stage1_job_id", jobId);
+    const { error: revDelErr } = await supabase
+      .from("stage1_revenue_events")
+      .delete()
+      .eq("stage1_job_id", jobId)
+      .or("source.is.null,source.neq.stage1_quote_conversion");
     if (revDelErr) {
       ok = false;
       addWriteError(diagnostics, "stage1_revenue_events", "delete existing for job", revDelErr, { stage1_job_id: jobId });
     }
     const revenueRows: Record<string, unknown>[] = [];
     for (const line of invoiceLinesForWrite(u)) {
-      if ((line.amount ?? 0) <= 0) continue;
+      if (line.source === "stage1_quote_conversion") continue;
+      if ((line.amount ?? 0) === 0) continue;
       const split = computeGstSplit({
         inclusive: line.amount,
         treatment: line.gstTreatment ?? (line.gstIncluded ? "gst_included" : "no_gst"),
@@ -937,7 +1027,7 @@ async function doSyncStage1Units(
         overridden: line.gstOverridden,
       });
       revenueRows.push({
-        id: newCanonicalId(),
+        id: line.id,
         stage1_job_id: jobId,
         amount: split.exGst,
         amount_inc_gst: line.amount,
@@ -955,7 +1045,7 @@ async function doSyncStage1Units(
     for (const line of paymentLinesForWrite(u)) {
       if ((line.amount ?? 0) <= 0) continue;
       revenueRows.push({
-        id: newCanonicalId(),
+        id: line.id,
         stage1_job_id: jobId,
         amount: line.amount,
         amount_inc_gst: line.amount,
@@ -990,7 +1080,7 @@ async function doSyncStage1Units(
       addWriteError(diagnostics, "stage1_job_costs", "delete existing for job", costDelErr, { stage1_job_id: jobId });
     }
     const buckets = bucketDirectCosts(u);
-    if (buckets.total > 0) {
+    if (buckets.total > 0 || buckets.labourHours > 0) {
       const costRow = {
         id: newCanonicalId(),
         stage1_job_id: jobId,
@@ -1003,14 +1093,14 @@ async function doSyncStage1Units(
         other_direct_cost: buckets.otherDirectCost,
         amount_inc_gst: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
-  return serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+  return serializedCostLines.reduce((sum: number, line: any) => sum + numValue(line.amount), 0);
 })(),
 gst_treatment: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
   const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);
@@ -1019,20 +1109,20 @@ gst_treatment: (() => {
 gst_amount: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
   return serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);
 })(),
 amount_ex_gst: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
-  const incGst = serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+  const incGst = serializedCostLines.reduce((sum: number, line: any) => sum + numValue(line.amount), 0);
   const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);
@@ -1082,7 +1172,7 @@ amount_ex_gst: (() => {
     const gbRows = (u.gbExpenses ?? [])
       .filter((e) => (e.amount ?? 0) > 0 || e.supplier || e.description || e.receiptName)
       .map((e) => ({
-        id: newCanonicalId(),
+        id: e.id,
         autopsy_run_id: runId,
         stage1_job_id: jobId,
         expense_date: e.expenseDate || null,

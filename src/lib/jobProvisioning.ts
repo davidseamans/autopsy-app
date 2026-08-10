@@ -295,16 +295,11 @@ export async function setQuoteOutcome(
   reason?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const patch: Record<string, unknown> = { status: uiToDbStatus(status) };
-    const now = new Date().toISOString();
-    if (status === "Accepted") patch.accepted_at = now;
-    if (status === "Declined" || status === "Rejected") {
-      patch.rejected_at = now;
-      patch.rejection_reason = reason?.trim() || null;
-    }
-    if (status === "Expired") patch.rejected_at = now;
-
-    const { error } = await supabase.from("stage1_quotes").update(patch).eq("id", quoteId);
+    const { error } = await supabase.rpc("set_stage1_quote_outcome", {
+      p_quote_id: quoteId,
+      p_status: uiToDbStatus(status),
+      p_reason: reason?.trim() || null,
+    });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {
@@ -328,43 +323,14 @@ export interface ConvertQuoteResult {
 /** Convert a Stage 1 sandbox quote into a Stage 1 sandbox job. */
 export async function convertQuoteToJob(input: ConvertQuoteInput): Promise<ConvertQuoteResult> {
   try {
-    const userId = await currentUserId();
-    if (!userId) return { ok: false, error: "A valid session is required to convert a Stage 1 quote." };
-
-    const { data: quote, error: quoteLoadErr } = await supabase
-      .from("stage1_quotes")
-      .select("id,autopsy_run_id,stage_progress_id,client_name,site_address,amount,quote_sequence_number")
-      .eq("id", input.quoteId)
-      .single();
-    if (quoteLoadErr) return { ok: false, error: `Quote load: ${quoteLoadErr.message}` };
-
-    const nowIso = new Date().toISOString();
-    const { error: accErr } = await supabase
-      .from("stage1_quotes")
-      .update({ status: "accepted", accepted_at: nowIso })
-      .eq("id", input.quoteId);
-    if (accErr) return { ok: false, error: `Quote accept: ${accErr.message}` };
-
-    const { data: job, error: jobErr } = await supabase
-      .from("stage1_jobs")
-      .insert({
-        autopsy_run_id: quote.autopsy_run_id,
-        stage_progress_id: quote.stage_progress_id,
-        client_name: quote.client_name,
-        job_title: quote.site_address || quote.client_name,
-        job_status: "draft",
-        notes: `Created from Stage 1 quote ${makeQuoteNumber(quote.quote_sequence_number)}.`,
-        created_by: userId,
-      })
-      .select("id, job_sequence_number")
-      .single();
-    if (jobErr) return { ok: false, error: `Job: ${jobErr.message}` };
-
-    await supabase.from("stage1_quotes").update({ stage1_job_id: job.id }).eq("id", input.quoteId);
+    const { data, error } = await supabase.rpc("accept_stage1_quote", { p_quote_id: input.quoteId });
+    if (error) return { ok: false, error: error.message };
+    const job = Array.isArray(data) ? data[0] : data;
+    if (!job?.job_id) return { ok: false, error: "The accepted quote did not create a job." };
 
     return {
       ok: true,
-      jobId: job.id as string,
+      jobId: String(job.job_id),
       jobNumber: `J-${job.job_sequence_number ?? ""}`,
     };
   } catch (e) {
@@ -381,7 +347,6 @@ export async function loadStage1Board(runId?: string | null): Promise<{
   const quoteQuery = supabase
     .from("stage1_quotes")
     .select("id,quote_sequence_number,client_name,site_address,amount,status,created_at,follow_up_due_at,rejection_reason,quote_notes,stage1_job_id")
-    .is("stage1_job_id", null)
     .order("created_at", { ascending: false })
     .limit(200);
   const jobQuery = supabase
@@ -411,7 +376,7 @@ export async function loadStage1Board(runId?: string | null): Promise<{
     notes: q.quote_notes ?? undefined,
     accountId: "stage1",
     siteId: "stage1",
-    converted: false,
+    converted: Boolean(q.stage1_job_id),
     createdAt: q.created_at,
   }));
 

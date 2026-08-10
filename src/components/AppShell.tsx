@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 const navGroups = [
   {
@@ -15,8 +15,8 @@ const navGroups = [
     label: "5JD / Stage 1",
     items: [
       { title: "First 5 Jobs", url: "/stage-1" },
-      { title: "Launchpad", url: "/launchpad" },
-      { title: "New Quote", url: "/launchpad/quote/new" },
+      { title: "Quotes", url: "/stage-1/quotes" },
+      { title: "Technical Guide", url: "/stage-1/technical-guide" },
       { title: "Business Details", url: "/business-setup" },
     ],
   },
@@ -40,6 +40,25 @@ const navGroups = [
 ];
 
 export default function AppShell() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const runId = searchParams.get("runId");
+  const stage1Context = searchParams.get("demo") === "1"
+    ? "?demo=1"
+    : runId
+      ? `?runId=${encodeURIComponent(runId)}`
+      : "";
+  const embeddedFlightDeck =
+    new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
+
+  if (embeddedFlightDeck) {
+    return (
+      <div className="min-h-screen bg-white text-foreground">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white text-foreground">
       <header className="border-b px-4 py-3">
@@ -57,7 +76,9 @@ export default function AppShell() {
                 {group.items.map((item) => (
                   <NavLink
                     key={item.url}
-                    to={item.url}
+                    to={group.label === "5JD / Stage 1"
+                      ? `${item.url}${stage1Context}`
+                      : item.url}
                     className={({ isActive }) =>
                       `rounded-md px-3 py-1.5 ${isActive ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted"}`
                     }

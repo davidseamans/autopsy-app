@@ -1,0 +1,266 @@
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bath,
+  CheckCircle2,
+  ChevronRight,
+  CookingPot,
+  Droplets,
+  ExternalLink,
+  HelpCircle,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  previousProductOptions,
+  type GuideOption,
+  type GuideAnswers,
+} from "@/lib/cleaningTechnicalGuide";
+import {
+  areaConfigs,
+  cleaningAreaOptionsV1,
+  findAreaForSearch,
+  resolveAreaProcedure,
+  type GuideAreaKey,
+} from "@/lib/cleaningTechnicalGuideV1";
+
+const areaIcons = {
+  shower: Bath,
+  toilet: Droplets,
+  kitchen: CookingPot,
+  windows: Sparkles,
+};
+
+function TouchChoice({ option, selected, onSelect }: { option: GuideOption; selected?: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`min-h-14 w-full overflow-hidden rounded-xl border text-left transition active:scale-[0.99] ${selected ? "border-sky-700 bg-sky-50 ring-2 ring-sky-200" : "border-slate-200 bg-white hover:border-sky-300 hover:bg-sky-50/40"}`}
+    >
+      {option.image ? <img src={option.image} alt="" loading="lazy" width="800" height="800" className="aspect-[4/3] w-full object-cover" /> : null}
+      <span className="flex items-center justify-between gap-3 px-4 py-3">
+        <span>
+          <span className="block text-base font-semibold text-slate-950">{option.label}</span>
+          {option.description ? <span className="mt-0.5 block text-sm leading-snug text-slate-600">{option.description}</span> : null}
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+      </span>
+    </button>
+  );
+}
+
+function QuestionStep({ title, hint, options, value, onSelect }: { title: string; hint: string; options: GuideOption[]; value?: string; onSelect: (key: string) => void }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">{hint}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {options.map((option) => <TouchChoice key={option.key} option={option} selected={value === option.key} onSelect={() => onSelect(option.key)} />)}
+      </div>
+    </section>
+  );
+}
+
+function ShowerLocationMap({ value, onSelect }: { value?: string; onSelect: (key: string) => void }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Where is it located?</h2>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">Tap the closest area on the shower map. The exact location changes what should be checked next.</p>
+      </div>
+      <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50 to-white p-4">
+        <div className="mx-auto grid max-w-sm grid-cols-2 gap-2 rounded-2xl border-4 border-slate-300 bg-white p-3 shadow-inner" aria-label="Shower area map">
+          <MapChoice optionKey="wall-floor" label="Wall tiles" selected={value === "wall-floor"} onSelect={onSelect} className="col-span-2 min-h-20" />
+          <MapChoice optionKey="fixture" label="Tap or fitting" selected={value === "fixture"} onSelect={onSelect} className="min-h-20" />
+          <MapChoice optionKey="screen" label="Screen or door" selected={value === "screen"} onSelect={onSelect} className="row-span-2 min-h-32" />
+          <MapChoice optionKey="edge-seal" label="Edge or seal" selected={value === "edge-seal"} onSelect={onSelect} className="min-h-16" />
+          <MapChoice optionKey="track" label="Track or corner" selected={value === "track"} onSelect={onSelect} className="col-span-2 min-h-16" />
+        </div>
+      </div>
+      <button type="button" onClick={() => onSelect("unsure")} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-left text-sm font-semibold text-slate-700 hover:border-sky-300">I’m not sure where it is</button>
+    </section>
+  );
+}
+
+function MapChoice({ optionKey, label, selected, onSelect, className }: { optionKey: string; label: string; selected: boolean; onSelect: (key: string) => void; className: string }) {
+  return <button type="button" aria-pressed={selected} onClick={() => onSelect(optionKey)} className={`${className} rounded-xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.98] ${selected ? "border-sky-700 bg-sky-100 text-sky-950 ring-2 ring-sky-200" : "border-slate-300 bg-slate-50 text-slate-700 hover:border-sky-400 hover:bg-sky-50"}`}>{label}</button>;
+}
+
+export default function CleaningTechnicalGuide() {
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get("runId") ?? "";
+  const isDemo = searchParams.get("demo") === "1";
+  const first5JobsPath = isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
+  const [step, setStep] = useState(0);
+  const [search, setSearch] = useState("");
+  const [searchAttempted, setSearchAttempted] = useState(false);
+  const [selectedArea, setSelectedArea] = useState<GuideAreaKey | null>(null);
+  const [answers, setAnswers] = useState<GuideAnswers>({});
+
+  const steps = ["Area", "What you see", "Surface", "Location", "Already used", "Safe next step"];
+  const area = selectedArea ? areaConfigs[selectedArea] : null;
+  const procedure = selectedArea ? resolveAreaProcedure(selectedArea, answers) : resolveAreaProcedure("shower", { observation: "damage" });
+  const progress = Math.round(((step + 1) / steps.length) * 100);
+  const answerTrail = [
+    answers.observation ? { step: 1, label: area?.observations.find((option) => option.key === answers.observation)?.label ?? "Observation" } : null,
+    answers.surface ? { step: 2, label: area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "Surface" } : null,
+    answers.location ? { step: 3, label: area?.locations.find((option) => option.key === answers.location)?.label ?? "Location" } : null,
+    answers.previousProduct ? { step: 4, label: previousProductOptions.find((option) => option.key === answers.previousProduct)?.label ?? "Product" } : null,
+  ].filter((item): item is { step: number; label: string } => Boolean(item));
+
+  const selectAnswer = (key: keyof GuideAnswers, value: string) => {
+    setAnswers((current) => ({ ...current, [key]: value }));
+    setStep((current) => Math.min(current + 1, 5));
+  };
+
+  const reset = () => {
+    setStep(0);
+    setAnswers({});
+    setSelectedArea(null);
+    setSearch("");
+    setSearchAttempted(false);
+  };
+
+  const runSearch = () => {
+    setSearchAttempted(true);
+    const matchedArea = findAreaForSearch(search);
+    if (matchedArea) {
+      setSelectedArea(matchedArea);
+      setAnswers({});
+      setStep(1);
+    }
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-120px)] bg-slate-50 px-3 py-4 sm:px-6 sm:py-8">
+      <main className="mx-auto max-w-2xl space-y-4">
+        <Button asChild variant="ghost" className="-ml-2 min-h-11"><Link to={first5JobsPath}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
+
+        <header className="rounded-2xl bg-gradient-to-br from-[#061b34] via-[#082849] to-[#07506b] p-5 text-white shadow-lg sm:p-7">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-300">Cleaning Sleeve · 5JD Stage Pack</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Cleaning Technical Guide</h1>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-200">Start with what you can see. A few short questions will narrow the issue and show whether there is a verified procedure or you should stop and ask for help.</p>
+            </div>
+            <ShieldAlert className="h-8 w-8 shrink-0 text-teal-300" />
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-teal-300 transition-all" style={{ width: `${progress}%` }} /></div>
+          <p className="mt-2 text-xs text-slate-300">Step {step + 1} of {steps.length} · {steps[step]}</p>
+        </header>
+
+        <Card className="border-sky-200 bg-sky-50">
+          <CardContent className="flex gap-3 p-4 text-sm text-sky-950">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p><strong>Technical Guide v1 review build.</strong> Shower, toilet, kitchen and window pathways now include pictures, processes and expected outcomes. Field-method direction is approved. Draft procedures remain visibly marked until independent safety and surface-compatibility review is recorded.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardContent className="p-4 sm:p-6">
+            {answerTrail.length > 0 ? <div className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Your answers">{answerTrail.map((item) => <button type="button" key={item.step} onClick={() => setStep(item.step)} className="min-h-10 shrink-0 rounded-full border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-900">{item.label} · Change</button>)}</div> : null}
+            {step === 0 ? (
+              <section className="space-y-5">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">What are you cleaning?</h2>
+                  <p className="mt-1 text-sm text-slate-600">Tap an area or search using the words you would normally use.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try body fat, toilet hinge, kitchen grease or window track" aria-label="Search cleaning issue" />
+                  <Button type="button" onClick={runSearch} className="min-h-12 min-w-12 px-3" aria-label="Search"><Search className="h-5 w-5" /></Button>
+                </div>
+                {searchAttempted && !findAreaForSearch(search) ? <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">That term is not in the first guide yet. Try <strong>shower</strong>, <strong>toilet hinge</strong>, <strong>kitchen grease</strong> or <strong>window track</strong>.</p> : null}
+                <div className="grid grid-cols-2 gap-3">
+                  {cleaningAreaOptionsV1.map((option) => {
+                    const Icon = areaIcons[option.key as keyof typeof areaIcons] ?? HelpCircle;
+                    return <button key={option.key} type="button" onClick={() => { setSelectedArea(option.key as GuideAreaKey); setAnswers({}); setStep(1); }} className="min-h-32 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-sky-400 hover:bg-sky-50"><Icon className="h-7 w-7 text-sky-700" /><span className="mt-3 block text-base font-semibold">{option.label}</span><span className="mt-1 block text-xs leading-snug text-slate-600">{option.description}</span></button>;
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {step === 1 && area ? <QuestionStep title="What are you seeing?" hint="Choose the closest description. Do not diagnose it yet." options={area.observations} value={answers.observation} onSelect={(value) => selectAnswer("observation", value)} /> : null}
+            {step === 2 && area ? <QuestionStep title="What is the surface?" hint="The same mark can require a different response on different materials and finishes." options={area.surfaces} value={answers.surface} onSelect={(value) => selectAnswer("surface", value)} /> : null}
+            {step === 3 && area ? (selectedArea === "shower" ? <ShowerLocationMap value={answers.location} onSelect={(value) => selectAnswer("location", value)} /> : <QuestionStep title="Where exactly is it?" hint="Choose the closest location. Access and nearby materials change the safe method." options={area.locations} value={answers.location} onSelect={(value) => selectAnswer("location", value)} />) : null}
+            {step === 4 ? <QuestionStep title="What has already been used?" hint="Do not add another product when an existing chemical is unknown." options={previousProductOptions} value={answers.previousProduct} onSelect={(value) => selectAnswer("previousProduct", value)} /> : null}
+
+            {step === 5 ? (
+              <section className="space-y-5">
+                <div className="flex items-start gap-3">
+                  {procedure.status === "Stop and escalate" ? <ShieldAlert className="mt-1 h-7 w-7 shrink-0 text-amber-700" /> : <CheckCircle2 className="mt-1 h-7 w-7 shrink-0 text-emerald-700" />}
+                  <div>
+                    <div className="flex flex-wrap gap-2"><Badge variant="outline">{procedure.status}</Badge><Badge variant="secondary">{procedure.confidence}</Badge></div>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{procedure.title}</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedure.likelyCondition}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <ResultBlock title="What the guide recorded" items={[
+                    `Area: ${area?.label ?? "not identified"}.`,
+                    `You saw: ${area?.observations.find((option) => option.key === answers.observation)?.label ?? "not identified"}.`,
+                    `Surface: ${area?.surfaces.find((option) => option.key === answers.surface)?.label ?? "not identified"}.`,
+                    `Location: ${area?.locations.find((option) => option.key === answers.location)?.label ?? "not identified"}.`,
+                  ]} />
+                  <ResultBlock title="Purpose" items={[procedure.purpose]} />
+                  <ResultBlock title="What you need" items={procedure.tools} />
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-slate-950">Process</h3>
+                    {procedure.steps.map((procedureStep, index) => (
+                      <article key={procedureStep.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        {procedureStep.image ? <img src={procedureStep.image} alt="" loading="lazy" width="1200" height="900" className="aspect-[4/3] w-full object-cover" /> : null}
+                        <div className="p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">Step {index + 1}</p>
+                          <h4 className="mt-1 font-semibold text-slate-950">{procedureStep.title}</h4>
+                          <p className="mt-2 text-sm leading-relaxed text-slate-700">{procedureStep.instruction}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <ResultBlock title="Expected outcome" items={procedure.expectedOutcome} />
+                  <ResultBlock title="Stop and get help if…" items={procedure.stopConditions} />
+                  <ResultBlock title="What to tell the customer" items={[procedure.customerExplanation]} />
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <h3 className="font-semibold text-violet-950">Review control</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-violet-900">{procedure.reviewNote}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <h3 className="font-semibold text-slate-950">Authority and safety sources</h3>
+                    <div className="mt-2 grid gap-2">
+                      {procedure.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 text-sm font-medium text-sky-800 hover:bg-sky-50"><span>{source.label}</span><ExternalLink className="h-4 w-4 shrink-0" /></a>)}
+                    </div>
+                  </div>
+                </div>
+                <Button type="button" onClick={reset} variant="outline" className="min-h-12 w-full"><RotateCcw className="mr-2 h-4 w-4" /> Start another search</Button>
+              </section>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {step > 0 && step < 5 ? <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} className="min-h-12 w-full"><ArrowLeft className="mr-2 h-4 w-4" /> Back to the previous question</Button> : null}
+      </main>
+    </div>
+  );
+}
+
+function ResultBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <ul className="mt-2 space-y-2 text-sm leading-relaxed text-slate-700">
+        {items.map((item) => <li key={item} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-700" /><span>{item}</span></li>)}
+      </ul>
+    </div>
+  );
+}

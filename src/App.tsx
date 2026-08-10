@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +13,7 @@ import ReadinessWorksheet from "@/pages/ReadinessWorksheet";
 import Stage1Dashboard from "@/pages/Stage1Dashboard";
 import MorningOrientation from "@/pages/MorningOrientation";
 import FirstConversation from "@/pages/FirstConversation";
+import PaidAutopsyEntry from "@/pages/PaidAutopsyEntry";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
 import Leads from "@/pages/crm/Leads";
@@ -21,9 +22,14 @@ import Pipeline from "@/pages/crm/Pipeline";
 import Quotes from "@/pages/crm/Quotes";
 import Jobs from "@/pages/crm/Jobs";
 import NotFound from "./pages/NotFound.tsx";
-import Launchpad from "@/pages/Launchpad";
 import BusinessSetup from "@/pages/BusinessSetup";
-import LaunchpadQuoteNew from "@/pages/LaunchpadQuoteNew";
+import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
+import Stage1QuoteDocument from "@/pages/Stage1QuoteDocument";
+import AutopsyClaim from "@/pages/AutopsyClaim";
+import Stage1Quotes from "@/pages/Stage1Quotes";
+import Stage1Orientation from "@/pages/Stage1Orientation";
+import Stage1Learning from "@/pages/Stage1Learning";
+import CleaningTechnicalGuide from "@/pages/CleaningTechnicalGuide";
 
 const queryClient = new QueryClient();
 const FirstConversationRoute = () => (
@@ -31,6 +37,63 @@ const FirstConversationRoute = () => (
     <FirstConversation />
   </AuthGate>
 );
+const BusinessSetupRoute = () => (
+  <AuthGate>
+    <BusinessSetup />
+  </AuthGate>
+);
+const Stage1QuoteNewRoute = () => (
+  <AuthGate allowDemo>
+    <Stage1QuoteNew />
+  </AuthGate>
+);
+const Stage1QuotesRoute = () => (
+  <AuthGate allowDemo>
+    <Stage1Quotes />
+  </AuthGate>
+);
+const Stage1QuoteDocumentRoute = () => (
+  <AuthGate allowDemo>
+    <Stage1QuoteDocument />
+  </AuthGate>
+);
+const Stage1OrientationRoute = () => (
+  <AuthGate allowDemo>
+    <Stage1Orientation />
+  </AuthGate>
+);
+const Stage1LearningRoute = () => (
+  <AuthGate allowDemo>
+    <Stage1Learning />
+  </AuthGate>
+);
+const CleaningTechnicalGuideRoute = () => (
+  <AuthGate allowDemo>
+    <CleaningTechnicalGuide />
+  </AuthGate>
+);
+
+const LegacyStage1Redirect = ({ to }: { to: string }) => {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+};
+
+const PaidAutopsyRoute = () => {
+  const params = new URLSearchParams(window.location.search);
+  const embeddedPreview =
+    window.location.hostname ===
+      "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app" &&
+    params.get("test_payment") === "accepted" &&
+    params.get("embedded") === "flight-deck";
+
+  return embeddedPreview ? (
+    <PaidAutopsyEntry />
+  ) : (
+    <AuthGate>
+      <PaidAutopsyEntry />
+    </AuthGate>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -49,20 +112,30 @@ const App = () => (
               <Route path="/autopsy" element={<Autopsy />} />
               <Route path="/autopsy/history" element={<AutopsyHistory />} />
               <Route path="/autopsy/run/:runId" element={<AutopsyRunRoute />} />
+              <Route path="/autopsy/claim/:runId" element={<AutopsyClaim />} />
               <Route path="/autopsy/run/:runId/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/autopsy/run/:runId/readiness" element={<ReadinessWorksheet />} />
               <Route path="/worksheet" element={<AutopsyWorksheet />} />
               <Route path="/worksheet/:runId" element={<AutopsyWorksheet />} />
               <Route path="/stage-1" element={<Stage1Dashboard />} />
-              <Route path="/launchpad" element={<Launchpad />} />
-              <Route path="/launchpad/quote/new" element={<LaunchpadQuoteNew />} />
-              <Route path="/business-setup" element={<BusinessSetup />} />
+              <Route path="/stage-1/orientation" element={<Stage1OrientationRoute />} />
+              <Route path="/stage-1/learning" element={<Stage1LearningRoute />} />
+              <Route path="/stage-1/technical-guide" element={<CleaningTechnicalGuideRoute />} />
+              <Route path="/stage-1/leads" element={<LegacyStage1Redirect to="/stage-1" />} />
+              <Route path="/stage-1/quotes" element={<Stage1QuotesRoute />} />
+              <Route path="/stage-1/quotes/new" element={<Stage1QuoteNewRoute />} />
+              <Route path="/stage-1/quote/:quoteId" element={<Stage1QuoteDocumentRoute />} />
+              <Route path="/launchpad" element={<LegacyStage1Redirect to="/stage-1" />} />
+              <Route path="/launchpad/leads" element={<LegacyStage1Redirect to="/stage-1" />} />
+              <Route path="/launchpad/quote/new" element={<LegacyStage1Redirect to="/stage-1/quotes/new" />} />
+              <Route path="/business-setup" element={<BusinessSetupRoute />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/pipeline" element={<Pipeline />} />
               <Route path="/quotes" element={<Quotes />} />
               <Route path="/jobs" element={<Jobs />} />
             </Route>
+            <Route path="/autopsy/paid" element={<PaidAutopsyRoute />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

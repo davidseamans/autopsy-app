@@ -1,0 +1,257 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/sonner";
+import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
+import {
+  createStandardQuote,
+  describeDocumentError,
+  fetchStage1CleanTypePricingRules,
+  type QuoteLineDraft,
+  type Stage1CleanTypePricingRule,
+} from "@/lib/stage1Documents";
+import { calculateGuidedQuoteTotals } from "@/lib/stage1Pricing";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { STAGE1_DEMO_CLEAN_TYPES, STAGE1_DEMO_PROFILE } from "@/lib/stage1Demo";
+
+const isoAfterDays = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const blankLine = (): QuoteLineDraft => ({ description: "", estimatedHours: 1 });
+const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
+
+export default function Stage1QuoteNew() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const runId = searchParams.get("runId") ?? "";
+  const isDemo = searchParams.get("demo") === "1";
+  const tourActive = searchParams.get("tour") === "builder";
+  const tourAutoPlay = searchParams.get("autoplay") === "1";
+  const tourStepParam = searchParams.get("step");
+  const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
+  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
+  const [tourStep, setTourStep] = useState(initialTourStep);
+  const backTo = isDemo ? "/stage-1/quotes?demo=1" : runId ? `/stage-1/quotes?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes";
+  const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [clientName, setClientName] = useState(isDemo ? "Paddington Property Group" : "");
+  const [clientContactName, setClientContactName] = useState(isDemo ? "Alex Morgan" : "");
+  const [clientEmail, setClientEmail] = useState(isDemo ? "alex@example.com" : "");
+  const [clientPhone, setClientPhone] = useState(isDemo ? "0400 000 000" : "");
+  const [siteAddress, setSiteAddress] = useState(isDemo ? "Sample commercial premises, Paddington QLD" : "");
+  const [serviceDescription, setServiceDescription] = useState(isDemo ? "Initial office clean including floors, amenities and common areas." : "");
+  const [validUntil, setValidUntil] = useState(isoAfterDays(14));
+  const [paymentTerms, setPaymentTerms] = useState("Payment Due on Completion");
+  const [cleanTypeCode, setCleanTypeCode] = useState(isDemo ? "initial" : "");
+  const [cleanTypeRules, setCleanTypeRules] = useState<Stage1CleanTypePricingRule[]>([]);
+  const [chargeOutRateExGst, setChargeOutRateExGst] = useState(isDemo ? 80 : 0);
+  const [items, setItems] = useState<QuoteLineDraft[]>(isDemo ? [{ description: "Floors and common areas", estimatedHours: 6 }, { description: "Amenities and detailed initial clean", estimatedHours: 10 }] : [blankLine()]);
+
+  useEffect(() => {
+    if (isDemo) {
+      setProfile(STAGE1_DEMO_PROFILE);
+      setCleanTypeRules(STAGE1_DEMO_CLEAN_TYPES);
+      setLoading(false);
+      return;
+    }
+    if (!runId) {
+      setError("Open the quote form from your First 5 Jobs sales activity page.");
+      setLoading(false);
+      return;
+    }
+    void Promise.all([fetchBusinessIdentity(runId), fetchStage1CleanTypePricingRules()])
+      .then(([{ profile: current }, rules]) => {
+        if (!current?.verified) throw new Error("Verify Business Details before creating a quote.");
+        if (rules.length === 0) throw new Error("The guided clean types are not available.");
+        setProfile(current);
+        setCleanTypeRules(rules);
+      })
+      .catch((loadError) => setError(describeDocumentError(loadError)))
+      .finally(() => setLoading(false));
+  }, [isDemo, runId]);
+
+  const totals = useMemo(() => {
+    const selectedRule = cleanTypeRules.find((rule) => rule.code === cleanTypeCode) ?? null;
+    return {
+      selectedRule,
+      ...calculateGuidedQuoteTotals({ items, chargeOutRateExGst, rule: selectedRule }),
+    };
+  }, [chargeOutRateExGst, cleanTypeCode, cleanTypeRules, items]);
+
+  const formReady = Boolean(
+    profile?.verified && clientName.trim() && clientEmail.trim() && siteAddress.trim()
+      && validUntil
+      && totals.selectedRule
+      && items.length > 0
+      && items.every((item) => item.description.trim() && item.estimatedHours > 0)
+      && chargeOutRateExGst > 0
+      && totals.total > 0,
+  );
+
+  const updateLine = (index: number, patch: Partial<QuoteLineDraft>) => {
+    setItems((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...patch } : line));
+  };
+
+  async function generateAndOpenQuote() {
+    if (isDemo) {
+      toast.info("This sample calculation is read only. No quotation was created.");
+      return;
+    }
+    if (!formReady || saving) return;
+    setSaving(true);
+    try {
+      const created = await createStandardQuote({
+        runId,
+        clientName,
+        clientContactName,
+        clientEmail,
+        clientPhone,
+        siteAddress,
+        serviceDescription: serviceDescription.trim()
+          || items.map((item) => `${item.description.trim()} — ${item.estimatedHours} hours`).join("; "),
+        validUntil,
+        paymentTerms,
+        cleanTypeCode,
+        chargeOutRateExGst,
+        items,
+      });
+      toast.success(`${created.quoteNumber} generated and ready to send.`);
+      navigate(`/stage-1/quote/${created.quoteId}?runId=${encodeURIComponent(runId)}`);
+    } catch (saveError) {
+      toast.error(describeDocumentError(saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="container max-w-4xl py-10 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading quote form…</div>;
+  }
+
+  return (
+    <div className="container max-w-4xl py-10 space-y-6">
+      <Button asChild variant="ghost" size="sm"><Link to={backTo}><ArrowLeft className="mr-1 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
+      <header className="space-y-2">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Written Quote</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Create a standard quote</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Customer and work details begin here. If the customer accepts, this quote becomes the job and then the tax invoice.</p>
+      </header>
+
+      {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
+
+      {profile ? (
+        <Card className={tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+          <CardHeader><CardTitle className="text-base">From</CardTitle><CardDescription>Locked from your verified Business Details.</CardDescription></CardHeader>
+          <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
+            <p><span className="text-muted-foreground">Business:</span> {profile.businessName}</p>
+            <p><span className="text-muted-foreground">Registered:</span> {profile.registeredName}</p>
+            <p><span className="text-muted-foreground">ABN:</span> {profile.abn}</p>
+            <p><span className="text-muted-foreground">Contact:</span> {profile.contactName}</p>
+            <p>{profile.email}</p><p>{profile.phone}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card className={tourActive && tourStep === 1 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+        <CardHeader><CardTitle className="text-base">Customer and work</CardTitle><CardDescription>Capture these details because this opportunity is now ready to quote.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <Field id="client-name" label="Customer or business" value={clientName} onChange={setClientName} required />
+          <Field id="client-contact" label="Contact person" value={clientContactName} onChange={setClientContactName} />
+          <Field id="client-email" label="Customer email" type="email" value={clientEmail} onChange={setClientEmail} required />
+          <Field id="client-phone" label="Customer phone" value={clientPhone} onChange={setClientPhone} />
+          <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="site-address">Service address *</Label><Textarea id="site-address" value={siteAddress} onChange={(event) => setSiteAddress(event.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="scope">Notes or exclusions (optional)</Label><Textarea id="scope" rows={3} value={serviceDescription} onChange={(event) => setServiceDescription(event.target.value)} placeholder="Add anything the customer should know. The work items and hours are added to the quote automatically." /></div>
+          <Field id="valid-until" label="Quote valid until" type="date" value={validUntil} onChange={setValidUntil} required />
+          <div className="space-y-1.5">
+            <Label htmlFor="terms">Payment terms *</Label>
+            <select
+              id="terms"
+              value={paymentTerms}
+              onChange={(event) => setPaymentTerms(event.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              required
+            >
+              <option value="Payment Due on Completion">Payment Due on Completion</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className={tourActive && tourStep === 2 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+        <CardHeader><CardTitle className="text-base">Choose the type of clean</CardTitle><CardDescription>Make one choice. First 5 Jobs will allow for the expected supplies automatically.</CardDescription></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Type of clean">
+          {cleanTypeRules.map((rule) => {
+            const selected = cleanTypeCode === rule.code;
+            return (
+              <button
+                key={`${rule.code}-${rule.ruleVersion}`}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`rounded-lg border p-4 text-left transition-colors ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"}`}
+                onClick={() => setCleanTypeCode(rule.code)}
+              >
+                <span className="block font-medium">{rule.label}</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{rule.guidance}</span>
+              </button>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card className={tourActive && (tourStep === 3 || tourStep === 4) ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+        <CardHeader><CardTitle className="text-base">Estimate the work</CardTitle><CardDescription>Break the job into a few plain work items. Enter the hours you expect, then use one hourly charge-out rate for the whole quote.</CardDescription></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="max-w-xs space-y-1.5">
+            <Label htmlFor="charge-out-rate">Your charge-out rate, ex GST *</Label>
+            <Input id="charge-out-rate" type="number" min={0.01} step="0.01" value={chargeOutRateExGst} onChange={(event) => setChargeOutRateExGst(Number(event.target.value))} />
+          </div>
+          {items.map((item, index) => (
+            <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_150px_42px]">
+              <Field id={`line-${index}`} label="Work item" value={item.description} onChange={(value) => updateLine(index, { description: value })} />
+              <NumberField id={`hours-${index}`} label="Estimated hours" value={item.estimatedHours} min={0.25} onChange={(value) => updateLine(index, { estimatedHours: value })} />
+              <Button type="button" variant="ghost" size="icon" className="self-end" disabled={items.length === 1} onClick={() => setItems((current) => current.filter((_, lineIndex) => lineIndex !== index))} aria-label={`Remove line ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={() => setItems((current) => [...current, blankLine()])} disabled={items.length >= 20}><Plus className="mr-2 h-4 w-4" /> Add work item</Button>
+          <dl className="ml-auto grid max-w-sm grid-cols-2 gap-2 border-t pt-4 text-sm">
+            <dt className="text-muted-foreground">Estimated hours</dt><dd className="text-right">{totals.totalHours}</dd>
+            <dt className="text-muted-foreground">Rate per hour ex GST</dt><dd className="text-right">{money(chargeOutRateExGst)}</dd>
+            <dt className="text-muted-foreground">Cleaning service</dt><dd className="text-right">{money(totals.serviceAmount)}</dd>
+            <dt className="text-muted-foreground">Supplies included</dt><dd className="text-right">{totals.selectedRule ? money(totals.consumablesSellAmount) : "Choose a clean type"}</dd>
+            <dt className="text-muted-foreground">Subtotal</dt><dd className="text-right">{money(totals.subtotal)}</dd>
+            <dt className="text-muted-foreground">GST</dt><dd className="text-right">{money(totals.gst)}</dd>
+            <dt className="font-semibold">Total including GST</dt><dd className="text-right font-semibold">{money(totals.total)}</dd>
+          </dl>
+          {totals.selectedRule ? (
+            <p className="ml-auto max-w-sm text-xs leading-relaxed text-muted-foreground">
+              {totals.selectedRule.label}: First 5 Jobs has budgeted {money(totals.consumablesCost)} for supplies and included {money(totals.consumablesSellAmount)} in the quote. The supplies amount includes a {totals.selectedRule.targetConsumablesMarginPct}% margin.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {!isDemo ? <div className="flex justify-end"><Button onClick={() => void generateAndOpenQuote()} disabled={!formReady || saving || Boolean(error)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Generate and Open Quote</Button></div> : null}
+      {tourActive ? <Stage1WelcomeGuide mode="builder" initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={() => { const next = new URLSearchParams(searchParams); next.delete("tour"); next.delete("step"); next.delete("autoplay"); setSearchParams(next, { replace: true }); }} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1/quotes?demo=1&tour=quotes&step=5&autoplay=1")} onJourneyAction={() => window.location.assign("/stage-1/quote/demo-q-1004?demo=1&tour=document&autoplay=1")} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "builder"); setSearchParams(next); }} /> : null}
+    </div>
+  );
+}
+
+function Field({ id, label, value, onChange, type = "text", required = false }: { id: string; label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} /></div>;
+}
+
+function NumberField({ id, label, value, min, onChange }: { id: string; label: string; value: number; min: number; onChange: (value: number) => void }) {
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label} *</Label><Input id={id} type="number" min={min} step="0.01" value={value} onChange={(event) => onChange(Number(event.target.value))} /></div>;
+}

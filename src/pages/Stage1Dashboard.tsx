@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SEED_UNITS,
   computeScorecard,
@@ -11,12 +11,13 @@ import { computeGstSplit } from "@/lib/gst";
 import { AuthGate } from "@/components/AuthGate";
 import { useAuth } from "@/lib/auth";
 import {
-  createQuote,
   setQuoteOutcome,
   convertQuoteToJob,
   loadStage1Board,
 } from "@/lib/jobProvisioning";
 import { getActiveRunId, getStage1RunId, setStage1RunId } from "@/lib/progression";
+import { fetchBusinessIdentity, type PublicBusinessProfile } from "@/lib/businessIdentity";
+import { fetchStage1Onboarding } from "@/lib/stage1Onboarding";
 import {
   fetchStage1Units,
   loadStage1UnitsCache,
@@ -63,8 +64,25 @@ import {
   IdCard,
   Loader2,
   Plus,
+  Compass,
+  BookOpen,
+  ShieldAlert,
+  Download,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
+import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
+import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
+import { leadRecordsAsActivities } from "@/lib/stage1LeadRecords";
+import {
+  createStage1LeadRecord,
+  loadStage1LeadActivities,
+  loadStage1LeadRecords,
+  type NewStage1LeadRecord,
+  type Stage1LeadActivity,
+  type Stage1LeadRecord,
+} from "@/lib/stage1Funnel";
+import { downloadAccountantPack } from "@/lib/stage1AccountantPack";
+import { downloadEvidenceFile, listRunEvidence } from "@/lib/stage1Evidence";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -87,29 +105,46 @@ const isoToAU = (iso: string) => {
 // dated activity records on top of this baseline.
 const METHOD_BASELINE: { method: string; attempts: number; contacts: number; leads: number; quotes: number; jobs: number; notes: string }[] = [];
 const DEMO_METHOD_BASELINE: typeof METHOD_BASELINE = [
-  { method: "Referral Request", attempts: 12, contacts: 10, leads: 9, quotes: 4, jobs: 1, notes: "Introductions from established local contacts" },
-  { method: "Phone Outreach", attempts: 30, contacts: 14, leads: 8, quotes: 3, jobs: 1, notes: "Targeted calls to nearby commercial premises" },
-  { method: "Local Flyer", attempts: 250, contacts: 11, leads: 8, quotes: 3, jobs: 1, notes: "Focused distribution around selected business precincts" },
+  { method: "Referral Request", attempts: 0, contacts: 0, leads: 0, quotes: 4, jobs: 1, notes: "Introductions from established local contacts" },
+  { method: "Customer Referral", attempts: 0, contacts: 0, leads: 0, quotes: 0, jobs: 0, notes: "Introductions from satisfied customers" },
+  { method: "Personal Referral", attempts: 0, contacts: 0, leads: 0, quotes: 0, jobs: 0, notes: "Introductions from personal contacts" },
+  { method: "Phone Outreach", attempts: 0, contacts: 0, leads: 0, quotes: 3, jobs: 1, notes: "Targeted calls to nearby commercial premises" },
+  { method: "Local Flyer", attempts: 0, contacts: 0, leads: 0, quotes: 3, jobs: 1, notes: "Focused distribution around selected business precincts" },
 ];
 const METHOD_OPTIONS = [
   "Phone Outreach",
-  "Referral Request",
+  "Customer Referral",
+  "Personal Referral",
   "Local Flyer",
   "Email Outreach",
   "Walk-in",
   "Other",
 ];
 
-type LeadActivity = {
-  id: string;
-  activity_date: string; // yyyy-mm-dd
-  method: string;
-  attempts: number;
-  contacts_made: number;
-  quotes_generated: number;
-  notes: string;
-  created_at: string;
-};
+const DEMO_LEAD_ACTIVITIES: Stage1LeadActivity[] = [
+  { id: "demo-lead-1", activity_date: "2026-08-01", method: "Referral Request", attempts: 4, contacts_made: 4, leads_generated: 3, created_at: "2026-08-01T09:00:00Z" },
+  { id: "demo-lead-2", activity_date: "2026-08-04", method: "Phone Outreach", attempts: 10, contacts_made: 4, leads_generated: 2, created_at: "2026-08-04T09:00:00Z" },
+  { id: "demo-lead-3", activity_date: "2026-08-09", method: "Local Flyer", attempts: 80, contacts_made: 3, leads_generated: 2, created_at: "2026-08-09T09:00:00Z" },
+  { id: "demo-lead-4", activity_date: "2026-08-12", method: "Customer Referral", attempts: 3, contacts_made: 3, leads_generated: 2, created_at: "2026-08-12T09:00:00Z" },
+  { id: "demo-lead-5", activity_date: "2026-08-18", method: "Phone Outreach", attempts: 12, contacts_made: 5, leads_generated: 3, created_at: "2026-08-18T09:00:00Z" },
+  { id: "demo-lead-6", activity_date: "2026-08-26", method: "Personal Referral", attempts: 4, contacts_made: 4, leads_generated: 3, created_at: "2026-08-26T09:00:00Z" },
+];
+const DEMO_LEAD_RECORDS: Stage1LeadRecord[] = DEMO_LEAD_ACTIVITIES.flatMap((activity) =>
+  Array.from({ length: activity.leads_generated }, (_, index) => ({
+    id: `${activity.id}-${index + 1}`,
+    client_name: `Sample lead ${index + 1}`,
+    contact_name: null,
+    contact_email: null,
+    contact_phone: null,
+    site_address: null,
+    source: activity.method,
+    status: "new",
+    estimated_value: 0,
+    next_action_at: null,
+    notes: "Demonstration lead record",
+    created_at: activity.created_at,
+  })),
+);
 
 const QUOTE_STATUSES = ["Sent", "Accepted", "Declined", "Expired", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -155,7 +190,7 @@ const DEMO_QUOTES: Quote[] = [
   { number: "Q-1001", client: "Riverstone Dental Centre", site: "Paddington, QLD", value: 2035, status: "Accepted", quoteDate: "2026-07-08", followUp: "", reason: "", converted: true, convertedToN: 1, convertedJobNumber: "J-1", method: "Referral Request" },
   { number: "Q-1002", client: "Milton Legal Chambers", site: "Milton, QLD", value: 2640, status: "Accepted", quoteDate: "2026-07-09", followUp: "", reason: "", converted: true, convertedToN: 2, convertedJobNumber: "J-2", method: "Phone Outreach" },
   { number: "Q-1003", client: "Newstead Allied Health", site: "Newstead, QLD", value: 1760, status: "Accepted", quoteDate: "2026-07-10", followUp: "", reason: "", converted: true, convertedToN: 3, convertedJobNumber: "J-3", method: "Local Flyer" },
-  { number: "Q-1004", client: "Paddington Property Group", site: "Paddington, QLD", value: 1450, status: "Sent", quoteDate: "2026-07-11", followUp: "2026-07-22", reason: "", method: "Referral Request" },
+  { number: "Q-1004", client: "Paddington Property Group", site: "Paddington, QLD", value: 1496, status: "Sent", quoteDate: "2026-07-11", followUp: "2026-07-22", reason: "", method: "Referral Request" },
   { number: "Q-1005", client: "Ashgrove Physio Centre", site: "Ashgrove, QLD", value: 1320, status: "Sent", quoteDate: "2026-07-11", followUp: "2026-07-23", reason: "", method: "Phone Outreach" },
   { number: "Q-1006", client: "West End Studios", site: "West End, QLD", value: 980, status: "Declined", quoteDate: "2026-07-12", followUp: "", reason: "Scope changed", method: "Local Flyer" },
   { number: "Q-1007", client: "Teneriffe Accountants", site: "Teneriffe, QLD", value: 2100, status: "Sent", quoteDate: "2026-07-13", followUp: "2026-07-24", reason: "", method: "Referral Request" },
@@ -165,9 +200,9 @@ const DEMO_QUOTES: Quote[] = [
 ];
 
 const DEMO_UNITS: ProofUnit[] = [
-  { n: 1, jobNumber: "J-1", jobSequenceNumber: 1, client: "Riverstone Dental Centre", jobSite: "Paddington, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1001", sandboxRevenueAmount: 1850, sandboxTotalDirectCost: 1050, sandboxGrossProfit: 800, sandboxGrossMarginPct: 43 },
-  { n: 2, jobNumber: "J-2", jobSequenceNumber: 2, client: "Milton Legal Chambers", jobSite: "Milton, QLD", proofType: "Recurring Job", status: "In Progress", gm: 45, evidence: true, lifecycle: "active", sourceQuote: "Q-1002", sandboxRevenueAmount: 2400, sandboxTotalDirectCost: 1320, sandboxGrossProfit: 1080, sandboxGrossMarginPct: 45 },
-  { n: 3, jobNumber: "J-3", jobSequenceNumber: 3, client: "Newstead Allied Health", jobSite: "Newstead, QLD", proofType: "Recurring Job", status: "In Progress", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1003", sandboxRevenueAmount: 1600, sandboxTotalDirectCost: 920, sandboxGrossProfit: 680, sandboxGrossMarginPct: 43 },
+  { n: 1, jobNumber: "J-1", jobSequenceNumber: 1, client: "Riverstone Dental Centre", jobSite: "Sample premises, Paddington QLD", proofType: "Completed Job", status: "Completed", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1001", quoteValue: 2035, quotedLabourHours: 20, quotedChargeOutRate: 90, quotedConsumablesBudget: 35, quotedCleanTypeLabel: "Initial or heavy clean", actualLabourHours: 19, invoiceAmount: 2035, invoiceDate: "2026-07-18", invoiceRef: "INV-1", invoiceStatus: "Paid", invoiceLines: [{ id: "demo-invoice-1", date: "2026-07-18", ref: "INV-1", description: "Final invoice generated from accepted quote Q-1001", amount: 2035, gstIncluded: true, gstTreatment: "gst_included", source: "stage1_quote_conversion", sourceQuoteId: "demo-q-1001" }], costMaterials: 85, costLabour: 950, costOther: 15, costLines: [{ id: "demo-cost-1", description: "Cleaning materials and consumables", amount: 85, gstIncluded: true, gstTreatment: "gst_included", date: "2026-07-18" }], paymentStatus: "Paid", paymentDate: "2026-07-18", paymentAmount: 2035, paymentMethod: "Bank Transfer", paymentLines: [{ id: "demo-payment-1", date: "2026-07-18", client: "Riverstone Dental Centre", description: "Payment received in full", amount: 2035, method: "Bank Transfer" }], sandboxRevenueAmount: 2035, sandboxPaymentReceivedAmount: 2035, sandboxOutstandingAmount: 0, sandboxTotalDirectCost: 1050, sandboxGrossProfit: 985, sandboxGrossMarginPct: 48 },
+  { n: 2, jobNumber: "J-2", jobSequenceNumber: 2, client: "Milton Legal Chambers", jobSite: "Sample premises, Milton QLD", proofType: "Recurring Job", status: "In Progress", gm: 45, evidence: true, lifecycle: "active", sourceQuote: "Q-1002", quoteValue: 2640, quotedLabourHours: 24, quotedChargeOutRate: 95, quotedConsumablesBudget: 65, actualLabourHours: 12, sandboxRevenueAmount: 2640, sandboxTotalDirectCost: 1320, sandboxGrossProfit: 1320, sandboxGrossMarginPct: 50 },
+  { n: 3, jobNumber: "J-3", jobSequenceNumber: 3, client: "Newstead Allied Health", jobSite: "Sample premises, Newstead QLD", proofType: "Recurring Job", status: "Scheduled", gm: 43, evidence: true, lifecycle: "active", sourceQuote: "Q-1003", quoteValue: 1760, quotedLabourHours: 16, quotedChargeOutRate: 95, quotedConsumablesBudget: 45, scheduledDate: "2026-07-24", sandboxRevenueAmount: 1760, sandboxTotalDirectCost: 920, sandboxGrossProfit: 840, sandboxGrossMarginPct: 48 },
 ];
 
 // Canonical Stage 1 snapshot shape, returned by the read-only Supabase RPC
@@ -504,9 +539,7 @@ type Stage1PublicNextStep = Partial<Stage1NextStepGuidance> & { [key: string]: a
 type Stage1DashboardDisplay = { [key: string]: any };
 type Stage1JobDetailDisplay = { [key: string]: any };
 
-// Render a Supabase-derived direct-cost value using maturity-oriented wording.
-// Prefers an explicit display string (direct_cost_display); a missing/zero cost
-// renders as "Not Yet Recorded" rather than a dash.
+// Render a Supabase-derived direct-cost value compactly.
 function renderDirectCost(
   value: number | null | undefined,
   opts?: { display?: string | null },
@@ -517,7 +550,7 @@ function renderDirectCost(
     const n = typeof value === "number" ? value : Number(value);
     if (Number.isFinite(n) && n > 0) return `$${fmtMoney(n)}`;
   }
-  return "Not Yet Recorded";
+  return "—";
 }
 
 function marginTone35(pct: number | null): string {
@@ -613,48 +646,23 @@ function deriveStage1GmStatus(u: ProofUnit): { label: string; tone: string; pct:
     return { label: "GM proven", tone: gmPct >= 30 ? "text-emerald-600" : gmPct >= 20 ? "text-amber-600" : "text-red-600", pct: gmPct };
   }
   if (revenue > 0 && costs === 0) {
-    return { label: "Cost not yet proven", tone: "text-muted-foreground", pct: null };
+    return { label: "—", tone: "text-muted-foreground", pct: null };
   }
   if (revenue === 0) {
-    return { label: "Revenue not yet proven", tone: "text-muted-foreground", pct: null };
+    return { label: "—", tone: "text-muted-foreground", pct: null };
   }
-  return { label: "GM not yet proven", tone: "text-muted-foreground", pct: null };
+  return { label: "—", tone: "text-muted-foreground", pct: null };
 }
 
 // ---------------------------------------------------------------------------
-// Stage 1 sandbox commercial proof model — display helpers
-// Proof type and payment status are DISTINCT axes. Both are derived from the
-// persisted public.stage1_job_margin_summary projection on the unit, falling
-// back to the documented rules when the view did not supply an explicit value.
+// Stage 1 payment-status display helper.
 // ---------------------------------------------------------------------------
-const PROOF_TYPE_LABELS: Record<string, string> = {
-  not_yet_proven: "Not yet proven",
-  revenue_recorded: "Revenue recorded",
-  commercial_proof_recorded: "Commercial proof recorded",
-  completed_job: "Completed job",
-};
-
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  not_invoiced: "Not invoiced",
+  not_invoiced: "—",
   unpaid: "Unpaid",
   part_paid: "Part-paid",
   paid: "Paid",
 };
-
-function deriveStage1ProofType(u: ProofUnit): string {
-  if (u.sandboxProofType && PROOF_TYPE_LABELS[u.sandboxProofType]) {
-    return PROOF_TYPE_LABELS[u.sandboxProofType];
-  }
-  const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
-  const cost = u.sandboxTotalDirectCost ?? unitTotalCost(u);
-  const statusLc = (u.status ?? "").toLowerCase();
-  const completed = statusLc.includes("complete") || u.sandboxProofType === "completed_job";
-  if (revenue > 0 && cost > 0) {
-    return completed ? "Completed job" : "Commercial proof recorded";
-  }
-  if (revenue > 0) return "Revenue recorded";
-  return "Not yet proven";
-}
 
 function deriveStage1PaymentStatus(u: ProofUnit): string {
   if (u.sandboxPaymentStatus && PAYMENT_STATUS_LABELS[u.sandboxPaymentStatus]) {
@@ -662,7 +670,7 @@ function deriveStage1PaymentStatus(u: ProofUnit): string {
   }
   const revenue = u.sandboxRevenueAmount ?? u.invoiceAmount ?? u.quoteValue ?? 0;
   const paid = u.sandboxPaymentReceivedAmount ?? u.paymentAmount ?? 0;
-  if (revenue <= 0) return "Not invoiced";
+  if (revenue <= 0) return "—";
   if (paid >= revenue) return "Paid";
   if (paid > 0) return "Part-paid";
   return "Unpaid";
@@ -681,6 +689,7 @@ function KpiCard({
   accent,
   tone,
   onClick,
+  highlighted = false,
 }: {
   label: string;
   primary: React.ReactNode;
@@ -689,6 +698,7 @@ function KpiCard({
   accent: "blue" | "green" | "violet" | "amber";
   tone?: string;
   onClick?: () => void;
+  highlighted?: boolean;
 }) {
   const accentStyles = {
     blue: {
@@ -739,7 +749,7 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card}`}>
+      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         {content}
       </div>
     );
@@ -747,197 +757,84 @@ function KpiCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card}`}
+      className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}
     >
       {content}
     </button>
   );
 }
 
-// ---------- Business Details (simplified dialog) ----------
-type BDForm = {
-  business_name: string;
-  abn: string;
-  trading_name: string;
-  business_address: string;
-  contact_name: string;
-  phone: string;
-  email: string;
-};
-const EMPTY_BD: BDForm = {
-  business_name: "",
-  abn: "",
-  trading_name: "",
-  business_address: "",
-  contact_name: "",
-  phone: "",
-  email: "",
-};
-const BD_REQUIRED: (keyof BDForm)[] = ["abn"];
-const BD_EXTRA_KEY = "stage1.business_details.extras";
-
-const normaliseAbn = (value: string) => value.replace(/\D/g, "");
-const isEnteredAbn = (value: string) => normaliseAbn(value).length === 11;
-
-type BusinessGateStatus = "missing" | "entered" | "pending_verification" | "verified" | "invalid";
-
-function getBusinessGateStatus(form: BDForm): BusinessGateStatus {
-  return isEnteredAbn(form.abn) ? "entered" : "missing";
-}
-
-
-function useBusinessDetails() {
+// ---------- Business Details (server-verified gate) ----------
+function useBusinessDetails(runId: string | null, isDemo: boolean) {
   const [loaded, setLoaded] = useState(false);
-  const [complete, setComplete] = useState(false);
-  const [form, setForm] = useState<BDForm>(EMPTY_BD);
-  const [rowId, setRowId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<PublicBusinessProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("business_identity_profile")
-          .select("*")
-          .order("created_at", { ascending: false, nullsFirst: false })
-          .limit(1)
-          .maybeSingle();
-        const extras = (() => {
-          try { return JSON.parse(localStorage.getItem(BD_EXTRA_KEY) || "{}"); } catch { return {}; }
-        })();
-        if (data) {
-          setRowId((data as any).id ?? null);
-          const merged: BDForm = {
-            ...EMPTY_BD,
-            business_name: data.business_name ?? "",
-            contact_name: data.contact_name ?? "",
-            phone: data.phone ?? "",
-            email: data.email ?? "",
-            abn: data.abn ?? "",
-            trading_name: extras.trading_name ?? "",
-            business_address: extras.business_address ?? "",
-          };
-          setForm(merged);
-          setComplete(isEnteredAbn(merged.abn));
-        }
-      } catch {
-        /* ignore */
-      }
+    if (isDemo) {
       setLoaded(true);
-    })();
-  }, []);
+      return;
+    }
+    if (!runId) {
+      setLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    setLoaded(false);
+    setError(null);
+    void fetchBusinessIdentity(runId)
+      .then(({ profile: next }) => { if (!cancelled) setProfile(next); })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
+      })
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [isDemo, runId]);
 
-  async function save(next: BDForm): Promise<{ ok: boolean; error?: string }> {
-    const missing = BD_REQUIRED.filter((k) => !String(next[k] ?? "").trim());
-    if (missing.length) return { ok: false, error: `Missing: ${missing.join(", ")}` };
-    const payload: any = {
-      business_name: next.business_name,
-      contact_name: next.contact_name,
-      phone: next.phone,
-      email: next.email,
-      abn: next.abn,
-    };
-    if (rowId) payload.id = rowId;
-    const { data, error } = await supabase
-      .from("business_identity_profile")
-      .upsert(payload)
-      .select()
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    if (data?.id) setRowId(data.id);
-    localStorage.setItem(
-      BD_EXTRA_KEY,
-      JSON.stringify({
-        trading_name: next.trading_name,
-        business_address: next.business_address,
-      }),
-    );
-    setForm(next);
-    setComplete(isEnteredAbn(next.abn));
-    return { ok: true };
-  }
-
-  const gateStatus = getBusinessGateStatus(form);
-  const canOperate = gateStatus === "entered";
-  return { loaded, complete, form, setForm, save, gateStatus, canOperate };
+  const canOperate = isDemo || profile?.verified === true;
+  return { loaded, complete: canOperate, profile, error, canOperate };
 }
 
 function BusinessDetailsDialog({
   open,
   onOpenChange,
-  hook,
+  runId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  hook: ReturnType<typeof useBusinessDetails>;
+  runId: string | null;
 }) {
-  const { form, setForm, save } = hook;
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const set = <K extends keyof BDForm>(k: K, v: BDForm[K]) =>
-    setForm((p) => ({ ...p, [k]: v }));
-
-  const missing = BD_REQUIRED.filter((k) => !String(form[k] ?? "").trim());
-
-  async function onSave() {
-    setSaving(true);
-    setErr(null);
-    const res = await save(form);
-    setSaving(false);
-    if (!res.ok) {
-      setErr(res.error ?? "Save failed");
-      return;
-    }
-    onOpenChange(false);
-  }
-
-  const field = (id: keyof BDForm, label: string, required?: boolean, type: string = "text") => (
-    <div className="space-y-1.5" key={id}>
-      <Label htmlFor={id}>
-        {label} {required && <span className="text-destructive">*</span>}
-      </Label>
-      <Input
-        id={id}
-        type={type}
-        value={form[id]}
-        onChange={(e) => set(id, e.target.value)}
-      />
-    </div>
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Complete Business Details</DialogTitle>
+          <DialogTitle>Before you start First 5 Jobs</DialogTitle>
           <DialogDescription>
-            Your ABN is required before you can create quotes, convert jobs, or record business transactions. ATO/ABR verification will be wired next; for now this gate requires a correctly entered 11-digit ABN.
+            Jane will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          {field("business_name", "Business name")}
-          {field("abn", "ABN", true)}
-          {field("trading_name", "Trading name (if different)")}
-          <div className="md:col-span-2">
-            {field("business_address", "Business address")}
+        <div className="space-y-3">
+          <div className="rounded-lg border p-4">
+            <p className="font-medium">I already have an ABN</p>
+            <p className="mt-1 text-sm text-muted-foreground">Enter your details, then we will check the ABN and GST status against the register.</p>
+            {runId ? (
+              <Button asChild className="mt-3">
+                <Link to={`/business-setup?runId=${encodeURIComponent(runId)}`}>Enter Business Details</Link>
+              </Button>
+            ) : (
+              <Button className="mt-3" disabled>Enter Business Details</Button>
+            )}
           </div>
-          {field("contact_name", "Contact name")}
-          {field("phone", "Contact phone")}
-          {field("email", "Contact email", false, "email")}
+          <div className="rounded-lg border p-4">
+            <p className="font-medium">I need to apply for an ABN</p>
+            <p className="mt-1 text-sm text-muted-foreground">Use the official government guide. Applying is free. Come back here once the ABN is active.</p>
+            <Button asChild variant="outline" className="mt-3">
+              <a href="https://www.abr.gov.au/business-super-funds-charities/applying-abn" target="_blank" rel="noreferrer">Show me how to apply</a>
+            </Button>
+          </div>
         </div>
-
-        {err && <p className="text-xs text-destructive">{err}</p>}
-
-        <DialogFooter className="gap-2">
-          <p className="text-xs text-muted-foreground mr-auto">
-            {missing.length === 0 ? "All required fields complete." : `Missing: ${missing.join(", ")}`}
-          </p>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave} disabled={saving || missing.length > 0}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Save business details
-          </Button>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Not now</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -950,7 +847,7 @@ type DrillKey = "leads" | "conversions" | "jobs";
 const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   leads: {
     title: "Lead Method Performance",
-    subtitle: "Where leads are coming from and what is converting.",
+    subtitle: "Where leads are coming from and the activity producing them.",
   },
   conversions: {
     title: "Quote Conversion Board",
@@ -962,9 +859,16 @@ const DRILL_META: Record<DrillKey, { title: string; subtitle: string }> = {
   },
 };
 
+function LeadSummary({ label, value }: { label: string; value: string | number }) {
+  return <div className="rounded-xl border bg-slate-50 p-3"><div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1 text-xl font-semibold leading-tight">{value}</div></div>;
+}
+
 function DrillBody({
   kind,
   methodRows,
+  activities,
+  leads,
+  stageStartedAt,
   quotes,
   selectedQuoteNumber,
   onSelectQuote,
@@ -975,6 +879,9 @@ function DrillBody({
 }: {
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
+  activities: Stage1LeadActivity[];
+  leads: Stage1LeadRecord[];
+  stageStartedAt: string | null;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
   onSelectQuote: (n: string) => void;
@@ -984,6 +891,7 @@ function DrillBody({
   onOpenUnit: (n: number) => void;
 }) {
   const [quoteFilter, setQuoteFilter] = useState<"all" | "sent" | "converted" | "rejected">("all");
+  const [selectedLeadMethod, setSelectedLeadMethod] = useState<string | null>(null);
 
   const filteredQuotes = useMemo(() => {
     switch (quoteFilter) {
@@ -1002,6 +910,12 @@ function DrillBody({
     <div className="space-y-4">
       {kind === "leads" && (
         <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <LeadSummary label="Total leads" value={methodRows.reduce((sum, row) => sum + row.leads, 0)} />
+            <LeadSummary label="Methods used" value={methodRows.filter((row) => row.leads > 0 || row.attempts > 0).length} />
+            <LeadSummary label="Total attempts" value={methodRows.reduce((sum, row) => sum + row.attempts, 0)} />
+            <LeadSummary label="Best source" value={methodRows.slice().sort((a, b) => b.leads - a.leads)[0]?.method ?? "—"} />
+          </div>
           {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto">
             <Table>
@@ -1011,21 +925,15 @@ function DrillBody({
                   <TableHead className="text-right">Attempts</TableHead>
                   <TableHead className="text-right">Contacts</TableHead>
                   <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">Quotes</TableHead>
-                  <TableHead className="text-right">Jobs</TableHead>
-                  <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {methodRows.map((r) => (
                   <TableRow key={r.method}>
-                    <TableCell className="font-medium">{r.method}</TableCell>
+                    <TableCell className="font-medium"><button type="button" className="text-left text-sky-700 underline-offset-4 hover:underline" onClick={() => setSelectedLeadMethod(r.method)}>{r.method}</button></TableCell>
                     <TableCell className="text-right">{r.attempts}</TableCell>
                     <TableCell className="text-right">{r.contacts}</TableCell>
                     <TableCell className="text-right">{r.leads}</TableCell>
-                    <TableCell className="text-right">{r.quotes}</TableCell>
-                    <TableCell className="text-right">{r.jobs}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.notes}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1034,19 +942,33 @@ function DrillBody({
           {/* Mobile stacked cards */}
           <div className="md:hidden space-y-3">
             {methodRows.map((r) => (
-              <div key={r.method} className="rounded-md border p-3">
-                <div className="font-medium">{r.method}</div>
+              <button type="button" key={r.method} className="w-full rounded-md border p-3 text-left hover:bg-slate-50" onClick={() => setSelectedLeadMethod(r.method)}>
+                <div className="font-medium text-sky-700">{r.method}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
                   <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
                   <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
-                  <div><div className="text-muted-foreground">Quotes</div><div>{r.quotes}</div></div>
-                  <div><div className="text-muted-foreground">Jobs</div><div>{r.jobs}</div></div>
                 </div>
-                {r.notes && <div className="mt-2 text-xs text-muted-foreground">{r.notes}</div>}
-              </div>
+              </button>
             ))}
           </div>
+          {selectedLeadMethod && (
+            <section aria-label={`${selectedLeadMethod} lead records`} className="rounded-xl border bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{selectedLeadMethod} leads</h3><Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLeadMethod(null)}>Close</Button></div>
+              <div className="mt-3 space-y-2">
+                {leads.filter((lead) => lead.source === selectedLeadMethod).map((lead) => (
+                  <div key={lead.id} className="rounded-lg border bg-white p-3 text-sm">
+                    <div className="font-semibold">{lead.client_name}</div>
+                    <div className="mt-1 text-muted-foreground">{[lead.contact_name, lead.contact_email, lead.contact_phone].filter(Boolean).join(" · ") || "No contact details recorded"}</div>
+                    <div className="mt-1">{lead.site_address || "No site address"} · Status: {lead.status}</div>
+                    {lead.notes && <div className="mt-1 text-muted-foreground">{lead.notes}</div>}
+                  </div>
+                ))}
+                {leads.every((lead) => lead.source !== selectedLeadMethod) && <p className="text-sm text-muted-foreground">No individual lead records for this method yet.</p>}
+              </div>
+            </section>
+          )}
+          <Stage1LeadMatrix activities={activities} startedAt={stageStartedAt} methods={methodRows.map((row) => row.method)} />
         </>
       )}
 
@@ -1208,7 +1130,6 @@ function DrillBody({
                   <TableHead className="text-right">Job Costs</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
                   <TableHead className="text-right">GM %</TableHead>
-                  <TableHead>Proof Type</TableHead>
                   <TableHead>Payment Status</TableHead>
                   <TableHead className="text-right">Details</TableHead>
                 </TableRow>
@@ -1223,9 +1144,7 @@ function DrillBody({
                   const gmStatus = deriveStage1GmStatus(u);
                   const gmPctValue = gmStatus.pct;
                   const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-                  const proofTypeLabel = deriveStage1ProofType(u);
                   const paymentStatusLabel = deriveStage1PaymentStatus(u);
-                  const hasVariation = stage1VariationRecorded(u);
                   return (
                     <TableRow
                       key={u.stage1JobId ?? `n-${u.n}`}
@@ -1261,14 +1180,6 @@ function DrillBody({
                       <TableCell className="text-right tabular-nums">{renderDirectCost(costs)}</TableCell>
                       <TableCell className="text-right tabular-nums">{income > 0 ? `$${fmtMoney(gp)}` : "—"}</TableCell>
                       <TableCell className={`text-right font-medium tabular-nums ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs">{proofTypeLabel}</span>
-                          {hasVariation && (
-                            <Badge variant="outline" className="w-fit text-[10px]">Variation recorded</Badge>
-                          )}
-                        </div>
-                      </TableCell>
                       <TableCell className="text-xs">{paymentStatusLabel}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -1295,7 +1206,6 @@ function DrillBody({
               const gmStatus = deriveStage1GmStatus(u);
               const gmPctValue = gmStatus.pct;
               const jobNum = u.jobSequenceNumber != null ? `J-${u.jobSequenceNumber}` : `J-${u.n}`;
-              const proofTypeLabel = deriveStage1ProofType(u);
               const paymentStatusLabel = deriveStage1PaymentStatus(u);
               const hasVariation = stage1VariationRecorded(u);
               return (
@@ -1317,7 +1227,6 @@ function DrillBody({
                   <div className="flex justify-between text-xs"><span>Job costs</span><span>{renderDirectCost(costs)}</span></div>
                   <div className="flex justify-between text-xs"><span>Gross profit</span><span>{income > 0 ? `$${fmtMoney(gp)}` : "—"}</span></div>
                   <div className="flex justify-between text-xs"><span>GM %</span><span className={`font-medium ${gmPctValue === null ? "text-muted-foreground" : gmStatus.tone}`}>{gmPctValue != null ? `${gmPctValue}%` : gmStatus.label}</span></div>
-                  <div className="flex justify-between text-xs"><span>Proof type</span><span>{proofTypeLabel}</span></div>
                   <div className="flex justify-between text-xs"><span>Payment status</span><span>{paymentStatusLabel}</span></div>
                   {hasVariation && (
                     <Badge variant="outline" className="text-[10px]">Variation recorded</Badge>
@@ -1337,6 +1246,9 @@ function DrillCurtain({
   drill,
   onOpenChange,
   methodRows,
+  activities,
+  leads,
+  stageStartedAt,
   onLogActivity,
   quotes,
   selectedQuoteNumber,
@@ -1346,10 +1258,14 @@ function DrillCurtain({
   onOpenQuoteDetail,
   units,
   onOpenUnit,
+  tourInteractive = false,
 }: {
   drill: DrillKey | null;
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
+  activities: Stage1LeadActivity[];
+  leads: Stage1LeadRecord[];
+  stageStartedAt: string | null;
   onLogActivity: () => void;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
@@ -1359,12 +1275,14 @@ function DrillCurtain({
   onOpenQuoteDetail: (n: string) => void;
   units: ProofUnit[];
   onOpenUnit: (n: number) => void;
+  tourInteractive?: boolean;
 }) {
   const meta = drill ? DRILL_META[drill] : null;
   return (
-    <Sheet open={!!drill} onOpenChange={onOpenChange}>
+    <Sheet open={!!drill} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
         side="right"
+        onInteractOutside={(event) => { if (tourInteractive) event.preventDefault(); }}
         className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
       >
         <div className="p-6 space-y-4">
@@ -1377,7 +1295,7 @@ function DrillCurtain({
               {drill === "leads" && (
                 <Button size="sm" onClick={onLogActivity} className="gap-1.5 shrink-0">
                   <Plus className="h-4 w-4" />
-                  Log Activity
+                  Add Lead
                 </Button>
               )}
               {drill === "conversions" && (
@@ -1391,6 +1309,9 @@ function DrillCurtain({
             <DrillBody
               kind={drill}
               methodRows={methodRows}
+              activities={activities}
+              leads={leads}
+              stageStartedAt={stageStartedAt}
               quotes={quotes}
               selectedQuoteNumber={selectedQuoteNumber}
               onSelectQuote={onSelectQuote}
@@ -1496,206 +1417,73 @@ function QuoteActivityDialog({
   );
 }
 
-function LogActivityDialog({
+function AddLeadDialog({
   open,
   onOpenChange,
   onSave,
-  nextQuoteNumberStart,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: LeadActivity, newQuotes: Quote[]) => void;
-  nextQuoteNumberStart: number;
+  onSave: (lead: NewStage1LeadRecord) => void;
 }) {
-  const [date, setDate] = useState("");
-  const [method, setMethod] = useState(METHOD_OPTIONS[0]);
-  const [attempts, setAttempts] = useState<string>("");
-  const [contacts, setContacts] = useState<string>("");
-  const [quotes, setQuotes] = useState<string>("");
+  const [clientName, setClientName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [site, setSite] = useState("");
+  const [source, setSource] = useState(METHOD_OPTIONS[0]);
+  const [value, setValue] = useState("");
+  const [nextAction, setNextAction] = useState("");
   const [notes, setNotes] = useState("");
-  type QRow = {
-    client: string;
-    site: string;
-    amount: string;
-    followUp: string;
-    status: "Sent";
-  };
-  const blankRow = (): QRow => ({ client: "", site: "", amount: "", followUp: "", status: "Sent" });
-  const [rows, setRows] = useState<QRow[]>([]);
 
   useEffect(() => {
     if (open) {
-      setDate(""); setMethod(METHOD_OPTIONS[0]);
-      setAttempts(""); setContacts(""); setQuotes(""); setNotes("");
-      setRows([]);
+      setClientName(""); setContactName(""); setEmail(""); setPhone(""); setSite("");
+      setSource(METHOD_OPTIONS[0]); setValue(""); setNextAction(""); setNotes("");
     }
   }, [open]);
 
-  const qGen = Math.max(0, parseInt(quotes || "0", 10) || 0);
-
-  // Keep rows count in sync with Quotes Generated input
-  useEffect(() => {
-    setRows((prev) => {
-      if (qGen === prev.length) return prev;
-      if (qGen > prev.length) {
-        return [...prev, ...Array.from({ length: qGen - prev.length }, blankRow)];
-      }
-      return prev.slice(0, qGen);
-    });
-  }, [qGen]);
-
-  const rowComplete = (r: QRow) => {
-    const amt = Number(r.amount);
-    if (!r.client.trim()) return false;
-    if (!r.site.trim()) return false;
-    if (isNaN(amt) || amt <= 0) return false;
-    if (!r.followUp) return false;
-    return true;
-  };
-  const completeCount = rows.filter(rowComplete).length;
-  const countOk = completeCount === qGen;
-  const canSave = !!date && !!method && countOk;
+  const canSave = !!clientName.trim() && !!source;
 
   const save = () => {
-    const activityId = `act-${Date.now()}`;
-    const a: LeadActivity = {
-      id: activityId,
-      activity_date: date,
-      method,
-      attempts: Number(attempts) || 0,
-      contacts_made: Number(contacts) || 0,
-      quotes_generated: qGen,
-      notes: notes.trim(),
-      created_at: new Date().toISOString(),
-    };
-    const newQuotes: Quote[] = rows.map((r, i) => ({
-      number: `Q-${nextQuoteNumberStart + i}`,
-      client: r.client.trim(),
-      site: r.site.trim(),
-      value: Number(r.amount),
-      status: r.status as QuoteStatus,
-      quoteDate: date,
-      followUp: r.followUp,
-      reason: "",
-      sourceActivityId: activityId,
-      sourceActivityDate: date,
-      method,
-      createdAt: new Date().toISOString(),
-    }));
-    onSave(a, newQuotes);
+    onSave({
+      client_name: clientName.trim(), contact_name: contactName.trim() || null,
+      contact_email: email.trim() || null, contact_phone: phone.trim() || null,
+      site_address: site.trim() || null, source, estimated_value: Number(value) || 0,
+      next_action_at: nextAction ? new Date(`${nextAction}T09:00:00`).toISOString() : null,
+      notes: notes.trim() || null,
+    });
   };
-
-  const updateRow = (i: number, patch: Partial<QRow>) =>
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Log Activity</DialogTitle>
-          <DialogDescription>
-            Record a dated lead-generation activity. Aggregates into Lead Method Performance.
-            When Quotes Generated is greater than zero, enter matching quote details below.
-          </DialogDescription>
+          <DialogTitle>Add Lead</DialogTitle>
+          <DialogDescription>Capture the prospect and contact details behind this lead.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="la-date">Activity Date <span className="text-destructive">*</span></Label>
-            <Input id="la-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">
-              {date ? `Entered as ${isoToAU(date)}` : "dd/mm/yyyy (e.g. 28/05/2026)"}
-            </p>
+            <Label htmlFor="lead-client">Lead / business name <span className="text-destructive">*</span></Label>
+            <Input id="lead-client" value={clientName} onChange={(e) => setClientName(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="la-method">Method</Label>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-contact">Contact name</Label><Input id="lead-contact" value={contactName} onChange={(e) => setContactName(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-site">Site address</Label><Input id="lead-site" value={site} onChange={(e) => setSite(e.target.value)} /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-email">Email</Label><Input id="lead-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-phone">Phone</Label><Input id="lead-phone" value={phone} onChange={(e) => setPhone(e.target.value)} /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5">
+            <Label htmlFor="lead-source">Lead method</Label>
             <select
-              id="la-method"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
+              id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="la-att">Attempts</Label>
-              <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="la-con">Contacts Made</Label>
-              <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="la-qt">Quotes Generated</Label>
-              <Input id="la-qt" type="number" min={0} value={quotes} onChange={(e) => setQuotes(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">
-                How many actual quotes did you issue from this activity session?
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                If greater than zero, you must enter one quote record for each quote before saving.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="la-notes">Notes</Label>
-            <Input id="la-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Best response 8–10am" />
-          </div>
-
-          {qGen > 0 && (
-            <div className="space-y-2 rounded-md border p-3">
-              <div>
-                <div className="text-sm font-semibold">Quote Details Required</div>
-                <p className="text-xs text-muted-foreground">
-                  You entered {qGen} quote{qGen === 1 ? "" : "s"} generated. Enter {qGen} quote record{qGen === 1 ? "" : "s"} before saving this activity.
-                </p>
-              </div>
-              {rows.map((r, i) => (
-                <div key={i} className="rounded-md border p-3 space-y-2 bg-muted/30">
-                  <div className="text-xs font-medium text-muted-foreground">Quote {i + 1} of {qGen}</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Client <span className="text-destructive">*</span></Label>
-                      <Input value={r.client} onChange={(e) => updateRow(i, { client: e.target.value })} placeholder="e.g. M. Patel" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Job Location <span className="text-destructive">*</span></Label>
-                      <Input value={r.site} onChange={(e) => updateRow(i, { site: e.target.value })} placeholder="e.g. Unit 4, Buderim" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Quote Amount <span className="text-destructive">*</span></Label>
-                      <Input type="number" min={0} step="0.01" value={r.amount} onChange={(e) => updateRow(i, { amount: e.target.value })} placeholder="0.00" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">
-                        Follow-up Date <span className="text-destructive">*</span>
-                      </Label>
-                      <Input type="date" value={r.followUp} onChange={(e) => updateRow(i, { followUp: e.target.value })} />
-                      <p className="text-[11px] text-muted-foreground">
-                        {r.followUp ? isoToAU(r.followUp) : "dd/mm/yyyy"}
-                      </p>
-                    </div>
-                    <div className="space-y-1 md:col-span-2">
-                      <Label className="text-xs">Initial Status</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Quotes created from Log Activity are saved as <span className="font-medium text-foreground">Sent</span>.
-                        Update status later from the Quote Conversion Board.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!countOk && (
-                <p className="text-xs text-destructive">
-                  Quotes Generated must match the number of completed quote records. ({completeCount} of {qGen} complete)
-                </p>
-              )}
-            </div>
-          )}
+          </div><div className="space-y-1.5"><Label htmlFor="lead-value">Estimated value</Label><Input id="lead-value" type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} /></div></div>
+          <div className="space-y-1.5"><Label htmlFor="lead-next">Next action date</Label><Input id="lead-next" type="date" value={nextAction} onChange={(e) => setNextAction(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="lead-notes">Notes</Label><Input id="lead-notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Activity</Button>
+          <Button onClick={save} disabled={!canSave}>Save Lead</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1733,13 +1521,9 @@ function QuoteDetailDialog({
 
   if (!quote) return null;
   const isConverted = !!quote.converted;
-  // Converted quotes can still amend the flow-through fields (client, site, amount).
-  // Fully read-only is no longer the default.
-  const readOnly = false;
   const isSent = quote.status === "Sent" && !isConverted;
   const isRejected = quote.status === "Rejected" && !isConverted;
-  // Fields editable for amendment: Sent OR Converted (flow-through to job)
-  const canEditFlowThrough = isSent || isConverted;
+  const canEditFlowThrough = isSent;
   const hadNotes = !!quote.notes;
 
   const handleSave = () => {
@@ -1774,7 +1558,7 @@ function QuoteDetailDialog({
           <DialogTitle>Quote Detail</DialogTitle>
           <DialogDescription>
             {isConverted
-              ? "This quote has been converted into a job. Amendments to client, location, or quote amount will update the linked job and ledger."
+              ? "This accepted quote is locked. If the agreed work or price changes, issue a replacement quote so the history remains clear."
               : isSent
                 ? "Limited amendments available while quote is Sent. Status changes happen in Quote Activity."
                 : "Status changes happen in Quote Activity."}
@@ -1784,7 +1568,7 @@ function QuoteDetailDialog({
         {isConverted && (
           <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-xs text-amber-900">
             <div className="font-semibold">This quote has already been converted into a job.</div>
-            <div>Changing client, location, or quote amount will update the linked job and ledger.</div>
+            <div>The accepted customer, work and price are now part of the commercial record.</div>
           </div>
         )}
 
@@ -1876,11 +1660,48 @@ function QuoteDetailDialog({
 }
 
 function Stage1DashboardInner() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const isDemo = searchParams.get("demo") === "1";
+  const tourMode = searchParams.get("tour");
+  const tourActive = tourMode === "1" || tourMode === "jobs";
+  const tourAutoPlay = searchParams.get("autoplay") === "1";
+  const tourStepParam = searchParams.get("step");
+  const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
+  const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
+  const [tourStep, setTourStep] = useState(tourMode === "jobs" ? initialTourStep + 4 : initialTourStep);
+  const handleTourStepChange = useCallback((step: number) => setTourStep(tourMode === "jobs" ? step + 4 : step), [tourMode]);
+  const closeTour = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("tour");
+    next.delete("step");
+    next.delete("autoplay");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const { user, loading: authLoading } = useAuth();
-  const bd = useBusinessDetails();
+  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
+  );
+  const bd = useBusinessDetails(activeRunId, isDemo);
+  const [orientationComplete, setOrientationComplete] = useState(isDemo);
+  const [orientationLoaded, setOrientationLoaded] = useState(isDemo);
+  useEffect(() => {
+    if (isDemo) return;
+    if (!activeRunId) {
+      setOrientationComplete(false);
+      setOrientationLoaded(true);
+      return;
+    }
+    setOrientationLoaded(false);
+    void fetchStage1Onboarding(activeRunId)
+      .then((progress) => setOrientationComplete(Boolean(progress.completedAt)))
+      .catch(() => setOrientationComplete(false))
+      .finally(() => setOrientationLoaded(true));
+  }, [activeRunId, isDemo]);
   const [bdOpen, setBdOpen] = useState(false);
+  useEffect(() => {
+    if (!isDemo && activeRunId && orientationLoaded && orientationComplete && bd.loaded && !bd.canOperate) setBdOpen(true);
+  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, orientationComplete, orientationLoaded]);
   const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
@@ -1888,8 +1709,34 @@ function Stage1DashboardInner() {
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [ledgerView, setLedgerView] = useState<"debtors" | "summary">(isDemo ? "summary" : "debtors");
+
+  useEffect(() => {
+    if (!tourActive) return;
+    if (tourStep === 2) setDrill("leads");
+    else if (tourStep === 4) setDrill("jobs");
+    else if (tourStep >= 5 && tourStep <= 8 && isDemo) {
+      setDrill(null);
+      if (tourStep === 5) {
+        window.setTimeout(() => { setReportN(1); setReportOpen(true); }, 350);
+      }
+      const target = tourStep === 5 ? "job-summary" : tourStep === 6 ? "client-invoices" : tourStep === 7 ? "job-costs" : "client-payments";
+      window.setTimeout(() => document.querySelector(`[data-stage1-tour="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    }
+    else if (tourStep === 9) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
+    else if (tourStep === 10) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
+    else setDrill(null);
+  }, [isDemo, tourActive, tourStep]);
   const [logActOpen, setLogActOpen] = useState(false);
-  const [activities, setActivities] = useState<LeadActivity[]>([]);
+  const [activities, setActivities] = useState<Stage1LeadActivity[]>(isDemo ? DEMO_LEAD_ACTIVITIES : []);
+  const [leadRecords, setLeadRecords] = useState<Stage1LeadRecord[]>(isDemo ? DEMO_LEAD_RECORDS : []);
+  useEffect(() => {
+    if (isDemo || !activeRunId) return;
+    let cancelled = false;
+    Promise.all([loadStage1LeadActivities(activeRunId), loadStage1LeadRecords(activeRunId)])
+      .then(([activityRows, leads]) => { if (!cancelled) { setActivities(activityRows); setLeadRecords(leads); } })
+      .catch((error) => { if (!cancelled) toast({ title: "Lead records could not be loaded", description: error instanceof Error ? error.message : String(error), variant: "destructive" }); });
+    return () => { cancelled = true; };
+  }, [activeRunId, isDemo]);
   const [quotes, setQuotes] = useState<Quote[]>(isDemo ? DEMO_QUOTES : SEED_QUOTES);
   const [selectedQuoteNumber, setSelectedQuoteNumber] = useState<string | null>(null);
   const [quoteActivityOpen, setQuoteActivityOpen] = useState(false);
@@ -1904,9 +1751,6 @@ function Stage1DashboardInner() {
   // from this component.
   const [stage1Snapshot, setStage1Snapshot] = useState<Stage1Snapshot | null>(null);
   const [stage1SnapshotLoaded, setStage1SnapshotLoaded] = useState(false);
-  const [activeRunId, setActiveRunId] = useState<string | null>(() =>
-    searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
-  );
   const unitsRef = useRef<ProofUnit[]>(units);
   useEffect(() => {
     unitsRef.current = units;
@@ -1931,6 +1775,12 @@ function Stage1DashboardInner() {
     setStage1RunId(nextRunId);
     setActiveRunId(nextRunId);
   }, [searchParams]);
+  useEffect(() => {
+    if (!activeRunId || searchParams.get("runId")) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("runId", activeRunId);
+    setSearchParams(next, { replace: true });
+  }, [activeRunId, searchParams, setSearchParams]);
   useEffect(() => {
     if (activeRunId || !user?.id) return;
     let cancelled = false;
@@ -2809,17 +2659,15 @@ function Stage1DashboardInner() {
         // Core jobs must never populate the ledger — doing so reindexes rows by
         // local array position (J-1, J-2, …) and breaks persisted row identity
         // (job_sequence_number). That legacy fallback is removed.
-        const { quotes: dbQuotes } = await loadStage1Board();
+        const { quotes: dbQuotes } = await loadStage1Board(activeRunId);
         if (!active) return;
-        if (dbQuotes.length) {
-          setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
-        }
+        setQuotes(dbQuotes.map((q) => ({ ...q, sourceActivityDate: q.quoteDate })));
       } catch {
         /* board stays empty; nothing persisted yet */
       }
     })();
     return () => { active = false; };
-  }, [isDemo]);
+  }, [activeRunId, isDemo]);
 
   // ---- Canonical Stage 1 sandbox hydration (READ-ONLY) ---------------------
   // On load / refresh / re-login / run change, hydrate the job ledger from the
@@ -2950,6 +2798,7 @@ function Stage1DashboardInner() {
     const methods = new Set<string>();
     methodBaseline.forEach((b) => methods.add(b.method));
     activities.forEach((a) => a.method && methods.add(a.method));
+    leadRecords.forEach((lead) => lead.source && methods.add(lead.source));
     quotes.forEach((q) => q.method && methods.add(q.method));
     return Array.from(methods).map((method) => {
       const baseline = methodBaseline.find((b) => b.method === method);
@@ -2961,8 +2810,8 @@ function Stage1DashboardInner() {
       }).length;
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
       const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
-      const quotesSum = (baseline?.quotes ?? 0) + acts.reduce((s, a) => s + (a.quotes_generated || 0), 0);
-      const leads = (baseline?.leads ?? 0) + acts.length;
+      const quotesSum = (baseline?.quotes ?? 0) + qs.length;
+      const leads = (baseline?.leads ?? 0) + leadRecords.filter((lead) => lead.source === method).length;
       const noteParts: string[] = [];
       if (baseline?.notes) noteParts.push(baseline.notes);
       if (acts.length) noteParts.push(`${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`);
@@ -2976,7 +2825,7 @@ function Stage1DashboardInner() {
         notes: noteParts.join(" · "),
       };
     });
-  }, [activities, isDemo, quotes, units]);
+  }, [activities, isDemo, leadRecords, quotes, units]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -3077,22 +2926,16 @@ function Stage1DashboardInner() {
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
   const quotesSent = quotes.length;
   const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
+  const quotesRejected = quotes.filter((q) => ["Rejected", "Declined", "Expired"].includes(q.status)).length;
+  const quotesOutstanding = Math.max(0, quotesSent - quotesAccepted - quotesRejected);
   const quoteConvPct = quotesSent ? Math.round((quotesAccepted / quotesSent) * 100) : 0;
   // Jobs in the ledger are only those created from accepted, converted quotes.
-  const activeJobs = units.filter((u) => u.status !== "Paid" && u.status !== "Voided").length;
-  const completedJobs = units.filter((u) => u.status === "Paid").length;
+  const completedJobs = units.filter((u) => ["Completed", "Paid"].includes(u.status)).length;
+  const activeJobs = units.filter((u) => !["Completed", "Paid", "Voided", "Cancelled"].includes(u.status)).length;
   const displayMarginText = ledgerTotals.totalGmPct !== null
     ? `${ledgerTotals.totalGmPct}%`
     : "—";
   const displayMarginTone = marginTone35(ledgerTotals.totalGmPct);
-
-  const nextQuoteNumberStart = useMemo(() => {
-    const nums = quotes
-      .map((q) => parseInt(q.number.replace(/^Q-/, ""), 10))
-      .filter((n) => !isNaN(n));
-    const max = nums.length ? Math.max(...nums) : 1000;
-    return max + 1;
-  }, [quotes]);
 
   const handleAcceptAndConvert = async (q: Quote) => {
     if (!requireBusinessRegistration("convert quotes to jobs")) return;
@@ -3201,7 +3044,7 @@ function Stage1DashboardInner() {
     if (bd.canOperate) return true;
     toast({
       title: "Business registration required",
-      description: `Enter your ABN before you ${action}.`,
+      description: `Complete and verify your Business Details before you ${action}.`,
     });
     setBdOpen(true);
     return false;
@@ -3234,13 +3077,22 @@ function Stage1DashboardInner() {
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10">
+      <header className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10 ${tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div>
           <p className="text-xs uppercase tracking-widest text-[#52d8c2]">Stage 1 command centre</p>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">First 5 Jobs</h1>
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={async () => { try { const attachments = !isDemo && activeRunId ? await listRunEvidence(activeRunId) : []; await downloadAccountantPack({ units, business: bd.profile, runId: activeRunId, attachments, attachmentDownloader: downloadEvidenceFile }); toast({ title: "Accountant Pack downloaded", description: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} included. Check QBO and bank feeds before importing or entering transactions.` }); } catch (error) { toast({ title: "Accountant Pack was not downloaded", description: error instanceof Error ? error.message : "An attachment could not be retrieved.", variant: "destructive" }); } }}>
+            <Download className="h-4 w-4" />
+            Accountant Pack
+          </Button>
+          {activeRunId ? (
+            <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+              <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
+            </Button>
+          ) : null}
           {!isDemo && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
@@ -3256,28 +3108,74 @@ function Stage1DashboardInner() {
         </div>
       </header>
 
+      {!isDemo && orientationLoaded && activeRunId && (
+        <Card className={orientationComplete ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
+          <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <Compass className={orientationComplete ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
+              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Jane’s handover or your ABN and business-name pathway at any time." : "Jane will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
+            </div>
+            <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isDemo && orientationLoaded && orientationComplete && activeRunId && (
+        <Card className="border-violet-200 bg-violet-50/40">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <BookOpen className="mt-0.5 h-5 w-5 text-violet-700" />
+              <div>
+                <p className="font-semibold">Getting Your First Five Jobs</p>
+                <p className="mt-1 text-sm text-muted-foreground">Short practical lessons, scripts and quick checks for finding and winning your first work.</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="shrink-0 border-violet-300 bg-white">
+              <Link to={`/stage-1/learning?runId=${encodeURIComponent(activeRunId)}`}>Open learning library</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(isDemo || (orientationLoaded && orientationComplete && activeRunId)) && (
+        <Card className="border-teal-200 bg-teal-50/40">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 text-teal-700" />
+              <div>
+                <p className="font-semibold">Cleaning Technical Guide</p>
+                <p className="mt-1 text-sm text-muted-foreground">Start with what you can see, answer a few short questions and find the safe next step.</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="min-h-11 shrink-0 border-teal-300 bg-white">
+              <Link to={isDemo ? "/stage-1/technical-guide?demo=1" : `/stage-1/technical-guide?runId=${encodeURIComponent(activeRunId ?? "")}`}>Open technical guide</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {(isDemo || (bd.loaded && bd.complete)) && (
         <p className="text-xs text-muted-foreground -mt-2">
-          Business registration is ready. You can now create quotes and record Stage 1 transactions. Business details can be updated if required.
+          Business registration is ready. You can create written quotes and record Stage 1 transactions. The verified identity is locked; only the customer-facing business name can change.
         </p>
       )}
 
       {!isDemo && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Complete Business Registration</CardTitle>
+            <CardTitle className="text-base">Let’s set up your Business Details first</CardTitle>
             <CardDescription>
-              Enter your ABN before creating quotes, converting jobs, or recording business transactions.
+              You can look around the summary, but quoting and job activity stay locked until your ABN is verified.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm text-amber-900">
-              Required: <span className="font-semibold">Australian Business Number (ABN)</span>.
-              Trading name and other details can be added later.
+            <div className="text-sm text-amber-900 space-y-1">
+              <p>Jane: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
+              {bd.error ? <p className="text-xs text-destructive">{bd.error}</p> : null}
             </div>
             <Button onClick={() => setBdOpen(true)} className="gap-2 shrink-0">
               <IdCard className="h-4 w-4" />
-              Enter ABN
+              Choose your next step
             </Button>
           </CardContent>
         </Card>
@@ -4514,6 +4412,7 @@ function Stage1DashboardInner() {
           primary={totalLeads}
           secondaries={[{ k: "Total leads", v: totalLeads }]}
           onClick={() => setDrill("leads")}
+          highlighted={tourActive && tourStep === 1}
         />
         <KpiCard
           label="Conversions"
@@ -4523,8 +4422,11 @@ function Stage1DashboardInner() {
           secondaries={[
             { k: "Quotes sent", v: quotesSent },
             { k: "Quotes accepted", v: quotesAccepted },
+            { k: "Quotes rejected", v: quotesRejected },
+            { k: "Quotes outstanding", v: quotesOutstanding },
           ]}
-          onClick={() => setDrill("conversions")}
+          onClick={() => navigate(activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}` : "/stage-1/quotes")}
+          highlighted={tourActive && tourStep === 3}
         />
         <KpiCard
           label="Active Jobs"
@@ -4536,6 +4438,7 @@ function Stage1DashboardInner() {
             { k: "Completed jobs", v: completedJobs },
           ]}
           onClick={() => setDrill("jobs")}
+          highlighted={tourActive && tourStep === 4}
         />
         <KpiCard
           label="Gross Margin"
@@ -4559,7 +4462,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className="space-y-3">
+      <section className={`space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4826,12 +4729,15 @@ function Stage1DashboardInner() {
         onDelete={() => { /* no-op */ }}
         onOpenDetailedReport={(n) => openReport(n)}
       />
-      <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} hook={bd} />
+      <BusinessDetailsDialog open={bdOpen} onOpenChange={setBdOpen} runId={activeRunId} />
       <DrillCurtain
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
-        onLogActivity={() => { if (requireBusinessRegistration("create quotes")) setLogActOpen(true); }}
+        activities={leadRecordsAsActivities(leadRecords)}
+        leads={leadRecords}
+        stageStartedAt={isDemo ? "2026-08-01" : stage1Snapshot?.started_at ?? null}
+        onLogActivity={() => { if (requireBusinessRegistration("add a lead")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
@@ -4839,7 +4745,12 @@ function Stage1DashboardInner() {
         onUpdateQuote={handleUpdateQuote}
         onOpenQuoteDetail={handleOpenQuoteDetail}
         units={units}
-        onOpenUnit={(n) => { setDrill(null); openUnit(n); }}
+        onOpenUnit={(n) => {
+          setDrill(null);
+          if (isDemo) window.setTimeout(() => openReport(n), 350);
+          else openUnit(n);
+        }}
+        tourInteractive={isDemo || tourActive}
       />
       <QuoteActivityDialog
         quote={quotes.find((q) => q.number === selectedQuoteNumber) ?? null}
@@ -4853,33 +4764,29 @@ function Stage1DashboardInner() {
         onOpenChange={setQuoteDetailOpen}
         onSave={handleSaveQuoteDetail}
       />
-      <LogActivityDialog
+      <AddLeadDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        nextQuoteNumberStart={nextQuoteNumberStart}
-        onSave={async (a, newQuotes) => {
-          if (!requireBusinessRegistration("create quotes")) return;
-          setActivities((prev) => [...prev, a]);
-          setLogActOpen(false);
-          for (const nq of newQuotes) {
-            const res = await createQuote({
-              client: nq.client,
-              site: nq.site,
-              value: nq.value,
-              followUp: nq.followUp,
-              quoteNotes: nq.notes,
-            });
-            if (res.ok && res.quote) {
-              const saved = { ...res.quote, method: nq.method, sourceActivityId: nq.sourceActivityId, sourceActivityDate: a.activity_date };
-              setQuotes((prev) => [saved, ...prev]);
-            } else {
-              toast({ title: "Quote not saved", description: res.error ?? "Backend write failed." });
-            }
+        onSave={async (lead) => {
+          if (!requireBusinessRegistration("add a lead")) return;
+          if (isDemo) {
+            setLeadRecords((prev) => [...prev, { ...lead, id: `demo-${Date.now()}`, status: "new", created_at: new Date().toISOString() }]);
+            setLogActOpen(false);
+            return;
+          }
+          if (!activeRunId) return;
+          try {
+            const saved = await createStage1LeadRecord(activeRunId, lead);
+            setLeadRecords((prev) => [...prev, saved]);
+            setLogActOpen(false);
+          } catch (error) {
+            toast({ title: "Lead was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
           }
         }}
       />
       <DetailedJobCostReport
         unit={reportUnit}
+        runId={activeRunId}
         open={reportOpen}
         onOpenChange={setReportOpen}
         onSave={async (u) => {
@@ -4888,7 +4795,12 @@ function Stage1DashboardInner() {
             prev.map((p) => (p.n === u.n ? { ...u, stage1JobId: p.stage1JobId ?? u.stage1JobId } : p)),
           );
         }}
+        tourInteractive={isDemo || tourActive}
+        readOnly={isDemo}
+        demoMode={isDemo}
       />
+      {tourActive ? <Stage1WelcomeGuide mode={tourMode === "jobs" ? "jobs" : "dashboard"} initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={handleTourStepChange} onJourneyBack={tourMode === "jobs" ? () => navigate("/stage-1/quote/demo-q-1004?demo=1&tour=document&step=2&autoplay=1") : undefined} onJourneyAction={tourMode === "jobs" ? undefined : () => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes&autoplay=1" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes&autoplay=1` : "/stage-1/quotes?tour=quotes&autoplay=1")} /> : null}
+      {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "1"); setSearchParams(next); }} /> : null}
     </div>
   );
 }
