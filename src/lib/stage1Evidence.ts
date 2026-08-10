@@ -271,6 +271,15 @@ export async function getEvidenceUrl(
   return { url: signed.signedUrl, record };
 }
 
+/** Download the original binary for inclusion in an owner-requested export. */
+export async function downloadEvidenceFile(record: EvidenceRecord): Promise<Blob> {
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .download(record.storagePath);
+  if (error || !data) throw error ?? new Error(`Attachment ${record.fileName} could not be downloaded.`);
+  return data;
+}
+
 /** Remove a stored attachment. Missing paperwork never blocks the job. */
 export async function deleteEvidence(id: string): Promise<void> {
   const { data } = await supabase
