@@ -8,5 +8,5 @@ export interface ApiRequest extends IncomingMessage {
 export interface ApiResponse extends ServerResponse {
   status(code: number): ApiResponse;
   json(body: unknown): ApiResponse;
+  redirect(status: number, url: string): ApiResponse;
 }
-
