@@ -25,4 +25,4 @@ This repository contains the approved customer-facing Autopsy and BuildOS applic
 
 ## Historical Tooling
 
-The codebase originated from an earlier Lovable-generated project and may retain implementation dependencies, generated artefacts, or dated documents that identify that origin. Lovable, Bubble, and Make are not part of the active canonical BuildOS stack. Historical artefacts are retained only where needed for provenance and must not be treated as current architecture or authority.
+Earlier generated artefacts and retired-tool records are preserved through Git history where provenance is required. They are not part of the active canonical BuildOS stack and must not be treated as current architecture, authority, dependencies, or build instructions.

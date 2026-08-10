@@ -107,6 +107,8 @@ describe("Stage 1 quote to invoice contract", () => {
     expect(store).toContain("source_stage1_quote_id");
     expect(store).toContain("quotedLabourHours: quotedWork?.hours");
     expect(store).toContain('const actualLabourHours = num("labour_hours")');
+    expect(store).not.toContain("num(line.");
+    expect(store).toContain("numValue(line.amount)");
     expect(store).toContain("labourHours: u.actualLabourHours ?? 0");
     expect(stage1).toContain("Actual hours worked");
     expect(stage1).toContain("One total for this job—not a timecard.");

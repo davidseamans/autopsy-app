@@ -1093,14 +1093,14 @@ async function doSyncStage1Units(
         other_direct_cost: buckets.otherDirectCost,
         amount_inc_gst: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
-  return serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+  return serializedCostLines.reduce((sum: number, line: any) => sum + numValue(line.amount), 0);
 })(),
 gst_treatment: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
   const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);
@@ -1109,20 +1109,20 @@ gst_treatment: (() => {
 gst_amount: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
   return serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);
 })(),
 amount_ex_gst: (() => {
   const serializedCostLines = serializeCostLines(u.costLines);
-  const incGst = serializedCostLines.reduce((sum: number, line: any) => sum + num(line.amount), 0);
+  const incGst = serializedCostLines.reduce((sum: number, line: any) => sum + numValue(line.amount), 0);
   const gstAmount = serializedCostLines.reduce((sum: number, line: any) => {
-    if (line.gstAmount != null) return sum + num(line.gstAmount);
+    if (line.gstAmount != null) return sum + numValue(line.gstAmount);
     if (line.gstIncluded === true || line.gstTreatment === "gst_included") {
-      return sum + num(line.amount) / 11;
+      return sum + numValue(line.amount) / 11;
     }
     return sum;
   }, 0);

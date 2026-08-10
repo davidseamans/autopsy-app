@@ -67,16 +67,22 @@ import {
   Compass,
   BookOpen,
   ShieldAlert,
+  Download,
 } from "lucide-react";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
+import { leadRecordsAsActivities } from "@/lib/stage1LeadRecords";
 import {
-  createStage1LeadActivity,
+  createStage1LeadRecord,
   loadStage1LeadActivities,
-  type NewStage1LeadActivity,
+  loadStage1LeadRecords,
+  type NewStage1LeadRecord,
   type Stage1LeadActivity,
+  type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
+import { downloadAccountantPack } from "@/lib/stage1AccountantPack";
+import { downloadEvidenceFile, listRunEvidence } from "@/lib/stage1Evidence";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -123,6 +129,22 @@ const DEMO_LEAD_ACTIVITIES: Stage1LeadActivity[] = [
   { id: "demo-lead-5", activity_date: "2026-08-18", method: "Phone Outreach", attempts: 12, contacts_made: 5, leads_generated: 3, created_at: "2026-08-18T09:00:00Z" },
   { id: "demo-lead-6", activity_date: "2026-08-26", method: "Personal Referral", attempts: 4, contacts_made: 4, leads_generated: 3, created_at: "2026-08-26T09:00:00Z" },
 ];
+const DEMO_LEAD_RECORDS: Stage1LeadRecord[] = DEMO_LEAD_ACTIVITIES.flatMap((activity) =>
+  Array.from({ length: activity.leads_generated }, (_, index) => ({
+    id: `${activity.id}-${index + 1}`,
+    client_name: `Sample lead ${index + 1}`,
+    contact_name: null,
+    contact_email: null,
+    contact_phone: null,
+    site_address: null,
+    source: activity.method,
+    status: "new",
+    estimated_value: 0,
+    next_action_at: null,
+    notes: "Demonstration lead record",
+    created_at: activity.created_at,
+  })),
+);
 
 const QUOTE_STATUSES = ["Sent", "Accepted", "Declined", "Expired", "Rejected"] as const;
 type QuoteStatus = typeof QUOTE_STATUSES[number];
@@ -845,6 +867,7 @@ function DrillBody({
   kind,
   methodRows,
   activities,
+  leads,
   stageStartedAt,
   quotes,
   selectedQuoteNumber,
@@ -857,6 +880,7 @@ function DrillBody({
   kind: DrillKey;
   methodRows: typeof METHOD_BASELINE;
   activities: Stage1LeadActivity[];
+  leads: Stage1LeadRecord[];
   stageStartedAt: string | null;
   quotes: Quote[];
   selectedQuoteNumber: string | null;
@@ -867,6 +891,7 @@ function DrillBody({
   onOpenUnit: (n: number) => void;
 }) {
   const [quoteFilter, setQuoteFilter] = useState<"all" | "sent" | "converted" | "rejected">("all");
+  const [selectedLeadMethod, setSelectedLeadMethod] = useState<string | null>(null);
 
   const filteredQuotes = useMemo(() => {
     switch (quoteFilter) {
@@ -905,7 +930,7 @@ function DrillBody({
               <TableBody>
                 {methodRows.map((r) => (
                   <TableRow key={r.method}>
-                    <TableCell className="font-medium">{r.method}</TableCell>
+                    <TableCell className="font-medium"><button type="button" className="text-left text-sky-700 underline-offset-4 hover:underline" onClick={() => setSelectedLeadMethod(r.method)}>{r.method}</button></TableCell>
                     <TableCell className="text-right">{r.attempts}</TableCell>
                     <TableCell className="text-right">{r.contacts}</TableCell>
                     <TableCell className="text-right">{r.leads}</TableCell>
@@ -917,16 +942,32 @@ function DrillBody({
           {/* Mobile stacked cards */}
           <div className="md:hidden space-y-3">
             {methodRows.map((r) => (
-              <div key={r.method} className="rounded-md border p-3">
-                <div className="font-medium">{r.method}</div>
+              <button type="button" key={r.method} className="w-full rounded-md border p-3 text-left hover:bg-slate-50" onClick={() => setSelectedLeadMethod(r.method)}>
+                <div className="font-medium text-sky-700">{r.method}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
                   <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
                   <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
+          {selectedLeadMethod && (
+            <section aria-label={`${selectedLeadMethod} lead records`} className="rounded-xl border bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{selectedLeadMethod} leads</h3><Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLeadMethod(null)}>Close</Button></div>
+              <div className="mt-3 space-y-2">
+                {leads.filter((lead) => lead.source === selectedLeadMethod).map((lead) => (
+                  <div key={lead.id} className="rounded-lg border bg-white p-3 text-sm">
+                    <div className="font-semibold">{lead.client_name}</div>
+                    <div className="mt-1 text-muted-foreground">{[lead.contact_name, lead.contact_email, lead.contact_phone].filter(Boolean).join(" · ") || "No contact details recorded"}</div>
+                    <div className="mt-1">{lead.site_address || "No site address"} · Status: {lead.status}</div>
+                    {lead.notes && <div className="mt-1 text-muted-foreground">{lead.notes}</div>}
+                  </div>
+                ))}
+                {leads.every((lead) => lead.source !== selectedLeadMethod) && <p className="text-sm text-muted-foreground">No individual lead records for this method yet.</p>}
+              </div>
+            </section>
+          )}
           <Stage1LeadMatrix activities={activities} startedAt={stageStartedAt} methods={methodRows.map((row) => row.method)} />
         </>
       )}
@@ -1206,6 +1247,7 @@ function DrillCurtain({
   onOpenChange,
   methodRows,
   activities,
+  leads,
   stageStartedAt,
   onLogActivity,
   quotes,
@@ -1222,6 +1264,7 @@ function DrillCurtain({
   onOpenChange: (open: boolean) => void;
   methodRows: typeof METHOD_BASELINE;
   activities: Stage1LeadActivity[];
+  leads: Stage1LeadRecord[];
   stageStartedAt: string | null;
   onLogActivity: () => void;
   quotes: Quote[];
@@ -1252,7 +1295,7 @@ function DrillCurtain({
               {drill === "leads" && (
                 <Button size="sm" onClick={onLogActivity} className="gap-1.5 shrink-0">
                   <Plus className="h-4 w-4" />
-                  Log Activity
+                  Add Lead
                 </Button>
               )}
               {drill === "conversions" && (
@@ -1267,6 +1310,7 @@ function DrillCurtain({
               kind={drill}
               methodRows={methodRows}
               activities={activities}
+              leads={leads}
               stageStartedAt={stageStartedAt}
               quotes={quotes}
               selectedQuoteNumber={selectedQuoteNumber}
@@ -1373,87 +1417,73 @@ function QuoteActivityDialog({
   );
 }
 
-function LogActivityDialog({
+function AddLeadDialog({
   open,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (a: NewStage1LeadActivity) => void;
+  onSave: (lead: NewStage1LeadRecord) => void;
 }) {
-  const [date, setDate] = useState("");
-  const [method, setMethod] = useState(METHOD_OPTIONS[0]);
-  const [attempts, setAttempts] = useState<string>("");
-  const [contacts, setContacts] = useState<string>("");
-  const [leads, setLeads] = useState<string>("");
+  const [clientName, setClientName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [site, setSite] = useState("");
+  const [source, setSource] = useState(METHOD_OPTIONS[0]);
+  const [value, setValue] = useState("");
+  const [nextAction, setNextAction] = useState("");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (open) {
-      setDate(""); setMethod(METHOD_OPTIONS[0]);
-      setAttempts(""); setContacts(""); setLeads("");
+      setClientName(""); setContactName(""); setEmail(""); setPhone(""); setSite("");
+      setSource(METHOD_OPTIONS[0]); setValue(""); setNextAction(""); setNotes("");
     }
   }, [open]);
 
-  const canSave = !!date && !!method;
+  const canSave = !!clientName.trim() && !!source;
 
   const save = () => {
-    const a: NewStage1LeadActivity = {
-      activity_date: date,
-      method,
-      attempts: Number(attempts) || 0,
-      contacts_made: Number(contacts) || 0,
-      leads_generated: Number(leads) || 0,
-    };
-    onSave(a);
+    onSave({
+      client_name: clientName.trim(), contact_name: contactName.trim() || null,
+      contact_email: email.trim() || null, contact_phone: phone.trim() || null,
+      site_address: site.trim() || null, source, estimated_value: Number(value) || 0,
+      next_action_at: nextAction ? new Date(`${nextAction}T09:00:00`).toISOString() : null,
+      notes: notes.trim() || null,
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Log Activity</DialogTitle>
-          <DialogDescription>
-            Record a dated lead-generation activity. Aggregates into Lead Method Performance.
-          </DialogDescription>
+          <DialogTitle>Add Lead</DialogTitle>
+          <DialogDescription>Capture the prospect and contact details behind this lead.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="la-date">Activity Date <span className="text-destructive">*</span></Label>
-            <Input id="la-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">
-              {date ? `Entered as ${isoToAU(date)}` : "dd/mm/yyyy (e.g. 28/05/2026)"}
-            </p>
+            <Label htmlFor="lead-client">Lead / business name <span className="text-destructive">*</span></Label>
+            <Input id="lead-client" value={clientName} onChange={(e) => setClientName(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="la-method">Method</Label>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-contact">Contact name</Label><Input id="lead-contact" value={contactName} onChange={(e) => setContactName(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-site">Site address</Label><Input id="lead-site" value={site} onChange={(e) => setSite(e.target.value)} /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-email">Email</Label><Input id="lead-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-phone">Phone</Label><Input id="lead-phone" value={phone} onChange={(e) => setPhone(e.target.value)} /></div></div>
+          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5">
+            <Label htmlFor="lead-source">Lead method</Label>
             <select
-              id="la-method"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
+              id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="la-att">Attempts</Label>
-              <Input id="la-att" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="la-con">Contacts Made</Label>
-              <Input id="la-con" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="la-leads">Leads Generated</Label>
-              <Input id="la-leads" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} />
-            </div>
-          </div>
+          </div><div className="space-y-1.5"><Label htmlFor="lead-value">Estimated value</Label><Input id="lead-value" type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} /></div></div>
+          <div className="space-y-1.5"><Label htmlFor="lead-next">Next action date</Label><Input id="lead-next" type="date" value={nextAction} onChange={(e) => setNextAction(e.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="lead-notes">Notes</Label><Input id="lead-notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Activity</Button>
+          <Button onClick={save} disabled={!canSave}>Save Lead</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1698,12 +1728,13 @@ function Stage1DashboardInner() {
   }, [isDemo, tourActive, tourStep]);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<Stage1LeadActivity[]>(isDemo ? DEMO_LEAD_ACTIVITIES : []);
+  const [leadRecords, setLeadRecords] = useState<Stage1LeadRecord[]>(isDemo ? DEMO_LEAD_RECORDS : []);
   useEffect(() => {
     if (isDemo || !activeRunId) return;
     let cancelled = false;
-    loadStage1LeadActivities(activeRunId)
-      .then((rows) => { if (!cancelled) setActivities(rows); })
-      .catch((error) => { if (!cancelled) toast({ title: "Lead activity could not be loaded", description: error instanceof Error ? error.message : String(error), variant: "destructive" }); });
+    Promise.all([loadStage1LeadActivities(activeRunId), loadStage1LeadRecords(activeRunId)])
+      .then(([activityRows, leads]) => { if (!cancelled) { setActivities(activityRows); setLeadRecords(leads); } })
+      .catch((error) => { if (!cancelled) toast({ title: "Lead records could not be loaded", description: error instanceof Error ? error.message : String(error), variant: "destructive" }); });
     return () => { cancelled = true; };
   }, [activeRunId, isDemo]);
   const [quotes, setQuotes] = useState<Quote[]>(isDemo ? DEMO_QUOTES : SEED_QUOTES);
@@ -2767,6 +2798,7 @@ function Stage1DashboardInner() {
     const methods = new Set<string>();
     methodBaseline.forEach((b) => methods.add(b.method));
     activities.forEach((a) => a.method && methods.add(a.method));
+    leadRecords.forEach((lead) => lead.source && methods.add(lead.source));
     quotes.forEach((q) => q.method && methods.add(q.method));
     return Array.from(methods).map((method) => {
       const baseline = methodBaseline.find((b) => b.method === method);
@@ -2779,7 +2811,7 @@ function Stage1DashboardInner() {
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
       const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
       const quotesSum = (baseline?.quotes ?? 0) + qs.length;
-      const leads = (baseline?.leads ?? 0) + acts.reduce((sum, activity) => sum + activity.leads_generated, 0);
+      const leads = (baseline?.leads ?? 0) + leadRecords.filter((lead) => lead.source === method).length;
       const noteParts: string[] = [];
       if (baseline?.notes) noteParts.push(baseline.notes);
       if (acts.length) noteParts.push(`${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`);
@@ -2793,7 +2825,7 @@ function Stage1DashboardInner() {
         notes: noteParts.join(" · "),
       };
     });
-  }, [activities, isDemo, quotes, units]);
+  }, [activities, isDemo, leadRecords, quotes, units]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -3052,6 +3084,10 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={async () => { try { const attachments = !isDemo && activeRunId ? await listRunEvidence(activeRunId) : []; await downloadAccountantPack({ units, business: bd.profile, runId: activeRunId, attachments, attachmentDownloader: downloadEvidenceFile }); toast({ title: "Accountant Pack downloaded", description: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} included. Check QBO and bank feeds before importing or entering transactions.` }); } catch (error) { toast({ title: "Accountant Pack was not downloaded", description: error instanceof Error ? error.message : "An attachment could not be retrieved.", variant: "destructive" }); } }}>
+            <Download className="h-4 w-4" />
+            Accountant Pack
+          </Button>
           {activeRunId ? (
             <Button asChild variant="outline" className="border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white">
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
@@ -4698,9 +4734,10 @@ function Stage1DashboardInner() {
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
-        activities={activities}
+        activities={leadRecordsAsActivities(leadRecords)}
+        leads={leadRecords}
         stageStartedAt={isDemo ? "2026-08-01" : stage1Snapshot?.started_at ?? null}
-        onLogActivity={() => { if (requireBusinessRegistration("log lead activity")) setLogActOpen(true); }}
+        onLogActivity={() => { if (requireBusinessRegistration("add a lead")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
@@ -4727,23 +4764,23 @@ function Stage1DashboardInner() {
         onOpenChange={setQuoteDetailOpen}
         onSave={handleSaveQuoteDetail}
       />
-      <LogActivityDialog
+      <AddLeadDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={async (a) => {
-          if (!requireBusinessRegistration("log lead activity")) return;
+        onSave={async (lead) => {
+          if (!requireBusinessRegistration("add a lead")) return;
           if (isDemo) {
-            setActivities((prev) => [...prev, { ...a, id: `demo-${Date.now()}`, created_at: new Date().toISOString() }]);
+            setLeadRecords((prev) => [...prev, { ...lead, id: `demo-${Date.now()}`, status: "new", created_at: new Date().toISOString() }]);
             setLogActOpen(false);
             return;
           }
           if (!activeRunId) return;
           try {
-            const saved = await createStage1LeadActivity(activeRunId, a);
-            setActivities((prev) => [...prev, saved]);
+            const saved = await createStage1LeadRecord(activeRunId, lead);
+            setLeadRecords((prev) => [...prev, saved]);
             setLogActOpen(false);
           } catch (error) {
-            toast({ title: "Lead activity was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+            toast({ title: "Lead was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
           }
         }}
       />
