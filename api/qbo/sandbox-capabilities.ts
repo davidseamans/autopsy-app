@@ -1,5 +1,5 @@
 import type { ApiRequest, ApiResponse } from "../_lib/http.js";
-import { authenticateRequest } from "../_lib/supabase-server.js";
+import { authenticateRequest, createServiceClient } from "../_lib/supabase-server.js";
 import { getQboSandboxConfig, qboSandboxCapabilities } from "../_lib/qbo-sandbox.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -20,13 +20,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       configured = false;
     }
 
+    const { data, error } = await createServiceClient()
+      .from("qbo_connections")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error) throw error;
+
     return res.status(200).json({
       ...qboSandboxCapabilities(),
       configured,
-      connected: false,
-      connectionReason: configured
-        ? "Connection persistence is not yet installed."
-        : "Intuit sandbox credentials are not configured.",
+      connected: Boolean(data),
+      connectionReason: !configured
+        ? "Intuit sandbox credentials are not configured."
+        : data
+          ? "An Intuit sandbox company is connected."
+          : "No Intuit sandbox company is connected.",
     });
   } catch (error) {
     console.error("QBO sandbox capability request failed", error);
