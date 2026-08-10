@@ -83,6 +83,7 @@ import {
 } from "@/lib/stage1Funnel";
 import { downloadAccountantPack } from "@/lib/stage1AccountantPack";
 import { downloadEvidenceFile, listRunEvidence } from "@/lib/stage1Evidence";
+import { QboSandboxConnectionCard } from "@/components/QboSandboxConnectionCard";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3107,6 +3108,8 @@ function Stage1DashboardInner() {
           )}
         </div>
       </header>
+
+      {!isDemo ? <QboSandboxConnectionCard /> : null}
 
       {!isDemo && orientationLoaded && activeRunId && (
         <Card className={orientationComplete ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
