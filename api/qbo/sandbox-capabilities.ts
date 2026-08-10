@@ -9,6 +9,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
+    res.setHeader("Cache-Control", "no-store");
     const user = await authenticateRequest(req);
     if (!user) return res.status(401).json({ error: "A valid session is required." });
 
@@ -19,7 +20,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       configured = false;
     }
 
-    res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({
       ...qboSandboxCapabilities(),
       configured,
