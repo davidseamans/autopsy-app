@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   QBO_ACCOUNTING_SCOPE,
   QBO_SANDBOX_API_ORIGIN,
@@ -82,5 +84,13 @@ describe("QBO Phase 0 sandbox boundary", () => {
       writesAllowed: false,
       paymentsScopeAllowed: false,
     });
+  });
+
+  it("marks capability responses no-store before authentication", () => {
+    const endpoint = readFileSync(resolve("api/qbo/sandbox-capabilities.ts"), "utf8");
+    expect(endpoint.indexOf('res.setHeader("Cache-Control", "no-store")')).toBeGreaterThan(-1);
+    expect(endpoint.indexOf('res.setHeader("Cache-Control", "no-store")')).toBeLessThan(
+      endpoint.indexOf("authenticateRequest(req)"),
+    );
   });
 });
