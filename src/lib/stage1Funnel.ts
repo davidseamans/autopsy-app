@@ -27,6 +27,73 @@ export type Stage1LeadActivity = {
 
 export type NewStage1LeadActivity = Omit<Stage1LeadActivity, "id" | "created_at">;
 
+export type Stage1LeadRecord = {
+  id: string;
+  client_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  site_address: string | null;
+  source: string;
+  status: string;
+  estimated_value: number;
+  next_action_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type NewStage1LeadRecord = Omit<Stage1LeadRecord, "id" | "status" | "created_at">;
+
+const LEAD_FIELDS = "id,client_name,contact_name,contact_email,contact_phone,site_address,source,status,estimated_value,next_action_at,notes,created_at";
+
+function mapLeadRecord(row: Record<string, unknown>): Stage1LeadRecord {
+  return {
+    id: String(row.id),
+    client_name: String(row.client_name),
+    contact_name: row.contact_name ? String(row.contact_name) : null,
+    contact_email: row.contact_email ? String(row.contact_email) : null,
+    contact_phone: row.contact_phone ? String(row.contact_phone) : null,
+    site_address: row.site_address ? String(row.site_address) : null,
+    source: String(row.source ?? "Other"),
+    status: String(row.status ?? "new"),
+    estimated_value: Number(row.estimated_value ?? 0),
+    next_action_at: row.next_action_at ? String(row.next_action_at) : null,
+    notes: row.notes ? String(row.notes) : null,
+    created_at: String(row.created_at),
+  };
+}
+
+export async function loadStage1LeadRecords(runId: string): Promise<Stage1LeadRecord[]> {
+  const { data, error } = await supabase
+    .from("stage1_leads")
+    .select(LEAD_FIELDS)
+    .eq("autopsy_run_id", runId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapLeadRecord(row));
+}
+
+export async function createStage1LeadRecord(runId: string, lead: NewStage1LeadRecord): Promise<Stage1LeadRecord> {
+  const { data: created, error: createError } = await supabase.rpc("create_stage1_lead", {
+    p_run_id: runId,
+    p_client_name: lead.client_name,
+    p_contact_name: lead.contact_name,
+    p_contact_email: lead.contact_email,
+    p_contact_phone: lead.contact_phone,
+    p_site_address: lead.site_address,
+    p_source: lead.source,
+    p_estimated_value: lead.estimated_value,
+    p_next_action_at: lead.next_action_at,
+    p_notes: lead.notes,
+  });
+  if (createError) throw new Error(createError.message);
+  const leadId = Array.isArray(created) ? created[0]?.lead_id : created?.lead_id;
+  if (!leadId) throw new Error("Lead was created but its record id was not returned.");
+  const { data, error } = await supabase.from("stage1_leads").select(LEAD_FIELDS).eq("id", leadId).single();
+  if (error) throw new Error(error.message);
+  return mapLeadRecord(data);
+}
+
 export async function loadStage1Funnel(runId: string): Promise<Stage1FunnelSnapshot> {
   const [leadResult, quoteResult] = await Promise.all([
     supabase

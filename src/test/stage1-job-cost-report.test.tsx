@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
@@ -58,6 +58,16 @@ describe("First 5 Jobs sample report", () => {
     expect(screen.getByText("Riverstone Dental Centre")).toBeInTheDocument();
     expect(screen.getByText("Q-1001")).toBeInTheDocument();
     expect(screen.getByText("INV-1")).toBeInTheDocument();
+  });
+
+  it("captures and saves actual hours from the current Job Cost Summary", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<DetailedJobCostReport unit={{ ...sampleJob, actualLabourHours: undefined }} runId={null} open onOpenChange={vi.fn()} onSave={onSave} />);
+
+    fireEvent.change(screen.getByLabelText("Actual hours worked"), { target: { value: "6.25" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save hours" })); });
+
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ actualLabourHours: 6.25 })));
   });
 
   it("takes Back across the quotation-to-jobs route boundary", () => {

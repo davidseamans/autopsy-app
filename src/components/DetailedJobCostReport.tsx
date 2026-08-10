@@ -533,8 +533,14 @@ export function DetailedJobCostReport({
   const [transactionDraft, setTransactionDraft] = useState<TransactionDraft | null>(null);
   const [transactionSaving, setTransactionSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [actualHoursDraft, setActualHoursDraft] = useState("");
+  const [actualHoursSaving, setActualHoursSaving] = useState(false);
   const [attachments, setAttachments] = useState<EvidenceRecord[]>([]);
   const transactionSavingRef = useRef(false);
+
+  useEffect(() => {
+    if (open) setActualHoursDraft(unit?.actualLabourHours != null ? String(unit.actualLabourHours) : "");
+  }, [open, unit?.actualLabourHours, unit?.n]);
 
   useEffect(() => {
     if (!open || !stage1JobId || demoMode) {
@@ -879,6 +885,23 @@ export function DetailedJobCostReport({
       setStatusSaving(false);
     }
   };
+  const saveActualHours = async () => {
+    if (!onSave || actualHoursSaving) return;
+    const value = Number(actualHoursDraft);
+    if (actualHoursDraft === "" || !Number.isFinite(value) || value < 0) {
+      toast.error("Enter actual hours as zero or a positive number.");
+      return;
+    }
+    setActualHoursSaving(true);
+    try {
+      await onSave({ ...unit, actualLabourHours: value });
+      toast.success("Actual hours saved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Actual hours could not be saved.");
+    } finally {
+      setActualHoursSaving(false);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={!tourInteractive}>
@@ -967,13 +990,24 @@ export function DetailedJobCostReport({
 
           {/* Section 3 — Job Costs */}
           <section className="scroll-mt-6 space-y-2" data-stage1-tour="job-costs">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 3. Job Costs
               </h3>
-              <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openCostDialog()}>
-                Add Job Cost
-              </Button>
+              <div className="flex flex-wrap items-end gap-2">
+                {!readOnly && (
+                  <div className="space-y-1">
+                    <Label htmlFor="report-actual-hours" className="text-xs">Actual hours worked</Label>
+                    <div className="flex gap-2">
+                      <Input id="report-actual-hours" aria-label="Actual hours worked" className="h-9 w-28" type="number" min={0} step="0.25" value={actualHoursDraft} onChange={(event) => setActualHoursDraft(event.target.value)} />
+                      <Button size="sm" variant="secondary" disabled={actualHoursSaving || actualHoursDraft === String(unit.actualLabourHours ?? "")} onClick={() => void saveActualHours()}>{actualHoursSaving ? "Saving..." : "Save hours"}</Button>
+                    </div>
+                  </div>
+                )}
+                <Button size="sm" variant="outline" disabled={readOnly} onClick={() => openCostDialog()}>
+                  Add Job Cost
+                </Button>
+              </div>
             </div>
             <div className="grid gap-3 rounded-md bg-muted/40 p-3 text-sm sm:grid-cols-3">
               <div><p className="text-xs text-muted-foreground">Hours estimated</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 ? `${unit.quotedLabourHours} hours` : "—"}</p></div>
