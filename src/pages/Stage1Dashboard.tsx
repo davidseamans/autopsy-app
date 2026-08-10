@@ -82,6 +82,7 @@ import {
   type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
 import { downloadAccountantPack } from "@/lib/stage1AccountantPack";
+import { downloadEvidenceFile, listRunEvidence } from "@/lib/stage1Evidence";
 
 const fmtMoney = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3083,7 +3084,7 @@ function Stage1DashboardInner() {
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={() => { downloadAccountantPack({ units, business: bd.profile, runId: activeRunId }); toast({ title: "Accountant Pack downloaded", description: "Check QBO and bank feeds before importing or entering transactions." }); }}>
+          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={async () => { try { const attachments = !isDemo && activeRunId ? await listRunEvidence(activeRunId) : []; await downloadAccountantPack({ units, business: bd.profile, runId: activeRunId, attachments, attachmentDownloader: downloadEvidenceFile }); toast({ title: "Accountant Pack downloaded", description: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} included. Check QBO and bank feeds before importing or entering transactions.` }); } catch (error) { toast({ title: "Accountant Pack was not downloaded", description: error instanceof Error ? error.message : "An attachment could not be retrieved.", variant: "destructive" }); } }}>
             <Download className="h-4 w-4" />
             Accountant Pack
           </Button>
