@@ -16,11 +16,7 @@ import FirstConversation from "@/pages/FirstConversation";
 import PaidAutopsyEntry from "@/pages/PaidAutopsyEntry";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
-import Leads from "@/pages/crm/Leads";
-import Accounts from "@/pages/crm/Accounts";
-import Pipeline from "@/pages/crm/Pipeline";
-import Quotes from "@/pages/crm/Quotes";
-import Jobs from "@/pages/crm/Jobs";
+import CoreOverview from "@/pages/CoreOverview";
 import NotFound from "./pages/NotFound.tsx";
 import BusinessSetup from "@/pages/BusinessSetup";
 import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
@@ -129,11 +125,12 @@ const App = () => (
               <Route path="/launchpad/leads" element={<LegacyStage1Redirect to="/stage-1" />} />
               <Route path="/launchpad/quote/new" element={<LegacyStage1Redirect to="/stage-1/quotes/new" />} />
               <Route path="/business-setup" element={<BusinessSetupRoute />} />
-              <Route path="/leads" element={<Leads />} />
-              <Route path="/accounts" element={<Accounts />} />
-              <Route path="/pipeline" element={<Pipeline />} />
-              <Route path="/quotes" element={<Quotes />} />
-              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/core" element={<CoreOverview />} />
+              <Route path="/leads" element={<Navigate to="/core" replace />} />
+              <Route path="/accounts" element={<Navigate to="/core" replace />} />
+              <Route path="/pipeline" element={<Navigate to="/core" replace />} />
+              <Route path="/quotes" element={<Navigate to="/core" replace />} />
+              <Route path="/jobs" element={<Navigate to="/core" replace />} />
             </Route>
             <Route path="/autopsy/paid" element={<PaidAutopsyRoute />} />
             <Route path="*" element={<NotFound />} />

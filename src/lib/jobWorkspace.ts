@@ -4,10 +4,10 @@ import { supabase } from "@/lib/supabase";
 // Job workspace persistence
 //
 // The Job / Contract Site Detail screen is a workspace over an existing job.
-// Every write here targets an existing Core table, keyed on the real job_id.
-// We never create a parallel "Stage 1" entity. Each helper returns a structured
-// { ok, error } result so the UI can show exactly what persisted and what did
-// not — we never swallow an error.
+// Historical workspace reads remain while the legacy Stage 1 screen is
+// quarantined. Browser-direct Core writes are prohibited by Packet 4. Every
+// write-shaped helper fails closed until a separately authorised promotion
+// transaction exists.
 // ---------------------------------------------------------------------------
 
 export interface WriteResult {
@@ -15,12 +15,13 @@ export interface WriteResult {
   error?: string;
 }
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+export const CORE_WRITE_UNAVAILABLE =
+  "Core changes are unavailable. Selective Discover-to-Control promotion is not implemented.";
+
+const coreWriteUnavailable = (): WriteResult => ({ ok: false, error: CORE_WRITE_UNAVAILABLE });
 
 // ===== Revenue events (Payment Proof) — table: revenue_events =====
-// Verified live columns: id, job_id, amount, source, reference, revenue_type,
-// created_at. RLS ALLOWS inserts via the publishable key (an empty insert fails
-// only on the job_id NOT NULL constraint, not on RLS) — Payment Proof persists.
+// Historical read model only. Packet 4 revokes authenticated Core DML.
 export interface RevenueEventRow {
   id: string;
   job_id: string;
@@ -64,19 +65,8 @@ export async function recordPayment(input: {
   revenueType?: string;
   reference?: string;
 }): Promise<WriteResult> {
-  try {
-    const { error } = await supabase.from("revenue_events").insert({
-      job_id: input.jobId,
-      amount: input.amount,
-      source: input.source,
-      revenue_type: input.revenueType ?? null,
-      reference: input.reference?.trim() || null,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
 // ===== Job Costs — table: job_costs (RLS BLOCKED for insert) =====
@@ -96,21 +86,8 @@ export interface JobCostsInput {
 }
 
 export async function saveJobCosts(input: JobCostsInput): Promise<WriteResult> {
-  try {
-    const { error } = await supabase.from("job_costs").insert({
-      job_id: input.jobId,
-      labour_cost: input.labourCost ?? null,
-      consumables_cost: input.consumablesCost ?? null,
-      travel_cost: input.travelCost ?? null,
-      labour_hours: input.labourHours ?? null,
-      labour_rate: input.labourRate ?? null,
-      notes: input.notes?.trim() || null,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
 // ===== Customer Invoice / Contract proof — table: documents (RLS BLOCKED) =====
@@ -122,17 +99,8 @@ export async function saveDocument(input: {
   jobId: string;
   fileUrl: string;
 }): Promise<WriteResult> {
-  try {
-    const { error } = await supabase.from("documents").insert({
-      entity_type: "job",
-      entity_id: input.jobId,
-      file_url: input.fileUrl,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
 // ===== Activity / audit trail — table: audit_log (RLS BLOCKED) =====
@@ -142,20 +110,11 @@ export async function appendAuditLog(input: {
   action: string;
   jobId: string;
 }): Promise<WriteResult> {
-  try {
-    const { error } = await supabase.from("audit_log").insert({
-      action: input.action,
-      entity: "job",
-      entity_id: input.jobId,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
-// ===== Value adjustments / write-offs — table: job_value_adjustments (WRITABLE) =====
+// ===== Value adjustments / write-offs — historical read model only =====
 export type AdjustmentType = "write_off" | "credit" | "approved_reduction";
 
 export const ADJUSTMENT_TYPES: { value: AdjustmentType; label: string }[] = [
@@ -196,20 +155,8 @@ export async function saveAdjustment(input: {
   approvedByCustomer: boolean;
   documentReference?: string;
 }): Promise<WriteResult> {
-  try {
-    const { error } = await supabase.from("job_value_adjustments").insert({
-      job_id: input.jobId,
-      adjustment_type: input.adjustmentType,
-      amount: input.amount,
-      reason: input.reason,
-      approved_by_customer: input.approvedByCustomer,
-      document_reference: input.documentReference?.trim() || null,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
 // Adjusted financial position derived client-side, since the job_revenue_control
@@ -267,7 +214,7 @@ export function deriveAdjustedPosition(
   };
 }
 
-// ===== Customer handover + referrals — tables: job_handovers, job_referrals (WRITABLE) =====
+// ===== Customer handover + referrals — historical read model only =====
 export type SatisfactionStatus =
   | "satisfied"
   | "satisfied_with_minor_issue"
@@ -370,80 +317,24 @@ export async function saveHandover(input: {
   thankYouNotes?: string;
   referrals?: ReferralInput[];
 }): Promise<WriteResult & { handoverId?: string; referralsSaved?: number }> {
-  try {
-    const { data, error } = await supabase
-      .from("job_handovers")
-      .insert({
-        job_id: input.jobId,
-        work_completed_as_agreed: input.workCompletedAsAgreed,
-        customer_walkthrough_completed: input.customerWalkthroughCompleted,
-        satisfaction_status: input.satisfactionStatus,
-        issue_notes: input.issueNotes?.trim() || null,
-        payment_status_checked: input.paymentStatusChecked,
-        referral_request_made: input.referralRequestMade,
-        referral_count: input.referralCount,
-        thank_you_action: input.thankYouAction ?? null,
-        thank_you_notes: input.thankYouNotes?.trim() || null,
-      })
-      .select("id")
-      .single();
-    if (error) return { ok: false, error: error.message };
-    const handoverId = data.id as string;
-
-    const rows = (input.referrals ?? [])
-      .filter((r) => (r.name || r.phone || r.email || "").toString().trim())
-      .map((r) => ({
-        handover_id: handoverId,
-        source_job_id: input.jobId,
-        referral_name: r.name?.trim() || null,
-        referral_phone: r.phone?.trim() || null,
-        referral_email: r.email?.trim() || null,
-        referral_notes: r.notes?.trim() || null,
-      }));
-    let referralsSaved = 0;
-    if (rows.length) {
-      const { error: rErr } = await supabase.from("job_referrals").insert(rows);
-      if (rErr) {
-        return {
-          ok: true,
-          handoverId,
-          referralsSaved: 0,
-          error: `Handover saved, but referral details failed: ${rErr.message}`,
-        };
-      }
-      referralsSaved = rows.length;
-    }
-    return { ok: true, handoverId, referralsSaved };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void input;
+  return coreWriteUnavailable();
 }
 
-// ===== Job status (Status & Next Action) — table: jobs (PATCH WRITABLE) =====
+// ===== Job status (Status & Next Action) — write unavailable =====
 export async function updateJobStatus(
   jobId: string,
   patch: { status?: string; scheduledDate?: string; completed?: boolean },
 ): Promise<WriteResult> {
-  try {
-    const body: Record<string, unknown> = {};
-    if (patch.status) body.status = patch.status;
-    if (patch.scheduledDate) body.scheduled_date = patch.scheduledDate;
-    if (patch.completed !== undefined)
-      body.completed_at = patch.completed ? new Date().toISOString() : null;
-    if (Object.keys(body).length === 0) return { ok: true };
-    const { error } = await supabase.from("core_jobs").update(body).eq("id", jobId);
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: msg(e) };
-  }
+  void jobId;
+  void patch;
+  return coreWriteUnavailable();
 }
 
 // ===== Known backend blockers — surfaced to the operator, never hidden =====
-// Verified live (publishable key) on the external Supabase project. revenue_events,
-// job_value_adjustments, job_handovers and job_referrals are WRITABLE and therefore
-// are NOT listed here. Only genuine blockers remain.
+// Packet 4 supersedes historical publishable-key write assumptions.
 export const BACKEND_BLOCKERS = {
+  core_writes: CORE_WRITE_UNAVAILABLE,
   documents:
     "documents — Row Level Security blocks inserts (42501). Needs an INSERT policy. Linked polymorphically via entity_type='job' + entity_id=job_id.",
   job_costs:
