@@ -4817,7 +4817,75 @@ export default function Stage1Dashboard() {
   }
   return (
     <AuthGate>
-      <Stage1DashboardInner />
+      <GovernedStage1Entry />
     </AuthGate>
   );
+}
+
+function GovernedStage1Entry() {
+  const [searchParams] = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
+  const runId =
+    searchParams.get("runId") || getStage1RunId() || getActiveRunId();
+  const [admission, setAdmission] = useState<
+    "loading" | "granted" | "denied"
+  >("loading");
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id || !runId) {
+      setAdmission("denied");
+      return;
+    }
+    let active = true;
+    setAdmission("loading");
+    void supabase
+      .rpc("get_stage1_progress_snapshot_by_run", { p_run_id: runId })
+      .then(({ data, error }) => {
+        if (!active) return;
+        const row = Array.isArray(data) ? data[0] : data;
+        const granted =
+          !error &&
+          row?.stage_progress_id != null &&
+          row?.autopsy_run_id === runId &&
+          row?.resolved_user_id === user.id;
+        setAdmission(granted ? "granted" : "denied");
+      });
+    return () => {
+      active = false;
+    };
+  }, [authLoading, runId, user?.id]);
+
+  if (admission === "loading") {
+    return (
+      <main className="mx-auto flex max-w-xl items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Checking First 5 Jobs authority…
+      </main>
+    );
+  }
+
+  if (admission !== "granted") {
+    return (
+      <main className="mx-auto max-w-xl space-y-4 p-8 text-center">
+        <ShieldAlert className="mx-auto h-8 w-8 text-amber-600" />
+        <h1 className="text-2xl font-semibold">First 5 Jobs is not authorised</h1>
+        <p className="text-sm text-muted-foreground">
+          Browser storage and links cannot open this stage. Supabase must hold
+          an authorised Stage 1 progression record for your completed Autopsy.
+        </p>
+        {runId ? (
+          <Button asChild variant="outline">
+            <Link to={`/autopsy/run/${runId}`}>Return to your Autopsy result</Link>
+          </Button>
+        ) : (
+          <Button asChild variant="outline">
+            <Link to="/autopsy/history">View Autopsy history</Link>
+          </Button>
+        )}
+      </main>
+    );
+  }
+
+  return <Stage1DashboardInner />;
 }
