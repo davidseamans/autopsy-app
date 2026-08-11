@@ -35,6 +35,7 @@ import {
   useProgression,
 } from "@/lib/progression";
 import { supabase } from "@/lib/supabase";
+import { getAuthorizedStage1Admission } from "@/lib/stage1Admission";
 
 const STATUS_OPTIONS: WorksheetStatus[] = [
   "Not Started",
@@ -82,14 +83,7 @@ export default function ReadinessWorksheet() {
   });
   const stage1AdmissionQ = useQuery({
     queryKey: ["stage1-authority", runId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc(
-        "get_stage1_progress_snapshot_by_run",
-        { p_run_id: runId },
-      );
-      if (error) throw error;
-      return Array.isArray(data) ? data[0] : data;
-    },
+    queryFn: () => getAuthorizedStage1Admission(runId),
     enabled: !!runId,
     retry: false,
   });
@@ -142,10 +136,7 @@ export default function ReadinessWorksheet() {
 
   const checklistComplete =
     !!state && Object.values(state.checklist).every(Boolean);
-  const stage1Unlocked = Boolean(
-    stage1AdmissionQ.data?.stage_progress_id &&
-      stage1AdmissionQ.data?.autopsy_run_id === runId,
-  );
+  const stage1Unlocked = stage1AdmissionQ.data === true;
 
   const setChecklist = (key: keyof ChecklistState, value: boolean) => {
     if (!state) return;

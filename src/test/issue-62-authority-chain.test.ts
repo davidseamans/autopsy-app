@@ -9,6 +9,7 @@ const migration = readFileSync(
 );
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
+const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
 const webhook = readFileSync(resolve("api/stripe/webhook.ts"), "utf8");
 const checkoutStatus = readFileSync(resolve("api/stripe/checkout-status.ts"), "utf8");
 
@@ -35,13 +36,22 @@ describe("Issue #62 governed authority chain", () => {
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
     const route = dashboard.slice(dashboard.indexOf("export default function Stage1Dashboard"));
     expect(route).toContain("<GovernedStage1Entry />");
-    expect(route).toContain('rpc("get_stage1_progress_snapshot_by_run"');
-    expect(route).toContain("row?.stage_progress_id != null");
-    expect(route).toContain("row?.autopsy_run_id === runId");
-    expect(route).toContain("row?.resolved_user_id === user.id");
+    expect(route).toContain("getAuthorizedStage1Admission(runId)");
+    expect(route).not.toContain('rpc("get_stage1_progress_snapshot_by_run"');
     expect(route.indexOf("<GovernedStage1Entry />")).toBeLessThan(
       route.lastIndexOf("return <Stage1DashboardInner />"),
     );
+  });
+
+  it("uses one owner-bound Supabase admission contract in both UI consumers", () => {
+    expect(admission).toContain('"get_authorized_stage1_admission"');
+    expect(admission).toContain("return !error && data === true");
+    expect(dashboard).toContain("getAuthorizedStage1Admission(runId)");
+    expect(readiness).toContain("getAuthorizedStage1Admission(runId)");
+    expect(migration).toContain("ar.owner_user_id = auth.uid()");
+    expect(migration).toContain("sp.current_stage_code = 'stage_1_first_five_jobs'");
+    expect(migration).toContain("('available', 'in_progress', 'passed')");
+    expect(migration).toContain("from public, anon, service_role");
   });
 
   it("keeps candidate worksheet input submit-only", () => {
@@ -54,6 +64,6 @@ describe("Issue #62 governed authority chain", () => {
     expect(statuses).not.toContain('"Rejected"');
     expect(statuses).not.toContain('"Retest Required"');
     expect(readiness).toContain("Browser state cannot");
-    expect(readiness).toContain("stage1AdmissionQ.data?.stage_progress_id");
+    expect(readiness).toContain("stage1AdmissionQ.data === true");
   });
 });

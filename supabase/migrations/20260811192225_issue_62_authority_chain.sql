@@ -120,4 +120,34 @@ revoke all on function public.create_authorized_autopsy_run(text,text,text,text,
 grant execute on function public.create_authorized_autopsy_run(text,text,text,text,text)
   to authenticated, service_role;
 
+-- One fail-closed contract owns the meaning of Stage 1 admission. The browser
+-- supplies only a candidate run id; authenticated ownership, stage and gate
+-- state are all verified here.
+create or replace function public.get_authorized_stage1_admission(
+  p_run_id uuid
+) returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select coalesce(
+    (select true
+     from public.autopsy_runs ar
+     join public.stage_progress sp
+       on sp.autopsy_run_id = ar.id
+      and sp.current_stage_code = 'stage_1_first_five_jobs'
+      and sp.current_gate_status in ('available', 'in_progress', 'passed')
+     where ar.id = p_run_id
+       and ar.owner_user_id = auth.uid()
+     limit 1),
+    false
+  );
+$$;
+
+revoke all on function public.get_authorized_stage1_admission(uuid)
+  from public, anon, service_role;
+grant execute on function public.get_authorized_stage1_admission(uuid)
+  to authenticated;
+
 commit;

@@ -7,6 +7,7 @@ import {
   type ProofUnit,
 } from "./Stage1";
 import { supabase, isDebug } from "@/lib/supabase";
+import { getAuthorizedStage1Admission } from "@/lib/stage1Admission";
 import { computeGstSplit } from "@/lib/gst";
 import { AuthGate } from "@/components/AuthGate";
 import { useAuth } from "@/lib/auth";
@@ -4839,17 +4840,13 @@ function GovernedStage1Entry() {
     }
     let active = true;
     setAdmission("loading");
-    void supabase
-      .rpc("get_stage1_progress_snapshot_by_run", { p_run_id: runId })
-      .then(({ data, error }) => {
+    void getAuthorizedStage1Admission(runId)
+      .then((granted) => {
         if (!active) return;
-        const row = Array.isArray(data) ? data[0] : data;
-        const granted =
-          !error &&
-          row?.stage_progress_id != null &&
-          row?.autopsy_run_id === runId &&
-          row?.resolved_user_id === user.id;
         setAdmission(granted ? "granted" : "denied");
+      })
+      .catch(() => {
+        if (active) setAdmission("denied");
       });
     return () => {
       active = false;
