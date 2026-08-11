@@ -32,7 +32,7 @@ describe("Stage 1 navigation context", () => {
 
     expect(screen.getAllByRole("link", { name: "Quotes" })[0]).toHaveAttribute("href", "/stage-1/quotes?demo=1");
     expect(screen.getByRole("link", { name: "Technical Guide" })).toHaveAttribute("href", "/stage-1/technical-guide?demo=1");
-    expect(screen.getByRole("link", { name: "Leads" })).toHaveAttribute("href", "/leads");
+    expect(screen.getByRole("link", { name: "Core overview Read only" })).toHaveAttribute("href", "/core");
   });
 
   it("opens only Stage 1 demonstration routes without an account session", () => {

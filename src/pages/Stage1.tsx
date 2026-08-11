@@ -2268,7 +2268,7 @@ const fmtPayDateTime = (iso: string) => {
   return isNaN(d.getTime()) ? iso : d.toLocaleString();
 };
 
-// Inline "Record Payment" form — writes a single revenue_events row for this job.
+// Historical "Record Payment" form. Packet 4 write helpers now fail closed.
 function PaymentRecorder({
   jobId,
   disabled,
@@ -2407,7 +2407,7 @@ function PaymentHistoryList({ rows }: { rows: RevenueEventRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Write-Offs / Value Adjustments — writes to job_value_adjustments (WRITABLE).
+// Write-Offs / Value Adjustments — historical UI; writes are unavailable.
 // Lives inside the Job / Contract Site Detail workspace, keyed on the real job_id.
 // ---------------------------------------------------------------------------
 function WriteOffsSection({
@@ -2566,9 +2566,7 @@ function WriteOffsSection({
 }
 
 // ---------------------------------------------------------------------------
-// Handover + Referral capture — writes to job_handovers and job_referrals
-// (both WRITABLE), keyed on the real job_id. Referrals are captured in the same
-// flow so the operator completes the proof pack in one place.
+// Handover + Referral capture — historical UI; writes are unavailable.
 // ---------------------------------------------------------------------------
 function HandoverDialog({
   jobId,

@@ -23,11 +23,7 @@ const navGroups = [
   {
     label: "BuildOS / Core",
     items: [
-      { title: "Leads", url: "/leads" },
-      { title: "Accounts", url: "/accounts" },
-      { title: "Pipeline", url: "/pipeline" },
-      { title: "Quotes", url: "/quotes" },
-      { title: "Jobs", url: "/jobs" },
+      { title: "Core overview", url: "/core", badge: "Read only" },
     ],
   },
   {

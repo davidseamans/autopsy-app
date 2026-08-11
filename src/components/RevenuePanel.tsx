@@ -257,8 +257,8 @@ export function RevenuePanel() {
                       />
                     </div>
 
-                    <Button size="sm" className="w-full gap-2" onClick={() => openPayment(job.job_id)}>
-                      <Receipt className="h-4 w-4" /> Record Payment
+                    <Button size="sm" className="w-full gap-2" disabled title="Selective promotion is not implemented">
+                      <Receipt className="h-4 w-4" /> Record Payment unavailable
                     </Button>
 
                     <PaymentHistory rows={events.filter((e) => e.job_id === job.job_id)} />
@@ -361,29 +361,16 @@ function RecordPaymentDialog({
 
   async function handleSave() {
     if (!canSave) return;
-    setSaving(true);
-    const { error } = await supabase.from("revenue_events").insert({
-      job_id: jobId,
-      amount: amountNum,
-      revenue_type: revenueType,
-      source,
-      reference: reference.trim() || null,
-    });
-    setSaving(false);
-    if (error) {
-      toast.error(`Could not record payment: ${error.message}`);
-      return;
-    }
-    onSaved();
+    toast.error("Core changes are unavailable. Selective promotion is not implemented.");
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Record Payment</DialogTitle>
+          <DialogTitle>Record Payment unavailable</DialogTitle>
           <DialogDescription>
-            Add a single payment event. Each payment is saved separately — totals update automatically.
+            Browser-direct Core writes are prohibited. This action cannot save or report success.
           </DialogDescription>
         </DialogHeader>
 
