@@ -22,6 +22,7 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
       attempts += 1;
       const response = await fetch(`/api/stripe/checkout-status?session_id=${encodeURIComponent(sessionId)}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
       });
       const payload = await response.json();
       if (cancelled) return;

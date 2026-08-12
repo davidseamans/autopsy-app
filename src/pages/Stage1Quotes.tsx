@@ -3,14 +3,17 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, FileText, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { loadStage1Funnel, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
+import { createStage1LeadRecord, loadStage1Funnel, loadStage1LeadRecords, type Stage1LeadRecord, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
 import { toast } from "@/components/ui/sonner";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { STAGE1_DEMO_QUOTES } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
-type QuoteFilter = "outstanding" | "rejected" | "accepted";
+type QuoteFilter = "potential" | "all" | "outstanding" | "rejected" | "accepted";
+type GeneratedQuoteStatus = "outstanding" | "rejected" | "accepted";
 const isRejected = (status: string) => ["rejected", "declined", "expired"].includes(status.toLowerCase());
 const quoteBucket = (quote: Stage1QuoteSummary): QuoteFilter => quote.status === "accepted" ? "accepted" : isRejected(quote.status) ? "rejected" : "outstanding";
 
@@ -20,10 +23,16 @@ export default function Stage1Quotes() {
   const isDemo = searchParams.get("demo") === "1";
   const first5JobsPath = isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
   const quotePath = runId ? `/stage-1/quotes/new?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes/new";
+  const quoteContactSeparator = quotePath.includes("?") ? "&" : "?";
   const [quotes, setQuotes] = useState<Stage1QuoteSummary[]>([]);
+  const [contacts, setContacts] = useState<Stage1LeadRecord[]>([]);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<QuoteFilter>("outstanding");
+  const [filter, setFilter] = useState<QuoteFilter>("all");
   const [workingQuoteId, setWorkingQuoteId] = useState<string | null>(null);
   const tourActive = searchParams.get("tour") === "quotes";
   const tourAutoPlay = searchParams.get("autoplay") === "1";
@@ -52,8 +61,9 @@ export default function Stage1Quotes() {
       return;
     }
     try {
-      const snapshot = await loadStage1Funnel(runId);
+      const [snapshot, contactRows] = await Promise.all([loadStage1Funnel(runId), loadStage1LeadRecords(runId)]);
       setQuotes(snapshot.quotes);
+      setContacts(contactRows);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -78,14 +88,21 @@ export default function Stage1Quotes() {
     rejected: quotes.filter((quote) => quoteBucket(quote) === "rejected").length,
     accepted: quotes.filter((quote) => quote.status === "accepted").length,
   }), [quotes]);
-  const filteredQuotes = useMemo(() => quotes.filter((quote) => quoteBucket(quote) === filter), [filter, quotes]);
+  const filteredQuotes = useMemo(
+    () => filter === "all" ? quotes : quotes.filter((quote) => quoteBucket(quote) === filter),
+    [filter, quotes],
+  );
+  const potentialContacts = useMemo(
+    () => contacts.filter((contact) => !["quoted", "won", "lost"].includes(contact.status)),
+    [contacts],
+  );
 
   async function changeStatus(quote: Stage1QuoteSummary, next: QuoteFilter) {
     if (isDemo) {
       toast.info("This is sample data. No status was changed.");
       return;
     }
-    if (workingQuoteId || quoteBucket(quote) === next) return;
+    if (workingQuoteId || next === "all" || quoteBucket(quote) === next) return;
     setWorkingQuoteId(quote.id);
     try {
       if (next === "accepted") {
@@ -102,6 +119,20 @@ export default function Stage1Quotes() {
     } finally {
       setWorkingQuoteId(null);
     }
+  }
+
+  async function saveContact() {
+    if (!runId || !contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())) return;
+    try {
+      await createStage1LeadRecord(runId, {
+        client_name: contactName.trim(), contact_name: null,
+        contact_email: contactEmail.trim() || null, contact_phone: contactPhone.trim() || null,
+        site_address: null, source: "Contact", estimated_value: 0, next_action_at: null, notes: null,
+      });
+      setContactName(""); setContactPhone(""); setContactEmail(""); setShowContactForm(false);
+      toast.success("Contact added to Potential quotes.");
+      await refresh();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : String(cause)); }
   }
 
   if (loading) {
@@ -122,17 +153,23 @@ export default function Stage1Quotes() {
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
-      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
-      <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
-        <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("outstanding")} />
-        <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
-        <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 4} onClick={() => setFilter("accepted")} />
+      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes generated: {counts.sent}</span> from the start of First 5 Jobs. The selected panel controls the register below.</p>
+      <div className={`grid grid-cols-2 gap-3 lg:grid-cols-5 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+        <FunnelCount label="Potential" value={potentialContacts.length} tone="sky" active={filter === "potential"} onClick={() => setFilter("potential")} />
+        <FunnelCount label="All generated" value={counts.sent} tone="slate" active={filter === "all"} onClick={() => setFilter("all")} />
+        <FunnelCount label="Outstanding" value={counts.outstanding} tone="amber" active={filter === "outstanding"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("outstanding")} />
+        <FunnelCount label="Accepted" value={counts.accepted} tone="emerald" active={filter === "accepted"} highlighted={tourActive && tourStep === 4} onClick={() => setFilter("accepted")} />
+        <FunnelCount label="Rejected" value={counts.rejected} tone="rose" active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
       </div>
 
       <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter.charAt(0).toUpperCase() + filter.slice(1)} quotes</CardTitle><CardDescription>Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
+        <CardHeader className="flex flex-row items-start justify-between gap-4"><div><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter === "potential" ? "Potential — unquoted" : filter === "all" ? "All quotes generated" : `${filter.charAt(0).toUpperCase() + filter.slice(1)} quotes`}</CardTitle><CardDescription>{filter === "potential" ? "Capture only enough detail to arrange the appointment. Prepare the written quote after the site visit." : `Showing ${filteredQuotes.length} of ${counts.sent}. Change the status here, or open a quote to print it and review the detail.`}</CardDescription></div>{filter === "potential" && !isDemo ? <Button type="button" size="sm" onClick={() => setShowContactForm((current) => !current)}><Plus className="mr-2 h-4 w-4" /> Add contact</Button> : null}</CardHeader>
         <CardContent className="space-y-3">
-          {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
+          {filter === "potential" ? <>
+            {showContactForm ? <div className="grid gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-4 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="potential-name">Name *</Label><Input id="potential-name" value={contactName} onChange={(event) => setContactName(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-phone">Phone</Label><Input id="potential-phone" value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-email">Email</Label><Input id="potential-email" type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} /></div><div className="sm:col-span-3 flex justify-end"><Button type="button" onClick={() => void saveContact()} disabled={!contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())}>Save potential quote</Button></div></div> : null}
+            {potentialContacts.map((contact) => <div key={contact.id} className="flex flex-col gap-3 rounded-lg border border-sky-200 bg-sky-50/40 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{contact.client_name}</p><span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">Potential — unquoted</span></div><p className="text-sm text-muted-foreground">{[contact.contact_phone, contact.contact_email].filter(Boolean).join(" · ")}</p></div><Button asChild size="sm"><Link to={`${quotePath}${quoteContactSeparator}contactId=${encodeURIComponent(contact.id)}`}>Prepare quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button></div>)}
+            {potentialContacts.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No potential quotes waiting.</p> : null}
+          </> : filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
       </Card>
       {tourActive ? <Stage1WelcomeGuide mode="quotes" initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={setTourStep} onJourneyBack={() => window.location.assign("/stage-1?demo=1&tour=1&step=2&autoplay=1")} onJourneyAction={() => { window.location.assign(isDemo ? "/stage-1/quotes/new?demo=1&tour=builder&autoplay=1" : `${quotePath}${quotePath.includes("?") ? "&" : "?"}tour=builder&autoplay=1`); }} /> : null}
@@ -141,17 +178,18 @@ export default function Stage1Quotes() {
   );
 }
 
-function FunnelCount({ label, value, active, highlighted, onClick }: { label: string; value: number; active: boolean; highlighted?: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`text-left ${highlighted ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}><Card className={active ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardContent className="pt-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card></button>;
+function FunnelCount({ label, value, tone, active, highlighted, onClick }: { label: string; value: number; tone: "sky" | "slate" | "amber" | "emerald" | "rose"; active: boolean; highlighted?: boolean; onClick: () => void }) {
+  const tones = { sky: "border-sky-300 bg-sky-50 text-sky-900", slate: "border-slate-300 bg-slate-50 text-slate-900", amber: "border-amber-300 bg-amber-50 text-amber-900", emerald: "border-emerald-300 bg-emerald-50 text-emerald-900", rose: "border-rose-300 bg-rose-50 text-rose-900" };
+  return <button type="button" onClick={onClick} className={`text-left ${highlighted ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}><Card className={`${tones[tone]} transition-all ${active ? "ring-2 ring-current shadow-sm" : "opacity-75 hover:opacity-100"}`}><CardContent className="pt-4"><p className="text-xs uppercase tracking-wide">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card></button>;
 }
 
-function QuoteRow({ quote, runId, isDemo, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; isDemo: boolean; working: boolean; onStatusChange: (status: QuoteFilter) => void }) {
+function QuoteRow({ quote, runId, isDemo, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; isDemo: boolean; working: boolean; onStatusChange: (status: GeneratedQuoteStatus) => void }) {
   const documentPath = isDemo ? `/stage-1/quote/${quote.id}?demo=1` : `/stage-1/quote/${quote.id}?runId=${encodeURIComponent(runId)}`;
   const status = quoteBucket(quote);
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={isDemo || working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as QuoteFilter)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
+        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={isDemo || working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as GeneratedQuoteStatus)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
         <p className="text-sm text-muted-foreground">{money(quote.totalIncGst)} · {new Date(quote.issuedAt).toLocaleDateString("en-AU")}</p>
       </div>
       <Button asChild variant="outline" size="sm"><Link to={documentPath}>Open quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button>

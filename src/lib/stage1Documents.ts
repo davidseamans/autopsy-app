@@ -91,24 +91,28 @@ export async function createStandardQuote(input: {
   cleanTypeCode: string;
   chargeOutRateExGst: number;
   items: QuoteLineDraft[];
+  contactId?: string | null;
 }) {
-  const { data, error } = await supabase.rpc("create_stage1_guided_quote", {
-    p_run_id: input.runId,
-    p_client_name: input.clientName,
-    p_client_contact_name: input.clientContactName,
-    p_client_email: input.clientEmail,
-    p_client_phone: input.clientPhone,
-    p_site_address: input.siteAddress,
-    p_service_description: input.serviceDescription,
-    p_valid_until: input.validUntil,
-    p_payment_terms: input.paymentTerms,
-    p_clean_type_code: input.cleanTypeCode,
-    p_items: input.items.map((item) => ({
-      description: item.description,
-      quantity: item.estimatedHours,
-      unitPriceExGst: input.chargeOutRateExGst,
-    })),
-  });
+  const { data, error } = await supabase.rpc(
+    input.contactId ? "create_stage1_guided_quote_from_contact" : "create_stage1_guided_quote",
+    {
+      ...(input.contactId ? { p_contact_id: input.contactId } : { p_run_id: input.runId }),
+      p_client_name: input.clientName,
+      p_client_contact_name: input.clientContactName,
+      p_client_email: input.clientEmail,
+      p_client_phone: input.clientPhone,
+      p_site_address: input.siteAddress,
+      p_service_description: input.serviceDescription,
+      p_valid_until: input.validUntil,
+      p_payment_terms: input.paymentTerms,
+      p_clean_type_code: input.cleanTypeCode,
+      p_items: input.items.map((item) => ({
+        description: item.description,
+        quantity: item.estimatedHours,
+        unitPriceExGst: input.chargeOutRateExGst,
+      })),
+    },
+  );
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.quote_id) throw new Error("The quote was not created.");

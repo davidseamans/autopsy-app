@@ -171,3 +171,13 @@ export async function createStage1LeadActivity(runId: string, activity: NewStage
     created_at: String(data.created_at),
   };
 }
+
+export async function loadStage1Contact(contactId: string): Promise<Stage1LeadRecord> {
+  const { data, error } = await supabase
+    .from("stage1_leads")
+    .select(LEAD_FIELDS)
+    .eq("id", contactId)
+    .single();
+  if (error) throw new Error(error.message);
+  return mapLeadRecord(data);
+}

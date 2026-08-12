@@ -30,7 +30,7 @@ Only the four checklist choices and completion time are retained. Never collect 
 >
 > This is a controlled six-week start. It is not a classroom exercise and it is not a full accounting system. Your job is to find real opportunities, quote them properly, complete five genuine jobs and learn what the figures tell you.
 >
-> Keep the lead record simple. Enter the number of enquiries you receive. When an opportunity is real, prepare a written quote. If the customer accepts it, First 5 Jobs creates the job and invoice. When the work is done, use the Job Cost Summary to enter the actual hours, costs, customer payments and any useful photos or PDFs.
+> Keep prospecting simple. Record the date, method and volume—calls, conversations, flyers or similar activity—but no names. When somebody gives you their name and a phone number or email so you can arrange an appointment, add them to Potential quotes. After the site visit, prepare the written quote. If the customer accepts it, First 5 Jobs creates the job and invoice. When the work is done, use the Job Cost Summary to enter the actual hours, costs, customer payments and any useful photos or PDFs.
 >
 > Start lean. Open a separate bank account. Order a small first batch of business cards with room for notes on the back. Buy what booked work needs, not what an imaginary future business might need.
 >

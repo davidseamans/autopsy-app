@@ -30,19 +30,17 @@ import {
   ChecklistState,
   WorksheetStatus,
   getWorksheetGuidance,
-  isStage1Reachable,
   setStage1RunId,
   upsertFromVerdict,
   useProgression,
 } from "@/lib/progression";
+import { supabase } from "@/lib/supabase";
+import { getAuthorizedStage1Admission } from "@/lib/stage1Admission";
 
 const STATUS_OPTIONS: WorksheetStatus[] = [
   "Not Started",
   "In Progress",
   "Submitted",
-  "Accepted",
-  "Rejected",
-  "Retest Required",
 ];
 
 function humanize(v: any): string {
@@ -82,6 +80,12 @@ export default function ReadinessWorksheet() {
     queryKey: ["autopsy", "blocks", runId],
     queryFn: () => generateSupportingBlocks(runId),
     enabled: !!runId,
+  });
+  const stage1AdmissionQ = useQuery({
+    queryKey: ["stage1-authority", runId],
+    queryFn: () => getAuthorizedStage1Admission(runId),
+    enabled: !!runId,
+    retry: false,
   });
 
   const run = (payloadQ.data?.run ?? {}) as Record<string, any>;
@@ -132,7 +136,7 @@ export default function ReadinessWorksheet() {
 
   const checklistComplete =
     !!state && Object.values(state.checklist).every(Boolean);
-  const stage1Unlocked = !!state && isStage1Reachable(state.stagePermission);
+  const stage1Unlocked = stage1AdmissionQ.data === true;
 
   const setChecklist = (key: keyof ChecklistState, value: boolean) => {
     if (!state) return;
@@ -223,8 +227,8 @@ export default function ReadinessWorksheet() {
             <div>
               <CardTitle className="text-base">Worksheet Status</CardTitle>
               <CardDescription>
-                Move to Submitted when your proof is ready for review. Accepted
-                unlocks Stage 1 (conditionally for high-risk verdicts).
+                You may prepare and submit evidence. Only the governed backend
+                can accept the gate or open First 5 Jobs.
               </CardDescription>
             </div>
             <Badge variant="outline">{state?.worksheetStatus ?? "Not Started"}</Badge>
@@ -251,17 +255,6 @@ export default function ReadinessWorksheet() {
               </SelectContent>
             </Select>
           </div>
-          {state?.worksheetStatus === "Rejected" && (
-            <div className="rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900">
-              Worksheet rejected. Stage 1 stays locked until the proof is rebuilt
-              and the retest condition is satisfied.
-            </div>
-          )}
-          {state?.worksheetStatus === "Retest Required" && (
-            <div className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
-              Retest required before Stage 1 can be opened.
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -294,7 +287,8 @@ export default function ReadinessWorksheet() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Stage Permission</CardTitle>
           <CardDescription>
-            Computed from verdict, worksheet status, and checklist.
+            Read from the Supabase progression record. Browser state cannot
+            grant admission.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -304,16 +298,19 @@ export default function ReadinessWorksheet() {
             ) : (
               <Lock className="h-4 w-4 text-muted-foreground" />
             )}
-            <span className="font-medium">{state?.stagePermission ?? "Locked"}</span>
+            <span className="font-medium">
+              {stage1Unlocked ? "Stage 1 Active" : "Locked"}
+            </span>
           </div>
           {!checklistComplete && (
             <p className="text-xs text-muted-foreground">
               Checklist incomplete — finish all items above.
             </p>
           )}
-          {state?.worksheetStatus !== "Accepted" && (
+          {!stage1Unlocked && (
             <p className="text-xs text-muted-foreground">
-              Worksheet not Accepted — set status above when your proof is ready.
+              A submitted worksheet records candidate evidence only. It cannot
+              approve its own gate.
             </p>
           )}
           <div className="flex gap-2 pt-2">
@@ -323,7 +320,7 @@ export default function ReadinessWorksheet() {
                 setStage1RunId(runId);
                 toast({
                   title: "Stage 1 opened",
-                  description: `Permission: ${state?.stagePermission}`,
+                  description: "Supabase authority verified.",
                 });
                 navigate(`/stage-1?runId=${runId}`);
               }}
