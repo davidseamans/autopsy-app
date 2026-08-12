@@ -7,6 +7,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/20260811192225_issue_62_authority_chain.sql"),
   "utf8",
 );
+const webhookConflictFix = readFileSync(
+  resolve("supabase/migrations/20260812014502_fix_paid_checkout_order_conflict.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -31,6 +35,13 @@ describe("Issue #62 governed authority chain", () => {
     expect(webhook).toContain("constructEvent(await readRawBody(req), signature");
     expect(webhook).toContain("if (event.livemode)");
     expect(webhook).toContain('session.payment_status !== "paid"');
+  });
+
+  it("uses the named order constraint so the webhook return column cannot shadow order_id", () => {
+    expect(webhookConflictFix).toContain(
+      "on conflict on constraint autopsy_entitlements_order_id_key",
+    );
+    expect(webhookConflictFix).not.toContain("on conflict (order_id)");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
