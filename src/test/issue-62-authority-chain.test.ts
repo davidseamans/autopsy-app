@@ -16,6 +16,10 @@ const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
 const webhook = readFileSync(resolve("api/stripe/webhook.ts"), "utf8");
 const checkoutStatus = readFileSync(resolve("api/stripe/checkout-status.ts"), "utf8");
+const checkoutPanel = readFileSync(
+  resolve("src/components/autopsy/AutopsyCheckoutPanel.tsx"),
+  "utf8",
+);
 
 
 describe("Issue #62 governed authority chain", () => {
@@ -35,6 +39,11 @@ describe("Issue #62 governed authority chain", () => {
     expect(webhook).toContain("constructEvent(await readRawBody(req), signature");
     expect(webhook).toContain("if (event.livemode)");
     expect(webhook).toContain('session.payment_status !== "paid"');
+  });
+
+  it("never caches payment verification while the signed webhook is catching up", () => {
+    expect(checkoutStatus).toContain('res.setHeader("Cache-Control", "no-store');
+    expect(checkoutPanel).toContain('cache: "no-store"');
   });
 
   it("uses the named order constraint so the webhook return column cannot shadow order_id", () => {
