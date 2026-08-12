@@ -46,3 +46,7 @@ grant select, insert, update, delete on public.stage1_jobs to authenticated;
 grant select, insert, update, delete on public.stage1_revenue_events to authenticated;
 grant select, insert, update, delete on public.stage1_payment_events to authenticated;
 grant select, insert, update, delete on public.stage1_job_costs to authenticated;
+grant select, insert, update, delete on public.stage1_leads to authenticated;
+grant select, insert, update, delete on public.stage1_quotes to authenticated;
+grant select, insert, update, delete on public.stage1_reflections to authenticated;
+grant select, insert, update, delete on public.stage1_business_expenses to authenticated;
