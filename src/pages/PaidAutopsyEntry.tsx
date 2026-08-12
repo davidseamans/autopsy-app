@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ConversationalAutopsy } from "@/components/autopsy/ConversationalAutopsy";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +9,7 @@ const INTEGRATION_PREVIEW_HOST =
   "autopsy-app-git-codex-voice-autopsy-integration-david-seamans.vercel.app";
 
 export default function PaidAutopsyEntry() {
+  const navigate = useNavigate();
   const { loading: authLoading, session } = useAuth();
   const embeddedFlightDeck =
     new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
@@ -49,9 +50,16 @@ export default function PaidAutopsyEntry() {
       return;
     }
     void supabase
-      .rpc("current_user_can_enter_paid_autopsy")
-      .then(({ data, error }) => setState(!error && data === true ? "authorised" : "blocked"));
-  }, [authLoading, previewTestPayment, session]);
+      .rpc("get_current_paid_autopsy_destination")
+      .then(({ data, error }) => {
+        const destination = data as { kind?: string; run_id?: string } | null;
+        if (!error && destination?.kind === "verdict" && destination.run_id) {
+          navigate(`/autopsy/run/${destination.run_id}`, { replace: true });
+          return;
+        }
+        setState(!error && destination?.kind === "assessment" ? "authorised" : "blocked");
+      });
+  }, [authLoading, navigate, previewTestPayment, session]);
 
   if (state === "authorised") return (
     <>

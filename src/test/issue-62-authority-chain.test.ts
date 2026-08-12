@@ -27,6 +27,11 @@ const canonicalVerdictReferenceSeed = readFileSync(
   resolve("supabase/migrations/20260812030000_seed_canonical_autopsy_verdict_reference_data.sql"),
   "utf8",
 );
+const paidAutopsyDestination = readFileSync(
+  resolve("supabase/migrations/20260812031500_route_completed_paid_autopsy.sql"),
+  "utf8",
+);
+const paidAutopsyEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -100,6 +105,19 @@ describe("Issue #62 governed authority chain", () => {
     expect(canonicalVerdictReferenceSeed).toContain("Canonical dimension recovery count must be 6");
     expect(canonicalVerdictReferenceSeed).toContain("Canonical supporting-block count must be 18");
     expect(canonicalVerdictReferenceSeed).toContain("authenticated_read_dimension_supporting_blocks");
+  });
+
+  it("routes a completed paid Autopsy to its verdict before another entitlement can be consumed", () => {
+    expect(paidAutopsyDestination).toContain("r.status = 'in_progress'");
+    expect(paidAutopsyDestination).toContain("r.status = 'completed'");
+    expect(paidAutopsyDestination.indexOf("r.status = 'in_progress'")).toBeLessThan(
+      paidAutopsyDestination.indexOf("r.status = 'completed'"),
+    );
+    expect(paidAutopsyDestination).toContain("jsonb_build_object('kind', 'verdict'");
+    expect(paidAutopsyDestination).toContain("from public, anon");
+    expect(paidAutopsyEntry).toContain('rpc("get_current_paid_autopsy_destination")');
+    expect(paidAutopsyEntry).toContain("navigate(`/autopsy/run/${destination.run_id}`");
+    expect(paidAutopsyEntry).toContain("{ replace: true }");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
