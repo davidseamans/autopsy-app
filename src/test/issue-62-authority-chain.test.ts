@@ -36,6 +36,7 @@ const businessIdentityRunRead = readFileSync(
   resolve("supabase/migrations/20260812032500_grant_business_identity_run_read.sql"),
   "utf8",
 );
+const businessSetup = readFileSync(resolve("src/pages/BusinessSetup.tsx"), "utf8");
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -130,6 +131,13 @@ describe("Issue #62 governed authority chain", () => {
     );
     expect(businessIdentityRunRead).not.toContain("to authenticated");
     expect(businessIdentityRunRead).not.toContain("to anon");
+  });
+
+  it("gives a verified candidate one unmistakable continuation into First 5 Jobs", () => {
+    expect(businessSetup).toContain("Business Details complete.");
+    expect(businessSetup).toContain("Continue to First 5 Jobs");
+    expect(businessSetup).toContain("Save changed business name");
+    expect(businessSetup).toContain("Save only if you change the customer-facing name.");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {

@@ -159,11 +159,29 @@ export default function BusinessSetup() {
       )}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button asChild variant="outline"><Link to={returnTo}>Back to First 5 Jobs</Link></Button>
-        <Button onClick={() => void save()} disabled={!canSave || Boolean(loadError)} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-          {verified ? "Save business name" : "Save and verify ABN"}
-        </Button>
+        {verified ? (
+          <>
+            <div className="text-sm text-muted-foreground">
+              <p className="font-medium text-emerald-700">Business Details complete.</p>
+              <p>Continue to First 5 Jobs. Save only if you change the customer-facing name.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => void save()} disabled={!canSave || Boolean(loadError)} variant="outline" className="gap-2">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Save changed business name
+              </Button>
+              <Button asChild><Link to={returnTo}>Continue to First 5 Jobs</Link></Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Button asChild variant="outline"><Link to={returnTo}>Back to First 5 Jobs</Link></Button>
+            <Button onClick={() => void save()} disabled={!canSave || Boolean(loadError)} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              Save and verify ABN
+            </Button>
+          </>
+        )}
       </div>
 
       <Card>
