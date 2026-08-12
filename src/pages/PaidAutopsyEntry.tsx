@@ -49,12 +49,8 @@ export default function PaidAutopsyEntry() {
       return;
     }
     void supabase
-      .from("autopsy_entitlements")
-      .select("id")
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setState(data ? "authorised" : "blocked"));
+      .rpc("current_user_can_enter_paid_autopsy")
+      .then(({ data, error }) => setState(!error && data === true ? "authorised" : "blocked"));
   }, [authLoading, previewTestPayment, session]);
 
   if (state === "authorised") return (
