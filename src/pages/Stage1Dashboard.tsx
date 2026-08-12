@@ -2900,6 +2900,7 @@ function Stage1DashboardInner() {
   // Compute KPI aggregates from current state
   const totalLeads = methodRows.reduce((s, r) => s + r.leads, 0);
   const quotesSent = quotes.length;
+  const potentialQuotes = leadRecords.filter((contact) => !["quoted", "won", "lost"].includes(contact.status.toLowerCase())).length;
   const quotesAccepted = quotes.filter((q) => q.status === "Accepted").length;
   const quotesRejected = quotes.filter((q) => ["Rejected", "Declined", "Expired"].includes(q.status)).length;
   const quotesOutstanding = Math.max(0, quotesSent - quotesAccepted - quotesRejected);
@@ -4397,7 +4398,8 @@ function Stage1DashboardInner() {
           accent="green"
           primary={`${quoteConvPct}%`}
           secondaries={[
-            { k: "Quotes sent", v: quotesSent },
+            { k: "Quotes potential", v: potentialQuotes },
+            { k: "Written quotes", v: quotesSent },
             { k: "Quotes accepted", v: quotesAccepted },
             { k: "Quotes rejected", v: quotesRejected },
             { k: "Quotes outstanding", v: quotesOutstanding },

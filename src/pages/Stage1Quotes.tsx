@@ -12,7 +12,7 @@ import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1Welcome
 import { STAGE1_DEMO_QUOTES } from "@/lib/stage1Demo";
 
 const money = (value: number) => value.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
-type QuoteFilter = "outstanding" | "rejected" | "accepted";
+type QuoteFilter = "all" | "outstanding" | "rejected" | "accepted";
 const isRejected = (status: string) => ["rejected", "declined", "expired"].includes(status.toLowerCase());
 const quoteBucket = (quote: Stage1QuoteSummary): QuoteFilter => quote.status === "accepted" ? "accepted" : isRejected(quote.status) ? "rejected" : "outstanding";
 
@@ -31,7 +31,7 @@ export default function Stage1Quotes() {
   const [contactEmail, setContactEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<QuoteFilter>("outstanding");
+  const [filter, setFilter] = useState<QuoteFilter>("all");
   const [workingQuoteId, setWorkingQuoteId] = useState<string | null>(null);
   const tourActive = searchParams.get("tour") === "quotes";
   const tourAutoPlay = searchParams.get("autoplay") === "1";
@@ -87,14 +87,17 @@ export default function Stage1Quotes() {
     rejected: quotes.filter((quote) => quoteBucket(quote) === "rejected").length,
     accepted: quotes.filter((quote) => quote.status === "accepted").length,
   }), [quotes]);
-  const filteredQuotes = useMemo(() => quotes.filter((quote) => quoteBucket(quote) === filter), [filter, quotes]);
+  const filteredQuotes = useMemo(
+    () => filter === "all" ? quotes : quotes.filter((quote) => quoteBucket(quote) === filter),
+    [filter, quotes],
+  );
 
   async function changeStatus(quote: Stage1QuoteSummary, next: QuoteFilter) {
     if (isDemo) {
       toast.info("This is sample data. No status was changed.");
       return;
     }
-    if (workingQuoteId || quoteBucket(quote) === next) return;
+    if (workingQuoteId || next === "all" || quoteBucket(quote) === next) return;
     setWorkingQuoteId(quote.id);
     try {
       if (next === "accepted") {
@@ -154,15 +157,16 @@ export default function Stage1Quotes() {
         </CardContent>
       </Card>
 
-      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
-      <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Written quotes: {counts.sent}</span> from the start of First 5 Jobs. The selected panel controls the register below.</p>
+      <div className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+        <FunnelCount label="All written quotes" value={counts.sent} active={filter === "all"} onClick={() => setFilter("all")} />
         <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("outstanding")} />
         <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
         <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 4} onClick={() => setFilter("accepted")} />
       </div>
 
       <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter.charAt(0).toUpperCase() + filter.slice(1)} quotes</CardTitle><CardDescription>Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter === "all" ? "All written quotes" : `${filter.charAt(0).toUpperCase() + filter.slice(1)} quotes`}</CardTitle><CardDescription>Showing {filteredQuotes.length} of {counts.sent}. Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
@@ -177,13 +181,13 @@ function FunnelCount({ label, value, active, highlighted, onClick }: { label: st
   return <button type="button" onClick={onClick} className={`text-left ${highlighted ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}><Card className={active ? "border-primary ring-1 ring-primary" : "transition-colors hover:border-primary/50"}><CardContent className="pt-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></CardContent></Card></button>;
 }
 
-function QuoteRow({ quote, runId, isDemo, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; isDemo: boolean; working: boolean; onStatusChange: (status: QuoteFilter) => void }) {
+function QuoteRow({ quote, runId, isDemo, working, onStatusChange }: { quote: Stage1QuoteSummary; runId: string; isDemo: boolean; working: boolean; onStatusChange: (status: Exclude<QuoteFilter, "all">) => void }) {
   const documentPath = isDemo ? `/stage-1/quote/${quote.id}?demo=1` : `/stage-1/quote/${quote.id}?runId=${encodeURIComponent(runId)}`;
   const status = quoteBucket(quote);
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={isDemo || working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as QuoteFilter)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
+        <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{quote.number} · {quote.clientName}</p><select aria-label={`Status for ${quote.number}`} value={status} disabled={isDemo || working || status === "accepted"} onChange={(event) => onStatusChange(event.target.value as Exclude<QuoteFilter, "all">)} className="h-8 rounded-md border bg-background px-2 text-xs font-medium"><option value="outstanding">Outstanding</option><option value="rejected">Rejected</option><option value="accepted">Accepted — create job</option></select>{working ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}</div>
         <p className="text-sm text-muted-foreground">{money(quote.totalIncGst)} · {new Date(quote.issuedAt).toLocaleDateString("en-AU")}</p>
       </div>
       <Button asChild variant="outline" size="sm"><Link to={documentPath}>Open quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button>
