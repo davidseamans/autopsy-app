@@ -15,6 +15,10 @@ const contextReferenceRepair = readFileSync(
   resolve("supabase/migrations/20260812021500_repair_autopsy_context_reference_data.sql"),
   "utf8",
 );
+const paidAutopsyResume = readFileSync(
+  resolve("supabase/migrations/20260812022500_resume_paid_autopsy_before_consuming.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -64,6 +68,15 @@ describe("Issue #62 governed authority chain", () => {
     expect(contextReferenceRepair).toContain("('never', 'Never owned");
     expect(contextReferenceRepair).toContain("on conflict (code) do update");
     expect(contextReferenceRepair).toContain("to authenticated");
+  });
+
+  it("resumes an owner-bound in-progress Autopsy before consuming another entitlement", () => {
+    expect(paidAutopsyResume).toContain("current_user_can_enter_paid_autopsy");
+    expect(paidAutopsyResume).toContain("Resume before consuming");
+    expect(paidAutopsyResume.indexOf("select e.autopsy_run_id")).toBeLessThan(
+      paidAutopsyResume.indexOf("select e.* into v_entitlement"),
+    );
+    expect(readiness).toBeDefined();
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
