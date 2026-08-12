@@ -23,6 +23,10 @@ const canonicalAssessmentSeed = readFileSync(
   resolve("supabase/migrations/20260812024500_seed_canonical_autopsy_assessment.sql"),
   "utf8",
 );
+const canonicalVerdictReferenceSeed = readFileSync(
+  resolve("supabase/migrations/20260812030000_seed_canonical_autopsy_verdict_reference_data.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -88,6 +92,14 @@ describe("Issue #62 governed authority chain", () => {
     expect(canonicalAssessmentSeed).toContain("active-question answer-option count must be 48");
     expect(canonicalAssessmentSeed).toContain("conversation-variant count must be 48");
     expect(canonicalAssessmentSeed).toContain("on conflict (dimension_code) do nothing");
+  });
+
+  it("ships the governed verdict and Stage 1 reference rows required to finalize Q12", () => {
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical stage definition count must be 8");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical verdict band count must be 5");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical dimension recovery count must be 6");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical supporting-block count must be 18");
+    expect(canonicalVerdictReferenceSeed).toContain("authenticated_read_dimension_supporting_blocks");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
