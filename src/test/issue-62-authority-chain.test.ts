@@ -153,6 +153,10 @@ describe("Issue #62 governed authority chain", () => {
     expect(stage1DashboardDataSurfaces).toContain("grant select, insert on public.stage1_lead_activities to authenticated");
     expect(stage1DashboardDataSurfaces).toContain("grant select on public.stage1_job_margin_summary to authenticated");
     expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_jobs to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_leads to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_quotes to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_reflections to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_business_expenses to authenticated");
     expect(stage1DashboardDataSurfaces).not.toContain("truncate");
   });
 
