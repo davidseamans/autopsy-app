@@ -109,10 +109,10 @@ describe("Issue #62 governed authority chain", () => {
   });
 
   it("ships the governed verdict and Stage 1 reference rows required to finalize Q12", () => {
-    expect(canonicalVerdictReferenceSeed).toContain("Canonical stage definition count must be 8");
-    expect(canonicalVerdictReferenceSeed).toContain("Canonical verdict band count must be 5");
-    expect(canonicalVerdictReferenceSeed).toContain("Canonical dimension recovery count must be 6");
-    expect(canonicalVerdictReferenceSeed).toContain("Canonical supporting-block count must be 18");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical stage definitions are incomplete");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical startup verdict bands are incomplete");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical recovery validation rows are incomplete");
+    expect(canonicalVerdictReferenceSeed).toContain("Canonical supporting blocks are incomplete");
     expect(canonicalVerdictReferenceSeed).toContain("authenticated_read_dimension_supporting_blocks");
   });
 

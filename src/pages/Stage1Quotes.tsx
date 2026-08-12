@@ -3,7 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, FileText, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { loadStage1Funnel, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
+import { createStage1LeadRecord, loadStage1Funnel, loadStage1LeadRecords, type Stage1LeadRecord, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
 import { toast } from "@/components/ui/sonner";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
@@ -20,7 +22,13 @@ export default function Stage1Quotes() {
   const isDemo = searchParams.get("demo") === "1";
   const first5JobsPath = isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1";
   const quotePath = runId ? `/stage-1/quotes/new?runId=${encodeURIComponent(runId)}` : "/stage-1/quotes/new";
+  const quoteContactSeparator = quotePath.includes("?") ? "&" : "?";
   const [quotes, setQuotes] = useState<Stage1QuoteSummary[]>([]);
+  const [contacts, setContacts] = useState<Stage1LeadRecord[]>([]);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<QuoteFilter>("outstanding");
@@ -52,8 +60,9 @@ export default function Stage1Quotes() {
       return;
     }
     try {
-      const snapshot = await loadStage1Funnel(runId);
+      const [snapshot, contactRows] = await Promise.all([loadStage1Funnel(runId), loadStage1LeadRecords(runId)]);
       setQuotes(snapshot.quotes);
+      setContacts(contactRows);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -104,6 +113,20 @@ export default function Stage1Quotes() {
     }
   }
 
+  async function saveContact() {
+    if (!runId || !contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())) return;
+    try {
+      await createStage1LeadRecord(runId, {
+        client_name: contactName.trim(), contact_name: null,
+        contact_email: contactEmail.trim() || null, contact_phone: contactPhone.trim() || null,
+        site_address: null, source: "Contact", estimated_value: 0, next_action_at: null, notes: null,
+      });
+      setContactName(""); setContactPhone(""); setContactEmail(""); setShowContactForm(false);
+      toast.success("Contact added to Potential quotes.");
+      await refresh();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : String(cause)); }
+  }
+
   if (loading) {
     return <div className="container max-w-5xl py-10 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading quotes…</div>;
   }
@@ -121,6 +144,15 @@ export default function Stage1Quotes() {
       </header>
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4"><div><CardTitle className="text-base">Potential quotes</CardTitle><CardDescription className="mt-1">Capture only enough detail to arrange the appointment. Prepare the written quote after the site visit.</CardDescription></div>{!isDemo ? <Button type="button" size="sm" onClick={() => setShowContactForm((current) => !current)}><Plus className="mr-2 h-4 w-4" /> Add contact</Button> : null}</CardHeader>
+        <CardContent className="space-y-3">
+          {showContactForm ? <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="potential-name">Name *</Label><Input id="potential-name" value={contactName} onChange={(event) => setContactName(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-phone">Phone</Label><Input id="potential-phone" value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-email">Email</Label><Input id="potential-email" type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} /></div><div className="sm:col-span-3 flex justify-end"><Button type="button" onClick={() => void saveContact()} disabled={!contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())}>Save potential quote</Button></div></div> : null}
+          {contacts.filter((contact) => !["quoted", "won", "lost"].includes(contact.status)).map((contact) => <div key={contact.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{contact.client_name}</p><p className="text-sm text-muted-foreground">{[contact.contact_phone, contact.contact_email].filter(Boolean).join(" · ")}</p></div><Button asChild size="sm"><Link to={`${quotePath}${quoteContactSeparator}contactId=${encodeURIComponent(contact.id)}`}>Prepare quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button></div>)}
+          {contacts.every((contact) => ["quoted", "won", "lost"].includes(contact.status)) ? <p className="py-4 text-center text-sm text-muted-foreground">No potential quotes waiting.</p> : null}
+        </CardContent>
+      </Card>
 
       <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes sent: {counts.sent}</span> from the start of First 5 Jobs.</p>
       <div className={`grid grid-cols-3 gap-3 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>

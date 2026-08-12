@@ -73,12 +73,11 @@ import {
 import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
-import { leadRecordsAsActivities } from "@/lib/stage1LeadRecords";
 import {
-  createStage1LeadRecord,
+  createStage1LeadActivity,
   loadStage1LeadActivities,
   loadStage1LeadRecords,
-  type NewStage1LeadRecord,
+  type NewStage1LeadActivity,
   type Stage1LeadActivity,
   type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
@@ -893,8 +892,6 @@ function DrillBody({
   onOpenUnit: (n: number) => void;
 }) {
   const [quoteFilter, setQuoteFilter] = useState<"all" | "sent" | "converted" | "rejected">("all");
-  const [selectedLeadMethod, setSelectedLeadMethod] = useState<string | null>(null);
-
   const filteredQuotes = useMemo(() => {
     switch (quoteFilter) {
       case "sent":
@@ -932,7 +929,7 @@ function DrillBody({
               <TableBody>
                 {methodRows.map((r) => (
                   <TableRow key={r.method}>
-                    <TableCell className="font-medium"><button type="button" className="text-left text-sky-700 underline-offset-4 hover:underline" onClick={() => setSelectedLeadMethod(r.method)}>{r.method}</button></TableCell>
+                    <TableCell className="font-medium">{r.method}</TableCell>
                     <TableCell className="text-right">{r.attempts}</TableCell>
                     <TableCell className="text-right">{r.contacts}</TableCell>
                     <TableCell className="text-right">{r.leads}</TableCell>
@@ -944,32 +941,16 @@ function DrillBody({
           {/* Mobile stacked cards */}
           <div className="md:hidden space-y-3">
             {methodRows.map((r) => (
-              <button type="button" key={r.method} className="w-full rounded-md border p-3 text-left hover:bg-slate-50" onClick={() => setSelectedLeadMethod(r.method)}>
+              <div key={r.method} className="w-full rounded-md border p-3 text-left">
                 <div className="font-medium text-sky-700">{r.method}</div>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div><div className="text-muted-foreground">Attempts</div><div>{r.attempts}</div></div>
                   <div><div className="text-muted-foreground">Contacts</div><div>{r.contacts}</div></div>
                   <div><div className="text-muted-foreground">Leads</div><div>{r.leads}</div></div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
-          {selectedLeadMethod && (
-            <section aria-label={`${selectedLeadMethod} lead records`} className="rounded-xl border bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{selectedLeadMethod} leads</h3><Button type="button" size="sm" variant="ghost" onClick={() => setSelectedLeadMethod(null)}>Close</Button></div>
-              <div className="mt-3 space-y-2">
-                {leads.filter((lead) => lead.source === selectedLeadMethod).map((lead) => (
-                  <div key={lead.id} className="rounded-lg border bg-white p-3 text-sm">
-                    <div className="font-semibold">{lead.client_name}</div>
-                    <div className="mt-1 text-muted-foreground">{[lead.contact_name, lead.contact_email, lead.contact_phone].filter(Boolean).join(" · ") || "No contact details recorded"}</div>
-                    <div className="mt-1">{lead.site_address || "No site address"} · Status: {lead.status}</div>
-                    {lead.notes && <div className="mt-1 text-muted-foreground">{lead.notes}</div>}
-                  </div>
-                ))}
-                {leads.every((lead) => lead.source !== selectedLeadMethod) && <p className="text-sm text-muted-foreground">No individual lead records for this method yet.</p>}
-              </div>
-            </section>
-          )}
           <Stage1LeadMatrix activities={activities} startedAt={stageStartedAt} methods={methodRows.map((row) => row.method)} />
         </>
       )}
@@ -1297,7 +1278,7 @@ function DrillCurtain({
               {drill === "leads" && (
                 <Button size="sm" onClick={onLogActivity} className="gap-1.5 shrink-0">
                   <Plus className="h-4 w-4" />
-                  Add Lead
+                  Log activity
                 </Button>
               )}
               {drill === "conversions" && (
@@ -1419,41 +1400,37 @@ function QuoteActivityDialog({
   );
 }
 
-function AddLeadDialog({
+function LogLeadActivityDialog({
   open,
   onOpenChange,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (lead: NewStage1LeadRecord) => void;
+  onSave: (activity: NewStage1LeadActivity) => void;
 }) {
-  const [clientName, setClientName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [site, setSite] = useState("");
+  const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [source, setSource] = useState(METHOD_OPTIONS[0]);
-  const [value, setValue] = useState("");
-  const [nextAction, setNextAction] = useState("");
-  const [notes, setNotes] = useState("");
+  const [attempts, setAttempts] = useState("");
+  const [contacts, setContacts] = useState("");
+  const [leads, setLeads] = useState("");
 
   useEffect(() => {
     if (open) {
-      setClientName(""); setContactName(""); setEmail(""); setPhone(""); setSite("");
-      setSource(METHOD_OPTIONS[0]); setValue(""); setNextAction(""); setNotes("");
+      setActivityDate(new Date().toISOString().slice(0, 10));
+      setSource(METHOD_OPTIONS[0]); setAttempts(""); setContacts(""); setLeads("");
     }
   }, [open]);
 
-  const canSave = !!clientName.trim() && !!source;
+  const canSave = Boolean(activityDate && source && Number(attempts) >= 0 && Number(leads) >= 0);
 
   const save = () => {
     onSave({
-      client_name: clientName.trim(), contact_name: contactName.trim() || null,
-      contact_email: email.trim() || null, contact_phone: phone.trim() || null,
-      site_address: site.trim() || null, source, estimated_value: Number(value) || 0,
-      next_action_at: nextAction ? new Date(`${nextAction}T09:00:00`).toISOString() : null,
-      notes: notes.trim() || null,
+      activity_date: activityDate,
+      method: source,
+      attempts: Math.max(0, Math.trunc(Number(attempts) || 0)),
+      contacts_made: Math.max(0, Math.trunc(Number(contacts) || 0)),
+      leads_generated: Math.max(0, Math.trunc(Number(leads) || 0)),
     });
   };
 
@@ -1461,16 +1438,11 @@ function AddLeadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Lead</DialogTitle>
-          <DialogDescription>Capture the prospect and contact details behind this lead.</DialogDescription>
+          <DialogTitle>Log lead activity</DialogTitle>
+          <DialogDescription>Record only the date, method and volume. Names begin when somebody becomes a genuine contact.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="lead-client">Lead / business name <span className="text-destructive">*</span></Label>
-            <Input id="lead-client" value={clientName} onChange={(e) => setClientName(e.target.value)} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-contact">Contact name</Label><Input id="lead-contact" value={contactName} onChange={(e) => setContactName(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-site">Site address</Label><Input id="lead-site" value={site} onChange={(e) => setSite(e.target.value)} /></div></div>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="lead-email">Email</Label><Input id="lead-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="lead-phone">Phone</Label><Input id="lead-phone" value={phone} onChange={(e) => setPhone(e.target.value)} /></div></div>
+          <div className="space-y-1.5"><Label htmlFor="lead-date">Date</Label><Input id="lead-date" type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} /></div>
           <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5">
             <Label htmlFor="lead-source">Lead method</Label>
             <select
@@ -1479,13 +1451,16 @@ function AddLeadDialog({
             >
               {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-          </div><div className="space-y-1.5"><Label htmlFor="lead-value">Estimated value</Label><Input id="lead-value" type="number" min={0} value={value} onChange={(e) => setValue(e.target.value)} /></div></div>
-          <div className="space-y-1.5"><Label htmlFor="lead-next">Next action date</Label><Input id="lead-next" type="date" value={nextAction} onChange={(e) => setNextAction(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label htmlFor="lead-notes">Notes</Label><Input id="lead-notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+          </div></div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5"><Label htmlFor="lead-attempts">People approached / items distributed</Label><Input id="lead-attempts" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="lead-contacts">Responses / conversations</Label><Input id="lead-contacts" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="lead-results">Potential customers</Label><Input id="lead-results" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} /></div>
+          </div>
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save Lead</Button>
+          <Button onClick={save} disabled={!canSave}>Save activity</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2800,8 +2775,6 @@ function Stage1DashboardInner() {
     const methods = new Set<string>();
     methodBaseline.forEach((b) => methods.add(b.method));
     activities.forEach((a) => a.method && methods.add(a.method));
-    leadRecords.forEach((lead) => lead.source && methods.add(lead.source));
-    quotes.forEach((q) => q.method && methods.add(q.method));
     return Array.from(methods).map((method) => {
       const baseline = methodBaseline.find((b) => b.method === method);
       const acts = activities.filter((a) => a.method === method);
@@ -2813,7 +2786,7 @@ function Stage1DashboardInner() {
       const attempts = (baseline?.attempts ?? 0) + acts.reduce((s, a) => s + (a.attempts || 0), 0);
       const contacts = (baseline?.contacts ?? 0) + acts.reduce((s, a) => s + (a.contacts_made || 0), 0);
       const quotesSum = (baseline?.quotes ?? 0) + qs.length;
-      const leads = (baseline?.leads ?? 0) + leadRecords.filter((lead) => lead.source === method).length;
+      const leads = (baseline?.leads ?? 0) + acts.reduce((sum, activity) => sum + (activity.leads_generated || 0), 0);
       const noteParts: string[] = [];
       if (baseline?.notes) noteParts.push(baseline.notes);
       if (acts.length) noteParts.push(`${acts.length} logged activit${acts.length === 1 ? "y" : "ies"}`);
@@ -2827,7 +2800,7 @@ function Stage1DashboardInner() {
         notes: noteParts.join(" · "),
       };
     });
-  }, [activities, isDemo, leadRecords, quotes, units]);
+  }, [activities, isDemo, quotes, units]);
 
   const openReport = (n: number) => {
     setReportN(n);
@@ -3095,7 +3068,7 @@ function Stage1DashboardInner() {
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
             </Button>
           ) : null}
-          {!isDemo && bd.loaded && !bd.complete && (
+          {!isDemo && orientationComplete && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
@@ -3164,7 +3137,7 @@ function Stage1DashboardInner() {
         </p>
       )}
 
-      {!isDemo && bd.loaded && !bd.canOperate && (
+      {!isDemo && orientationComplete && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Let’s set up your Business Details first</CardTitle>
@@ -4738,10 +4711,10 @@ function Stage1DashboardInner() {
         drill={drill}
         onOpenChange={(o) => { if (!o) { setDrill(null); setQuoteActivityError(null); } }}
         methodRows={methodRows}
-        activities={leadRecordsAsActivities(leadRecords)}
+        activities={activities}
         leads={leadRecords}
         stageStartedAt={isDemo ? "2026-08-01" : stage1Snapshot?.started_at ?? null}
-        onLogActivity={() => { if (requireBusinessRegistration("add a lead")) setLogActOpen(true); }}
+        onLogActivity={() => { if (requireBusinessRegistration("log lead activity")) setLogActOpen(true); }}
         quotes={quotes}
         selectedQuoteNumber={selectedQuoteNumber}
         onSelectQuote={(n) => { setSelectedQuoteNumber(n); setQuoteActivityError(null); }}
@@ -4768,23 +4741,23 @@ function Stage1DashboardInner() {
         onOpenChange={setQuoteDetailOpen}
         onSave={handleSaveQuoteDetail}
       />
-      <AddLeadDialog
+      <LogLeadActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={async (lead) => {
-          if (!requireBusinessRegistration("add a lead")) return;
+        onSave={async (activity) => {
+          if (!requireBusinessRegistration("log lead activity")) return;
           if (isDemo) {
-            setLeadRecords((prev) => [...prev, { ...lead, id: `demo-${Date.now()}`, status: "new", created_at: new Date().toISOString() }]);
+            setActivities((prev) => [...prev, { ...activity, id: `demo-${Date.now()}`, created_at: new Date().toISOString() }]);
             setLogActOpen(false);
             return;
           }
           if (!activeRunId) return;
           try {
-            const saved = await createStage1LeadRecord(activeRunId, lead);
-            setLeadRecords((prev) => [...prev, saved]);
+            const saved = await createStage1LeadActivity(activeRunId, activity);
+            setActivities((prev) => [...prev, saved]);
             setLogActOpen(false);
           } catch (error) {
-            toast({ title: "Lead was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+            toast({ title: "Lead activity was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
           }
         }}
       />

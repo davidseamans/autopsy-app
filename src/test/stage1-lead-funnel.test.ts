@@ -36,20 +36,17 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(indexMigration).toContain("public.stage1_funnel_totals(created_by)");
   });
 
-  it("keeps candidate lead entry in the existing dashboard drilldown", () => {
+  it("keeps prospecting aggregate and unnamed in the dashboard drilldown", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     const matrix = readFileSync(resolve("src/components/Stage1LeadMatrix.tsx"), "utf8");
     expect(funnel).toContain('rpc("set_stage1_lead_count"');
-    expect(funnel).toContain('rpc("create_stage1_lead"');
-    expect(funnel).toContain('.from("stage1_leads")');
+    expect(funnel).toContain('.from("stage1_lead_activities")');
     expect(dashboard).toContain("Lead Method Performance");
-    expect(dashboard).toContain("Add Lead");
-    expect(dashboard).toContain("Lead / business name");
-    expect(dashboard).toContain("Contact name");
-    expect(dashboard).toContain("Site address");
+    expect(dashboard).toContain("Log lead activity");
+    expect(dashboard).toContain("Record only the date, method and volume");
+    expect(dashboard).not.toContain("Lead / business name");
     expect(matrix).toContain("Six-week lead-source graph");
-    expect(dashboard).toContain("lead records");
     expect(dashboard).not.toContain("Quotes Generated");
     expect(dashboard).not.toContain("Quote Details Required");
     expect(dashboard).not.toContain("matching quote details");
@@ -61,15 +58,11 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(existsSync(resolve("src/pages/Stage1Leads.tsx"))).toBe(false);
   });
 
-  it("derives lead totals, method drill-downs, and the graph from real lead records", () => {
-    const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
+  it("derives lead totals and the graph from aggregate activity rather than named contacts", () => {
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
-    const leadRecords = readFileSync(resolve("src/lib/stage1LeadRecords.ts"), "utf8");
-    expect(leadRecords).toContain("leadRecordsAsActivities");
-    expect(leadRecords).toContain("leads_generated: 1");
-    expect(dashboard).toContain("leadRecords.filter((lead) => lead.source === method).length");
-    expect(dashboard).toContain("setSelectedLeadMethod(r.method)");
-    expect(dashboard).toContain("leadRecordsAsActivities(leadRecords)");
+    expect(dashboard).toContain("activity.leads_generated");
+    expect(dashboard).toContain("activities={activities}");
+    expect(dashboard).not.toContain("leadRecords.filter((lead) => lead.source === method).length");
   });
 
   it("captures customer details at quote creation and preserves quote-to-job routing", () => {
@@ -77,13 +70,16 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     const quotePage = readFileSync(resolve("src/pages/Stage1QuoteNew.tsx"), "utf8");
     const quotesPage = readFileSync(resolve("src/pages/Stage1Quotes.tsx"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
-    expect(documents).toContain('rpc("create_stage1_guided_quote"');
-    expect(documents).toContain("p_run_id: input.runId");
+    expect(documents).toContain('"create_stage1_guided_quote_from_contact"');
+    expect(documents).toContain('{ p_contact_id: input.contactId }');
     expect(documents).toContain("p_client_name: input.clientName");
     expect(documents).toContain("p_clean_type_code: input.cleanTypeCode");
-    expect(quotePage).not.toContain('searchParams.get("leadId")');
+    expect(quotePage).toContain('searchParams.get("contactId")');
+    expect(quotePage).toContain("loadStage1Contact(contactId)");
     expect(quotePage).toContain("Customer and work details begin here");
     expect(quotesPage).toContain("Create a quote");
+    expect(quotesPage).toContain("Potential quotes");
+    expect(quotesPage).toContain("Capture only enough detail to arrange the appointment");
     expect(quotesPage).toContain('label="Outstanding"');
     expect(quotesPage).toContain('label="Rejected"');
     expect(quotesPage).toContain('label="Accepted"');

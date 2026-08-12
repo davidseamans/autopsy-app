@@ -18,6 +18,7 @@ import {
 import { calculateGuidedQuoteTotals } from "@/lib/stage1Pricing";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { STAGE1_DEMO_CLEAN_TYPES, STAGE1_DEMO_PROFILE } from "@/lib/stage1Demo";
+import { loadStage1Contact } from "@/lib/stage1Funnel";
 
 const isoAfterDays = (days: number) => {
   const date = new Date();
@@ -32,6 +33,7 @@ export default function Stage1QuoteNew() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
+  const contactId = searchParams.get("contactId");
   const isDemo = searchParams.get("demo") === "1";
   const tourActive = searchParams.get("tour") === "builder";
   const tourAutoPlay = searchParams.get("autoplay") === "1";
@@ -69,16 +71,27 @@ export default function Stage1QuoteNew() {
       setLoading(false);
       return;
     }
-    void Promise.all([fetchBusinessIdentity(runId), fetchStage1CleanTypePricingRules()])
-      .then(([{ profile: current }, rules]) => {
+    void Promise.all([
+      fetchBusinessIdentity(runId),
+      fetchStage1CleanTypePricingRules(),
+      contactId ? loadStage1Contact(contactId) : Promise.resolve(null),
+    ])
+      .then(([{ profile: current }, rules, contact]) => {
         if (!current?.verified) throw new Error("Verify Business Details before creating a quote.");
         if (rules.length === 0) throw new Error("The guided clean types are not available.");
         setProfile(current);
         setCleanTypeRules(rules);
+        if (contact) {
+          setClientName(contact.client_name);
+          setClientContactName(contact.contact_name ?? "");
+          setClientEmail(contact.contact_email ?? "");
+          setClientPhone(contact.contact_phone ?? "");
+          setSiteAddress(contact.site_address ?? "");
+        }
       })
       .catch((loadError) => setError(describeDocumentError(loadError)))
       .finally(() => setLoading(false));
-  }, [isDemo, runId]);
+  }, [contactId, isDemo, runId]);
 
   const totals = useMemo(() => {
     const selectedRule = cleanTypeRules.find((rule) => rule.code === cleanTypeCode) ?? null;
@@ -124,6 +137,7 @@ export default function Stage1QuoteNew() {
         cleanTypeCode,
         chargeOutRateExGst,
         items,
+        contactId,
       });
       toast.success(`${created.quoteNumber} generated and ready to send.`);
       navigate(`/stage-1/quote/${created.quoteId}?runId=${encodeURIComponent(runId)}`);
