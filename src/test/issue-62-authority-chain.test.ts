@@ -32,6 +32,10 @@ const paidAutopsyDestination = readFileSync(
   "utf8",
 );
 const paidAutopsyEntry = readFileSync(resolve("src/pages/PaidAutopsyEntry.tsx"), "utf8");
+const businessIdentityRunRead = readFileSync(
+  resolve("supabase/migrations/20260812032500_grant_business_identity_run_read.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -118,6 +122,14 @@ describe("Issue #62 governed authority chain", () => {
     expect(paidAutopsyEntry).toContain('rpc("get_current_paid_autopsy_destination")');
     expect(paidAutopsyEntry).toContain("navigate(`/autopsy/run/${destination.run_id}`");
     expect(paidAutopsyEntry).toContain("{ replace: true }");
+  });
+
+  it("allows the server-only Business Details endpoint to verify an owner-bound run", () => {
+    expect(businessIdentityRunRead).toContain(
+      "grant select on public.autopsy_runs to service_role",
+    );
+    expect(businessIdentityRunRead).not.toContain("to authenticated");
+    expect(businessIdentityRunRead).not.toContain("to anon");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
