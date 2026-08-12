@@ -44,6 +44,8 @@ describe("Issue #62 governed authority chain", () => {
   it("never caches payment verification while the signed webhook is catching up", () => {
     expect(checkoutStatus).toContain('res.setHeader("Cache-Control", "no-store');
     expect(checkoutPanel).toContain('cache: "no-store"');
+    expect(checkoutStatus).toContain("Array.isArray(order.autopsy_entitlements)");
+    expect(checkoutStatus).toContain(": order.autopsy_entitlements;");
   });
 
   it("uses the named order constraint so the webhook return column cannot shadow order_id", () => {
