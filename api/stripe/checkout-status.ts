@@ -25,11 +25,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (error) return res.status(500).json({ error: "Payment status could not be read." });
   if (!order) return res.status(404).json({ error: "Order not found." });
 
-  const entitlements = Array.isArray(order.autopsy_entitlements) ? order.autopsy_entitlements : [];
+  const entitlement = Array.isArray(order.autopsy_entitlements)
+    ? order.autopsy_entitlements[0]
+    : order.autopsy_entitlements;
   return res.status(200).json({
     status: order.status,
     paidAt: order.paid_at,
-    entitlementId: entitlements[0]?.id ?? null,
-    entitlementStatus: entitlements[0]?.status ?? null,
+    entitlementId: entitlement?.id ?? null,
+    entitlementStatus: entitlement?.status ?? null,
   });
 }
