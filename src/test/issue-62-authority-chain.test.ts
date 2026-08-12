@@ -37,6 +37,10 @@ const businessIdentityRunRead = readFileSync(
   "utf8",
 );
 const businessSetup = readFileSync(resolve("src/pages/BusinessSetup.tsx"), "utf8");
+const stage1DashboardDataSurfaces = readFileSync(
+  resolve("supabase/migrations/20260812034000_restore_stage1_dashboard_data_surfaces.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -138,6 +142,18 @@ describe("Issue #62 governed authority chain", () => {
     expect(businessSetup).toContain("Continue to First 5 Jobs");
     expect(businessSetup).toContain("Save changed business name");
     expect(businessSetup).toContain("Save only if you change the customer-facing name.");
+  });
+
+  it("ships the owner-bound lead ledger and readable margin surface required by 5JD", () => {
+    expect(stage1DashboardDataSurfaces).toContain("create table if not exists public.stage1_lead_activities");
+    expect(stage1DashboardDataSurfaces).toContain("stage1_lead_activities_select_own");
+    expect(stage1DashboardDataSurfaces).toContain("stage1_lead_activities_insert_own");
+    expect(stage1DashboardDataSurfaces).toContain("current_user_has_verified_business_identity()");
+    expect(stage1DashboardDataSurfaces).toContain("current_user_can_use_stage1_run(autopsy_run_id)");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert on public.stage1_lead_activities to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select on public.stage1_job_margin_summary to authenticated");
+    expect(stage1DashboardDataSurfaces).toContain("grant select, insert, update, delete on public.stage1_jobs to authenticated");
+    expect(stage1DashboardDataSurfaces).not.toContain("truncate");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
