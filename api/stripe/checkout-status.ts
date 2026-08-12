@@ -2,6 +2,10 @@ import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import { authenticateRequest, createServiceClient } from "../_lib/supabase-server.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
