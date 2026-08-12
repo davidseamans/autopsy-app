@@ -11,6 +11,10 @@ const webhookConflictFix = readFileSync(
   resolve("supabase/migrations/20260812014502_fix_paid_checkout_order_conflict.sql"),
   "utf8",
 );
+const contextReferenceRepair = readFileSync(
+  resolve("supabase/migrations/20260812021500_repair_autopsy_context_reference_data.sql"),
+  "utf8",
+);
 const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
 const readiness = readFileSync(resolve("src/pages/ReadinessWorksheet.tsx"), "utf8");
 const admission = readFileSync(resolve("src/lib/stage1Admission.ts"), "utf8");
@@ -53,6 +57,13 @@ describe("Issue #62 governed authority chain", () => {
       "on conflict on constraint autopsy_entitlements_order_id_key",
     );
     expect(webhookConflictFix).not.toContain("on conflict (order_id)");
+  });
+
+  it("repairs required Autopsy context reference rows after a migration-version collision", () => {
+    expect(contextReferenceRepair).toContain("('startup', 'Startup'");
+    expect(contextReferenceRepair).toContain("('never', 'Never owned");
+    expect(contextReferenceRepair).toContain("on conflict (code) do update");
+    expect(contextReferenceRepair).toContain("to authenticated");
   });
 
   it("does not mount authenticated First 5 Jobs before Supabase grants it", () => {
