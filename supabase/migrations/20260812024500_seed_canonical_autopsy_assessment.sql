@@ -1,6 +1,13 @@
 -- Canonical Autopsy assessment reference content.
 -- Exported read-only from autopsy-canonical; contains no candidate or operational data.
 
+insert into public.dimensions
+select * from jsonb_populate_recordset(
+  null::public.dimensions,
+  $dimensions$[{"sort_order":1,"dimension_code":"cash_reality","dimension_name":"Cash Reality"},{"sort_order":2,"dimension_code":"economic_literacy","dimension_name":"Economic Literacy"},{"sort_order":5,"dimension_code":"execution_discipline","dimension_name":"Execution Discipline"},{"sort_order":3,"dimension_code":"market_reality","dimension_name":"Market Reality"},{"sort_order":4,"dimension_code":"operational_capacity","dimension_name":"Operational Capacity"},{"sort_order":6,"dimension_code":"psychological_resilience","dimension_name":"Psychological Resilience"}]$dimensions$::jsonb
+)
+on conflict (dimension_code) do nothing;
+
 insert into public.questions
 select * from jsonb_populate_recordset(
   null::public.questions,
