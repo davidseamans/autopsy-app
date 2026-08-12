@@ -4399,7 +4399,7 @@ function Stage1DashboardInner() {
           primary={`${quoteConvPct}%`}
           secondaries={[
             { k: "Quotes potential", v: potentialQuotes },
-            { k: "Written quotes", v: quotesSent },
+            { k: "Quotes generated", v: quotesSent },
             { k: "Quotes accepted", v: quotesAccepted },
             { k: "Quotes rejected", v: quotesRejected },
             { k: "Quotes outstanding", v: quotesOutstanding },

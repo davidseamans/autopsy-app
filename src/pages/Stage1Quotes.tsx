@@ -157,16 +157,16 @@ export default function Stage1Quotes() {
         </CardContent>
       </Card>
 
-      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Written quotes: {counts.sent}</span> from the start of First 5 Jobs. The selected panel controls the register below.</p>
+      <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Quotes generated: {counts.sent}</span> from the start of First 5 Jobs. The selected panel controls the register below.</p>
       <div className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${tourActive && tourStep === 1 ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
-        <FunnelCount label="All written quotes" value={counts.sent} active={filter === "all"} onClick={() => setFilter("all")} />
+        <FunnelCount label="All quotes generated" value={counts.sent} active={filter === "all"} onClick={() => setFilter("all")} />
         <FunnelCount label="Outstanding" value={counts.outstanding} active={filter === "outstanding"} highlighted={tourActive && tourStep === 2} onClick={() => setFilter("outstanding")} />
         <FunnelCount label="Rejected" value={counts.rejected} active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
         <FunnelCount label="Accepted" value={counts.accepted} active={filter === "accepted"} highlighted={tourActive && tourStep === 4} onClick={() => setFilter("accepted")} />
       </div>
 
       <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter === "all" ? "All written quotes" : `${filter.charAt(0).toUpperCase() + filter.slice(1)} quotes`}</CardTitle><CardDescription>Showing {filteredQuotes.length} of {counts.sent}. Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter === "all" ? "All quotes generated" : `${filter.charAt(0).toUpperCase() + filter.slice(1)} quotes`}</CardTitle><CardDescription>Showing {filteredQuotes.length} of {counts.sent}. Change the status here, or open a quote to print it and review the detail.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>

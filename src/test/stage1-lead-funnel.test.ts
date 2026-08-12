@@ -80,7 +80,7 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(quotesPage).toContain("Create a quote");
     expect(quotesPage).toContain("Potential quotes");
     expect(quotesPage).toContain("Capture only enough detail to arrange the appointment");
-    expect(quotesPage).toContain("All written quotes");
+    expect(quotesPage).toContain("All quotes generated");
     expect(quotesPage).toContain("Showing {filteredQuotes.length} of {counts.sent}");
     expect(quotesPage).toContain('label="Outstanding"');
     expect(quotesPage).toContain('label="Rejected"');
@@ -96,6 +96,7 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(lineageMigration).toContain("v_quote.stage1_lead_id, v_quote.id");
     expect(dashboard).toContain("Lead Method Performance");
     expect(dashboard).toContain('{ k: "Quotes potential", v: potentialQuotes }');
+    expect(dashboard).toContain('{ k: "Quotes generated", v: quotesSent }');
   });
 
   it("keeps Stage 1 navigation separate from Core and carries the run context", () => {
