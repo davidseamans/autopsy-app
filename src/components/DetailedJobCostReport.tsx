@@ -996,7 +996,7 @@ export function DetailedJobCostReport({
               </h3>
               <div className="flex flex-wrap items-end gap-2">
                 {!readOnly && (
-                  <div className="space-y-1">
+                  <div className="scroll-mt-24 space-y-1 rounded-md" data-stage1-tour="actual-hours">
                     <Label htmlFor="report-actual-hours" className="text-xs">Actual hours worked</Label>
                     <div className="flex gap-2">
                       <Input id="report-actual-hours" aria-label="Actual hours worked" className="h-9 w-28" type="number" min={0} step="0.25" value={actualHoursDraft} onChange={(event) => setActualHoursDraft(event.target.value)} />
@@ -1011,7 +1011,7 @@ export function DetailedJobCostReport({
             </div>
             <div className="grid gap-3 rounded-md bg-muted/40 p-3 text-sm sm:grid-cols-3">
               <div><p className="text-xs text-muted-foreground">Hours estimated</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 ? `${unit.quotedLabourHours} hours` : "—"}</p></div>
-              <div><p className="text-xs text-muted-foreground">Actual hours</p><p className="font-medium">{(unit.actualLabourHours ?? 0) > 0 ? `${unit.actualLabourHours} hours` : "—"}</p></div>
+              <div className="scroll-mt-24 rounded-md" data-stage1-tour={readOnly ? "actual-hours" : undefined}><p className="text-xs text-muted-foreground">Actual hours</p><p className="font-medium">{(unit.actualLabourHours ?? 0) > 0 ? `${unit.actualLabourHours} hours` : "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Hours variance</p><p className="font-medium">{(unit.quotedLabourHours ?? 0) > 0 && unit.actualLabourHours != null ? `${unit.actualLabourHours - (unit.quotedLabourHours ?? 0) >= 0 ? "+" : ""}${unit.actualLabourHours - (unit.quotedLabourHours ?? 0)} hours` : "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Clean type</p><p className="font-medium">{unit.quotedCleanTypeLabel ?? "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Consumables budget</p><p className="font-medium">{(unit.quotedConsumablesBudget ?? 0) > 0 ? `$${fmt(unit.quotedConsumablesBudget ?? 0)}` : "—"}</p></div>
