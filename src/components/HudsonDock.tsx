@@ -8,6 +8,7 @@ const screenSteps: Array<{ area: HudsonScreenFocus; label: string; step: number 
   { area: "leads", label: "Leads", step: 2 },
   { area: "quotes", label: "Quotes", step: 3 },
   { area: "jobs", label: "Jobs", step: 4 },
+  { area: "labour-hours", label: "Labour hours", step: 12 },
   { area: "margin", label: "Margin", step: 11 },
   { area: "debtors", label: "Money owing", step: 10 },
 ];
@@ -104,7 +105,7 @@ export default function HudsonDock() {
       <iframe title="Hudson video conversation" src={session.conversationUrl} allow="camera; microphone; fullscreen; display-capture" referrerPolicy="no-referrer" className="h-[min(52vh,520px)] w-full border-0 bg-slate-950" />
       <div className="space-y-2 border-t bg-emerald-50 px-4 py-3 text-xs text-emerald-950">
         <p>Hudson can explain what is on screen. BuildOS alone controls highlights, records, payment, Verdict and progression.</p>
-        <div className="grid grid-cols-5 gap-1" aria-label="First 5 Jobs screen focus">
+        <div className="grid grid-cols-3 gap-1 sm:grid-cols-6" aria-label="First 5 Jobs screen focus">
           {screenSteps.map((item) => <Button key={item.area} type="button" size="sm" variant={screenFocus === item.area ? "default" : "outline"} className="h-auto min-h-9 whitespace-normal px-1 py-1 text-[10px] leading-tight" onClick={() => showArea(item.area)}>{item.label}</Button>)}
         </div>
         {endError ? <p role="alert" className="rounded-md bg-red-50 p-2 text-red-800">{endError} Use the close button to try again; the automatic Tavus timeout remains active.</p> : null}
