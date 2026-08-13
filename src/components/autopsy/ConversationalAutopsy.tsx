@@ -77,7 +77,15 @@ type Reconciliation = {
     confidence: number;
     fact_flags: string[];
   }>;
-  runtime: NonNullable<Interpretation["runtime"]>;
+  runtime: NonNullable<Interpretation["runtime"]> & {
+    reconciliation_source?: "whole_run" | "baseline_fallback";
+  };
+};
+
+type BaselineSelection = {
+  question_id: string;
+  selected_option_id: string;
+  confidence: number;
 };
 
 const SUBJECT_PRESENTATION: Record<string, { prompt: string; boundary: string }> = {
@@ -232,6 +240,7 @@ export function ConversationalAutopsy() {
   const interpretationRef = useRef<Interpretation | null>(null);
   const confirmationSavingRef = useRef(false);
   const assessmentMemoryRef = useRef<AssessmentMemoryEntry[]>([]);
+  const baselineSelectionsRef = useRef<BaselineSelection[]>([]);
   const initializationRef = useRef<{
     email: string;
     promise: Promise<{
@@ -239,6 +248,7 @@ export function ConversationalAutopsy() {
       ordered: GatewayQuestion[];
       resumeIndex: number;
       priorMemory: AssessmentMemoryEntry[];
+      priorSelections: BaselineSelection[];
     }>;
     presented: boolean;
   } | null>(null);
@@ -352,11 +362,16 @@ export function ConversationalAutopsy() {
                 };
               })
               .filter((entry): entry is AssessmentMemoryEntry => entry !== null);
-            return { id, ordered, resumeIndex, priorMemory };
+            const priorSelections = prior.map((entry) => ({
+              question_id: entry.question_id,
+              selected_option_id: entry.selected_option_id,
+              confidence: 1,
+            }));
+            return { id, ordered, resumeIndex, priorMemory, priorSelections };
           })();
           initializationRef.current = { email, promise, presented: false };
         }
-        const { id, ordered, resumeIndex, priorMemory } =
+        const { id, ordered, resumeIndex, priorMemory, priorSelections } =
           await initializationRef.current.promise;
         if (cancelled) return;
         if (initializationRef.current.presented) return;
@@ -365,6 +380,7 @@ export function ConversationalAutopsy() {
         setQuestions(ordered);
         setIndex(resumeIndex);
         assessmentMemoryRef.current = priorMemory;
+        baselineSelectionsRef.current = priorSelections;
         const first = ordered[resumeIndex];
         const firstPresentation = presentationFor(first, resumeIndex);
         activeSubjectRef.current = {
@@ -463,6 +479,16 @@ export function ConversationalAutopsy() {
         interpreted_summary: chosen.plain_summary.trim(),
       },
     ];
+    baselineSelectionsRef.current = [
+      ...baselineSelectionsRef.current.filter(
+        (selection) => selection.question_id !== String(currentQuestion.question_id),
+      ),
+      {
+        question_id: String(currentQuestion.question_id),
+        selected_option_id: String(chosen.selected_option_id),
+        confidence: chosen.confidence,
+      },
+    ];
     if (index === 11) {
       setStatus("Your answers are saved. Jane is checking the whole conversation before preparing your Verdict…");
       const reconciliationResponse = await fetch("/api/autopsy-assessment-reconcile", {
@@ -483,6 +509,7 @@ export function ConversationalAutopsy() {
             };
           }),
           assessment_memory: assessmentMemoryRef.current,
+          baseline_selections: baselineSelectionsRef.current,
         }),
       });
       const reconciliation = await reconciliationResponse.json() as Reconciliation & { error?: string };
