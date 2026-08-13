@@ -6,6 +6,7 @@ const endApi = readFileSync("api/hudson/session-end.ts", "utf8");
 const orientation = readFileSync("src/pages/Stage1Orientation.tsx", "utf8");
 const dock = readFileSync("src/components/HudsonDock.tsx", "utf8");
 const shell = readFileSync("src/components/AppShell.tsx", "utf8");
+const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
 
 describe("Hudson governed session boundary", () => {
   it("authenticates, verifies run ownership and keeps the upstream credential server-side", () => {
@@ -25,6 +26,15 @@ describe("Hudson governed session boundary", () => {
 
   it("does not permit First 5 Jobs training before completed Autopsy", () => {
     expect(api).toContain('mode === "first_5_jobs" && run.status !== "completed"');
+  });
+
+  it("inherits the governed Autopsy conversation without gaining assessment authority", () => {
+    expect(api).toContain('new Set(["autopsy", "first_5_jobs"])');
+    expect(runtime).toContain("conducts the existing twelve-subject Autopsy in its governed order");
+    expect(runtime).toContain("asks at most one narrow follow-up");
+    expect(runtime).toContain("leaves reconciliation, scoring, hard-fail evaluation and Verdict to BuildOS");
+    expect(runtime).toContain("must not implement a parallel Autopsy");
+    expect(runtime).toContain("must never mention elapsed time, remaining time");
   });
 
   it("states Hudson's non-authoritative limits at the point of use", () => {
