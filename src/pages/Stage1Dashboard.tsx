@@ -811,7 +811,7 @@ function BusinessDetailsDialog({
         <DialogHeader>
           <DialogTitle>Before you start First 5 Jobs</DialogTitle>
           <DialogDescription>
-            Jane will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
+            Hudson will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -3095,7 +3095,7 @@ function Stage1DashboardInner() {
           <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <Compass className={orientationComplete ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
-              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Jane’s handover or your ABN and business-name pathway at any time." : "Jane will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
+              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Hudson’s handover or your ABN and business-name pathway at any time." : "Hudson will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
             </div>
             <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
           </CardContent>
@@ -3152,7 +3152,7 @@ function Stage1DashboardInner() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-amber-900 space-y-1">
-              <p>Jane: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
+              <p>Hudson: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
               {bd.error ? <p className="text-xs text-destructive">{bd.error}</p> : null}
             </div>
             <Button onClick={() => setBdOpen(true)} className="gap-2 shrink-0">
