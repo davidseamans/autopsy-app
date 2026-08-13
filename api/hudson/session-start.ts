@@ -62,7 +62,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (runError) throw runError;
     if (!run) return res.status(403).json({ error: "This Autopsy run does not belong to your account." });
     if (mode === "first_5_jobs" && run.status !== "completed") {
-      return res.status(409).json({ error: "First 5 Jobs training is available after the governed Autopsy is completed." });
+      return res.status(409).json({ error: "First 5 Jobs orientation is available after the governed Autopsy is completed." });
     }
 
     const { error: reserveError } = await service.from("hudson_session_starts").insert({
