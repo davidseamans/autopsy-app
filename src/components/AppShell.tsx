@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import HudsonDock from "@/components/HudsonDock";
 
 const navGroups = [
   {
@@ -95,6 +96,7 @@ export default function AppShell() {
       <main className="min-w-0">
         <Outlet />
       </main>
+      <HudsonDock />
     </div>
   );
 }

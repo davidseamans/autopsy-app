@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, PlayCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, MessageCircle, PlayCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/lib/auth";
 import { fetchBusinessIdentity } from "@/lib/businessIdentity";
+import { openHudsonDock } from "@/lib/hudsonDock";
 import {
   fetchStage1Onboarding,
   saveStage1Onboarding,
@@ -29,6 +31,7 @@ const initialProgress: Stage1OnboardingProgress = {
 };
 
 export default function Stage1Orientation() {
+  const { session } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const runId = searchParams.get("runId") ?? "";
@@ -36,6 +39,8 @@ export default function Stage1Orientation() {
   const [businessVerified, setBusinessVerified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [startingHudson, setStartingHudson] = useState(false);
+  const hudsonRequestId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,6 +84,32 @@ export default function Stage1Orientation() {
     }
   }
 
+  async function startHudson() {
+    if (!runId || !session?.access_token || startingHudson) return;
+    setStartingHudson(true);
+    try {
+      hudsonRequestId.current ??= crypto.randomUUID();
+      const response = await fetch("/api/hudson/session-start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ requestId: hudsonRequestId.current, runId, mode: "first_5_jobs" }),
+      });
+      const payload = await response.json() as { conversationUrl?: string; error?: string };
+      if (!response.ok || !payload.conversationUrl) throw new Error(payload.error || "Hudson could not start.");
+      const requestId = hudsonRequestId.current;
+      hudsonRequestId.current = null;
+      openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId });
+    } catch (cause) {
+      if (cause instanceof Error && cause.message.includes("start a new session")) hudsonRequestId.current = null;
+      toast.error(cause instanceof Error ? cause.message : "Hudson could not start.");
+    } finally {
+      setStartingHudson(false);
+    }
+  }
+
   if (loading) {
     return <div className="container max-w-3xl py-12 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading your orientation…</div>;
   }
@@ -96,6 +127,22 @@ export default function Stage1Orientation() {
       {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       {!error ? <>
+        <Card className="border-emerald-200 bg-emerald-50/40">
+          <CardHeader>
+            <div className="flex items-start gap-3">
+              <span className="rounded-full bg-emerald-900 p-2 text-white"><MessageCircle className="h-5 w-5" /></span>
+              <div><CardTitle>Meet Hudson</CardTitle><CardDescription className="mt-1">A conversational trainer for your First 5 Jobs orientation.</CardDescription></div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm leading-6">
+            <p>Hudson can explain the screen, ask questions, clarify your answers and help you practise. He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.</p>
+            <Button type="button" onClick={startHudson} disabled={startingHudson || !session?.access_token} className="gap-2 bg-emerald-900 text-white hover:bg-emerald-800">
+              {startingHudson ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+              {startingHudson ? "Opening Hudson…" : "Start a session with Hudson"}
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card className="border-sky-200 bg-sky-50/40">
           <CardHeader>
             <div className="flex items-start gap-3">
