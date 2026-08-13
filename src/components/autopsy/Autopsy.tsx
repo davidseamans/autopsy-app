@@ -2992,12 +2992,12 @@ function CandidateVerdict({
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-slate-900 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Jane · Verdict handover</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Hudson · Verdict handover</p>
             <p className="mt-2 leading-7 text-slate-700">
               {verdictVoiceState === "speaking"
-                ? "Jane is explaining your result and the next option available."
+                ? "Hudson is explaining your result and the next option available."
                 : verdictVoiceState === "error"
-                  ? "Jane’s explanation is written below. You can also hear it again."
+                  ? "Hudson’s explanation is written below. You can also hear it again."
                   : "Your result and next option are ready to review."}
             </p>
           </div>
@@ -3009,7 +3009,7 @@ function CandidateVerdict({
               disabled={verdictVoiceState === "speaking" || !session?.access_token}
               className="shrink-0 border-sky-500 bg-white text-sky-800 hover:bg-sky-100"
             >
-              {verdictVoiceState === "speaking" ? "Jane is speaking…" : "Hear Jane explain this result"}
+              {verdictVoiceState === "speaking" ? "Hudson is speaking…" : "Hear Hudson explain this result"}
             </Button>
           ) : null}
         </div>
