@@ -7,6 +7,8 @@ const orientation = readFileSync("src/pages/Stage1Orientation.tsx", "utf8");
 const dock = readFileSync("src/components/HudsonDock.tsx", "utf8");
 const shell = readFileSync("src/components/AppShell.tsx", "utf8");
 const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
+const dashboard = readFileSync("src/pages/Stage1Dashboard.tsx", "utf8");
+const report = readFileSync("src/components/DetailedJobCostReport.tsx", "utf8");
 
 describe("Hudson governed session boundary", () => {
   it("authenticates, verifies run ownership and keeps the upstream credential server-side", () => {
@@ -54,6 +56,14 @@ describe("Hudson governed session boundary", () => {
     expect(dock).toContain('tour=hudson&step=${target.step}');
     expect(orientation).toContain('tour=hudson&step=2');
     expect(dock).toContain("BuildOS alone controls highlights, records, payment, Verdict and progression.");
+  });
+
+  it("opens and highlights the existing actual labour-hours field without writing it", () => {
+    expect(dock).toContain('{ area: "labour-hours", label: "Labour hours", step: 12 }');
+    expect(dashboard).toContain("tourStep === 12 && hudsonTourActive");
+    expect(dashboard).toContain("setReportOpen(true)");
+    expect(dashboard).toContain("'[data-stage1-tour=\"actual-hours\"]'");
+    expect(report).toContain('data-stage1-tour="actual-hours"');
   });
 
   it("ends Tavus through an authenticated, owner-bound and idempotent server path", () => {
