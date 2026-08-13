@@ -40,7 +40,9 @@ describe("Hudson governed session boundary", () => {
     expect(shell).toContain("<HudsonDock />");
     expect(dock).toContain('allow="camera; microphone; fullscreen; display-capture"');
     expect(dock).toContain('url.hostname === "tavus.daily.co"');
-    expect(dock).toContain("Open governed 5JD highlights");
+    expect(dock).toContain("Show Hudson beside First 5 Jobs");
+    expect(dock).toContain('tour=hudson&step=${target.step}');
+    expect(orientation).toContain('tour=hudson&step=2');
     expect(dock).toContain("BuildOS alone controls highlights, records, payment, Verdict and progression.");
   });
 
