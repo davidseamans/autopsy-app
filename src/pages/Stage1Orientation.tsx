@@ -131,7 +131,7 @@ export default function Stage1Orientation() {
           <CardHeader>
             <div className="flex items-start gap-3">
               <span className="rounded-full bg-emerald-900 p-2 text-white"><MessageCircle className="h-5 w-5" /></span>
-              <div><CardTitle>Meet Hudson</CardTitle><CardDescription className="mt-1">A conversational trainer for your First 5 Jobs orientation.</CardDescription></div>
+              <div><CardTitle>Meet Hudson</CardTitle><CardDescription className="mt-1">Your conversational guide to the First 5 Jobs screen and six-week test.</CardDescription></div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-6">
