@@ -1,7 +1,7 @@
 export const HUDSON_DOCK_OPEN = "buildos:hudson-dock-open";
 export const HUDSON_SCREEN_FOCUS = "buildos:hudson-screen-focus";
 
-export type HudsonScreenFocus = "leads" | "quotes" | "jobs" | "margin" | "debtors";
+export type HudsonScreenFocus = "leads" | "quotes" | "jobs" | "labour-hours" | "margin" | "debtors";
 
 export type HudsonDockDetail = {
   conversationUrl: string;
