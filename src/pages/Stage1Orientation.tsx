@@ -102,6 +102,7 @@ export default function Stage1Orientation() {
       const requestId = hudsonRequestId.current;
       hudsonRequestId.current = null;
       openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId });
+      navigate(`/stage-1?runId=${encodeURIComponent(runId)}&tour=hudson&step=2`);
     } catch (cause) {
       if (cause instanceof Error && cause.message.includes("start a new session")) hudsonRequestId.current = null;
       toast.error(cause instanceof Error ? cause.message : "Hudson could not start.");
