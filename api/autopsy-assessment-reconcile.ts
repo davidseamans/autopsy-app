@@ -21,6 +21,11 @@ type Memory = {
   answer: string;
   interpreted_summary?: string;
 };
+type BaselineSelection = {
+  question_id: string | number;
+  selected_option_id: string | number;
+  confidence?: number;
+};
 
 const extractText = (payload: any): string =>
   typeof payload?.output_text === "string"
@@ -51,6 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const memory = (Array.isArray(req.body?.assessment_memory)
     ? req.body.assessment_memory
     : []).slice(0, 12) as Memory[];
+  const baselineSelections = (Array.isArray(req.body?.baseline_selections)
+    ? req.body.baseline_selections
+    : []).slice(0, 12) as BaselineSelection[];
   if (
     questions.length !== 12 ||
     memory.length !== 12 ||
@@ -77,13 +85,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }));
   const fullText = disclosed.map((m) => m.answer).join("\n");
 
+  const normaliseSelections = (rawSelections: any[], source: "whole_run" | "baseline_fallback") => {
+    const byQuestion = new Map(governed.map((q) => [q.question_id, q]));
+    const seen = new Set<string>();
+    const selections = rawSelections.map((selection: any) => {
+      const questionId = String(selection.question_id);
+      const question = byQuestion.get(questionId);
+      if (!question || seen.has(questionId)) throw new Error("subject mismatch");
+      seen.add(questionId);
+      const allowed = question.options.map((o) => o.id);
+      let selected = String(selection.selected_option_id);
+      if (!allowed.includes(selected)) throw new Error("option mismatch");
+      selected = applyConstitutionalScoreFloor(
+        question.subject_code,
+        fullText,
+        selected,
+        question.options,
+      );
+      if (!allowed.includes(selected)) throw new Error("reconciled option mismatch");
+      return {
+        question_id: questionId,
+        selected_option_id: selected,
+        confidence: Math.max(0, Math.min(1, Number(selection.confidence) || 0)),
+        fact_flags: privacySafeFactFlags(fullText),
+      };
+    });
+    if (selections.length !== 12 || seen.size !== 12) throw new Error("incomplete");
+    return {
+      selections,
+      runtime: {
+        prompt_version: AUTOPSY_ASSESSMENT_PROMPT_VERSION,
+        contract_version: AUTOPSY_ASSESSMENT_CONTRACT_VERSION,
+        policy_gate_version: AUTOPSY_ASSESSMENT_POLICY_GATE_VERSION,
+        reconciliation_source: source,
+      },
+    };
+  };
+
+  const baselineFallback = (reason: string) => {
+    try {
+      const result = normaliseSelections(baselineSelections, "baseline_fallback");
+      console.warn("Assessment reconciliation used governed baseline fallback", { reason });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Assessment reconciliation baseline fallback failed", {
+        reason,
+        error: error instanceof Error ? error.message : "unknown",
+        baseline_count: baselineSelections.length,
+      });
+      return res.status(502).json({ error: "Jane could not complete a reliable final cross-check." });
+    }
+  };
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: process.env.OPENAI_CONVERSATION_MODEL || "gpt-5-mini",
       reasoning: { effort: "low" },
-      max_output_tokens: 1800,
+      max_output_tokens: 4000,
       text: {
         format: {
           type: "json_schema",
@@ -143,46 +203,20 @@ systemisation, not a complete tested method. Return JSON only.`,
   });
   const payload = await response.json();
   if (!response.ok) {
-    console.error("Assessment reconciliation failed", response.status, payload?.error?.code);
-    return res.status(502).json({ error: "Jane could not complete the final cross-check." });
+    console.error("Assessment reconciliation failed", {
+      status: response.status,
+      code: payload?.error?.code,
+      type: payload?.error?.type,
+    });
+    return baselineFallback(`upstream_${response.status}_${payload?.error?.code ?? "unknown"}`);
   }
 
   try {
     const parsed = JSON.parse(extractText(payload));
-    const byQuestion = new Map(governed.map((q) => [q.question_id, q]));
-    const seen = new Set<string>();
-    const selections = parsed.selections.map((selection: any) => {
-      const questionId = String(selection.question_id);
-      const question = byQuestion.get(questionId);
-      if (!question || seen.has(questionId)) throw new Error("subject mismatch");
-      seen.add(questionId);
-      const allowed = question.options.map((o) => o.id);
-      let selected = String(selection.selected_option_id);
-      if (!allowed.includes(selected)) throw new Error("option mismatch");
-      selected = applyConstitutionalScoreFloor(
-        question.subject_code,
-        fullText,
-        selected,
-        question.options,
-      );
-      if (!allowed.includes(selected)) throw new Error("reconciled option mismatch");
-      return {
-        question_id: questionId,
-        selected_option_id: selected,
-        confidence: Math.max(0, Math.min(1, Number(selection.confidence) || 0)),
-        fact_flags: privacySafeFactFlags(fullText),
-      };
-    });
-    if (selections.length !== 12 || seen.size !== 12) throw new Error("incomplete");
-    return res.status(200).json({
-      selections,
-      runtime: {
-        prompt_version: AUTOPSY_ASSESSMENT_PROMPT_VERSION,
-        contract_version: AUTOPSY_ASSESSMENT_CONTRACT_VERSION,
-        policy_gate_version: AUTOPSY_ASSESSMENT_POLICY_GATE_VERSION,
-      },
-    });
-  } catch {
-    return res.status(502).json({ error: "Jane could not complete a reliable final cross-check." });
+    return res.status(200).json(normaliseSelections(parsed.selections, "whole_run"));
+  } catch (error) {
+    return baselineFallback(
+      `invalid_upstream_output_${error instanceof Error ? error.message : "unknown"}`,
+    );
   }
 }
