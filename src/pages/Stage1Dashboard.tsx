@@ -1693,6 +1693,15 @@ function Stage1DashboardInner() {
 
   useEffect(() => {
     if (!tourActive) return;
+    let highlighted: Element | null = null;
+    let revealTimer: number | null = null;
+    const reveal = (selector: string) => {
+      revealTimer = window.setTimeout(() => {
+        highlighted = document.querySelector(selector);
+        highlighted?.classList.add("relative", "z-40", "ring-4", "ring-sky-400", "ring-offset-4");
+        highlighted?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 450);
+    };
     if (tourStep === 2) setDrill("leads");
     else if (tourStep === 4) setDrill("jobs");
     else if (tourStep >= 5 && tourStep <= 8 && isDemo) {
@@ -1705,8 +1714,21 @@ function Stage1DashboardInner() {
     }
     else if (tourStep === 9) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
     else if (tourStep === 10) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
+    else if (tourStep === 12 && hudsonTourActive) {
+      setDrill(null);
+      const firstJob = units[0];
+      if (firstJob) {
+        setReportN(firstJob.n);
+        setReportOpen(true);
+        reveal('[data-stage1-tour="actual-hours"]');
+      }
+    }
     else setDrill(null);
-  }, [isDemo, tourActive, tourStep]);
+    return () => {
+      if (revealTimer != null) window.clearTimeout(revealTimer);
+      highlighted?.classList.remove("relative", "z-40", "ring-4", "ring-sky-400", "ring-offset-4");
+    };
+  }, [hudsonTourActive, isDemo, tourActive, tourStep, units]);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<Stage1LeadActivity[]>(isDemo ? DEMO_LEAD_ACTIVITIES : []);
   const [leadRecords, setLeadRecords] = useState<Stage1LeadRecord[]>(isDemo ? DEMO_LEAD_RECORDS : []);
