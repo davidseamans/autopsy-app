@@ -271,7 +271,7 @@ export function ConversationalAutopsy() {
     lastSpokenTextRef.current = text;
     audioRef.current?.pause();
     setSpeaking(true);
-    setStatus("Jane is speaking…");
+    setStatus("Hudson is speaking…");
     try {
       const response = await fetch("/api/autopsy-speech", {
         method: "POST",
@@ -295,19 +295,19 @@ export function ConversationalAutopsy() {
         audio.onerror = () => {
           URL.revokeObjectURL(url);
           setSpeaking(false);
-          setStatus("Jane's words are on screen. Use Hear Jane to try the voice again.");
+          setStatus("Hudson's words are on screen. Use Hear Hudson to try the voice again.");
           resolve();
         };
         void audio.play().catch(() => {
           URL.revokeObjectURL(url);
           setSpeaking(false);
-          setStatus("Jane's words are on screen. Use Hear Jane to try the voice again.");
+          setStatus("Hudson's words are on screen. Use Hear Hudson to try the voice again.");
           resolve();
         });
       });
     } catch {
       setSpeaking(false);
-      setStatus("Jane's words are on screen. Use Hear Jane to try the voice again.");
+      setStatus("Hudson's words are on screen. Use Hear Hudson to try the voice again.");
     }
   }, [session?.access_token]);
 
@@ -396,7 +396,7 @@ export function ConversationalAutopsy() {
         setStatus(
           introductionPresented || resumeIndex > 0
             ? "Resuming your Autopsy."
-            : "Jane is explaining how Autopsy will work.",
+            : "Hudson is explaining how Autopsy will work.",
         );
         const opening = introductionPresented || resumeIndex > 0
           ? `Welcome back. Let us continue. ${firstPresentation.prompt}`
@@ -451,7 +451,7 @@ export function ConversationalAutopsy() {
       !chosen.selected_option_id ||
       chosen.question_id !== String(currentQuestion.question_id)
     ) {
-      throw new Error("Jane lost the current subject before it could be saved.");
+      throw new Error("Hudson lost the current subject before it could be saved.");
     }
     await recordAutopsyAnswer({
       run_id: runId,
@@ -490,7 +490,7 @@ export function ConversationalAutopsy() {
       },
     ];
     if (index === 11) {
-      setStatus("Your answers are saved. Jane is checking the whole conversation before preparing your Verdict…");
+      setStatus("Your answers are saved. Hudson is checking the whole conversation before preparing your Verdict…");
       const reconciliationResponse = await fetch("/api/autopsy-assessment-reconcile", {
         method: "POST",
         headers: {
@@ -604,7 +604,7 @@ export function ConversationalAutopsy() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Jane could not interpret that answer.");
+      if (!response.ok) throw new Error(payload.error || "Hudson could not interpret that answer.");
       const next = payload as Interpretation;
       if (
         String(next.question_id ?? "") !== questionId ||
@@ -654,13 +654,13 @@ export function ConversationalAutopsy() {
       setCombinedAnswer(candidateAnswer);
       if (next.selected_option_id && !next.clarifying_question) {
         storeInterpretation(null);
-        setStatus("Jane has understood. Moving to the next subject…");
+        setStatus("Hudson has understood. Moving to the next subject…");
         await saveSelectionAndAdvance(next, candidateAnswer);
       } else {
         storeInterpretation(next);
         setClarificationCount((count) => Math.min(2, count + 1));
         const words = next.clarifying_question || "Could you tell me a little more about that?";
-        setStatus("Jane needs one point clarified before anything is saved.");
+        setStatus("Hudson needs one point clarified before anything is saved.");
         if (embeddedFlightDeck) {
           postToFlightDeck({
             type: "BUILDOS_AUTOPSY_EVENT",
@@ -674,7 +674,7 @@ export function ConversationalAutopsy() {
         }
       }
     } catch (cause) {
-      setError(candidateSafeFailure("Jane could not complete that step. Your answer has not been lost. Please try again."));
+      setError(candidateSafeFailure("Hudson could not complete that step. Your answer has not been lost. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -696,7 +696,7 @@ export function ConversationalAutopsy() {
     try {
       await saveSelectionAndAdvance(confirmedInterpretation);
     } catch (cause) {
-      setError(candidateSafeFailure("Jane could not save that step. Please try again."));
+      setError(candidateSafeFailure("Hudson could not save that step. Please try again."));
     } finally {
       confirmationSavingRef.current = false;
       setBusy(false);
@@ -749,7 +749,7 @@ export function ConversationalAutopsy() {
       setListening(false);
       const captured = transcriptRef.current.trim();
       if (captured) {
-        setStatus("Jane is thinking…");
+        setStatus("Hudson is thinking…");
         handleSpokenTurnRef.current?.(captured);
       } else {
         setStatus("I did not catch that. Use the microphone or type your answer.");
@@ -811,7 +811,7 @@ export function ConversationalAutopsy() {
       setAnswer(text);
       const inputMode = event.data.inputMode === "text" ? "text" : "voice";
       setLastInputMode(inputMode);
-      setStatus("Jane is considering what you said…");
+      setStatus("Hudson is considering what you said…");
       handleSpokenTurnRef.current?.(text);
     };
     window.addEventListener("message", receiveFlightDeckAnswer);
@@ -865,10 +865,10 @@ export function ConversationalAutopsy() {
         )}>
           <p className="text-[10px] font-bold tracking-[0.2em] text-[#b78525]">AUTOPSY · TEST CONVERSATION</p>
           <blockquote className="my-auto font-serif text-2xl leading-snug text-[#dce8ec] xl:text-3xl">
-            “Speak naturally. Jane will listen, clarify and keep the twelve subjects in the background.”
+            “Speak naturally. Hudson will listen, clarify and keep the twelve subjects in the background.”
           </blockquote>
           <small className="text-sm leading-6 text-[#718796]">
-            Jane keeps the twelve subjects in order. The analysis stays quietly in the background.
+            Hudson keeps the twelve subjects in order. The analysis stays quietly in the background.
           </small>
         </aside>
 
@@ -878,8 +878,8 @@ export function ConversationalAutopsy() {
         )}>
           <header className="flex items-center justify-between gap-5">
             <div className="flex items-center gap-4">
-              <i className="grid h-12 w-12 place-items-center rounded-full border border-[#38aafa] not-italic text-[#38aafa] shadow-[0_0_28px_rgba(56,170,250,.18)]">J</i>
-              <p className="text-[11px] font-bold tracking-[0.18em]">JANE<small className="mt-1 block font-normal text-[#7f95a7]">Autopsy · listening and guiding</small></p>
+              <i className="grid h-12 w-12 place-items-center rounded-full border border-[#38aafa] not-italic text-[#38aafa] shadow-[0_0_28px_rgba(56,170,250,.18)]">H</i>
+              <p className="text-[11px] font-bold tracking-[0.18em]">HUDSON<small className="mt-1 block font-normal text-[#7f95a7]">Autopsy · listening and guiding</small></p>
             </div>
             <span className="font-mono text-xs text-[#7f95a7]">{questions.length ? `${index + 1} OF 12` : "PREPARING"}</span>
           </header>
@@ -923,13 +923,13 @@ export function ConversationalAutopsy() {
                 ) : null}
                 <button type="submit" disabled={busy || listening || !answer.trim()} className="border border-[#38aafa] px-6 py-3 text-sm font-bold text-[#edf8fb] disabled:opacity-30">CONTINUE</button>
                 {!embeddedFlightDeck ? (
-                  <button type="button" onClick={() => void speak(lastSpokenTextRef.current || currentPrompt)} disabled={busy || speaking || !lastSpokenTextRef.current} className="ml-auto border-0 bg-transparent text-xs font-bold tracking-[0.12em] text-[#7f95a7] disabled:opacity-30">HEAR JANE AGAIN</button>
+                  <button type="button" onClick={() => void speak(lastSpokenTextRef.current || currentPrompt)} disabled={busy || speaking || !lastSpokenTextRef.current} className="ml-auto border-0 bg-transparent text-xs font-bold tracking-[0.12em] text-[#7f95a7] disabled:opacity-30">HEAR HUDSON AGAIN</button>
                 ) : null}
               </div>
             </form>
           ) : null}
 
-          <p className="mt-5 text-sm text-[#8ea5b4]">{busy ? "Jane is considering what you said…" : status}</p>
+          <p className="mt-5 text-sm text-[#8ea5b4]">{busy ? "Hudson is considering what you said…" : status}</p>
           {error ? <p className="mt-3 border border-[#7b3434] bg-[#2b171b] p-3 text-sm text-[#ffb7b7]">{error}</p> : null}
         </article>
       </section>
