@@ -66,6 +66,14 @@ describe("Hudson governed session boundary", () => {
     expect(report).toContain('data-stage1-tour="actual-hours"');
   });
 
+  it("lets the operator move Hudson away from the field being explained", () => {
+    expect(dock).toContain("onPointerDown={beginDrag}");
+    expect(dock).toContain("Drag this top bar to move me");
+    expect(dock).toContain("window.addEventListener(\"pointermove\", move)");
+    expect(dock).toContain("window.innerWidth - rect.width");
+    expect(dock).toContain("window.innerHeight - rect.height");
+  });
+
   it("ends Tavus through an authenticated, owner-bound and idempotent server path", () => {
     expect(endApi).toContain("authenticateRequest(req)");
     expect(endApi).toContain('.eq("owner_user_id", user.id)');
