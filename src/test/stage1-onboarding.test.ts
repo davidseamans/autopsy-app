@@ -51,13 +51,13 @@ describe("First 5 Jobs orientation", () => {
     expect(pack).toContain("Do not combine both into one long recording");
     expect(pack).toContain("Never collect or retain a TFN");
     expect(guide).toContain("/api/autopsy-speech");
-    expect(guide).toContain("Jane · live First 5 Jobs tour");
+    expect(guide).toContain("Hudson · First 5 Jobs screen guide");
     expect(guide).toContain("requestRef.current?.abort()");
     expect(guide).toContain("playbackId !== playbackIdRef.current");
     expect(guide).toContain("This is the Leads card");
     expect(guide).toContain("This is the Leads drill-down");
     expect(guide).toContain("The Conversions card opens Quotes");
-    expect(guide).toContain("Jane will never do that for you");
+    expect(guide).toContain("Hudson will never do that for you");
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
     expect(guide).toContain("Use Print or save PDF");
