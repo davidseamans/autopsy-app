@@ -148,7 +148,7 @@ export default function Stage1Quotes() {
           <h1 className="text-3xl font-semibold tracking-tight">Quotes</h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">Customer and work details begin here. An accepted quote becomes a First 5 Jobs job.</p>
         </div>
-        {isDemo ? <Button type="button" onClick={() => toast.info("Jane is demonstrating the real quote workflow. Sample data cannot be changed.")}><Plus className="mr-2 h-4 w-4" /> Create a quote</Button> : <Button asChild><Link to={quotePath}><Plus className="mr-2 h-4 w-4" /> Create a quote</Link></Button>}
+        {isDemo ? <Button type="button" onClick={() => toast.info("Hudson is demonstrating the real quote workflow. Sample data cannot be changed.")}><Plus className="mr-2 h-4 w-4" /> Create a quote</Button> : <Button asChild><Link to={quotePath}><Plus className="mr-2 h-4 w-4" /> Create a quote</Link></Button>}
       </header>
 
       {error ? <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
