@@ -59,6 +59,16 @@ describe("whole-run reconciliation contract", () => {
   it("rejects a score-floor result that is not a governed option id", () => {
     expect(source).toContain('if (!allowed.includes(selected)) throw new Error("reconciled option mismatch")');
   });
+
+  it("falls back to all twelve governed per-subject selections when the whole-run model fails", () => {
+    expect(source).toContain('baselineFallback(`upstream_${response.status}_${payload?.error?.code ?? "unknown"}`)');
+    expect(source).toContain('normaliseSelections(baselineSelections, "baseline_fallback")');
+    expect(source).toContain('max_output_tokens: 4000');
+  });
+
+  it("never accepts an incomplete baseline fallback", () => {
+    expect(source).toContain('if (selections.length !== 12 || seen.size !== 12) throw new Error("incomplete")');
+  });
 });
 
 describe("privacy-safe cumulative fact flags", () => {
