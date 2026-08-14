@@ -27,6 +27,14 @@ export type Stage1LeadActivity = {
 
 export type NewStage1LeadActivity = Omit<Stage1LeadActivity, "id" | "created_at">;
 
+export type NewStage1PotentialCustomer = {
+  client_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  site_address: string | null;
+};
+
 export type Stage1LeadRecord = {
   id: string;
   client_name: string;
@@ -170,6 +178,28 @@ export async function createStage1LeadActivity(runId: string, activity: NewStage
     leads_generated: Number(data.leads_generated ?? 0),
     created_at: String(data.created_at),
   };
+}
+
+export async function createStage1LeadActivityWithContacts(
+  runId: string,
+  activity: NewStage1LeadActivity,
+  potentialCustomers: NewStage1PotentialCustomer[],
+): Promise<{ activities: Stage1LeadActivity[]; leads: Stage1LeadRecord[] }> {
+  const { error } = await supabase.rpc("create_stage1_lead_activity_with_contacts", {
+    p_run_id: runId,
+    p_activity_date: activity.activity_date,
+    p_method: activity.method,
+    p_attempts: activity.attempts,
+    p_contacts_made: activity.contacts_made,
+    p_leads_generated: activity.leads_generated,
+    p_potential_customers: potentialCustomers,
+  });
+  if (error) throw new Error(error.message);
+  const [activities, leads] = await Promise.all([
+    loadStage1LeadActivities(runId),
+    loadStage1LeadRecords(runId),
+  ]);
+  return { activities, leads };
 }
 
 export async function loadStage1Contact(contactId: string): Promise<Stage1LeadRecord> {
