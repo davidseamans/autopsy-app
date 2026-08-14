@@ -10,6 +10,8 @@ const shell = readFileSync("src/components/AppShell.tsx", "utf8");
 const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
 const dashboard = readFileSync("src/pages/Stage1Dashboard.tsx", "utf8");
 const report = readFileSync("src/components/DetailedJobCostReport.tsx", "utf8");
+const practices = readFileSync("src/lib/hudsonPractice.ts", "utf8");
+const practiceMigration = readFileSync("supabase/migrations/20260814203000_add_hudson_practice_context.sql", "utf8");
 
 describe("Hudson governed session boundary", () => {
   it("authenticates, verifies run ownership and keeps the upstream credential server-side", () => {
@@ -51,7 +53,7 @@ describe("Hudson governed session boundary", () => {
 
   it("keeps Hudson beside the governed 5JD tour without granting UI authority", () => {
     expect(orientation).toContain("<HudsonSupportButton");
-    expect(support).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId })");
+    expect(support).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId, practiceKey })");
     expect(orientation).not.toContain('window.open("about:blank"');
     expect(shell).toContain("<HudsonDock />");
     expect(dock).toContain('allow="camera; microphone; fullscreen; display-capture"');
@@ -61,6 +63,23 @@ describe("Hudson governed session boundary", () => {
     expect(dock).toContain("step: String(target.step)");
     expect(orientation).toContain('tour=hudson&step=2');
     expect(dock).toContain("BuildOS alone controls highlights, records, payment, Verdict and progression.");
+  });
+
+  it("adds bounded customer practice without creating a test, transcript or parallel Hudson", () => {
+    expect(practices).toContain('"customer_opening"');
+    expect(practices).toContain('"price_question"');
+    expect(practices).toContain('"scope_inspection"');
+    expect(practices).toContain('"quote_follow_up"');
+    expect(practices).toContain('"quote_rejection"');
+    expect(practices).toContain('"completion_referral"');
+    expect(api).toContain("isHudsonPracticeKey(requestedPracticeKey)");
+    expect(api).toContain("practice_key: practiceKey");
+    expect(api).toContain('mode !== "first_5_jobs"');
+    expect(dock).toContain("Hudson · three-minute practice");
+    expect(dock).toContain("There is no score");
+    expect(practiceMigration).toContain("add column if not exists practice_key text");
+    expect(practiceMigration).toContain("no transcript, response content or maturity score");
+    expect(practiceMigration).not.toMatch(/transcript\s+(text|json|jsonb)|maturity_score\s+/i);
   });
 
   it("opens and highlights the existing actual labour-hours field without writing it", () => {

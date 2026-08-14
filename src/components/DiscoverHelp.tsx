@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { buildHelpTargetUrl, searchDiscoverHelp, suggestedHelpEntries, type HelpEntry } from "@/lib/discoverHelp";
+import { notifyDiscoverHelpState } from "@/lib/discoverHelpState";
 
 const MISSING_SEARCH_KEY = "buildos.discover-help.missing-searches.v1";
 
@@ -28,6 +29,8 @@ export function DiscoverHelp() {
   const results = useMemo(() => searchDiscoverHelp(submittedQuery), [submittedQuery]);
   const suggestions = useMemo(() => suggestedHelpEntries(location.pathname), [location.pathname]);
 
+  useEffect(() => () => notifyDiscoverHelpState(false), []);
+
   const clearSearch = () => {
     setQuery("");
     setSubmittedQuery("");
@@ -35,6 +38,7 @@ export function DiscoverHelp() {
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
+    notifyDiscoverHelpState(nextOpen);
     if (!nextOpen) clearSearch();
   };
 
@@ -47,6 +51,7 @@ export function DiscoverHelp() {
   const goTo = (entry: HelpEntry) => {
     clearSearch();
     setOpen(false);
+    notifyDiscoverHelpState(false);
     navigate(buildHelpTargetUrl(entry, location.search));
   };
 

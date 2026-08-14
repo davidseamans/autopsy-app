@@ -31,6 +31,7 @@ export default function Stage1Orientation() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const runId = searchParams.get("runId") ?? "";
+  const isDemo = searchParams.get("demo") === "1";
   const [progress, setProgress] = useState(initialProgress);
   const [businessVerified, setBusinessVerified] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,6 +39,10 @@ export default function Stage1Orientation() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isDemo) {
+      setLoading(false);
+      return;
+    }
     if (!runId) {
       setError("Return to First 5 Jobs and open setup from there.");
       setLoading(false);
@@ -50,11 +55,15 @@ export default function Stage1Orientation() {
       })
       .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [isDemo, runId]);
 
   const readyToSave = Boolean(progress.abnPath && progress.businessNamePath);
 
   async function saveAndContinue() {
+    if (isDemo) {
+      navigate("/stage-1?demo=1");
+      return;
+    }
     if (!runId || !readyToSave) return;
     setSaving(true);
     try {
@@ -82,7 +91,7 @@ export default function Stage1Orientation() {
 
   return (
     <main className="container max-w-3xl py-10 space-y-6">
-      <Button asChild variant="ghost" className="-ml-3"><Link to={runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1"}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
+      <Button asChild variant="ghost" className="-ml-3"><Link to={isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1"}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
 
       <header className="space-y-3">
         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · setup</p>
@@ -102,13 +111,13 @@ export default function Stage1Orientation() {
             <p>Hudson will take you through Leads, Quotes, Jobs, Margin and Money Owing in your actual workspace. Use the buttons below his video to move directly to the area you are discussing.</p>
             <p>Ask Hudson what a screen means or where to find something whenever you need help. BuildOS continues to control records and progression in the background.</p>
             <div className="flex flex-wrap gap-2">
-              <HudsonSupportButton
+              {!isDemo ? <HudsonSupportButton
                 runId={runId}
                 label="Open Hudson and tour First 5 Jobs"
                 onOpened={() => navigate(`/stage-1?runId=${encodeURIComponent(runId)}&tour=hudson&step=2`)}
-              />
+              /> : null}
               <Button asChild variant="outline" className="gap-2">
-                <Link to={`/stage-1?runId=${encodeURIComponent(runId)}&tour=1`}>
+                <Link to={isDemo ? "/stage-1?demo=1&tour=1" : `/stage-1?runId=${encodeURIComponent(runId)}&tour=1`}>
                   <PlayCircle className="h-4 w-4" /> Tour without live video
                 </Link>
               </Button>
@@ -161,9 +170,9 @@ export default function Stage1Orientation() {
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             <span>{progress.savedAt ? "Your current ABN and trading-name choices are shown above. Change them only if your circumstances have changed." : "Choose your ABN and trading-name paths to continue."}</span>
           </div>
-          <Button onClick={() => void saveAndContinue()} disabled={!readyToSave || saving} className="gap-2">
+          <Button onClick={() => void saveAndContinue()} disabled={(!isDemo && !readyToSave) || saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {businessVerified ? "Save choices and open First 5 Jobs" : "Save choices and open Business Details"}
+            {isDemo ? "Return to sample First 5 Jobs" : businessVerified ? "Save choices and open First 5 Jobs" : "Save choices and open Business Details"}
           </Button>
         </div>
       </> : null}

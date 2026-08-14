@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, GripHorizontal, Loader2, Pause, Play, X } from "
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/lib/auth";
+import { DISCOVER_HELP_STATE } from "@/lib/discoverHelpState";
 
 const dashboardSlides = [
   { title: "A controlled six-week start", narration: "Welcome to First 5 Jobs. This demonstration command centre uses sample information to show the complete process. After Autopsy, your job is to find genuine opportunities, complete five jobs, and learn what the figures tell you." },
@@ -193,5 +194,14 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
 }
 
 export function Stage1TourResume({ onClick }: { onClick: () => void }) {
-  return <Button type="button" onClick={onClick} className="fixed bottom-20 right-5 z-[200] gap-2 rounded-full bg-[#061b34] px-5 text-white shadow-2xl hover:bg-[#0a3158]"><Play className="h-4 w-4" /> Resume 5 Jobs Tour</Button>;
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    const update = (event: Event) => setHelpOpen((event as CustomEvent<boolean>).detail === true);
+    window.addEventListener(DISCOVER_HELP_STATE, update);
+    return () => window.removeEventListener(DISCOVER_HELP_STATE, update);
+  }, []);
+
+  if (helpOpen) return null;
+  return <Button type="button" onClick={onClick} className="fixed bottom-20 right-5 z-[200] gap-2 rounded-full bg-teal-600 px-5 text-white shadow-2xl hover:bg-teal-700"><Play className="h-4 w-4" /> Resume 5 Jobs Tour</Button>;
 }

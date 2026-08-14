@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -6,37 +6,22 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronRight,
-  Circle,
-  Loader2,
   LockKeyhole,
   MessageSquareText,
-  RotateCcw,
   Users,
 } from "lucide-react";
+import { HudsonSupportButton } from "@/components/HudsonSupportButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/components/ui/sonner";
-import {
-  fetchStage1LearningProgress,
-  saveStage1LessonCompletion,
-  type Stage1LessonProgress,
-} from "@/lib/stage1Learning";
+import { HUDSON_PRACTICES, type HudsonPracticeKey } from "@/lib/hudsonPractice";
 import {
   calculateChargeOutRate,
   calculatePriceCutConsequence,
   type ChargeOutRateInputs,
 } from "@/lib/stage1ChargeOutRate";
 import { FollowUpPractice, JobCloseoutPractice, RejectedQuotePractice } from "@/components/stage1-learning/FinalLessonPractices";
-
-type QuizQuestion = {
-  prompt: string;
-  options: { key: string; label: string }[];
-  correct: string;
-  explanation: string;
-};
 
 type Lesson = {
   key: string;
@@ -47,8 +32,8 @@ type Lesson = {
   duration: string;
   available: boolean;
   sections?: { title: string; body: string; script?: string; points?: string[] }[];
-  quiz?: QuizQuestion[];
   interactive?: "charge_out_rate" | "inspect_and_quote" | "follow_up" | "rejected_quote" | "complete_professionally";
+  practiceKey?: HudsonPracticeKey;
 };
 
 const lessons: Lesson[] = [
@@ -75,26 +60,6 @@ const lessons: Lesson[] = [
         body: "Work the warm opportunities first. A small number of thoughtful conversations is more useful than paying for advertising before you know how to present the service, inspect the work and quote it properly.",
       },
     ],
-    quiz: [
-      {
-        prompt: "Which is the best first action for a new operator?",
-        options: [{ key: "a", label: "Buy a large online advertising campaign" }, { key: "b", label: "List nearby people and places where a genuine cleaning need may exist" }, { key: "c", label: "Buy equipment for every possible type of job" }],
-        correct: "b",
-        explanation: "Start with visible opportunities and booked needs before committing money.",
-      },
-      {
-        prompt: "A past customer introduces you to a neighbour. How should the lead source be recorded?",
-        options: [{ key: "a", label: "Customer referral" }, { key: "b", label: "Walk-in" }, { key: "c", label: "Other" }],
-        correct: "a",
-        explanation: "The source is the customer who made the introduction.",
-      },
-      {
-        prompt: "Why record lead methods in First 5 Jobs?",
-        options: [{ key: "a", label: "To create a full customer database" }, { key: "b", label: "To judge people who do not buy" }, { key: "c", label: "To learn which activities produce genuine enquiries" }],
-        correct: "c",
-        explanation: "The record is deliberately simple: activity, source and result.",
-      },
-    ],
   },
   {
     key: "what_to_say",
@@ -104,6 +69,7 @@ const lessons: Lesson[] = [
     promise: "Use short, natural scripts that open a conversation without sounding rehearsed.",
     duration: "7 minutes",
     available: true,
+    practiceKey: "customer_opening",
     sections: [
       {
         title: "Personal contact",
@@ -125,26 +91,6 @@ const lessons: Lesson[] = [
         body: "Your first conversation is not the quote and it is not a performance. The objective is permission for the next sensible step: an introduction, a site visit or a clear no.",
       },
     ],
-    quiz: [
-      {
-        prompt: "What is the main objective of the first lead conversation?",
-        options: [{ key: "a", label: "Close the job immediately at any price" }, { key: "b", label: "Secure the next sensible step" }, { key: "c", label: "Explain every cleaning service you might offer" }],
-        correct: "b",
-        explanation: "A useful next step may be an introduction, site visit or permission to quote.",
-      },
-      {
-        prompt: "Which referral request is strongest?",
-        options: [{ key: "a", label: "Give me the phone numbers of everyone you know" }, { key: "b", label: "Please post my advertisement everywhere" }, { key: "c", label: "Do you know one person who may need dependable cleaning?" }],
-        correct: "c",
-        explanation: "One relevant introduction is plain, respectful and easy to act upon.",
-      },
-      {
-        prompt: "What should you do before making detailed claims about a site?",
-        options: [{ key: "a", label: "Inspect it and understand the work" }, { key: "b", label: "Promise the lowest price" }, { key: "c", label: "Assume it is similar to the last job" }],
-        correct: "a",
-        explanation: "Inspection protects the customer, the scope and your price.",
-      },
-    ],
   },
   {
     key: "presentation_before_discounting",
@@ -154,6 +100,7 @@ const lessons: Lesson[] = [
     promise: "Protect the price by improving trust and presentation.",
     duration: "7 minutes",
     available: true,
+    practiceKey: "price_question",
     sections: [
       {
         title: "The customer is buying confidence",
@@ -172,26 +119,6 @@ const lessons: Lesson[] = [
       {
         title: "Presentation is practical",
         body: "Professional does not mean expensive clothes or a complicated sales performance. It means being prepared, dependable and clear enough that the customer knows what will happen next.",
-      },
-    ],
-    quiz: [
-      {
-        prompt: "A customer says the quote is higher than expected. What is the best first response?",
-        options: [{ key: "a", label: "Immediately cut the price" }, { key: "b", label: "Explain the scope and discuss changing the work if the total must fall" }, { key: "c", label: "Tell the customer cheaper cleaners are unreliable" }],
-        correct: "b",
-        explanation: "Protect the price by explaining the work. If the total changes, the scope should change clearly as well.",
-      },
-      {
-        prompt: "Which action does most to support a professional price?",
-        options: [{ key: "a", label: "A clear inspection and written quote" }, { key: "b", label: "Promising to beat every competitor" }, { key: "c", label: "Buying equipment before any job is booked" }],
-        correct: "a",
-        explanation: "Preparation, clarity and follow-through give the customer a reason to trust the quote.",
-      },
-      {
-        prompt: "What is the main risk of making cheap your selling point?",
-        options: [{ key: "a", label: "The customer may ask too many questions" }, { key: "b", label: "The quote may look too professional" }, { key: "c", label: "The job may not leave enough money to deliver properly and continue" }],
-        correct: "c",
-        explanation: "A job that cannot support proper delivery is not a useful foundation for the business.",
       },
     ],
   },
@@ -227,26 +154,6 @@ const lessons: Lesson[] = [
         body: "Working longer does not repair a price that was too low. Start with a considered rate, record the result, and improve it from the first five jobs instead of guessing forever.",
       },
     ],
-    quiz: [
-      {
-        prompt: "What is the difference between a work rate and a charge-out rate?",
-        options: [{ key: "a", label: "There is no difference" }, { key: "b", label: "The work rate is what you want to earn; the charge-out rate must also carry business costs and margin" }, { key: "c", label: "The charge-out rate is always the competitor’s price" }],
-        correct: "b",
-        explanation: "The customer rate has to support both the person doing the work and the business that makes the work possible.",
-      },
-      {
-        prompt: "Which time is usually not billed directly to one cleaning customer?",
-        options: [{ key: "a", label: "Cleaning the customer’s floors" }, { key: "b", label: "Cleaning the customer’s windows when quoted" }, { key: "c", label: "Preparing quotes and organising supplies" }],
-        correct: "c",
-        explanation: "Unbilled business time still has to be supported by the work the business sells.",
-      },
-      {
-        prompt: "You want to earn $35 per cleaning hour. Why is charging exactly $35 risky?",
-        options: [{ key: "a", label: "It leaves nothing for the costs and unbilled work around the job" }, { key: "b", label: "Customers only accept round numbers" }, { key: "c", label: "Every cleaning job must use the same rate" }],
-        correct: "a",
-        explanation: "A sustainable quote must carry more than the operator’s desired hourly pay.",
-      },
-    ],
   },
   {
     key: "inspect_and_quote",
@@ -257,6 +164,7 @@ const lessons: Lesson[] = [
     duration: "9 minutes",
     available: true,
     interactive: "inspect_and_quote",
+    practiceKey: "scope_inspection",
     sections: [
       {
         title: "A quote begins with an inspection",
@@ -281,57 +189,27 @@ const lessons: Lesson[] = [
         body: "Before generating the written quote, check the customer details, service address, work items, estimated hours, clean type, exclusions, price, GST, validity period and payment terms. Generate it only when those details describe the job you are prepared to deliver.",
       },
     ],
-    quiz: [
-      {
-        prompt: "A customer asks for ‘the windows’ but does not explain which windows or how they can be reached. What should you do?",
-        options: [{ key: "a", label: "Include every window and hope the estimate is enough" }, { key: "b", label: "Clarify and inspect the window work, or exclude it clearly from this quote" }, { key: "c", label: "Leave windows unmentioned" }],
-        correct: "b",
-        explanation: "Unclear work should be resolved before pricing or identified plainly as excluded.",
-      },
-      {
-        prompt: "What is the best way to estimate the time for a quote?",
-        options: [{ key: "a", label: "Break the inspected work into plain tasks and estimate each part" }, { key: "b", label: "Use the same hours for every customer" }, { key: "c", label: "Start with the customer’s budget and make the hours fit" }],
-        correct: "a",
-        explanation: "Task-based estimates are easier to explain and compare with the completed job.",
-      },
-      {
-        prompt: "When is a written quote ready to generate?",
-        options: [{ key: "a", label: "As soon as the customer asks for a price" }, { key: "b", label: "After the work, access, hours, exclusions and customer details are clear" }, { key: "c", label: "After buying all possible equipment" }],
-        correct: "b",
-        explanation: "The quote should describe a job you understand and are prepared to deliver.",
-      },
-    ],
   },
   {
-    key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "7 minutes", available: true, interactive: "follow_up",
+    key: "follow_up", version: 1, number: 6, title: "Follow up and ask for the job", promise: "Follow up clearly and give the customer an easy decision.", duration: "7 minutes", available: true, interactive: "follow_up", practiceKey: "quote_follow_up",
     sections: [
       { title: "Following up is part of quoting", body: "A clear written quote does not remove the need to follow up. Confirm that it arrived, ask whether anything needs explaining and then ask directly whether the customer would like to proceed." },
       { title: "Use a short, calm structure", body: "Identify the quote, confirm receipt, answer questions and ask for the decision. Do not repeat the entire sales presentation or apologise for contacting them.", script: "Hi, it’s Alex from Harbour Cleaning. I’m following up on the quote for your office clean. Did it reach you, and is there anything you would like me to explain? If everything is clear, would you like me to book the work?" },
       { title: "A delay needs a next step", body: "If the customer needs more time, agree on one reasonable follow-up date. Do not keep calling without permission and do not leave the quote outstanding forever." },
       { title: "Do not negotiate against yourself", body: "Silence or hesitation is not a request for a discount. Ask what is preventing the decision. If the scope or price must change, make the change openly and issue a clear revised quote." },
     ],
-    quiz: [
-      { prompt: "What is the strongest way to finish a quote follow-up?", options: [{ key: "a", label: "Would you like me to book the work?" }, { key: "b", label: "I can probably make it cheaper if you want" }, { key: "c", label: "Call me sometime" }], correct: "a", explanation: "A direct, respectful decision question gives the customer an easy next step." },
-      { prompt: "The customer says they need a few days. What should you do?", options: [{ key: "a", label: "Call every day" }, { key: "b", label: "Agree on one reasonable follow-up date" }, { key: "c", label: "Immediately reduce the price" }], correct: "b", explanation: "A mutually understood next step is persistent without becoming intrusive." },
-      { prompt: "The customer hesitates but has not mentioned price. What should you do first?", options: [{ key: "a", label: "Offer 20% off" }, { key: "b", label: "Withdraw the quote" }, { key: "c", label: "Ask whether anything is unclear or preventing the decision" }], correct: "c", explanation: "Find the actual concern before changing the scope or price." },
-    ],
   },
   {
-    key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "7 minutes", available: true, interactive: "rejected_quote",
+    key: "rejected_quote", version: 1, number: 7, title: "If the quote is rejected", promise: "Ask for useful feedback without arguing or discounting automatically.", duration: "7 minutes", available: true, interactive: "rejected_quote", practiceKey: "quote_rejection",
     sections: [
       { title: "A rejected quote is an honest outcome", body: "The customer is allowed to say no. Your job is to close the conversation professionally, learn what is useful and leave the relationship intact." },
       { title: "Ask once for practical feedback", body: "Thank the customer and ask one short question. They may mention price, scope, timing, confidence, another supplier or no reason at all. Accept the answer without cross-examination.", script: "Thanks for letting me know. So I can improve future quotes, was there one main reason you decided not to proceed? No problem if you would rather not say." },
       { title: "Do not rescue every rejection with a discount", body: "A lower price only makes sense if the scope or commercial decision genuinely changes. Chasing every rejection downwards trains the business to win work it cannot afford to deliver." },
       { title: "Record the result and move on", body: "Mark the quote rejected and record the useful reason in plain language. Do not keep it outstanding to make the numbers look better, and do not turn feedback into an argument." },
     ],
-    quiz: [
-      { prompt: "What is the best first response when a customer rejects the quote?", options: [{ key: "a", label: "Thank them and accept the decision" }, { key: "b", label: "Explain why they are wrong" }, { key: "c", label: "Cut the price immediately" }], correct: "a", explanation: "Professional acceptance protects the relationship and makes useful feedback more likely." },
-      { prompt: "How should you ask for feedback?", options: [{ key: "a", label: "Demand a detailed justification" }, { key: "b", label: "Ask one short optional question about the main reason" }, { key: "c", label: "Send a long survey" }], correct: "b", explanation: "One respectful question is enough. The customer is not obliged to teach the business." },
-      { prompt: "What should happen to the quote record after a clear rejection?", options: [{ key: "a", label: "Leave it outstanding forever" }, { key: "b", label: "Delete it" }, { key: "c", label: "Mark it rejected and record any useful reason" }], correct: "c", explanation: "Accurate status and concise feedback make the conversion figures useful." },
-    ],
   },
   {
-    key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "9 minutes", available: true, interactive: "complete_professionally",
+    key: "complete_professionally", version: 1, number: 8, title: "Complete the job professionally", promise: "Finish the records, invoice and referral request properly.", duration: "9 minutes", available: true, interactive: "complete_professionally", practiceKey: "completion_referral",
     sections: [
       { title: "Completion includes the records", body: "Finishing the cleaning is not the end of the job. Record the actual hours and costs, confirm the work with the customer, issue the final invoice and keep the payment record current." },
       { title: "Compare estimate with actual", body: "The first five jobs are where estimates become experience. A variance is not automatically a failure. Record it honestly and understand whether the scope, pace, access, condition or estimate caused it." },
@@ -339,67 +217,20 @@ const lessons: Lesson[] = [
       { title: "Close the money loop", body: "Record the payment when received and keep unpaid invoices visible. Do not mark a job financially complete while money is still owing." },
       { title: "Ask for the next opportunity", body: "After the customer confirms they are satisfied, ask whether they need ongoing work or know one person who may value the same service. A referral request is earned by delivery, not inserted mechanically into every conversation.", script: "I’m glad the work is complete and you’re happy with it. If you know someone who would value dependable cleaning, I’d appreciate an introduction." },
     ],
-    quiz: [
-      { prompt: "Why compare actual hours with estimated hours?", options: [{ key: "a", label: "To improve the next estimate and understand what changed" }, { key: "b", label: "To hide overruns" }, { key: "c", label: "To change the accepted quote automatically" }], correct: "a", explanation: "Recorded variance turns the first jobs into practical estimating knowledge." },
-      { prompt: "When should a payment be recorded?", options: [{ key: "a", label: "When the invoice is issued" }, { key: "b", label: "When the money is actually received" }, { key: "c", label: "When the customer says they will pay" }], correct: "b", explanation: "An invoice and a payment are different events. The debtor remains visible until money is received." },
-      { prompt: "When is the best time to ask for a referral?", options: [{ key: "a", label: "Before inspecting the first job" }, { key: "b", label: "While arguing about an unpaid invoice" }, { key: "c", label: "After the customer confirms they are satisfied" }], correct: "c", explanation: "A referral request should follow demonstrated delivery and a satisfied customer." },
-    ],
   },
 ];
 
 export default function Stage1Learning() {
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("runId") ?? "";
-  const [progress, setProgress] = useState<Stage1LessonProgress[]>([]);
+  const isDemo = searchParams.get("demo") === "1";
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!runId) {
-      setError("Return to First 5 Jobs and open the learning library from there.");
-      setLoading(false);
-      return;
-    }
-    void fetchStage1LearningProgress(runId)
-      .then(setProgress)
-      .catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
-      .finally(() => setLoading(false));
-  }, [runId]);
-
-  const completed = useMemo(() => new Map(progress.map((item) => [item.lessonKey, item])), [progress]);
-  const score = selectedLesson?.quiz?.reduce((total, question, index) => total + (answers[index] === question.correct ? 1 : 0), 0) ?? 0;
-  const quizCount = selectedLesson?.quiz?.length ?? 0;
-  const passed = quizCount > 0 && score >= Math.ceil(quizCount * 0.67);
 
   function openLesson(lesson: Lesson) {
     if (!lesson.available) return;
     setSelectedLesson(lesson);
-    setAnswers({});
-    setSubmitted(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
-
-  async function completeLesson() {
-    if (!selectedLesson || !passed) return;
-    setSaving(true);
-    try {
-      const saved = await saveStage1LessonCompletion({ runId, lessonKey: selectedLesson.key, lessonVersion: selectedLesson.version, quizScore: score });
-      setProgress((current) => [...current.filter((item) => item.lessonKey !== saved.lessonKey), saved]);
-      toast.success("Lesson complete.");
-      setSelectedLesson(null);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Lesson completion could not be saved.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (loading) return <div className="container max-w-4xl py-12 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading the learning library…</div>;
 
   if (selectedLesson) {
     return <main className="container max-w-4xl py-10 space-y-6">
@@ -412,22 +243,22 @@ export default function Stage1Learning() {
       {selectedLesson.interactive === "follow_up" ? <FollowUpPractice /> : null}
       {selectedLesson.interactive === "rejected_quote" ? <RejectedQuotePractice /> : null}
       {selectedLesson.interactive === "complete_professionally" ? <JobCloseoutPractice /> : null}
-      <Card><CardHeader><CardTitle>Quick check</CardTitle><CardDescription>Choose the best practical answer. Two correct answers out of three completes the lesson.</CardDescription></CardHeader><CardContent className="space-y-6">{selectedLesson.quiz?.map((question, index) => <div key={question.prompt} className="space-y-3"><p className="font-medium">{index + 1}. {question.prompt}</p><RadioGroup value={answers[index] ?? ""} onValueChange={(value) => setAnswers((current) => ({ ...current, [index]: value }))}>{question.options.map((option) => <Label key={option.key} htmlFor={`${selectedLesson.key}-${index}-${option.key}`} className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 hover:bg-muted/40"><RadioGroupItem id={`${selectedLesson.key}-${index}-${option.key}`} value={option.key} className="mt-0.5" /><span>{option.label}</span></Label>)}</RadioGroup>{submitted ? <p className={`text-sm ${answers[index] === question.correct ? "text-emerald-700" : "text-amber-700"}`}>{answers[index] === question.correct ? "Correct. " : "Not quite. "}{question.explanation}</p> : null}</div>)}
-        {!submitted ? <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== quizCount}>Check my answers</Button> : passed ? <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-emerald-800">You understood the lesson: {score} of {quizCount}</p><p className="text-sm text-emerald-700">This records lesson completion only. It does not change your Autopsy result or progression gate.</p></div><Button onClick={() => void completeLesson()} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}Complete lesson</Button></div> : <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-amber-900">Review the explanations and try again.</p><p className="text-sm text-amber-800">You scored {score} of {quizCount}. Nothing negative is recorded.</p></div><Button variant="outline" onClick={() => { setAnswers({}); setSubmitted(false); }}><RotateCcw className="mr-2 h-4 w-4" /> Try again</Button></div>}
-      </CardContent></Card>
+      {selectedLesson.practiceKey ? <HudsonPracticeCard runId={runId} practiceKey={selectedLesson.practiceKey} /> : <Card className="border-slate-200 bg-slate-50/50"><CardHeader><CardTitle>Try it in the real world</CardTitle><CardDescription>Use this lesson when the next opportunity arises. There is no acknowledgement, score or pass mark.</CardDescription></CardHeader></Card>}
     </main>;
   }
 
   return <main className="container max-w-5xl py-10 space-y-6">
-    <Button asChild variant="ghost" className="-ml-3"><Link to={runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1"}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
-    <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and checks for finding, quoting and completing your first work. Take them in order or return when the next situation arises.</p></header>
-    {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
-    {!error ? <>
-      <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Available now" value="8" /><Summary icon={CheckCircle2} label="Completed" value={String(completed.size)} /></div>
-      <div className="space-y-3">{lessons.map((lesson) => { const completion = completed.get(lesson.key); return <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">{lesson.title}</h2>{completion ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800"><CheckCircle2 className="h-3.5 w-3.5" /> Complete</span> : null}</div><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}</p></div>{lesson.available ? <Button variant={completion ? "outline" : "default"} onClick={() => openLesson(lesson)}>{completion ? "Review" : "Start lesson"}<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>; })}</div>
-      <p className="flex items-start gap-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground"><Circle className="mt-0.5 h-4 w-4 shrink-0" /> This library supports practice. Course completion is not Autopsy scoring and does not automatically admit anyone to Core.</p>
-    </> : null}
+    <Button asChild variant="ghost" className="-ml-3"><Link to={isDemo ? "/stage-1?demo=1" : runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1"}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
+    <header className="space-y-3"><p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · learning library</p><h1 className="text-3xl font-semibold tracking-tight">Getting Your First Five Jobs</h1><p className="max-w-3xl text-muted-foreground">Short practical lessons, scripts and customer practices for finding, quoting and completing your first work. Use them when the next situation arises.</p></header>
+    <div className="grid gap-4 sm:grid-cols-3"><Summary icon={BookOpen} label="Lessons" value="8" /><Summary icon={Users} label="Hudson practices" value="6" /><Summary icon={CheckCircle2} label="Progression gates" value="0" /></div>
+    <div className="space-y-3">{lessons.map((lesson) => <Card key={lesson.key} className={!lesson.available ? "bg-muted/30" : "hover:border-sky-300"}><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082849] font-semibold text-white">{lesson.number}</div><div className="min-w-0 flex-1"><h2 className="font-semibold">{lesson.title}</h2><p className="mt-1 text-sm text-muted-foreground">{lesson.promise}</p><p className="mt-2 text-xs text-muted-foreground">{lesson.duration}{lesson.practiceKey ? " · optional Hudson practice" : ""}</p></div>{lesson.available ? <Button onClick={() => openLesson(lesson)}>Open lesson<ChevronRight className="ml-2 h-4 w-4" /></Button> : <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Planned</span>}</CardContent></Card>)}</div>
+    <p className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">This library supports voluntary practice. Nothing here is scored, and it does not change Autopsy or admit anyone to Core.</p>
   </main>;
+}
+
+function HudsonPracticeCard({ runId, practiceKey }: { runId: string; practiceKey: HudsonPracticeKey }) {
+  const practice = HUDSON_PRACTICES[practiceKey];
+  return <Card className="border-emerald-200 bg-emerald-50/40"><CardHeader><CardTitle>Practise with Hudson — about 3 minutes</CardTitle><CardDescription>{practice.purpose}</CardDescription></CardHeader><CardContent className="space-y-4"><p className="text-sm leading-6 text-muted-foreground">Hudson starts immediately as the customer. After a few exchanges, he gives you one useful observation and one thing to try next. There is no score or pass mark.</p>{runId ? <HudsonSupportButton runId={runId} practiceKey={practiceKey} label={`Practise: ${practice.title}`} /> : <Button disabled>Available in your live First 5 Jobs workspace</Button>}</CardContent></Card>;
 }
 
 function Summary({ icon: Icon, label, value }: { icon: typeof BookOpen; label: string; value: string }) {

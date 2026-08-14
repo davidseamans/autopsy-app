@@ -54,7 +54,7 @@ describe("Discover Help interaction", () => {
     expect(screen.getByText("Useful on this screen")).toBeInTheDocument();
   });
 
-  it("keeps Help visible below a separately positioned tour-resume control", () => {
+  it("gives the tour control a distinct colour and removes it while Help is open", () => {
     render(
       <MemoryRouter initialEntries={["/stage-1?demo=1"]}>
         <DiscoverHelp />
@@ -63,7 +63,11 @@ describe("Discover Help interaction", () => {
     );
 
     expect(screen.getByRole("button", { name: "Open Help" })).toHaveClass("bottom-5", "z-[250]");
-    expect(screen.getByRole("button", { name: "Resume 5 Jobs Tour" })).toHaveClass("bottom-20", "z-[200]");
+    expect(screen.getByRole("button", { name: "Resume 5 Jobs Tour" })).toHaveClass("bottom-20", "z-[200]", "bg-teal-600");
+    fireEvent.click(screen.getByRole("button", { name: "Open Help" }));
+    expect(screen.queryByRole("button", { name: "Resume 5 Jobs Tour" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close Help" }));
+    expect(screen.getByRole("button", { name: "Resume 5 Jobs Tour" })).toBeInTheDocument();
   });
 
   it("does not invent an answer for an unknown question", () => {

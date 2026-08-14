@@ -176,7 +176,6 @@ describe("First 5 Jobs orientation", () => {
     const routes = read("src/App.tsx");
     const dashboard = read("src/pages/Stage1Dashboard.tsx");
     const learning = read("src/pages/Stage1Learning.tsx");
-    const client = read("src/lib/stage1Learning.ts");
     const migration = read("supabase/migrations/20260804100000_stage1_learning_library.sql");
 
     expect(routes).toContain('path="/stage-1/learning"');
@@ -184,9 +183,12 @@ describe("First 5 Jobs orientation", () => {
     expect(learning).toContain("Getting Your First Five Jobs");
     expect(learning).toContain("Where your first leads are");
     expect(learning).toContain("What to say");
-    expect(learning).toContain("Two correct answers out of three completes the lesson");
-    expect(learning).toContain("does not change your Autopsy result or progression gate");
-    expect(client).toContain('STAGE1_COURSE_KEY = "getting_your_first_five_jobs"');
+    expect(learning).toContain("Nothing here is scored");
+    expect(learning).toContain("Progression gates");
+    expect(learning).not.toContain("Quick check");
+    expect(learning).not.toContain("Check my answers");
+    expect(dashboard).toContain('/stage-1/learning?demo=1');
+    expect(dashboard).toContain('/stage-1/orientation?demo=1');
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("owner_user_id = (select auth.uid())");
     expect(migration).toContain("current_user_can_use_stage1_run(autopsy_run_id)");
@@ -208,7 +210,7 @@ describe("First 5 Jobs orientation", () => {
     expect(learning).toContain('title: "Present well—do not compete by being cheap"');
     expect(learning).toContain('key: "charge_out_rate"');
     expect(learning).toContain('title: "Your work rate is not your charge-out rate"');
-    expect(learning).toContain('label="Available now" value="8"');
+    expect(learning).toContain('label="Hudson practices" value="6"');
     expect(migration).toContain("'presentation_before_discounting'");
     expect(migration).toContain("'charge_out_rate'");
     expect(migration).toContain("security invoker");
@@ -250,7 +252,10 @@ describe("First 5 Jobs orientation", () => {
     expect(learning).toContain('key: "follow_up"');
     expect(learning).toContain('key: "rejected_quote"');
     expect(learning).toContain('key: "complete_professionally"');
-    expect(learning).toContain('label="Available now" value="8"');
+    expect(learning).toContain('label="Hudson practices" value="6"');
+    expect(learning).toContain('practiceKey: "quote_follow_up"');
+    expect(learning).toContain('practiceKey: "quote_rejection"');
+    expect(learning).toContain('practiceKey: "completion_referral"');
     expect(practices).toContain("Practice: follow up quote Q-12");
     expect(practices).toContain("Practice: the customer chose another supplier");
     expect(practices).toContain("Practice: close out the completed job");
