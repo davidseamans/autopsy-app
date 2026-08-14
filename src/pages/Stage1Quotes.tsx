@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, FileText, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createStage1LeadRecord, loadStage1Funnel, loadStage1LeadRecords, type Stage1LeadRecord, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
+import { createStage1LeadRecord, loadStage1Funnel, loadStage1LeadRecords, updateStage1LeadContact, type Stage1LeadRecord, type Stage1QuoteSummary } from "@/lib/stage1Funnel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { acceptStage1Quote, describeDocumentError, setStage1QuoteRejected } from "@/lib/stage1Documents";
@@ -30,6 +30,11 @@ export default function Stage1Quotes() {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editContactName, setEditContactName] = useState("");
+  const [editContactPhone, setEditContactPhone] = useState("");
+  const [editContactEmail, setEditContactEmail] = useState("");
+  const [editSiteAddress, setEditSiteAddress] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<QuoteFilter>("all");
@@ -121,6 +126,31 @@ export default function Stage1Quotes() {
     }
   }
 
+  function beginContactCorrection(contact: Stage1LeadRecord) {
+    setEditingContactId(contact.id);
+    setEditContactName(contact.contact_name ?? "");
+    setEditContactPhone(contact.contact_phone ?? "");
+    setEditContactEmail(contact.contact_email ?? "");
+    setEditSiteAddress(contact.site_address ?? "");
+  }
+
+  async function saveContactCorrection(contactId: string) {
+    if (!editContactPhone.trim() && !editContactEmail.trim()) return;
+    try {
+      await updateStage1LeadContact(contactId, {
+        contact_name: editContactName.trim() || null,
+        contact_phone: editContactPhone.trim() || null,
+        contact_email: editContactEmail.trim() || null,
+        site_address: editSiteAddress.trim() || null,
+      });
+      setEditingContactId(null);
+      toast.success("Potential-customer details updated.");
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function saveContact() {
     if (!runId || !contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())) return;
     try {
@@ -167,7 +197,44 @@ export default function Stage1Quotes() {
         <CardContent className="space-y-3">
           {filter === "potential" ? <>
             {showContactForm ? <div className="grid gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-4 sm:grid-cols-3"><div className="space-y-1.5"><Label htmlFor="potential-name">Name *</Label><Input id="potential-name" value={contactName} onChange={(event) => setContactName(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-phone">Phone</Label><Input id="potential-phone" value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} /></div><div className="space-y-1.5"><Label htmlFor="potential-email">Email</Label><Input id="potential-email" type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} /></div><div className="sm:col-span-3 flex justify-end"><Button type="button" onClick={() => void saveContact()} disabled={!contactName.trim() || (!contactPhone.trim() && !contactEmail.trim())}>Save potential quote</Button></div></div> : null}
-            {potentialContacts.map((contact) => <div key={contact.id} className="flex flex-col gap-3 rounded-lg border border-sky-200 bg-sky-50/40 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{contact.client_name}</p><span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">Potential — unquoted</span></div><p className="text-sm text-muted-foreground">{[contact.contact_phone, contact.contact_email].filter(Boolean).join(" · ")}</p></div><Button asChild size="sm"><Link to={`${quotePath}${quoteContactSeparator}contactId=${encodeURIComponent(contact.id)}`}>Prepare quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button></div>)}
+            {potentialContacts.map((contact) => {
+              const missingContactChannel = !contact.contact_phone && !contact.contact_email;
+              const editing = editingContactId === contact.id;
+              return (
+                <div key={contact.id} className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/40 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{contact.client_name}</p>
+                        <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800">Potential — unquoted</span>
+                        {missingContactChannel ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">Contact details required</span> : null}
+                      </div>
+                      {contact.contact_name ? <p className="text-sm text-muted-foreground">{contact.contact_name}</p> : null}
+                      <p className="text-sm text-muted-foreground">{[contact.contact_phone, contact.contact_email].filter(Boolean).join(" · ") || "No phone or email recorded"}</p>
+                      {contact.site_address ? <p className="text-sm text-muted-foreground">{contact.site_address}</p> : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => beginContactCorrection(contact)}>
+                        {missingContactChannel ? "Complete details" : "Edit details"}
+                      </Button>
+                      {!missingContactChannel ? <Button asChild size="sm"><Link to={`${quotePath}${quoteContactSeparator}contactId=${encodeURIComponent(contact.id)}`}>Prepare quote <ArrowRight className="ml-2 h-3.5 w-3.5" /></Link></Button> : null}
+                    </div>
+                  </div>
+                  {editing ? (
+                    <div className="grid items-end gap-3 rounded-lg border bg-white p-3 sm:grid-cols-2">
+                      <div className="space-y-1.5"><Label htmlFor={`edit-contact-name-${contact.id}`}>Contact person</Label><Input id={`edit-contact-name-${contact.id}`} value={editContactName} onChange={(event) => setEditContactName(event.target.value)} /></div>
+                      <div className="space-y-1.5"><Label htmlFor={`edit-contact-phone-${contact.id}`}>Phone</Label><Input id={`edit-contact-phone-${contact.id}`} type="tel" value={editContactPhone} onChange={(event) => setEditContactPhone(event.target.value)} /></div>
+                      <div className="space-y-1.5"><Label htmlFor={`edit-contact-email-${contact.id}`}>Email</Label><Input id={`edit-contact-email-${contact.id}`} type="email" value={editContactEmail} onChange={(event) => setEditContactEmail(event.target.value)} /></div>
+                      <div className="space-y-1.5"><Label htmlFor={`edit-contact-site-${contact.id}`}>Service address</Label><Input id={`edit-contact-site-${contact.id}`} value={editSiteAddress} onChange={(event) => setEditSiteAddress(event.target.value)} /></div>
+                      <div className="flex justify-end gap-2 sm:col-span-2">
+                        <Button type="button" variant="outline" onClick={() => setEditingContactId(null)}>Cancel</Button>
+                        <Button type="button" onClick={() => void saveContactCorrection(contact.id)} disabled={!editContactPhone.trim() && !editContactEmail.trim()}>Save contact details</Button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
             {potentialContacts.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No potential quotes waiting.</p> : null}
           </> : filteredQuotes.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No {filter} quotes.</p> : filteredQuotes.map((quote) => <QuoteRow key={quote.id} quote={quote} runId={runId} isDemo={isDemo} working={workingQuoteId === quote.id} onStatusChange={(next) => void changeStatus(quote, next)} />)}
         </CardContent>
