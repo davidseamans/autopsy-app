@@ -28,6 +28,16 @@ export function DiscoverHelp() {
   const results = useMemo(() => searchDiscoverHelp(submittedQuery), [submittedQuery]);
   const suggestions = useMemo(() => suggestedHelpEntries(location.pathname), [location.pathname]);
 
+  const clearSearch = () => {
+    setQuery("");
+    setSubmittedQuery("");
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) clearSearch();
+  };
+
   const runSearch = () => {
     const next = query.trim();
     setSubmittedQuery(next);
@@ -35,6 +45,7 @@ export function DiscoverHelp() {
   };
 
   const goTo = (entry: HelpEntry) => {
+    clearSearch();
     setOpen(false);
     navigate(buildHelpTargetUrl(entry, location.search));
   };
@@ -42,9 +53,9 @@ export function DiscoverHelp() {
   const visibleEntries = submittedQuery ? results : suggestions;
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button type="button" className="fixed bottom-5 right-5 z-40 gap-2 rounded-full bg-[#07375a] px-5 text-white shadow-lg hover:bg-[#082849]" aria-label="Open Help">
+        <Button type="button" className="fixed bottom-5 right-5 z-[250] gap-2 rounded-full bg-[#07375a] px-5 text-white shadow-lg hover:bg-[#082849]" aria-label="Open Help">
           <HelpCircle className="h-5 w-5" /> Help
         </Button>
       </SheetTrigger>

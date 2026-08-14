@@ -193,5 +193,5 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
 }
 
 export function Stage1TourResume({ onClick }: { onClick: () => void }) {
-  return <Button type="button" onClick={onClick} className="fixed bottom-5 right-5 z-[200] gap-2 rounded-full bg-[#061b34] px-5 text-white shadow-2xl hover:bg-[#0a3158]"><Play className="h-4 w-4" /> Resume 5 Jobs Tour</Button>;
+  return <Button type="button" onClick={onClick} className="fixed bottom-20 right-5 z-[200] gap-2 rounded-full bg-[#061b34] px-5 text-white shadow-2xl hover:bg-[#0a3158]"><Play className="h-4 w-4" /> Resume 5 Jobs Tour</Button>;
 }
