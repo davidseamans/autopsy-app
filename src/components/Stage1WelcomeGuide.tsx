@@ -70,6 +70,24 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
     try { const saved = sessionStorage.getItem("stage1-tour-position"); return saved ? JSON.parse(saved) : null; } catch { return null; }
   });
 
+  useEffect(() => {
+    if (!position || !panelRef.current) return;
+    const keepInViewport = () => {
+      if (!panelRef.current) return;
+      const rect = panelRef.current.getBoundingClientRect();
+      const next = {
+        left: Math.max(8, Math.min(Math.max(8, window.innerWidth - rect.width - 8), position.left)),
+        top: Math.max(8, Math.min(Math.max(8, window.innerHeight - rect.height - 8), position.top)),
+      };
+      if (next.left === position.left && next.top === position.top) return;
+      setPosition(next);
+      sessionStorage.setItem("stage1-tour-position", JSON.stringify(next));
+    };
+    keepInViewport();
+    window.addEventListener("resize", keepInViewport);
+    return () => window.removeEventListener("resize", keepInViewport);
+  }, [index, position]);
+
   function stopVoice() {
     playbackIdRef.current += 1;
     requestRef.current?.abort();
@@ -102,8 +120,8 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
   function moveDrag(event: ReactPointerEvent<HTMLDivElement>) {
     if (!dragRef.current || dragRef.current.pointerId !== event.pointerId || !panelRef.current) return;
     const rect = panelRef.current.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - rect.width - 8, event.clientX - dragRef.current.dx));
-    const top = Math.max(8, Math.min(window.innerHeight - rect.height - 8, event.clientY - dragRef.current.dy));
+    const left = Math.max(8, Math.min(Math.max(8, window.innerWidth - rect.width - 8), event.clientX - dragRef.current.dx));
+    const top = Math.max(8, Math.min(Math.max(8, window.innerHeight - rect.height - 8), event.clientY - dragRef.current.dy));
     const next = { left, top };
     setPosition(next);
     sessionStorage.setItem("stage1-tour-position", JSON.stringify(next));
@@ -163,7 +181,7 @@ export function Stage1WelcomeGuide({ onClose, onStepChange, mode = "dashboard", 
     close();
   };
 
-  const positioned = position ? { left: position.left, top: position.top } : undefined;
+  const positioned = position ? { left: position.left, top: position.top, right: "auto", bottom: "auto", margin: 0 } : undefined;
   return <aside ref={panelRef} style={positioned} className={`fixed z-[200] max-h-[calc(100vh-1rem)] w-[calc(100%-1.5rem)] max-w-2xl overflow-auto rounded-xl border border-sky-300 bg-white shadow-2xl ${position ? "" : "inset-x-3 bottom-3 mx-auto md:bottom-6"}`}>
     <div className="bg-[#061b34] px-5 py-4 text-white">
       <div onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} className="mb-3 hidden min-h-10 cursor-grab touch-none select-none items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 text-xs font-semibold text-slate-100 active:cursor-grabbing md:flex"><GripHorizontal className="h-5 w-5" /> Grab here to move the tour</div>
