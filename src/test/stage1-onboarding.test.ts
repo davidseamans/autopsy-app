@@ -90,6 +90,27 @@ describe("First 5 Jobs orientation", () => {
     expect(dock).toContain("step: String(target.step)");
   });
 
+  it("keeps lead activity totals and identified potential customers in one governed flow", () => {
+    const dashboard = read("src/pages/Stage1Dashboard.tsx");
+    const funnel = read("src/lib/stage1Funnel.ts");
+    const matrix = read("src/components/Stage1LeadMatrix.tsx");
+    const migration = read("supabase/migrations/20260814011500_stage1_lead_activity_contacts.sql");
+
+    expect(dashboard).toContain("Potential customers identified");
+    expect(dashboard).toContain("Potential-customer contact details");
+    expect(dashboard).toContain("Save activity and potential customers");
+    expect(dashboard).toContain("createStage1LeadActivityWithContacts");
+    expect(dashboard).toContain("Potential customers cannot exceed the responses or conversations recorded");
+    expect(funnel).toContain('supabase.rpc("create_stage1_lead_activity_with_contacts"');
+    expect(matrix).toContain("Weekly total");
+    expect(matrix).toContain("Six-week potential-customer total");
+    expect(matrix).toContain("outside this six-week window");
+    expect(migration).toContain("source_activity_id uuid");
+    expect(migration).toContain("v_customer_count <> p_leads_generated");
+    expect(migration).toContain("security invoker");
+    expect(migration).toContain("grant execute on function");
+  });
+
   it("keeps the guided sample workspace isolated from candidate transactions", () => {
     const demo = read("src/lib/stage1Demo.ts");
     const quotes = read("src/pages/Stage1Quotes.tsx");
