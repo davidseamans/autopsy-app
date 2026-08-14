@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { describe, expect, it } from "vitest";
-import { DiscoverHelp } from "@/components/DiscoverHelp";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { DiscoverHelp, HelpTargetFocus } from "@/components/DiscoverHelp";
 
 function LocationProbe() {
   const location = useLocation();
@@ -9,6 +9,8 @@ function LocationProbe() {
 }
 
 describe("Discover Help interaction", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("answers briefly and navigates to a stable target without copying tour state", () => {
     render(
       <MemoryRouter initialEntries={["/stage-1?demo=1&tour=1"]}>
@@ -41,5 +43,25 @@ describe("Discover Help interaction", () => {
 
     expect(screen.getByText("We do not have that answer yet.")).toBeInTheDocument();
     expect(screen.getByText(/saved on this device for testing/i)).toBeInTheDocument();
+  });
+
+  it("scrolls to and temporarily highlights an authorised stable target", () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <MemoryRouter initialEntries={["/stage-1?demo=1&helpTarget=money-owing"]}>
+        <HelpTargetFocus />
+        <section data-help-target="money-owing">Money owing</section>
+      </MemoryRouter>,
+    );
+
+    vi.advanceTimersByTime(100);
+    const target = screen.getByText("Money owing");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    expect(target).toHaveClass("ring-teal-400");
+
+    vi.advanceTimersByTime(3500);
+    expect(target).not.toHaveClass("ring-teal-400");
   });
 });

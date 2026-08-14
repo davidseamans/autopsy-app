@@ -91,13 +91,13 @@ export function HelpTargetFocus() {
 
   useEffect(() => {
     const target = new URLSearchParams(location.search).get("helpTarget");
-    if (!target || lastTarget.current === `${location.pathname}:${target}`) return;
+    if (!target || !/^[a-z0-9-]+$/.test(target) || lastTarget.current === `${location.pathname}:${target}`) return;
     lastTarget.current = `${location.pathname}:${target}`;
     let highlighted: HTMLElement | null = null;
     let attempts = 0;
     const timer = window.setInterval(() => {
       attempts += 1;
-      highlighted = document.querySelector<HTMLElement>(`[data-help-target="${CSS.escape(target)}"]`);
+      highlighted = document.querySelector<HTMLElement>(`[data-help-target="${target}"]`);
       if (highlighted) {
         window.clearInterval(timer);
         highlighted.classList.add("relative", "z-30", "ring-4", "ring-teal-400", "ring-offset-4");
