@@ -51,6 +51,21 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
     return methods.filter((method) => recorded.has(method));
   }, [activities, methods]);
 
+  const weeklyTotals = useMemo(() => Array.from({ length: 6 }, (_, index) => {
+    const week = index + 1;
+    return points
+      .filter((point) => point.week === week)
+      .reduce((total, point) => total + point.leads, 0);
+  }), [points]);
+  const sixWeekTotal = weeklyTotals.reduce((total, leads) => total + leads, 0);
+  const outsideWindow = useMemo(() => activities.filter((activity) => {
+    if (!anchor) return false;
+    const activityDate = dateOnly(activity.activity_date);
+    if (!activityDate) return true;
+    const week = Math.floor((activityDate.getTime() - anchor.getTime()) / (DAY_MS * 7)) + 1;
+    return week < 1 || week > 6;
+  }).length, [activities, anchor]);
+
   if (!anchor || visibleMethods.length === 0) {
     return <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Log the first dated activity to begin the six-week lead-source graph.</div>;
   }
@@ -71,8 +86,25 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
           {visibleMethods.map((method) => (
             <MatrixRow key={method} method={method} points={points} onSelect={setSelected} />
           ))}
+          <div className="flex min-h-14 items-center rounded-lg bg-sky-950 px-2 text-sm font-semibold text-white">
+            Weekly total
+          </div>
+          {weeklyTotals.map((total, index) => (
+            <div key={index} className="flex min-h-14 items-center justify-center rounded-lg bg-sky-50 text-base font-semibold text-sky-950">
+              {total}
+            </div>
+          ))}
         </div>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-sky-50 p-3 text-sm">
+        <span className="font-medium text-sky-950">Six-week potential-customer total</span>
+        <span className="text-xl font-semibold text-sky-950">{sixWeekTotal}</span>
+      </div>
+      {outsideWindow > 0 ? (
+        <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          {outsideWindow} dated activit{outsideWindow === 1 ? "y falls" : "ies fall"} outside this six-week window and {outsideWindow === 1 ? "is" : "are"} not included in the graph.
+        </p>
+      ) : null}
       <div aria-live="polite" className="min-h-16 rounded-xl border bg-slate-50 p-3 text-sm">
         {selected ? <><strong>{selected.method} · Week {selected.week}</strong><span className="mt-1 block">{selected.leads} lead{selected.leads === 1 ? "" : "s"} from {selected.attempts} attempts and {selected.contacts} contacts.</span></> : <span className="text-muted-foreground">Select a point for its lead count.</span>}
       </div>
