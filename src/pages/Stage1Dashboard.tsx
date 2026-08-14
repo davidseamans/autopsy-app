@@ -74,10 +74,11 @@ import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
 import {
-  createStage1LeadActivity,
+  createStage1LeadActivityWithContacts,
   loadStage1LeadActivities,
   loadStage1LeadRecords,
   type NewStage1LeadActivity,
+  type NewStage1PotentialCustomer,
   type Stage1LeadActivity,
   type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
@@ -1400,6 +1401,22 @@ function QuoteActivityDialog({
   );
 }
 
+type PotentialCustomerDraft = {
+  clientName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  siteAddress: string;
+};
+
+const blankPotentialCustomer = (): PotentialCustomerDraft => ({
+  clientName: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  siteAddress: "",
+});
+
 function LogLeadActivityDialog({
   open,
   onOpenChange,
@@ -1407,60 +1424,160 @@ function LogLeadActivityDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (activity: NewStage1LeadActivity) => void;
+  onSave: (activity: NewStage1LeadActivity, potentialCustomers: NewStage1PotentialCustomer[]) => void | Promise<void>;
 }) {
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [source, setSource] = useState(METHOD_OPTIONS[0]);
   const [attempts, setAttempts] = useState("");
   const [contacts, setContacts] = useState("");
   const [leads, setLeads] = useState("");
+  const [potentialCustomers, setPotentialCustomers] = useState<PotentialCustomerDraft[]>([]);
 
   useEffect(() => {
     if (open) {
       setActivityDate(new Date().toISOString().slice(0, 10));
-      setSource(METHOD_OPTIONS[0]); setAttempts(""); setContacts(""); setLeads("");
+      setSource(METHOD_OPTIONS[0]);
+      setAttempts("");
+      setContacts("");
+      setLeads("");
+      setPotentialCustomers([]);
     }
   }, [open]);
 
-  const canSave = Boolean(activityDate && source && Number(attempts) >= 0 && Number(leads) >= 0);
+  const potentialCustomerCount = Math.max(0, Math.trunc(Number(leads) || 0));
+  useEffect(() => {
+    if (!open) return;
+    setPotentialCustomers((current) =>
+      Array.from({ length: potentialCustomerCount }, (_, index) => current[index] ?? blankPotentialCustomer()),
+    );
+  }, [open, potentialCustomerCount]);
+
+  const attemptCount = Math.max(0, Math.trunc(Number(attempts) || 0));
+  const contactCount = Math.max(0, Math.trunc(Number(contacts) || 0));
+  const completeCustomers = potentialCustomers.every((customer) =>
+    customer.clientName.trim() && (customer.contactEmail.trim() || customer.contactPhone.trim()),
+  );
+  const canSave = Boolean(
+    activityDate &&
+    source &&
+    attempts !== "" &&
+    contacts !== "" &&
+    leads !== "" &&
+    contactCount <= attemptCount &&
+    potentialCustomerCount <= contactCount &&
+    completeCustomers,
+  );
+
+  const updatePotentialCustomer = (index: number, patch: Partial<PotentialCustomerDraft>) => {
+    setPotentialCustomers((current) =>
+      current.map((customer, customerIndex) => customerIndex === index ? { ...customer, ...patch } : customer),
+    );
+  };
 
   const save = () => {
-    onSave({
+    const identifiedCustomers: NewStage1PotentialCustomer[] = potentialCustomers.map((customer) => ({
+      client_name: customer.clientName.trim(),
+      contact_name: customer.contactName.trim() || null,
+      contact_email: customer.contactEmail.trim() || null,
+      contact_phone: customer.contactPhone.trim() || null,
+      site_address: customer.siteAddress.trim() || null,
+    }));
+    void onSave({
       activity_date: activityDate,
       method: source,
-      attempts: Math.max(0, Math.trunc(Number(attempts) || 0)),
-      contacts_made: Math.max(0, Math.trunc(Number(contacts) || 0)),
-      leads_generated: Math.max(0, Math.trunc(Number(leads) || 0)),
-    });
+      attempts: attemptCount,
+      contacts_made: contactCount,
+      leads_generated: potentialCustomerCount,
+    }, identifiedCustomers);
   };
+
+  const alignedField = "flex min-w-0 flex-col gap-1.5";
+  const alignedLabel = "flex min-h-10 items-end";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Log lead activity</DialogTitle>
-          <DialogDescription>Record only the date, method and volume. Names begin when somebody becomes a genuine contact.</DialogDescription>
+          <DialogDescription>
+            Record the activity totals. If it produced potential customers, identify each one so Quotes Potential and the contact record agree.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5"><Label htmlFor="lead-date">Date</Label><Input id="lead-date" type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} /></div>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5">
-            <Label htmlFor="lead-source">Lead method</Label>
-            <select
-              id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div></div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5"><Label htmlFor="lead-attempts">People approached / items distributed</Label><Input id="lead-attempts" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="lead-contacts">Responses / conversations</Label><Input id="lead-contacts" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="lead-results">Potential customers</Label><Input id="lead-results" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} /></div>
+        <div className="space-y-5">
+          <div className="grid items-end gap-3 sm:grid-cols-2">
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-date">Date</Label>
+              <Input id="lead-date" className="h-10" type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-source">Lead method</Label>
+              <select
+                id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
+              </select>
+            </div>
           </div>
+          <div className="grid items-end gap-3 sm:grid-cols-3">
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-attempts">People approached / items distributed</Label>
+              <Input id="lead-attempts" className="h-10" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-contacts">Responses / conversations</Label>
+              <Input id="lead-contacts" className="h-10" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-results">Potential customers identified</Label>
+              <Input id="lead-results" className="h-10" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} />
+            </div>
+          </div>
+          {contactCount > attemptCount ? (
+            <p role="alert" className="text-sm text-destructive">Responses cannot exceed the number approached.</p>
+          ) : null}
+          {potentialCustomerCount > contactCount ? (
+            <p role="alert" className="text-sm text-destructive">Potential customers cannot exceed the responses or conversations recorded.</p>
+          ) : null}
+          {potentialCustomerCount > 0 ? (
+            <section className="space-y-3" aria-labelledby="potential-customer-details">
+              <div>
+                <h3 id="potential-customer-details" className="font-semibold">Potential-customer contact details</h3>
+                <p className="text-sm text-muted-foreground">A customer or business name and either a phone number or email are required for each potential customer.</p>
+              </div>
+              {potentialCustomers.map((customer, index) => (
+                <div key={index} className="space-y-3 rounded-xl border bg-slate-50 p-4">
+                  <p className="text-sm font-semibold">Potential customer {index + 1}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-client-${index}`}>Customer or business *</Label>
+                      <Input id={`potential-client-${index}`} value={customer.clientName} onChange={(e) => updatePotentialCustomer(index, { clientName: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-contact-${index}`}>Contact person</Label>
+                      <Input id={`potential-contact-${index}`} value={customer.contactName} onChange={(e) => updatePotentialCustomer(index, { contactName: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-phone-${index}`}>Phone</Label>
+                      <Input id={`potential-phone-${index}`} type="tel" value={customer.contactPhone} onChange={(e) => updatePotentialCustomer(index, { contactPhone: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-email-${index}`}>Email</Label>
+                      <Input id={`potential-email-${index}`} type="email" value={customer.contactEmail} onChange={(e) => updatePotentialCustomer(index, { contactEmail: e.target.value })} />
+                    </div>
+                    <div className={`${alignedField} sm:col-span-2`}>
+                      <Label htmlFor={`potential-site-${index}`}>Service address</Label>
+                      <Input id={`potential-site-${index}`} value={customer.siteAddress} onChange={(e) => updatePotentialCustomer(index, { siteAddress: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          ) : null}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save activity</Button>
+          <Button onClick={save} disabled={!canSave}>Save activity and potential customers</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -4773,17 +4890,37 @@ function Stage1DashboardInner() {
       <LogLeadActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={async (activity) => {
+        onSave={async (activity, potentialCustomers) => {
           if (!requireBusinessRegistration("log lead activity")) return;
           if (isDemo) {
-            setActivities((prev) => [...prev, { ...activity, id: `demo-${Date.now()}`, created_at: new Date().toISOString() }]);
+            const createdAt = new Date().toISOString();
+            const activityId = `demo-${Date.now()}`;
+            setActivities((prev) => [...prev, { ...activity, id: activityId, created_at: createdAt }]);
+            setLeadRecords((prev) => [
+              ...prev,
+              ...potentialCustomers.map((customer, index) => ({
+                id: `${activityId}-lead-${index + 1}`,
+                client_name: customer.client_name,
+                contact_name: customer.contact_name,
+                contact_email: customer.contact_email,
+                contact_phone: customer.contact_phone,
+                site_address: customer.site_address,
+                source: activity.method,
+                status: "new",
+                estimated_value: 0,
+                next_action_at: null,
+                notes: null,
+                created_at: createdAt,
+              })),
+            ]);
             setLogActOpen(false);
             return;
           }
           if (!activeRunId) return;
           try {
-            const saved = await createStage1LeadActivity(activeRunId, activity);
-            setActivities((prev) => [...prev, saved]);
+            const refreshed = await createStage1LeadActivityWithContacts(activeRunId, activity, potentialCustomers);
+            setActivities(refreshed.activities);
+            setLeadRecords(refreshed.leads);
             setLogActOpen(false);
           } catch (error) {
             toast({ title: "Lead activity was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
