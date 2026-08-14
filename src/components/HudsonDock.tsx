@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { GripHorizontal, LayoutDashboard, Loader2, MessageCircle, Minimize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { HUDSON_DOCK_OPEN, HUDSON_SCREEN_FOCUS, type HudsonDockDetail, type HudsonScreenFocus } from "@/lib/hudsonDock";
+import { HUDSON_DOCK_OPEN, HUDSON_SCREEN_FOCUS, notifyHudsonDockClosed, type HudsonDockDetail, type HudsonScreenFocus } from "@/lib/hudsonDock";
 
 const screenSteps: Array<{ area: HudsonScreenFocus; label: string; step: number }> = [
   { area: "leads", label: "Leads", step: 2 },
@@ -138,6 +138,7 @@ export default function HudsonDock() {
         throw new Error(payload?.error || "Hudson could not close the room yet.");
       }
       setSession(null);
+      notifyHudsonDockClosed();
     } catch (cause) {
       setEndError(cause instanceof Error ? cause.message : "Hudson could not close the room yet.");
     } finally {
