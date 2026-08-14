@@ -80,6 +80,16 @@ describe("First 5 Jobs orientation", () => {
     expect(page).toContain("&tour=1");
   });
 
+  it("makes every Hudson focus control deterministic", () => {
+    const dock = read("src/components/HudsonDock.tsx");
+
+    expect(dock).toContain('const pathname = area === "quotes" ? "/stage-1/quotes" : "/stage-1"');
+    expect(dock).toContain('focusRequest: String(++focusRequestRef.current)');
+    expect(dock.match(/focusRequest: String\(\+\+focusRequestRef\.current\)/g)).toHaveLength(2);
+    expect(dock).toContain('tour: "hudson"');
+    expect(dock).toContain("step: String(target.step)");
+  });
+
   it("keeps the guided sample workspace isolated from candidate transactions", () => {
     const demo = read("src/lib/stage1Demo.ts");
     const quotes = read("src/pages/Stage1Quotes.tsx");
