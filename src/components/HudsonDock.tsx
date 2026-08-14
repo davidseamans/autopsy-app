@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { GripHorizontal, Loader2, Maximize2, MessageCircle, Minimize2, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { GripHorizontal, LayoutDashboard, Loader2, MessageCircle, Minimize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HUDSON_DOCK_OPEN, HUDSON_SCREEN_FOCUS, type HudsonDockDetail, type HudsonScreenFocus } from "@/lib/hudsonDock";
 
@@ -26,6 +26,7 @@ function safeMeetingUrl(value: string): string | null {
 
 export default function HudsonDock() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<HudsonDockDetail | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -165,7 +166,13 @@ export default function HudsonDock() {
           {screenSteps.map((item) => <Button key={item.area} type="button" size="sm" variant={screenFocus === item.area ? "default" : "outline"} className="h-auto min-h-9 whitespace-normal px-1 py-1 text-[10px] leading-tight" onClick={() => showArea(item.area)}>{item.label}</Button>)}
         </div>
         {endError ? <p role="alert" className="rounded-md bg-red-50 p-2 text-red-800">{endError} Use the close button to try again; the automatic Tavus timeout remains active.</p> : null}
-        <Button asChild size="sm" variant="outline" className="w-full gap-2 border-emerald-800/30 bg-white"><Link to={`/stage-1?runId=${encodeURIComponent(session.runId)}&tour=hudson&step=2`}><Maximize2 className="h-4 w-4" /> Show Hudson beside First 5 Jobs</Link></Button>
+        {location.pathname !== "/stage-1" ? (
+          <Button asChild size="sm" variant="outline" className="w-full gap-2 border-emerald-800/30 bg-white">
+            <Link to={`/stage-1?runId=${encodeURIComponent(session.runId)}&tour=hudson&step=2`}>
+              <LayoutDashboard className="h-4 w-4" /> Return to First 5 Jobs dashboard
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </aside>
   );
