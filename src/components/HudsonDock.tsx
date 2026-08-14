@@ -34,6 +34,7 @@ export default function HudsonDock() {
   const [position, setPosition] = useState<DockPosition | null>(null);
   const dockRef = useRef<HTMLElement | null>(null);
   const dragOffset = useRef<DockPosition | null>(null);
+  const focusRequestRef = useRef(0);
 
   useEffect(() => {
     const open = (event: Event) => {
@@ -56,7 +57,14 @@ export default function HudsonDock() {
       const target = screenSteps.find((item) => item.area === area);
       if (!target) return;
       setScreenFocus(area);
-      navigate(`/stage-1?runId=${encodeURIComponent(session.runId)}&tour=hudson&step=${target.step}`, { replace: true });
+      const params = new URLSearchParams({
+        runId: session.runId,
+        tour: "hudson",
+        step: String(target.step),
+        focusRequest: String(++focusRequestRef.current),
+      });
+      const pathname = area === "quotes" ? "/stage-1/quotes" : "/stage-1";
+      navigate(`${pathname}?${params.toString()}`, { replace: true });
     };
     window.addEventListener(HUDSON_SCREEN_FOCUS, focus);
     return () => window.removeEventListener(HUDSON_SCREEN_FOCUS, focus);
@@ -101,7 +109,14 @@ export default function HudsonDock() {
     const target = screenSteps.find((item) => item.area === area);
     if (!session || !target) return;
     setScreenFocus(area);
-    navigate(`/stage-1?runId=${encodeURIComponent(session.runId)}&tour=hudson&step=${target.step}`, { replace: true });
+    const params = new URLSearchParams({
+      runId: session.runId,
+      tour: "hudson",
+      step: String(target.step),
+      focusRequest: String(++focusRequestRef.current),
+    });
+    const pathname = area === "quotes" ? "/stage-1/quotes" : "/stage-1";
+    navigate(`${pathname}?${params.toString()}`, { replace: true });
   }
 
   async function endSession() {
