@@ -692,6 +692,7 @@ function KpiCard({
   tone,
   onClick,
   highlighted = false,
+  focusTarget,
 }: {
   label: string;
   primary: React.ReactNode;
@@ -701,6 +702,7 @@ function KpiCard({
   tone?: string;
   onClick?: () => void;
   highlighted?: boolean;
+  focusTarget?: string;
 }) {
   const accentStyles = {
     blue: {
@@ -751,13 +753,14 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <div data-hudson-focus={focusTarget} className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         {content}
       </div>
     );
   }
   return (
     <button
+      data-hudson-focus={focusTarget}
       onClick={onClick}
       className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}
     >
@@ -1265,12 +1268,13 @@ function DrillCurtain({
   return (
     <Sheet open={!!drill} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
+        closeLabel="Close"
         side="right"
         onInteractOutside={(event) => { if (tourInteractive) event.preventDefault(); }}
         className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
       >
         <div className="p-6 space-y-4">
-          <SheetHeader>
+          <SheetHeader className="pr-24">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <SheetTitle>{meta?.title}</SheetTitle>
@@ -1830,7 +1834,17 @@ function Stage1DashboardInner() {
       window.setTimeout(() => document.querySelector(`[data-stage1-tour="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
     }
     else if (tourStep === 9) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
-    else if (tourStep === 10) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
+    else if (tourStep === 10) {
+      setDrill(null);
+      setReportOpen(false);
+      setLedgerView("debtors");
+      reveal('[data-hudson-focus="money-owing"]');
+    }
+    else if (tourStep === 11) {
+      setDrill(null);
+      setReportOpen(false);
+      reveal('[data-hudson-focus="margin"]');
+    }
     else if (tourStep === 12 && hudsonTourActive) {
       setDrill(null);
       const firstJob = units[0];
@@ -4569,6 +4583,7 @@ function Stage1DashboardInner() {
           tone={displayMarginTone}
           primary={displayMarginText}
           highlighted={hudsonTourActive && tourStep === 11}
+          focusTarget="margin"
         />
       </section>
 
@@ -4585,7 +4600,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className={`space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <section data-hudson-focus="money-owing" className={`scroll-mt-6 space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
