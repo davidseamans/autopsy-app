@@ -88,6 +88,10 @@ describe("First 5 Jobs orientation", () => {
     expect(dock.match(/focusRequest: String\(\+\+focusRequestRef\.current\)/g)).toHaveLength(2);
     expect(dock).toContain('tour: "hudson"');
     expect(dock).toContain("step: String(target.step)");
+    expect(dock).toContain("Return to First 5 Jobs dashboard");
+    expect(dock).not.toContain("Show Hudson beside First 5 Jobs");
+    expect(read("src/pages/Stage1Dashboard.tsx")).toContain('reveal(\'[data-hudson-focus="money-owing"]\')');
+    expect(read("src/pages/Stage1Dashboard.tsx")).toContain('reveal(\'[data-hudson-focus="margin"]\')');
   });
 
   it("keeps lead activity totals and identified potential customers in one governed flow", () => {
@@ -106,12 +110,19 @@ describe("First 5 Jobs orientation", () => {
     expect(read("src/pages/Stage1Quotes.tsx")).toContain("Contact details required");
     expect(read("src/pages/Stage1Quotes.tsx")).toContain("Save contact details");
     expect(matrix).toContain("Weekly total");
-    expect(matrix).toContain("Six-week potential-customer total");
-    expect(matrix).toContain("outside this six-week window");
+    expect(matrix).toContain("Rolling six-week potential-customer total");
+    expect(matrix).toContain("window ends on your latest logged activity");
+    expect(matrix).toContain("WINDOW_DAYS = 42");
+    expect(matrix).toContain("Math.min(6");
+    expect(matrix).not.toContain("stageStart");
+    expect(matrix).not.toContain("outside this six-week window");
     expect(migration).toContain("source_activity_id uuid");
     expect(migration).toContain("v_customer_count <> p_leads_generated");
     expect(migration).toContain("security invoker");
     expect(migration).toContain("grant execute on function");
+    expect(read("src/components/ui/sheet.tsx")).toContain("closeLabel?: string");
+    expect(read("src/components/DetailedJobCostReport.tsx")).toContain('closeLabel="Close report"');
+    expect(dashboard).toContain('closeLabel="Close"');
   });
 
   it("keeps the guided sample workspace isolated from candidate transactions", () => {
