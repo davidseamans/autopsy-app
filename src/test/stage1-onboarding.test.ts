@@ -11,9 +11,9 @@ describe("First 5 Jobs orientation", () => {
     const page = read("src/pages/Stage1Orientation.tsx");
 
     expect(routes).toContain('path="/stage-1/orientation"');
-    expect(dashboard).toContain("Begin orientation");
-    expect(dashboard).toContain("Review orientation");
-    expect(page).toContain("Save and set up Business Details");
+    expect(dashboard).toContain("Set up First 5 Jobs");
+    expect(dashboard).toContain("Review setup choices");
+    expect(page).toContain("Save choices and open Business Details");
     expect(page).toContain("/business-setup?runId=");
   });
 
@@ -39,6 +39,23 @@ describe("First 5 Jobs orientation", () => {
     expect(migration).toContain("current_user_can_use_stage1_run(autopsy_run_id)");
     expect(migration).toContain("security invoker");
     expect(migration).toContain("revoke all on public.stage1_onboarding_progress from anon, authenticated");
+  });
+
+  it("treats orientation as support and saves only operational setup choices", () => {
+    const page = read("src/pages/Stage1Orientation.tsx");
+    const client = read("src/lib/stage1Onboarding.ts");
+    const migration = read("supabase/migrations/20260814043000_stage1_setup_choices_not_acknowledgements.sql");
+    const shell = read("src/components/AppShell.tsx");
+
+    expect(page).toContain("Hudson is your guide and support person throughout First 5 Jobs");
+    expect(page).toContain("Useful starting guidance—not a test or acknowledgement");
+    expect(page).not.toMatch(/welcomeAcknowledged|operatingStandardsAcknowledged|CheckLine/);
+    expect(client).toContain('supabase.rpc("save_stage1_setup_choices"');
+    expect(client).not.toMatch(/p_welcome_acknowledged|p_operating_standards_acknowledged/);
+    expect(migration).toContain("Legacy compatibility field. No longer collected or used for progression.");
+    expect(migration).toContain("security invoker");
+    expect(migration).toContain("current_user_can_use_stage1_run(p_run_id)");
+    expect(shell).toContain('label="Ask Hudson"');
   });
 
   it("uses video for welcome and Snagit Step for maintainable instructions", () => {
@@ -76,8 +93,12 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain('speaking ? "Pause"');
     expect(guide).toContain('"Forward"');
     expect(guide).not.toMatch(/\breal\b/i);
-    expect(page).toContain("Tour your actual First 5 Jobs screen");
+    expect(page).toContain("Open Hudson and tour First 5 Jobs");
+    expect(page).toContain("Tour without live video");
     expect(page).toContain("&tour=1");
+    expect(page).not.toContain("I understand how First 5 Jobs works");
+    expect(page).not.toContain("Orientation already completed");
+    expect(page).not.toContain("Welcome from Hudson");
   });
 
   it("makes every Hudson focus control deterministic", () => {
