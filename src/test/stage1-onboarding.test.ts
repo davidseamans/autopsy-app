@@ -102,6 +102,9 @@ describe("First 5 Jobs orientation", () => {
     expect(dashboard).toContain("createStage1LeadActivityWithContacts");
     expect(dashboard).toContain("Potential customers cannot exceed the responses or conversations recorded");
     expect(funnel).toContain('supabase.rpc("create_stage1_lead_activity_with_contacts"');
+    expect(funnel).toContain("updateStage1LeadContact");
+    expect(read("src/pages/Stage1Quotes.tsx")).toContain("Contact details required");
+    expect(read("src/pages/Stage1Quotes.tsx")).toContain("Save contact details");
     expect(matrix).toContain("Weekly total");
     expect(matrix).toContain("Six-week potential-customer total");
     expect(matrix).toContain("outside this six-week window");
