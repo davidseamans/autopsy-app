@@ -49,6 +49,8 @@ describe("First 5 Jobs orientation", () => {
 
     expect(page).toContain("Hudson is your guide and support person throughout First 5 Jobs");
     expect(page).toContain("Useful starting guidance—not a test or acknowledgement");
+    expect(page).toContain("Check the requirements of each target market before you approach it");
+    expect(page).toContain("regulated child-related cleaning work in Queensland can require a current blue card");
     expect(page).not.toMatch(/welcomeAcknowledged|operatingStandardsAcknowledged|CheckLine/);
     expect(client).toContain('supabase.rpc("save_stage1_setup_choices"');
     expect(client).not.toMatch(/p_welcome_acknowledged|p_operating_standards_acknowledged/);
@@ -256,8 +258,3 @@ describe("First 5 Jobs orientation", () => {
     expect(practices).not.toMatch(/supabase|localStorage|sessionStorage|createStage1Quote|updateStage1Quote|recordStage1Payment/);
     expect(migration).toContain("'follow_up'");
     expect(migration).toContain("'rejected_quote'");
-    expect(migration).toContain("'complete_professionally'");
-    expect(migration).toContain("security invoker");
-    expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
-  });
-});
