@@ -10,32 +10,46 @@ type MatrixPoint = {
 };
 
 const DAY_MS = 86_400_000;
+const WINDOW_DAYS = 42;
 
 function dateOnly(value: string) {
   const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatDate(value: Date) {
-  return value.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+function formatDate(value: Date, includeYear = false) {
+  return value.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    ...(includeYear ? { year: "numeric" } : {}),
+  });
 }
 
-export function Stage1LeadMatrix({ activities, startedAt, methods }: { activities: Stage1LeadActivity[]; startedAt: string | null; methods: string[] }) {
+function weekForDate(activityDate: Date, windowStart: Date, windowEnd: Date) {
+  if (activityDate < windowStart || activityDate > windowEnd) return null;
+  const elapsedDays = Math.floor((activityDate.getTime() - windowStart.getTime()) / DAY_MS);
+  return Math.min(6, Math.floor(elapsedDays / 7) + 1);
+}
+
+export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1LeadActivity[]; startedAt?: string | null; methods: string[] }) {
   const [selected, setSelected] = useState<MatrixPoint | null>(null);
-  const anchor = useMemo(() => {
-    const stageStart = startedAt ? dateOnly(startedAt) : null;
-    const firstActivity = activities.map((activity) => dateOnly(activity.activity_date)).filter((date): date is Date => Boolean(date)).sort((a, b) => a.getTime() - b.getTime())[0];
-    return stageStart ?? firstActivity ?? null;
-  }, [activities, startedAt]);
+  const windowEnd = useMemo(() => activities
+    .map((activity) => dateOnly(activity.activity_date))
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null, [activities]);
+  const windowStart = useMemo(
+    () => windowEnd ? new Date(windowEnd.getTime() - WINDOW_DAYS * DAY_MS) : null,
+    [windowEnd],
+  );
 
   const points = useMemo(() => {
-    if (!anchor) return [];
+    if (!windowStart || !windowEnd) return [];
     const totals = new Map<string, MatrixPoint>();
     activities.forEach((activity) => {
       const activityDate = dateOnly(activity.activity_date);
       if (!activityDate) return;
-      const week = Math.floor((activityDate.getTime() - anchor.getTime()) / (DAY_MS * 7)) + 1;
-      if (week < 1 || week > 6) return;
+      const week = weekForDate(activityDate, windowStart, windowEnd);
+      if (!week) return;
       const key = `${activity.method}:${week}`;
       const existing = totals.get(key) ?? { method: activity.method, week, leads: 0, attempts: 0, contacts: 0 };
       existing.leads += activity.leads_generated;
@@ -44,7 +58,7 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
       totals.set(key, existing);
     });
     return Array.from(totals.values());
-  }, [activities, anchor]);
+  }, [activities, windowEnd, windowStart]);
 
   const visibleMethods = useMemo(() => {
     const recorded = new Set(activities.map((activity) => activity.method));
@@ -59,28 +73,29 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
   }), [points]);
   const sixWeekTotal = weeklyTotals.reduce((total, leads) => total + leads, 0);
   const outsideWindow = useMemo(() => activities.filter((activity) => {
-    if (!anchor) return false;
+    if (!windowStart || !windowEnd) return false;
     const activityDate = dateOnly(activity.activity_date);
-    if (!activityDate) return true;
-    const week = Math.floor((activityDate.getTime() - anchor.getTime()) / (DAY_MS * 7)) + 1;
-    return week < 1 || week > 6;
-  }).length, [activities, anchor]);
+    return !activityDate || weekForDate(activityDate, windowStart, windowEnd) === null;
+  }).length, [activities, windowEnd, windowStart]);
 
-  if (!anchor || visibleMethods.length === 0) {
-    return <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Log the first dated activity to begin the six-week lead-source graph.</div>;
+  if (!windowStart || !windowEnd || visibleMethods.length === 0) {
+    return <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Log the first dated activity to begin the rolling six-week lead-source graph.</div>;
   }
 
   return (
     <section className="space-y-3" aria-labelledby="lead-matrix-title">
       <div>
-        <h3 id="lead-matrix-title" className="font-semibold">Six-week lead-source graph</h3>
+        <h3 id="lead-matrix-title" className="font-semibold">Rolling six-week lead-source graph</h3>
+        <p className="text-sm text-muted-foreground">
+          {formatDate(windowStart, true)} to {formatDate(windowEnd, true)} · the window ends on your latest logged activity.
+        </p>
         <p className="text-sm text-muted-foreground">Touch a point to see the result for that source and week.</p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-white p-3">
         <div className="grid min-w-[620px] gap-2" style={{ gridTemplateColumns: "minmax(150px, 1.5fr) repeat(6, minmax(62px, 1fr))" }}>
           <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead source</div>
           {Array.from({ length: 6 }, (_, index) => {
-            const start = new Date(anchor.getTime() + index * 7 * DAY_MS);
+            const start = new Date(windowStart.getTime() + index * 7 * DAY_MS);
             return <div key={index} className="px-1 py-1 text-center text-xs font-semibold"><span className="block">Week {index + 1}</span><span className="font-normal text-muted-foreground">{formatDate(start)}</span></div>;
           })}
           {visibleMethods.map((method) => (
@@ -97,12 +112,12 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-sky-50 p-3 text-sm">
-        <span className="font-medium text-sky-950">Six-week potential-customer total</span>
+        <span className="font-medium text-sky-950">Rolling six-week potential-customer total</span>
         <span className="text-xl font-semibold text-sky-950">{sixWeekTotal}</span>
       </div>
       {outsideWindow > 0 ? (
         <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          {outsideWindow} dated activit{outsideWindow === 1 ? "y falls" : "ies fall"} outside this six-week window and {outsideWindow === 1 ? "is" : "are"} not included in the graph.
+          {outsideWindow} older dated activit{outsideWindow === 1 ? "y falls" : "ies fall"} before this rolling six-week window and {outsideWindow === 1 ? "is" : "are"} not included in the graph.
         </p>
       ) : null}
       <div aria-live="polite" className="min-h-16 rounded-xl border bg-slate-50 p-3 text-sm">
