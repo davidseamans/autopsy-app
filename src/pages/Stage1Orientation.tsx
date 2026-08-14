@@ -19,6 +19,7 @@ import {
 const ABN_URL = "https://www.abr.gov.au/business-super-funds-charities/applying-abn";
 const ASIC_NAME_URL = "https://www.asic.gov.au/for-business-and-companies/business-names/register-a-business-name/how-to-register-a-business-name-with-asic/";
 const PRIVATE_NAME_URL = "https://australiabusinessnames.com.au/";
+const QUEENSLAND_BLUE_CARD_URL = "https://www.qld.gov.au/jobs/blue-card";
 
 const initialProgress: Stage1OnboardingProgress = {
   abnPath: null,
@@ -140,7 +141,18 @@ export default function Stage1Orientation() {
         <Card>
           <CardHeader><CardTitle>Start with business habits</CardTitle><CardDescription>Useful starting guidance—not a test or acknowledgement.</CardDescription></CardHeader>
           <CardContent className="space-y-3 text-sm leading-6">
-            <ul className="list-disc space-y-2 pl-5"><li>Open a separate business bank account.</li><li>Order only a small first batch of business cards, with room for notes on the back.</li><li>Buy only what booked work requires.</li></ul>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>Open a separate business bank account.</li>
+              <li>Order only a small first batch of business cards, with room for notes on the back.</li>
+              <li>Buy only what booked work requires.</li>
+              <li>
+                <strong className="font-medium text-foreground">Check the requirements of each target market before you approach it.</strong>{" "}
+                Some contracts require screening, licences, training or site-specific credentials. For example, regulated child-related cleaning work in Queensland can require a current blue card. Confirm the requirements for the actual role and location; if you hold a relevant credential, show it clearly on your business card and quote. It tells the customer you already understand their environment.
+                <span className="mt-2 block">
+                  <a className="font-medium text-foreground underline underline-offset-4" href={QUEENSLAND_BLUE_CARD_URL} target="_blank" rel="noreferrer">Check Queensland blue card guidance <ExternalLink className="ml-1 inline h-3.5 w-3.5" /></a>
+                </span>
+              </li>
+            </ul>
           </CardContent>
         </Card>
 
