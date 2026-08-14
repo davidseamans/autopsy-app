@@ -60,6 +60,9 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain("Hudson will never do that for you");
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
+    expect(guide).toContain('bottom: "auto"');
+    expect(guide).toContain("keepInViewport");
+    expect(guide).toContain('window.addEventListener("resize", keepInViewport)');
     expect(guide).toContain("Use Print or save PDF");
     expect(guide).toContain("There is no separate draft or issue step");
     expect(guide).toContain("Open the Job Cost Summary");
