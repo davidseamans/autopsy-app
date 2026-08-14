@@ -36,7 +36,7 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(indexMigration).toContain("public.stage1_funnel_totals(created_by)");
   });
 
-  it("keeps prospecting aggregate and unnamed in the dashboard drilldown", () => {
+  it("keeps lead activity aggregate while identifying potential customers for quote follow-up", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     const matrix = readFileSync(resolve("src/components/Stage1LeadMatrix.tsx"), "utf8");
@@ -44,9 +44,11 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(funnel).toContain('.from("stage1_lead_activities")');
     expect(dashboard).toContain("Lead Method Performance");
     expect(dashboard).toContain("Log lead activity");
-    expect(dashboard).toContain("Record only the date, method and volume");
+    expect(dashboard).toContain("Record the activity totals. If it produced potential customers, identify each one so Quotes Potential and the contact record agree.");
+    expect(dashboard).toContain("Potential-customer contact details");
+    expect(dashboard).toContain("createStage1LeadActivityWithContacts");
     expect(dashboard).not.toContain("Lead / business name");
-    expect(matrix).toContain("Six-week lead-source graph");
+    expect(matrix).toContain("Rolling six-week lead-source graph");
     expect(dashboard).not.toContain("Quotes Generated");
     expect(dashboard).not.toContain("Quote Details Required");
     expect(dashboard).not.toContain("matching quote details");

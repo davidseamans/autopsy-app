@@ -258,3 +258,8 @@ describe("First 5 Jobs orientation", () => {
     expect(practices).not.toMatch(/supabase|localStorage|sessionStorage|createStage1Quote|updateStage1Quote|recordStage1Payment/);
     expect(migration).toContain("'follow_up'");
     expect(migration).toContain("'rejected_quote'");
+    expect(migration).toContain("'complete_professionally'");
+    expect(migration).toContain("security invoker");
+    expect(migration).not.toMatch(/maturity_score|progression_gate|core_admission/i);
+  });
+});

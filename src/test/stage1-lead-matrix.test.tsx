@@ -13,18 +13,18 @@ const activities: Stage1LeadActivity[] = [
 ];
 
 describe("Stage 1 six-week lead-source matrix", () => {
-  it("places dated lead totals into touchable Stage 1 weeks", () => {
+  it("anchors the rolling window to the latest activity and aggregates its final week", () => {
     render(<Stage1LeadMatrix activities={activities} startedAt="2026-08-01T00:00:00Z" methods={["Customer Referral"]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Customer Referral, Week 1, 2 leads" }));
-    expect(screen.getByText("2 leads from 4 attempts and 3 contacts.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Customer Referral, Week 6, 3 leads" }));
+    expect(screen.getByText("3 leads from 6 attempts and 5 contacts.")).toBeInTheDocument();
     expect(screen.getByText("Week 6")).toBeInTheDocument();
   });
 
-  it("renders one newly created real lead immediately as a Week 1 point", () => {
+  it("renders a newly created latest lead immediately in Week 6", () => {
     const lead: Stage1LeadRecord = { id: "lead-1", client_name: "Acme Dental", contact_name: "Alex", contact_email: null, contact_phone: null, site_address: null, source: "Customer Referral", status: "new", estimated_value: 500, next_action_at: null, notes: null, created_at: "2026-08-10T01:00:00Z" };
     render(<Stage1LeadMatrix activities={leadRecordsAsActivities([lead])} startedAt={null} methods={["Customer Referral"]} />);
-    expect(screen.getByRole("button", { name: "Customer Referral, Week 1, 1 leads" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Customer Referral, Week 6, 1 leads" })).toBeInTheDocument();
   });
 
   it("keeps the persistent record aggregate and privacy-safe", () => {

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const api = readFileSync("api/hudson/session-start.ts", "utf8");
 const endApi = readFileSync("api/hudson/session-end.ts", "utf8");
 const orientation = readFileSync("src/pages/Stage1Orientation.tsx", "utf8");
+const support = readFileSync("src/components/HudsonSupportButton.tsx", "utf8");
 const dock = readFileSync("src/components/HudsonDock.tsx", "utf8");
 const shell = readFileSync("src/components/AppShell.tsx", "utf8");
 const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
@@ -39,21 +40,25 @@ describe("Hudson governed session boundary", () => {
     expect(runtime).toContain("must never mention elapsed time, remaining time");
   });
 
-  it("states Hudson's non-authoritative limits at the point of use", () => {
-    expect(orientation).toContain("He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.");
-    expect(orientation).toContain('mode: "first_5_jobs"');
-    expect(orientation).toContain("crypto.randomUUID()");
-    expect(orientation).toContain("requestId: hudsonRequestId.current");
+  it("introduces Hudson positively while preserving the governed session boundary", () => {
+    expect(orientation).toContain("Hudson is your guide and support person throughout First 5 Jobs.");
+    expect(orientation).toContain("BuildOS continues to control records and progression in the background.");
+    expect(orientation).not.toContain("He cannot issue your Verdict");
+    expect(support).toContain('mode: "first_5_jobs"');
+    expect(support).toContain("crypto.randomUUID()");
+    expect(support).toContain("requestId: requestIdRef.current");
   });
 
   it("keeps Hudson beside the governed 5JD tour without granting UI authority", () => {
-    expect(orientation).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId })");
+    expect(orientation).toContain("<HudsonSupportButton");
+    expect(support).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId })");
     expect(orientation).not.toContain('window.open("about:blank"');
     expect(shell).toContain("<HudsonDock />");
     expect(dock).toContain('allow="camera; microphone; fullscreen; display-capture"');
     expect(dock).toContain('url.hostname === "tavus.daily.co"');
-    expect(dock).toContain("Show Hudson beside First 5 Jobs");
-    expect(dock).toContain('tour=hudson&step=${target.step}');
+    expect(dock).toContain("Return to First 5 Jobs dashboard");
+    expect(dock).toContain('tour: "hudson"');
+    expect(dock).toContain("step: String(target.step)");
     expect(orientation).toContain('tour=hudson&step=2');
     expect(dock).toContain("BuildOS alone controls highlights, records, payment, Verdict and progression.");
   });
