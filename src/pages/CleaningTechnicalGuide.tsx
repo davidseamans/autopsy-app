@@ -176,7 +176,7 @@ export default function CleaningTechnicalGuide() {
                   <h2 className="text-2xl font-semibold tracking-tight">What are you cleaning?</h2>
                   <p className="mt-1 text-sm text-slate-600">Tap an area or search using the words you would normally use.</p>
                 </div>
-                <div className="flex gap-2">
+                <div data-help-target="technical-guide-search" className="flex gap-2">
                   <Input value={search} onChange={(event) => { setSearch(event.target.value); setSearchAttempted(false); }} onKeyDown={(event) => { if (event.key === "Enter") runSearch(); }} className="min-h-12 text-base" placeholder="Try body fat, toilet hinge, kitchen grease or window track" aria-label="Search cleaning issue" />
                   <Button type="button" onClick={runSearch} className="min-h-12 min-w-12 px-3" aria-label="Search"><Search className="h-5 w-5" /></Button>
                 </div>

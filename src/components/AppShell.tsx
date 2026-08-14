@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import HudsonDock from "@/components/HudsonDock";
 import { HudsonSupportButton } from "@/components/HudsonSupportButton";
+import { DiscoverHelp, HelpTargetFocus } from "@/components/DiscoverHelp";
 
 const navGroups = [
   {
@@ -102,6 +103,8 @@ export default function AppShell() {
       <main className="min-w-0">
         <Outlet />
       </main>
+      {isStage1Area ? <DiscoverHelp /> : null}
+      <HelpTargetFocus />
       <HudsonDock />
     </div>
   );

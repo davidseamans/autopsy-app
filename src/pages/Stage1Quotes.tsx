@@ -87,6 +87,12 @@ export default function Stage1Quotes() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    const helpTarget = searchParams.get("helpTarget");
+    if (helpTarget === "quotes-potential") setFilter("potential");
+    if (helpTarget === "quotes-register") setFilter("all");
+  }, [searchParams]);
+
   const counts = useMemo(() => ({
     sent: quotes.length,
     outstanding: quotes.filter((quote) => quoteBucket(quote) === "outstanding").length,
@@ -172,7 +178,7 @@ export default function Stage1Quotes() {
   return (
     <div className="container max-w-5xl py-10 space-y-6">
       <Button asChild variant="ghost" size="sm"><Link to={first5JobsPath}><ArrowLeft className="mr-1 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
-      <header className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && (tourStep === 0 || tourStep === 5) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <header data-help-target="quotes-register" className={`flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between ${tourActive && (tourStep === 0 || tourStep === 5) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-widest text-muted-foreground">First 5 Jobs · Quotes {isDemo ? "· Sample workspace" : ""}</p>
           <h1 className="text-3xl font-semibold tracking-tight">Quotes</h1>
@@ -192,7 +198,7 @@ export default function Stage1Quotes() {
         <FunnelCount label="Rejected" value={counts.rejected} tone="rose" active={filter === "rejected"} highlighted={tourActive && tourStep === 3} onClick={() => setFilter("rejected")} />
       </div>
 
-      <Card className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+      <Card data-help-target={filter === "potential" ? "quotes-potential" : "quotes-register"} className={tourActive && tourStep === 5 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader className="flex flex-row items-start justify-between gap-4"><div><CardTitle className="flex items-center gap-2 text-base"><FileText className="h-4 w-4" /> {filter === "potential" ? "Potential — unquoted" : filter === "all" ? "All quotes generated" : `${filter.charAt(0).toUpperCase() + filter.slice(1)} quotes`}</CardTitle><CardDescription>{filter === "potential" ? "Capture only enough detail to arrange the appointment. Prepare the written quote after the site visit." : `Showing ${filteredQuotes.length} of ${counts.sent}. Change the status here, or open a quote to print it and review the detail.`}</CardDescription></div>{filter === "potential" && !isDemo ? <Button type="button" size="sm" onClick={() => setShowContactForm((current) => !current)}><Plus className="mr-2 h-4 w-4" /> Add contact</Button> : null}</CardHeader>
         <CardContent className="space-y-3">
           {filter === "potential" ? <>
