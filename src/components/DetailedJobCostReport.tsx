@@ -906,12 +906,13 @@ export function DetailedJobCostReport({
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
+        closeLabel="Close report"
         side="right"
         onInteractOutside={(event) => { if (tourInteractive) event.preventDefault(); }}
         className="w-full sm:max-w-none sm:w-[90vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
       >
         <div className="p-6 space-y-6">
-          <SheetHeader>
+          <SheetHeader className="pr-32">
             <SheetTitle>Job Cost Summary Report</SheetTitle>
           </SheetHeader>
 
