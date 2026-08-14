@@ -202,6 +202,28 @@ export async function createStage1LeadActivityWithContacts(
   return { activities, leads };
 }
 
+export async function updateStage1LeadContact(
+  contactId: string,
+  patch: Pick<NewStage1PotentialCustomer, "contact_name" | "contact_email" | "contact_phone" | "site_address">,
+): Promise<Stage1LeadRecord> {
+  if (!patch.contact_email?.trim() && !patch.contact_phone?.trim()) {
+    throw new Error("A phone number or email is required.");
+  }
+  const { data, error } = await supabase
+    .from("stage1_leads")
+    .update({
+      contact_name: patch.contact_name?.trim() || null,
+      contact_email: patch.contact_email?.trim() || null,
+      contact_phone: patch.contact_phone?.trim() || null,
+      site_address: patch.site_address?.trim() || null,
+    })
+    .eq("id", contactId)
+    .select(LEAD_FIELDS)
+    .single();
+  if (error) throw new Error(error.message);
+  return mapLeadRecord(data);
+}
+
 export async function loadStage1Contact(contactId: string): Promise<Stage1LeadRecord> {
   const { data, error } = await supabase
     .from("stage1_leads")
