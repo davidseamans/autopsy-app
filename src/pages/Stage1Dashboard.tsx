@@ -1785,8 +1785,8 @@ function Stage1DashboardInner() {
     searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
   );
   const bd = useBusinessDetails(activeRunId, isDemo);
-  const [orientationComplete, setOrientationComplete] = useState(isDemo);
-  const [orientationLoaded, setOrientationLoaded] = useState(isDemo);
+  const [setupChoicesSaved, setOrientationComplete] = useState(isDemo);
+  const [setupChoicesLoaded, setOrientationLoaded] = useState(isDemo);
   useEffect(() => {
     if (isDemo) return;
     if (!activeRunId) {
@@ -1796,14 +1796,14 @@ function Stage1DashboardInner() {
     }
     setOrientationLoaded(false);
     void fetchStage1Onboarding(activeRunId)
-      .then((progress) => setOrientationComplete(Boolean(progress.completedAt)))
+      .then((progress) => setOrientationComplete(Boolean(progress.savedAt)))
       .catch(() => setOrientationComplete(false))
       .finally(() => setOrientationLoaded(true));
   }, [activeRunId, isDemo]);
   const [bdOpen, setBdOpen] = useState(false);
   useEffect(() => {
-    if (!isDemo && activeRunId && orientationLoaded && orientationComplete && bd.loaded && !bd.canOperate) setBdOpen(true);
-  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, orientationComplete, orientationLoaded]);
+    if (!isDemo && activeRunId && setupChoicesLoaded && setupChoicesSaved && bd.loaded && !bd.canOperate) setBdOpen(true);
+  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, setupChoicesSaved, setupChoicesLoaded]);
   const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
@@ -3226,7 +3226,7 @@ function Stage1DashboardInner() {
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
             </Button>
           ) : null}
-          {!isDemo && orientationComplete && bd.loaded && !bd.complete && (
+          {!isDemo && setupChoicesSaved && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
@@ -3243,19 +3243,30 @@ function Stage1DashboardInner() {
 
       {!isDemo ? <QboSandboxConnectionCard /> : null}
 
-      {!isDemo && orientationLoaded && activeRunId && (
-        <Card className={orientationComplete ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
+      {!isDemo && setupChoicesLoaded && activeRunId && (
+        <Card className={setupChoicesSaved ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
           <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
-              <Compass className={orientationComplete ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
-              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Hudson’s handover or your ABN and business-name pathway at any time." : "Hudson will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
+              <Compass className={setupChoicesSaved ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
+              <div>
+                <p className="font-semibold">First 5 Jobs setup</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {setupChoicesSaved
+                    ? "Your ABN and trading-name paths are saved. Hudson and the setup guide remain available."
+                    : "Choose your ABN and trading-name paths. Hudson can show you around first."}
+                </p>
+              </div>
             </div>
-            <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
+            <Button asChild variant={setupChoicesSaved ? "outline" : "default"} className="shrink-0">
+              <Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>
+                {setupChoicesSaved ? "Review setup choices" : "Set up First 5 Jobs"}
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      {!isDemo && orientationLoaded && orientationComplete && activeRunId && (
+      {!isDemo && setupChoicesLoaded && setupChoicesSaved && activeRunId && (
         <Card className="border-violet-200 bg-violet-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -3272,7 +3283,7 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {(isDemo || (orientationLoaded && orientationComplete && activeRunId)) && (
+      {(isDemo || (setupChoicesLoaded && setupChoicesSaved && activeRunId)) && (
         <Card className="border-teal-200 bg-teal-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -3295,7 +3306,7 @@ function Stage1DashboardInner() {
         </p>
       )}
 
-      {!isDemo && orientationComplete && bd.loaded && !bd.canOperate && (
+      {!isDemo && setupChoicesSaved && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Let’s set up your Business Details first</CardTitle>
