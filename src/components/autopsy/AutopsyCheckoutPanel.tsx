@@ -28,7 +28,7 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
       if (cancelled) return;
       if (response.ok && payload.status === "paid" && payload.entitlementStatus === "active") {
         setState("paid");
-        setMessage("Payment is verified. Your Autopsy assessment is ready when you are.");
+        setMessage("Hudson has confirmed the signed Stripe payment and your active access. Your Autopsy assessment is ready when you are.");
         return;
       }
       if (attempts < 8) window.setTimeout(verify, 1250);
@@ -62,8 +62,8 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
 
   return (
     <aside className="mt-6 rounded-3xl border border-[#9fc5b0] bg-[#eef8f1] p-5 text-[#17392a] shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#28734c]">When your questions are answered</p>
-      <h2 className="mt-2 text-xl font-semibold">You can choose the $49 Autopsy.</h2>
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#28734c]">Hudson · secure payment handover</p>
+      <h2 className="mt-2 text-xl font-semibold">When you are ready, Hudson can open the $49 Autopsy checkout.</h2>
       <p className="mt-2 text-sm leading-6 text-[#365d49]">
         This conversation is free and is not the assessment. Autopsy is the separate twelve-subject assessment of your readiness to carry the responsibility of a business.
       </p>
@@ -89,4 +89,3 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
     </aside>
   );
 }
-
