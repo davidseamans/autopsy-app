@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 
-export const AUTOPSY_AMOUNT_MINOR = 4900;
+export const AUTOPSY_AMOUNT_MINOR = 6900;
 export const AUTOPSY_CURRENCY = "aud";
 
 function requireStripeEnv(name: string): string {
