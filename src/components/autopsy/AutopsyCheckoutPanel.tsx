@@ -63,7 +63,7 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
   return (
     <aside className="mt-6 rounded-3xl border border-[#9fc5b0] bg-[#eef8f1] p-5 text-[#17392a] shadow-sm">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#28734c]">When your questions are answered</p>
-      <h2 className="mt-2 text-xl font-semibold">You can choose the $49 Autopsy.</h2>
+      <h2 className="mt-2 text-xl font-semibold">You can choose the $69 Autopsy.</h2>
       <p className="mt-2 text-sm leading-6 text-[#365d49]">
         This conversation is free and is not the assessment. Autopsy is the separate twelve-subject assessment of your readiness to carry the responsibility of a business.
       </p>
@@ -82,7 +82,7 @@ export function AutopsyCheckoutPanel({ conversationId }: { conversationId: strin
           disabled={!conversationId || state === "starting" || state === "verifying"}
           className="mt-5 rounded-full bg-[#28734c] px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {state === "starting" ? "Opening secure Checkout…" : state === "verifying" ? "Verifying payment…" : "Choose Autopsy — $49 AUD"}
+          {state === "starting" ? "Opening secure Checkout…" : state === "verifying" ? "Verifying payment…" : "Choose Autopsy — $69 AUD"}
         </button>
       )}
       <p className="mt-3 text-xs text-[#52705f]">One-time payment. No subscription. Secure Checkout by Stripe.</p>
