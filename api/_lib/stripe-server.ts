@@ -1,7 +1,8 @@
 import Stripe from "stripe";
 
-export const AUTOPSY_AMOUNT_MINOR = 4900;
+export const AUTOPSY_AMOUNT_MINOR = 6900;
 export const AUTOPSY_CURRENCY = "aud";
+export const AUTOPSY_PRICE_ID = "price_1U5CJtRtVEYVgWvX9jN6dclH";
 
 function requireStripeEnv(name: string): string {
   const value = process.env[name];
@@ -18,9 +19,7 @@ export function createTestStripeClient(): Stripe {
 }
 
 export function getAutopsyPriceId(): string {
-  const priceId = requireStripeEnv("STRIPE_AUTOPSY_PRICE_ID");
-  if (!priceId.startsWith("price_")) throw new Error("Invalid Autopsy Stripe price id.");
-  return priceId;
+  return AUTOPSY_PRICE_ID;
 }
 
 export function getAppBaseUrl(): string {
