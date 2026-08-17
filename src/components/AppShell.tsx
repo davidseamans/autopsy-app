@@ -24,6 +24,7 @@ const navGroups = [
     label: "BuildOS / Core",
     items: [
       { title: "Core overview", url: "/core", badge: "Read only" },
+      { title: "Weekly roster", url: "/core/roster", badge: "Read only" },
     ],
   },
   {

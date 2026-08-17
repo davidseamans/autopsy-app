@@ -4,13 +4,21 @@ on:
   pull_request:
     paths:
       - "src/lib/core/**"
-      - "src/test/core-roster-foundation.test.ts"
+      - "src/pages/CoreRoster.tsx"
+      - "src/components/AppShell.tsx"
+      - "src/App.tsx"
+      - "src/test/core-roster*.test.ts"
+      - "supabase/migrations/*core_roster*.sql"
       - ".github/workflows/core-roster.yml"
   push:
     branches: [main]
     paths:
       - "src/lib/core/**"
-      - "src/test/core-roster-foundation.test.ts"
+      - "src/pages/CoreRoster.tsx"
+      - "src/components/AppShell.tsx"
+      - "src/App.tsx"
+      - "src/test/core-roster*.test.ts"
+      - "supabase/migrations/*core_roster*.sql"
       - ".github/workflows/core-roster.yml"
 
 permissions:
@@ -34,7 +42,7 @@ jobs:
         run: npm ci
 
       - name: Run Core roster contract tests
-        run: npx vitest run src/test/core-roster-foundation.test.ts
+        run: npx vitest run src/test/core-roster*.test.ts
 
       - name: Verify production build
         run: npm run build
