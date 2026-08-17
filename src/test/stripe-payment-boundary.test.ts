@@ -13,8 +13,8 @@ afterEach(() => {
 });
 
 describe("Autopsy Stripe boundary", () => {
-  it("keeps the authorised price fixed at $49 AUD", () => {
-    expect(AUTOPSY_AMOUNT_MINOR).toBe(4900);
+  it("keeps the authorised price fixed at $69 AUD", () => {
+    expect(AUTOPSY_AMOUNT_MINOR).toBe(6900);
     expect(AUTOPSY_CURRENCY).toBe("aud");
   });
 
@@ -28,4 +28,3 @@ describe("Autopsy Stripe boundary", () => {
     expect(getAppBaseUrl()).toBe("https://preview.example.test");
   });
 });
-
