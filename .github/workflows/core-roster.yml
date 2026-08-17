@@ -1,0 +1,40 @@
+name: Core Roster Contract
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/core/**"
+      - "src/test/core-roster-foundation.test.ts"
+      - ".github/workflows/core-roster.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/core/**"
+      - "src/test/core-roster-foundation.test.ts"
+      - ".github/workflows/core-roster.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  core-roster-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Core roster contract tests
+        run: npx vitest run src/test/core-roster-foundation.test.ts
+
+      - name: Verify production build
+        run: npm run build
