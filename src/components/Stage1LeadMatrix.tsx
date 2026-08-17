@@ -66,7 +66,7 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
     <section className="space-y-3" aria-labelledby="lead-matrix-title">
       <div>
         <h3 id="lead-matrix-title" className="font-semibold">Six-week lead-source graph</h3>
-        <p className="text-sm text-muted-foreground">Touch a point to see the result for that source and week.</p>
+        <p className="text-sm text-muted-foreground">Six weeks ending at the latest recorded activity. Touch a point to see the result.</p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-white p-3">
         <div className="grid min-w-[620px] gap-2" style={{ gridTemplateColumns: "minmax(150px, 1.5fr) repeat(6, minmax(62px, 1fr))" }}>
