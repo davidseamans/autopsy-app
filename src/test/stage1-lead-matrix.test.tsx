@@ -16,9 +16,10 @@ describe("Stage 1 six-week lead-source matrix", () => {
   it("places dated lead totals into touchable Stage 1 weeks", () => {
     render(<Stage1LeadMatrix activities={activities} startedAt="2026-08-01T00:00:00Z" methods={["Customer Referral"]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Customer Referral, Week 1, 2 leads" }));
+    fireEvent.click(screen.getByRole("button", { name: "Customer Referral, Week 5, 2 leads" }));
     expect(screen.getByText("2 leads from 4 attempts and 3 contacts.")).toBeInTheDocument();
     expect(screen.getByText("Week 6")).toBeInTheDocument();
+    expect(screen.getByText("ends 9 Aug")).toBeInTheDocument();
   });
 
   it("renders one newly created real lead immediately as a Week 1 point", () => {

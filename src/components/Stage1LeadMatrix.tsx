@@ -22,19 +22,26 @@ function formatDate(value: Date) {
 
 export function Stage1LeadMatrix({ activities, startedAt, methods }: { activities: Stage1LeadActivity[]; startedAt: string | null; methods: string[] }) {
   const [selected, setSelected] = useState<MatrixPoint | null>(null);
-  const anchor = useMemo(() => {
-    const stageStart = startedAt ? dateOnly(startedAt) : null;
-    const firstActivity = activities.map((activity) => dateOnly(activity.activity_date)).filter((date): date is Date => Boolean(date)).sort((a, b) => a.getTime() - b.getTime())[0];
-    return stageStart ?? firstActivity ?? null;
-  }, [activities, startedAt]);
+  const window = useMemo(() => {
+    const dates = activities
+      .map((activity) => dateOnly(activity.activity_date))
+      .filter((date): date is Date => Boolean(date))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const latestActivity = dates.at(-1) ?? null;
+    if (!latestActivity) return null;
+    return {
+      start: new Date(latestActivity.getTime() - 41 * DAY_MS),
+      end: latestActivity,
+    };
+  }, [activities]);
 
   const points = useMemo(() => {
-    if (!anchor) return [];
+    if (!window) return [];
     const totals = new Map<string, MatrixPoint>();
     activities.forEach((activity) => {
       const activityDate = dateOnly(activity.activity_date);
       if (!activityDate) return;
-      const week = Math.floor((activityDate.getTime() - anchor.getTime()) / (DAY_MS * 7)) + 1;
+      const week = Math.floor((activityDate.getTime() - window.start.getTime()) / (DAY_MS * 7)) + 1;
       if (week < 1 || week > 6) return;
       const key = `${activity.method}:${week}`;
       const existing = totals.get(key) ?? { method: activity.method, week, leads: 0, attempts: 0, contacts: 0 };
@@ -44,14 +51,14 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
       totals.set(key, existing);
     });
     return Array.from(totals.values());
-  }, [activities, anchor]);
+  }, [activities, window]);
 
   const visibleMethods = useMemo(() => {
     const recorded = new Set(activities.map((activity) => activity.method));
     return methods.filter((method) => recorded.has(method));
   }, [activities, methods]);
 
-  if (!anchor || visibleMethods.length === 0) {
+  if (!window || visibleMethods.length === 0) {
     return <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Log the first dated activity to begin the six-week lead-source graph.</div>;
   }
 
@@ -59,14 +66,14 @@ export function Stage1LeadMatrix({ activities, startedAt, methods }: { activitie
     <section className="space-y-3" aria-labelledby="lead-matrix-title">
       <div>
         <h3 id="lead-matrix-title" className="font-semibold">Six-week lead-source graph</h3>
-        <p className="text-sm text-muted-foreground">Touch a point to see the result for that source and week.</p>
+        <p className="text-sm text-muted-foreground">Six weeks ending at the latest recorded activity. Touch a point to see the result.</p>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-white p-3">
         <div className="grid min-w-[620px] gap-2" style={{ gridTemplateColumns: "minmax(150px, 1.5fr) repeat(6, minmax(62px, 1fr))" }}>
           <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead source</div>
           {Array.from({ length: 6 }, (_, index) => {
-            const start = new Date(anchor.getTime() + index * 7 * DAY_MS);
-            return <div key={index} className="px-1 py-1 text-center text-xs font-semibold"><span className="block">Week {index + 1}</span><span className="font-normal text-muted-foreground">{formatDate(start)}</span></div>;
+            const end = new Date(window.start.getTime() + (index * 7 + 6) * DAY_MS);
+            return <div key={index} className="px-1 py-1 text-center text-xs font-semibold"><span className="block">Week {index + 1}</span><span className="font-normal text-muted-foreground">ends {formatDate(end)}</span></div>;
           })}
           {visibleMethods.map((method) => (
             <MatrixRow key={method} method={method} points={points} onSelect={setSelected} />
