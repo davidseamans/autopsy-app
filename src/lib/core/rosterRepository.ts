@@ -1,5 +1,5 @@
-import { addDays, format, startOfWeek } from "date-fns";
 import { supabase } from "@/lib/supabase";
+import type { RosterWeek } from "@/lib/core/rosterWeek";
 
 export interface CoreWeeklyRosterRow {
   shift_id: string;
@@ -19,19 +19,6 @@ export interface CoreWeeklyRosterRow {
   actual_minutes: number | null;
   variance_minutes: number | null;
   time_entry_status: string | null;
-}
-
-export interface RosterWeek {
-  startsOn: string;
-  endsOn: string;
-}
-
-export function getRosterWeek(anchor: Date): RosterWeek {
-  const monday = startOfWeek(anchor, { weekStartsOn: 1 });
-  return {
-    startsOn: format(monday, "yyyy-MM-dd"),
-    endsOn: format(addDays(monday, 6), "yyyy-MM-dd"),
-  };
 }
 
 export async function loadCoreWeeklyRoster(week: RosterWeek) {

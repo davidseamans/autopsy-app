@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getRosterWeek } from "@/lib/core/rosterRepository";
+import { getRosterWeek } from "@/lib/core/rosterWeek";
 
 const migration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260818095000_core_roster_persistence.sql"),

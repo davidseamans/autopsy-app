@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getRosterWeek, loadCoreWeeklyRoster } from "@/lib/core/rosterRepository";
+import { loadCoreWeeklyRoster } from "@/lib/core/rosterRepository";
+import { getRosterWeek } from "@/lib/core/rosterWeek";
 
 const hours = (minutes: number | null) =>
   minutes == null ? "—" : new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(minutes / 60);
