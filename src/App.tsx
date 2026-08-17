@@ -17,6 +17,7 @@ import PaidAutopsyEntry from "@/pages/PaidAutopsyEntry";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
 import CoreOverview from "@/pages/CoreOverview";
+import CoreRoster from "@/pages/CoreRoster";
 import NotFound from "./pages/NotFound.tsx";
 import BusinessSetup from "@/pages/BusinessSetup";
 import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
@@ -126,6 +127,7 @@ const App = () => (
               <Route path="/launchpad/quote/new" element={<LegacyStage1Redirect to="/stage-1/quotes/new" />} />
               <Route path="/business-setup" element={<BusinessSetupRoute />} />
               <Route path="/core" element={<CoreOverview />} />
+              <Route path="/core/roster" element={<CoreRoster />} />
               <Route path="/leads" element={<Navigate to="/core" replace />} />
               <Route path="/accounts" element={<Navigate to="/core" replace />} />
               <Route path="/pipeline" element={<Navigate to="/core" replace />} />
