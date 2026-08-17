@@ -26,7 +26,7 @@ describe("Core roster persistence", () => {
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("control_tenant_memberships");
     expect(migration).toContain("with (security_invoker = true)");
-    expect(migration).toContain("grant select on public.core_weekly_roster to authenticated");
+    expect(migration).toContain("grant select on table public.core_weekly_roster to authenticated");
     expect(migration).not.toMatch(/grant\s+(insert|update|delete)/i);
   });
 
