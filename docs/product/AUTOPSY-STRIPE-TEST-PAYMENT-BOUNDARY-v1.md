@@ -2,7 +2,8 @@
 
 **Status:** implementation draft  
 **Canonical authority:** `davidseamans/autopsy-canonical#65`  
-**Implementation issue:** `davidseamans/autopsy-app#32`
+**Implementation issue:** `davidseamans/autopsy-app#32`  
+**Current price authority:** `davidseamans/autopsy-canonical/docs/governance/DISCOVER-PRICE-AUTHORITY-A69-2026-08-18.md`
 
 ## Journey
 
@@ -11,7 +12,7 @@
 The free conversation builds trust and answers the candidate's questions. It is
 not an assessment and its transcript is not canonical maturity evidence.
 
-The candidate purchases one Autopsy assessment for $49 AUD. Payment does not
+The candidate purchases the complete six-week Discover journey for A$69 once. Payment does not
 guarantee a favourable verdict or admission to First 5 Jobs. A recommendation
 not to proceed is a valid, successful diagnostic outcome.
 
@@ -26,7 +27,7 @@ not to proceed is a valid, successful diagnostic outcome.
 
 ## Required test configuration
 
-Create a one-time $49 AUD Price in Stripe test mode, then configure these
+Create a one-time A$69 Price in Stripe test mode, then configure these
 server-only Vercel environment variables:
 
 - `SUPABASE_URL`
