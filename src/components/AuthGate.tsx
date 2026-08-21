@@ -7,11 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skull } from "lucide-react";
 
-type Mode = "signin" | "signup";
-
 /**
  * AuthGate enforces a valid Supabase Auth session before its children render.
- * While unauthenticated it shows a sign in / sign up form. Authorization is
+ * While unauthenticated it sends a passwordless secure return link. Authorization is
  * based solely on the Supabase session — never on tester_email or a
  * client-supplied user_id.
  */
@@ -50,9 +48,7 @@ export function AuthGate({
 }
 
 function AuthForm({ heading, description }: { heading?: string; description?: string }) {
-  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -63,23 +59,15 @@ function AuthForm({ heading, description }: { heading?: string; description?: st
     setError(null);
     setNotice(null);
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        setNotice(
-          "Account created. If email confirmation is enabled, check your inbox to confirm before signing in.",
-        );
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (error) throw error;
-      }
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`,
+          shouldCreateUser: false,
+        },
+      });
+      if (error) throw error;
+      setNotice("Check your email for your secure return link. No password is required.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Authentication failed.");
     } finally {
@@ -95,10 +83,10 @@ function AuthForm({ heading, description }: { heading?: string; description?: st
             <Skull className="h-7 w-7 text-[hsl(var(--autopsy-accent))]" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {mode === "signin" ? heading ?? "Sign in to continue" : "Create your account"}
+            {heading ?? "Return securely"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {description ?? "A signed-in account is required to start an Autopsy run."}
+            {description ?? "Use the email connected to your Autopsy or BuildOS access."}
           </p>
         </div>
 
@@ -117,7 +105,7 @@ function AuthForm({ heading, description }: { heading?: string; description?: st
 
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-1.5">
-            <Label htmlFor="auth-email">Email</Label>
+            <Label htmlFor="auth-email">Email address</Label>
             <Input
               id="auth-email"
               type="email"
@@ -128,60 +116,16 @@ function AuthForm({ heading, description }: { heading?: string; description?: st
               required
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="auth-password">Password</Label>
-            <Input
-              id="auth-password"
-              type="password"
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              minLength={6}
-              required
-            />
-          </div>
-
           <Button
             type="submit"
-            disabled={busy || !email.trim() || password.length < 6}
+            disabled={busy || !email.trim()}
             className="w-full h-11 bg-[hsl(var(--autopsy-accent))] hover:bg-[hsl(var(--autopsy-accent))]/90 text-[hsl(var(--autopsy-accent-foreground))]"
           >
             {busy
               ? "Please wait…"
-              : mode === "signin"
-                ? "Sign in"
-                : "Create account"}
+              : "Email my secure link"}
           </Button>
         </form>
-
-        <div className="mt-4 text-center text-sm text-muted-foreground">
-          {mode === "signin" ? (
-            <button
-              type="button"
-              className="underline underline-offset-4 hover:text-foreground"
-              onClick={() => {
-                setMode("signup");
-                setError(null);
-                setNotice(null);
-              }}
-            >
-              Need an account? Sign up
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="underline underline-offset-4 hover:text-foreground"
-              onClick={() => {
-                setMode("signin");
-                setError(null);
-                setNotice(null);
-              }}
-            >
-              Already have an account? Sign in
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
