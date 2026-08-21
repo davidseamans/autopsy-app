@@ -16,7 +16,7 @@ The replacement must preserve the engine and remove those diagnostics from the c
 
 ## Product decision
 
-`/first-conversation` becomes a single-thread conversational workspace. The candidate experiences one thoughtful exchange at a time with Jane. The underlying twelve-question assessment remains sequentially orchestrated but invisible.
+`/first-conversation` becomes a single-thread conversational workspace. The candidate experiences one thoughtful exchange at a time with Hudson. The underlying twelve-question assessment remains sequentially orchestrated but invisible.
 
 This is not a chat-shaped questionnaire. The interface must support pauses, clarification, reflection and operator-led redirection without displaying a test structure.
 
@@ -27,7 +27,7 @@ This is not a chat-shaped questionnaire. The interface must support pauses, clar
 Visible:
 
 - `Autopsy`
-- `Conversation with Jane`
+- `Conversation with Hudson`
 - quiet connection state only when operationally necessary: `Connected`, `Reconnecting`, or `Your response has not been saved`
 - `Pause` action
 - `Leave conversation` action
@@ -48,7 +48,7 @@ Not visible:
 
 A centred, readable transcript with restrained message density.
 
-Jane messages are plain natural language. Candidate responses appear as normal conversation bubbles. System notices are visually distinct and limited to consent, save failure, microphone state and final hand-off.
+Hudson messages are plain natural language. Candidate responses appear as normal conversation bubbles. System notices are visually distinct and limited to consent, save failure, microphone state and final hand-off.
 
 Only the current exchange receives visual emphasis. Prior exchanges remain available by scrolling but are not converted into cards, sections or completed steps.
 
@@ -75,7 +75,7 @@ Voice mode is an input method, not a separate assessment path.
 
 Required behaviour:
 
-1. Jane’s current message may be read aloud.
+1. Hudson’s current message may be read aloud.
 2. The candidate records a response.
 3. The transcript is shown for confirmation or correction.
 4. Only confirmed text is submitted for interpretation.
@@ -109,7 +109,7 @@ The explanation must remain challenge-specific, time-bound and revisable. No out
 
 ### State A — Opening and consent
 
-Jane establishes the relationship and permission:
+Hudson establishes the relationship and permission:
 
 > I’d like to understand what you are trying to create and whether BuilderOS can responsibly help you at this point. This is a conversation, not a test. You can pause, decline a question or ask me to rephrase anything.
 
@@ -123,7 +123,7 @@ Existing non-scored context remains required by the current run contract:
 - industry context
 - prior ownership or operating experience
 
-These are collected conversationally rather than through a visible form. Jane asks one context question at a time and reflects the answer before moving on. The stored values continue to populate the existing run fields.
+These are collected conversationally rather than through a visible form. Hudson asks one context question at a time and reflects the answer before moving on. The stored values continue to populate the existing run fields.
 
 ### State C — Evidence conversation
 
@@ -136,7 +136,7 @@ For each existing production question, the orchestration layer uses four interna
 
 ### State D — Interpretation confirmation
 
-Before binding a response to an existing answer option, Jane may reflect a concise interpretation:
+Before binding a response to an existing answer option, Hudson may reflect a concise interpretation:
 
 > It sounds as though you are saying [neutral summary]. Have I understood that correctly?
 
@@ -160,7 +160,7 @@ The existing `finalizeAutopsyRun` path remains the scoring authority. The conver
 
 The relationship does not end when the twelfth subject is confirmed. Once the
 existing finalisation path has produced its governed result, the Verdict screen
-opens and Jane gives a short spoken handover in the same established voice. The
+opens and Hudson gives a short spoken handover in the same established voice. The
 handover may state only the persisted Verdict, its candidate-facing explanation
 and the next action already permitted by the existing routing rules. It may not
 invent, soften, appeal or widen the Verdict.
@@ -424,17 +424,17 @@ Natural close:
 
 ## Opening sequence prototype
 
-Jane:
+Hudson:
 
 > Before we begin, this is not a test and there is no performance to put on. I’m trying to understand what you are attempting and whether BuilderOS can responsibly help you now. You can pause, decline or ask me to put anything differently.
 
-Jane:
+Hudson:
 
 > What are you trying to build, buy or improve at the moment?
 
-After the candidate answers, Jane captures the existing stage and industry context conversationally.
+After the candidate answers, Hudson captures the existing stage and industry context conversationally.
 
-Jane:
+Hudson:
 
 > And what experience have you had carrying responsibility for a business or team before now?
 

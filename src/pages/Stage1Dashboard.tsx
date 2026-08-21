@@ -74,10 +74,11 @@ import { DetailedJobCostReport } from "@/components/DetailedJobCostReport";
 import { Stage1TourResume, Stage1WelcomeGuide } from "@/components/Stage1WelcomeGuide";
 import { Stage1LeadMatrix } from "@/components/Stage1LeadMatrix";
 import {
-  createStage1LeadActivity,
+  createStage1LeadActivityWithContacts,
   loadStage1LeadActivities,
   loadStage1LeadRecords,
   type NewStage1LeadActivity,
+  type NewStage1PotentialCustomer,
   type Stage1LeadActivity,
   type Stage1LeadRecord,
 } from "@/lib/stage1Funnel";
@@ -691,6 +692,7 @@ function KpiCard({
   tone,
   onClick,
   highlighted = false,
+  focusTarget,
 }: {
   label: string;
   primary: React.ReactNode;
@@ -700,6 +702,7 @@ function KpiCard({
   tone?: string;
   onClick?: () => void;
   highlighted?: boolean;
+  focusTarget?: string;
 }) {
   const accentStyles = {
     blue: {
@@ -750,13 +753,14 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <div data-hudson-focus={focusTarget} className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         {content}
       </div>
     );
   }
   return (
     <button
+      data-hudson-focus={focusTarget}
       onClick={onClick}
       className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}
     >
@@ -811,7 +815,7 @@ function BusinessDetailsDialog({
         <DialogHeader>
           <DialogTitle>Before you start First 5 Jobs</DialogTitle>
           <DialogDescription>
-            Jane will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
+            Hudson will keep this simple. We first need a complete business identity and an ABN that can be verified with ABN Lookup.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1264,12 +1268,13 @@ function DrillCurtain({
   return (
     <Sheet open={!!drill} onOpenChange={onOpenChange} modal={!tourInteractive}>
       <SheetContent
+        closeLabel="Close"
         side="right"
         onInteractOutside={(event) => { if (tourInteractive) event.preventDefault(); }}
         className="w-full sm:max-w-none sm:w-[85vw] lg:w-[80vw] xl:w-[75vw] overflow-y-auto p-0"
       >
         <div className="p-6 space-y-4">
-          <SheetHeader>
+          <SheetHeader className="pr-24">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <SheetTitle>{meta?.title}</SheetTitle>
@@ -1400,6 +1405,22 @@ function QuoteActivityDialog({
   );
 }
 
+type PotentialCustomerDraft = {
+  clientName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  siteAddress: string;
+};
+
+const blankPotentialCustomer = (): PotentialCustomerDraft => ({
+  clientName: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  siteAddress: "",
+});
+
 function LogLeadActivityDialog({
   open,
   onOpenChange,
@@ -1407,60 +1428,160 @@ function LogLeadActivityDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (activity: NewStage1LeadActivity) => void;
+  onSave: (activity: NewStage1LeadActivity, potentialCustomers: NewStage1PotentialCustomer[]) => void | Promise<void>;
 }) {
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10));
   const [source, setSource] = useState(METHOD_OPTIONS[0]);
   const [attempts, setAttempts] = useState("");
   const [contacts, setContacts] = useState("");
   const [leads, setLeads] = useState("");
+  const [potentialCustomers, setPotentialCustomers] = useState<PotentialCustomerDraft[]>([]);
 
   useEffect(() => {
     if (open) {
       setActivityDate(new Date().toISOString().slice(0, 10));
-      setSource(METHOD_OPTIONS[0]); setAttempts(""); setContacts(""); setLeads("");
+      setSource(METHOD_OPTIONS[0]);
+      setAttempts("");
+      setContacts("");
+      setLeads("");
+      setPotentialCustomers([]);
     }
   }, [open]);
 
-  const canSave = Boolean(activityDate && source && Number(attempts) >= 0 && Number(leads) >= 0);
+  const potentialCustomerCount = Math.max(0, Math.trunc(Number(leads) || 0));
+  useEffect(() => {
+    if (!open) return;
+    setPotentialCustomers((current) =>
+      Array.from({ length: potentialCustomerCount }, (_, index) => current[index] ?? blankPotentialCustomer()),
+    );
+  }, [open, potentialCustomerCount]);
+
+  const attemptCount = Math.max(0, Math.trunc(Number(attempts) || 0));
+  const contactCount = Math.max(0, Math.trunc(Number(contacts) || 0));
+  const completeCustomers = potentialCustomers.every((customer) =>
+    customer.clientName.trim() && (customer.contactEmail.trim() || customer.contactPhone.trim()),
+  );
+  const canSave = Boolean(
+    activityDate &&
+    source &&
+    attempts !== "" &&
+    contacts !== "" &&
+    leads !== "" &&
+    contactCount <= attemptCount &&
+    potentialCustomerCount <= contactCount &&
+    completeCustomers,
+  );
+
+  const updatePotentialCustomer = (index: number, patch: Partial<PotentialCustomerDraft>) => {
+    setPotentialCustomers((current) =>
+      current.map((customer, customerIndex) => customerIndex === index ? { ...customer, ...patch } : customer),
+    );
+  };
 
   const save = () => {
-    onSave({
+    const identifiedCustomers: NewStage1PotentialCustomer[] = potentialCustomers.map((customer) => ({
+      client_name: customer.clientName.trim(),
+      contact_name: customer.contactName.trim() || null,
+      contact_email: customer.contactEmail.trim() || null,
+      contact_phone: customer.contactPhone.trim() || null,
+      site_address: customer.siteAddress.trim() || null,
+    }));
+    void onSave({
       activity_date: activityDate,
       method: source,
-      attempts: Math.max(0, Math.trunc(Number(attempts) || 0)),
-      contacts_made: Math.max(0, Math.trunc(Number(contacts) || 0)),
-      leads_generated: Math.max(0, Math.trunc(Number(leads) || 0)),
-    });
+      attempts: attemptCount,
+      contacts_made: contactCount,
+      leads_generated: potentialCustomerCount,
+    }, identifiedCustomers);
   };
+
+  const alignedField = "flex min-w-0 flex-col gap-1.5";
+  const alignedLabel = "flex min-h-10 items-end";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Log lead activity</DialogTitle>
-          <DialogDescription>Record only the date, method and volume. Names begin when somebody becomes a genuine contact.</DialogDescription>
+          <DialogDescription>
+            Record the activity totals. If it produced potential customers, identify each one so Quotes Potential and the contact record agree.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5"><Label htmlFor="lead-date">Date</Label><Input id="lead-date" type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} /></div>
-          <div className="grid gap-3 sm:grid-cols-2"><div className="space-y-1.5">
-            <Label htmlFor="lead-source">Lead method</Label>
-            <select
-              id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div></div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5"><Label htmlFor="lead-attempts">People approached / items distributed</Label><Input id="lead-attempts" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="lead-contacts">Responses / conversations</Label><Input id="lead-contacts" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="lead-results">Potential customers</Label><Input id="lead-results" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} /></div>
+        <div className="space-y-5">
+          <div className="grid items-end gap-3 sm:grid-cols-2">
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-date">Date</Label>
+              <Input id="lead-date" className="h-10" type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-source">Lead method</Label>
+              <select
+                id="lead-source" value={source} onChange={(e) => setSource(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
+              </select>
+            </div>
           </div>
+          <div className="grid items-end gap-3 sm:grid-cols-3">
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-attempts">People approached / items distributed</Label>
+              <Input id="lead-attempts" className="h-10" type="number" min={0} value={attempts} onChange={(e) => setAttempts(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-contacts">Responses / conversations</Label>
+              <Input id="lead-contacts" className="h-10" type="number" min={0} value={contacts} onChange={(e) => setContacts(e.target.value)} />
+            </div>
+            <div className={alignedField}>
+              <Label className={alignedLabel} htmlFor="lead-results">Potential customers identified</Label>
+              <Input id="lead-results" className="h-10" type="number" min={0} value={leads} onChange={(e) => setLeads(e.target.value)} />
+            </div>
+          </div>
+          {contactCount > attemptCount ? (
+            <p role="alert" className="text-sm text-destructive">Responses cannot exceed the number approached.</p>
+          ) : null}
+          {potentialCustomerCount > contactCount ? (
+            <p role="alert" className="text-sm text-destructive">Potential customers cannot exceed the responses or conversations recorded.</p>
+          ) : null}
+          {potentialCustomerCount > 0 ? (
+            <section className="space-y-3" aria-labelledby="potential-customer-details">
+              <div>
+                <h3 id="potential-customer-details" className="font-semibold">Potential-customer contact details</h3>
+                <p className="text-sm text-muted-foreground">A customer or business name and either a phone number or email are required for each potential customer.</p>
+              </div>
+              {potentialCustomers.map((customer, index) => (
+                <div key={index} className="space-y-3 rounded-xl border bg-slate-50 p-4">
+                  <p className="text-sm font-semibold">Potential customer {index + 1}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-client-${index}`}>Customer or business *</Label>
+                      <Input id={`potential-client-${index}`} value={customer.clientName} onChange={(e) => updatePotentialCustomer(index, { clientName: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-contact-${index}`}>Contact person</Label>
+                      <Input id={`potential-contact-${index}`} value={customer.contactName} onChange={(e) => updatePotentialCustomer(index, { contactName: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-phone-${index}`}>Phone</Label>
+                      <Input id={`potential-phone-${index}`} type="tel" value={customer.contactPhone} onChange={(e) => updatePotentialCustomer(index, { contactPhone: e.target.value })} />
+                    </div>
+                    <div className={alignedField}>
+                      <Label htmlFor={`potential-email-${index}`}>Email</Label>
+                      <Input id={`potential-email-${index}`} type="email" value={customer.contactEmail} onChange={(e) => updatePotentialCustomer(index, { contactEmail: e.target.value })} />
+                    </div>
+                    <div className={`${alignedField} sm:col-span-2`}>
+                      <Label htmlFor={`potential-site-${index}`}>Service address</Label>
+                      <Input id={`potential-site-${index}`} value={customer.siteAddress} onChange={(e) => updatePotentialCustomer(index, { siteAddress: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          ) : null}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={!canSave}>Save activity</Button>
+          <Button onClick={save} disabled={!canSave}>Save activity and potential customers</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1641,12 +1762,16 @@ function Stage1DashboardInner() {
   const navigate = useNavigate();
   const isDemo = searchParams.get("demo") === "1";
   const tourMode = searchParams.get("tour");
-  const tourActive = tourMode === "1" || tourMode === "jobs";
+  const hudsonTourActive = tourMode === "hudson";
+  const tourActive = tourMode === "1" || tourMode === "jobs" || hudsonTourActive;
   const tourAutoPlay = searchParams.get("autoplay") === "1";
   const tourStepParam = searchParams.get("step");
   const requestedTourStep = tourStepParam == null ? Number.NaN : Number(tourStepParam);
   const initialTourStep = Number.isInteger(requestedTourStep) && requestedTourStep >= 0 ? requestedTourStep : 0;
   const [tourStep, setTourStep] = useState(tourMode === "jobs" ? initialTourStep + 4 : initialTourStep);
+  useEffect(() => {
+    if (hudsonTourActive) setTourStep(initialTourStep);
+  }, [hudsonTourActive, initialTourStep]);
   const handleTourStepChange = useCallback((step: number) => setTourStep(tourMode === "jobs" ? step + 4 : step), [tourMode]);
   const closeTour = useCallback(() => {
     const next = new URLSearchParams(searchParams);
@@ -1660,8 +1785,8 @@ function Stage1DashboardInner() {
     searchParams.get("runId") || getStage1RunId() || getActiveRunId(),
   );
   const bd = useBusinessDetails(activeRunId, isDemo);
-  const [orientationComplete, setOrientationComplete] = useState(isDemo);
-  const [orientationLoaded, setOrientationLoaded] = useState(isDemo);
+  const [setupChoicesSaved, setOrientationComplete] = useState(isDemo);
+  const [setupChoicesLoaded, setOrientationLoaded] = useState(isDemo);
   useEffect(() => {
     if (isDemo) return;
     if (!activeRunId) {
@@ -1671,14 +1796,14 @@ function Stage1DashboardInner() {
     }
     setOrientationLoaded(false);
     void fetchStage1Onboarding(activeRunId)
-      .then((progress) => setOrientationComplete(Boolean(progress.completedAt)))
+      .then((progress) => setOrientationComplete(Boolean(progress.savedAt)))
       .catch(() => setOrientationComplete(false))
       .finally(() => setOrientationLoaded(true));
   }, [activeRunId, isDemo]);
   const [bdOpen, setBdOpen] = useState(false);
   useEffect(() => {
-    if (!isDemo && activeRunId && orientationLoaded && orientationComplete && bd.loaded && !bd.canOperate) setBdOpen(true);
-  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, orientationComplete, orientationLoaded]);
+    if (!isDemo && activeRunId && setupChoicesLoaded && setupChoicesSaved && bd.loaded && !bd.canOperate) setBdOpen(true);
+  }, [activeRunId, bd.canOperate, bd.loaded, isDemo, setupChoicesSaved, setupChoicesLoaded]);
   const [drill, setDrill] = useState<DrillKey | null>(null);
   const [units, setUnits] = useState<ProofUnit[]>(isDemo ? DEMO_UNITS : SEED_UNITS);
   const [selectedN, setSelectedN] = useState<number | null>(null);
@@ -1689,6 +1814,15 @@ function Stage1DashboardInner() {
 
   useEffect(() => {
     if (!tourActive) return;
+    let highlighted: Element | null = null;
+    let revealTimer: number | null = null;
+    const reveal = (selector: string) => {
+      revealTimer = window.setTimeout(() => {
+        highlighted = document.querySelector(selector);
+        highlighted?.classList.add("relative", "z-40", "ring-4", "ring-sky-400", "ring-offset-4");
+        highlighted?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 450);
+    };
     if (tourStep === 2) setDrill("leads");
     else if (tourStep === 4) setDrill("jobs");
     else if (tourStep >= 5 && tourStep <= 8 && isDemo) {
@@ -1700,9 +1834,32 @@ function Stage1DashboardInner() {
       window.setTimeout(() => document.querySelector(`[data-stage1-tour="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
     }
     else if (tourStep === 9) { setDrill(null); setReportOpen(false); setLedgerView("summary"); }
-    else if (tourStep === 10) { setDrill(null); setReportOpen(false); setLedgerView("debtors"); }
+    else if (tourStep === 10) {
+      setDrill(null);
+      setReportOpen(false);
+      setLedgerView("debtors");
+      reveal('[data-hudson-focus="money-owing"]');
+    }
+    else if (tourStep === 11) {
+      setDrill(null);
+      setReportOpen(false);
+      reveal('[data-hudson-focus="margin"]');
+    }
+    else if (tourStep === 12 && hudsonTourActive) {
+      setDrill(null);
+      const firstJob = units[0];
+      if (firstJob) {
+        setReportN(firstJob.n);
+        setReportOpen(true);
+        reveal('[data-stage1-tour="actual-hours"]');
+      }
+    }
     else setDrill(null);
-  }, [isDemo, tourActive, tourStep]);
+    return () => {
+      if (revealTimer != null) window.clearTimeout(revealTimer);
+      highlighted?.classList.remove("relative", "z-40", "ring-4", "ring-sky-400", "ring-offset-4");
+    };
+  }, [hudsonTourActive, isDemo, tourActive, tourStep, units]);
   const [logActOpen, setLogActOpen] = useState(false);
   const [activities, setActivities] = useState<Stage1LeadActivity[]>(isDemo ? DEMO_LEAD_ACTIVITIES : []);
   const [leadRecords, setLeadRecords] = useState<Stage1LeadRecord[]>(isDemo ? DEMO_LEAD_RECORDS : []);
@@ -3069,7 +3226,7 @@ function Stage1DashboardInner() {
               <Link to={`/autopsy/run/${activeRunId}`}>View Autopsy result</Link>
             </Button>
           ) : null}
-          {!isDemo && orientationComplete && bd.loaded && !bd.complete && (
+          {!isDemo && setupChoicesSaved && bd.loaded && !bd.complete && (
             <Button onClick={() => setBdOpen(true)} className="gap-2 bg-[#1769d4] text-white hover:bg-[#145ebd]">
               <IdCard className="h-4 w-4" />
               Complete Business Details
@@ -3086,19 +3243,30 @@ function Stage1DashboardInner() {
 
       {!isDemo ? <QboSandboxConnectionCard /> : null}
 
-      {!isDemo && orientationLoaded && activeRunId && (
-        <Card className={orientationComplete ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
+      {!isDemo && setupChoicesLoaded && activeRunId && (
+        <Card className={setupChoicesSaved ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
           <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
-              <Compass className={orientationComplete ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
-              <div><p className="font-semibold">{orientationComplete ? "First 5 Jobs orientation complete" : "Start with your First 5 Jobs orientation"}</p><p className="mt-1 text-sm text-muted-foreground">{orientationComplete ? "Review Jane’s handover or your ABN and business-name pathway at any time." : "Jane will explain the six-week test, then help you choose your ABN and business-name path."}</p></div>
+              <Compass className={setupChoicesSaved ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
+              <div>
+                <p className="font-semibold">First 5 Jobs setup</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {setupChoicesSaved
+                    ? "Your ABN and trading-name paths are saved. Hudson and the setup guide remain available."
+                    : "Choose your ABN and trading-name paths. Hudson can show you around first."}
+                </p>
+              </div>
             </div>
-            <Button asChild variant={orientationComplete ? "outline" : "default"} className="shrink-0"><Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>{orientationComplete ? "Review orientation" : "Begin orientation"}</Link></Button>
+            <Button asChild variant={setupChoicesSaved ? "outline" : "default"} className="shrink-0">
+              <Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>
+                {setupChoicesSaved ? "Review setup choices" : "Set up First 5 Jobs"}
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      {!isDemo && orientationLoaded && orientationComplete && activeRunId && (
+      {!isDemo && setupChoicesLoaded && setupChoicesSaved && activeRunId && (
         <Card className="border-violet-200 bg-violet-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -3115,7 +3283,7 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {(isDemo || (orientationLoaded && orientationComplete && activeRunId)) && (
+      {(isDemo || (setupChoicesLoaded && setupChoicesSaved && activeRunId)) && (
         <Card className="border-teal-200 bg-teal-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
@@ -3138,7 +3306,7 @@ function Stage1DashboardInner() {
         </p>
       )}
 
-      {!isDemo && orientationComplete && bd.loaded && !bd.canOperate && (
+      {!isDemo && setupChoicesSaved && bd.loaded && !bd.canOperate && (
         <Card className="border-amber-300 bg-amber-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Let’s set up your Business Details first</CardTitle>
@@ -3148,7 +3316,7 @@ function Stage1DashboardInner() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-amber-900 space-y-1">
-              <p>Jane: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
+              <p>Hudson: “Do you already have an ABN, or would you like the official steps for getting one?”</p>
               {bd.error ? <p className="text-xs text-destructive">{bd.error}</p> : null}
             </div>
             <Button onClick={() => setBdOpen(true)} className="gap-2 shrink-0">
@@ -4425,6 +4593,8 @@ function Stage1DashboardInner() {
           accent="amber"
           tone={displayMarginTone}
           primary={displayMarginText}
+          highlighted={hudsonTourActive && tourStep === 11}
+          focusTarget="margin"
         />
       </section>
 
@@ -4441,7 +4611,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section className={`space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <section data-hudson-focus="money-owing" className={`scroll-mt-6 space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -4746,17 +4916,37 @@ function Stage1DashboardInner() {
       <LogLeadActivityDialog
         open={logActOpen}
         onOpenChange={setLogActOpen}
-        onSave={async (activity) => {
+        onSave={async (activity, potentialCustomers) => {
           if (!requireBusinessRegistration("log lead activity")) return;
           if (isDemo) {
-            setActivities((prev) => [...prev, { ...activity, id: `demo-${Date.now()}`, created_at: new Date().toISOString() }]);
+            const createdAt = new Date().toISOString();
+            const activityId = `demo-${Date.now()}`;
+            setActivities((prev) => [...prev, { ...activity, id: activityId, created_at: createdAt }]);
+            setLeadRecords((prev) => [
+              ...prev,
+              ...potentialCustomers.map((customer, index) => ({
+                id: `${activityId}-lead-${index + 1}`,
+                client_name: customer.client_name,
+                contact_name: customer.contact_name,
+                contact_email: customer.contact_email,
+                contact_phone: customer.contact_phone,
+                site_address: customer.site_address,
+                source: activity.method,
+                status: "new",
+                estimated_value: 0,
+                next_action_at: null,
+                notes: null,
+                created_at: createdAt,
+              })),
+            ]);
             setLogActOpen(false);
             return;
           }
           if (!activeRunId) return;
           try {
-            const saved = await createStage1LeadActivity(activeRunId, activity);
-            setActivities((prev) => [...prev, saved]);
+            const refreshed = await createStage1LeadActivityWithContacts(activeRunId, activity, potentialCustomers);
+            setActivities(refreshed.activities);
+            setLeadRecords(refreshed.leads);
             setLogActOpen(false);
           } catch (error) {
             toast({ title: "Lead activity was not saved", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
@@ -4778,7 +4968,7 @@ function Stage1DashboardInner() {
         readOnly={isDemo}
         demoMode={isDemo}
       />
-      {tourActive ? <Stage1WelcomeGuide mode={tourMode === "jobs" ? "jobs" : "dashboard"} initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={handleTourStepChange} onJourneyBack={tourMode === "jobs" ? () => navigate("/stage-1/quote/demo-q-1004?demo=1&tour=document&step=2&autoplay=1") : undefined} onJourneyAction={tourMode === "jobs" ? undefined : () => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes&autoplay=1" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes&autoplay=1` : "/stage-1/quotes?tour=quotes&autoplay=1")} /> : null}
+      {tourActive && !hudsonTourActive ? <Stage1WelcomeGuide mode={tourMode === "jobs" ? "jobs" : "dashboard"} initialStep={initialTourStep} autoPlay={tourAutoPlay} onClose={closeTour} onStepChange={handleTourStepChange} onJourneyBack={tourMode === "jobs" ? () => navigate("/stage-1/quote/demo-q-1004?demo=1&tour=document&step=2&autoplay=1") : undefined} onJourneyAction={tourMode === "jobs" ? undefined : () => navigate(isDemo ? "/stage-1/quotes?demo=1&tour=quotes&autoplay=1" : activeRunId ? `/stage-1/quotes?runId=${encodeURIComponent(activeRunId)}&tour=quotes&autoplay=1` : "/stage-1/quotes?tour=quotes&autoplay=1")} /> : null}
       {isDemo && !tourActive ? <Stage1TourResume onClick={() => { const next = new URLSearchParams(searchParams); next.set("tour", "1"); setSearchParams(next); }} /> : null}
     </div>
   );

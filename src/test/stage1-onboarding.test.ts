@@ -11,9 +11,9 @@ describe("First 5 Jobs orientation", () => {
     const page = read("src/pages/Stage1Orientation.tsx");
 
     expect(routes).toContain('path="/stage-1/orientation"');
-    expect(dashboard).toContain("Begin orientation");
-    expect(dashboard).toContain("Review orientation");
-    expect(page).toContain("Save and set up Business Details");
+    expect(dashboard).toContain("Set up First 5 Jobs");
+    expect(dashboard).toContain("Review setup choices");
+    expect(page).toContain("Save choices and open Business Details");
     expect(page).toContain("/business-setup?runId=");
   });
 
@@ -41,6 +41,25 @@ describe("First 5 Jobs orientation", () => {
     expect(migration).toContain("revoke all on public.stage1_onboarding_progress from anon, authenticated");
   });
 
+  it("treats orientation as support and saves only operational setup choices", () => {
+    const page = read("src/pages/Stage1Orientation.tsx");
+    const client = read("src/lib/stage1Onboarding.ts");
+    const migration = read("supabase/migrations/20260814043000_stage1_setup_choices_not_acknowledgements.sql");
+    const shell = read("src/components/AppShell.tsx");
+
+    expect(page).toContain("Hudson is your guide and support person throughout First 5 Jobs");
+    expect(page).toContain("Useful starting guidance—not a test or acknowledgement");
+    expect(page).toContain("Check the requirements of each target market before you approach it");
+    expect(page).toContain("regulated child-related cleaning work in Queensland can require a current blue card");
+    expect(page).not.toMatch(/welcomeAcknowledged|operatingStandardsAcknowledged|CheckLine/);
+    expect(client).toContain('supabase.rpc("save_stage1_setup_choices"');
+    expect(client).not.toMatch(/p_welcome_acknowledged|p_operating_standards_acknowledged/);
+    expect(migration).toContain("Legacy compatibility field. No longer collected or used for progression.");
+    expect(migration).toContain("security invoker");
+    expect(migration).toContain("current_user_can_use_stage1_run(p_run_id)");
+    expect(shell).toContain('label="Ask Hudson"');
+  });
+
   it("uses video for welcome and Snagit Step for maintainable instructions", () => {
     const pack = read("docs/product/FIRST-5-JOBS-ONBOARDING-PRODUCTION-PACK-v1.md");
     const guide = read("src/components/Stage1WelcomeGuide.tsx");
@@ -51,15 +70,18 @@ describe("First 5 Jobs orientation", () => {
     expect(pack).toContain("Do not combine both into one long recording");
     expect(pack).toContain("Never collect or retain a TFN");
     expect(guide).toContain("/api/autopsy-speech");
-    expect(guide).toContain("Jane · live First 5 Jobs tour");
+    expect(guide).toContain("Hudson · First 5 Jobs screen guide");
     expect(guide).toContain("requestRef.current?.abort()");
     expect(guide).toContain("playbackId !== playbackIdRef.current");
     expect(guide).toContain("This is the Leads card");
     expect(guide).toContain("This is the Leads drill-down");
     expect(guide).toContain("The Conversions card opens Quotes");
-    expect(guide).toContain("Jane will never do that for you");
+    expect(guide).toContain("Hudson will never do that for you");
     expect(guide).toContain("stage1-tour-position");
     expect(guide).toContain("Grab here to move the tour");
+    expect(guide).toContain('bottom: "auto"');
+    expect(guide).toContain("keepInViewport");
+    expect(guide).toContain('window.addEventListener("resize", keepInViewport)');
     expect(guide).toContain("Use Print or save PDF");
     expect(guide).toContain("There is no separate draft or issue step");
     expect(guide).toContain("Open the Job Cost Summary");
@@ -73,8 +95,57 @@ describe("First 5 Jobs orientation", () => {
     expect(guide).toContain('speaking ? "Pause"');
     expect(guide).toContain('"Forward"');
     expect(guide).not.toMatch(/\breal\b/i);
-    expect(page).toContain("Tour your actual First 5 Jobs screen");
+    expect(page).toContain("Open Hudson and tour First 5 Jobs");
+    expect(page).toContain("Tour without live video");
     expect(page).toContain("&tour=1");
+    expect(page).not.toContain("I understand how First 5 Jobs works");
+    expect(page).not.toContain("Orientation already completed");
+    expect(page).not.toContain("Welcome from Hudson");
+  });
+
+  it("makes every Hudson focus control deterministic", () => {
+    const dock = read("src/components/HudsonDock.tsx");
+
+    expect(dock).toContain('const pathname = area === "quotes" ? "/stage-1/quotes" : "/stage-1"');
+    expect(dock).toContain('focusRequest: String(++focusRequestRef.current)');
+    expect(dock.match(/focusRequest: String\(\+\+focusRequestRef\.current\)/g)).toHaveLength(2);
+    expect(dock).toContain('tour: "hudson"');
+    expect(dock).toContain("step: String(target.step)");
+    expect(dock).toContain("Return to First 5 Jobs dashboard");
+    expect(dock).not.toContain("Show Hudson beside First 5 Jobs");
+    expect(read("src/pages/Stage1Dashboard.tsx")).toContain('reveal(\'[data-hudson-focus="money-owing"]\')');
+    expect(read("src/pages/Stage1Dashboard.tsx")).toContain('reveal(\'[data-hudson-focus="margin"]\')');
+  });
+
+  it("keeps lead activity totals and identified potential customers in one governed flow", () => {
+    const dashboard = read("src/pages/Stage1Dashboard.tsx");
+    const funnel = read("src/lib/stage1Funnel.ts");
+    const matrix = read("src/components/Stage1LeadMatrix.tsx");
+    const migration = read("supabase/migrations/20260814011500_stage1_lead_activity_contacts.sql");
+
+    expect(dashboard).toContain("Potential customers identified");
+    expect(dashboard).toContain("Potential-customer contact details");
+    expect(dashboard).toContain("Save activity and potential customers");
+    expect(dashboard).toContain("createStage1LeadActivityWithContacts");
+    expect(dashboard).toContain("Potential customers cannot exceed the responses or conversations recorded");
+    expect(funnel).toContain('supabase.rpc("create_stage1_lead_activity_with_contacts"');
+    expect(funnel).toContain("updateStage1LeadContact");
+    expect(read("src/pages/Stage1Quotes.tsx")).toContain("Contact details required");
+    expect(read("src/pages/Stage1Quotes.tsx")).toContain("Save contact details");
+    expect(matrix).toContain("Weekly total");
+    expect(matrix).toContain("Rolling six-week potential-customer total");
+    expect(matrix).toContain("window ends on your latest logged activity");
+    expect(matrix).toContain("latestActivity.getTime() - 41 * DAY_MS");
+    expect(matrix).toContain("if (week < 1 || week > 6) return");
+    expect(matrix).not.toContain("stageStart");
+    expect(matrix).not.toContain("outside this six-week window");
+    expect(migration).toContain("source_activity_id uuid");
+    expect(migration).toContain("v_customer_count <> p_leads_generated");
+    expect(migration).toContain("security invoker");
+    expect(migration).toContain("grant execute on function");
+    expect(read("src/components/ui/sheet.tsx")).toContain("closeLabel?: string");
+    expect(read("src/components/DetailedJobCostReport.tsx")).toContain('closeLabel="Close report"');
+    expect(dashboard).toContain('closeLabel="Close"');
   });
 
   it("keeps the guided sample workspace isolated from candidate transactions", () => {

@@ -1,4 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import HudsonDock from "@/components/HudsonDock";
+import { HudsonSupportButton } from "@/components/HudsonSupportButton";
 
 const navGroups = [
   {
@@ -47,6 +49,8 @@ export default function AppShell() {
       : "";
   const embeddedFlightDeck =
     new URLSearchParams(window.location.search).get("embedded") === "flight-deck";
+  const isStage1Area = location.pathname.startsWith("/stage-1") || location.pathname === "/business-setup";
+  const showHudsonSupport = isStage1Area && Boolean(runId) && searchParams.get("demo") !== "1";
 
   if (embeddedFlightDeck) {
     return (
@@ -91,11 +95,15 @@ export default function AppShell() {
               </div>
             ))}
           </nav>
+          {showHudsonSupport && runId ? (
+            <HudsonSupportButton runId={runId} label="Ask Hudson" nav />
+          ) : null}
         </div>
       </header>
       <main className="min-w-0">
         <Outlet />
       </main>
+      <HudsonDock />
     </div>
   );
 }

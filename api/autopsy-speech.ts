@@ -30,9 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     body: JSON.stringify({
       model: "gpt-4o-mini-tts",
-      voice: "marin",
+      voice: "cedar",
       input: text,
-      instructions: "Use a warm, mature feminine voice. Speak in a calm, direct Australian conversational manner. Be unhurried, attentive and natural, as though continuing one private conversation. Never sound theatrical, synthetic, instructional or like an assessor reading a report.",
+      instructions: "Use a clear, mature male voice with steady projection. Speak in a calm, direct Australian conversational manner. Keep the volume and energy consistent from beginning to end. Be attentive and natural, never breathy, whispering, theatrical, synthetic, instructional or like an assessor reading a report.",
       response_format: "mp3",
     }),
   });

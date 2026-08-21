@@ -4,7 +4,7 @@
 
 Use two complementary formats:
 
-- **In-app guided walkthrough:** Jane supplies tone, confidence and the reason behind First 5 Jobs through the existing governed voice. Five editable visual steps replace a frozen hosted video.
+- **In-app guided walkthrough:** Hudson supplies tone, confidence and the reason behind First 5 Jobs through the existing governed voice. Five editable visual steps replace a frozen hosted video.
 - **Snagit Step guide:** a quiet, numbered click guide for ABN and business-name setup. It is easier to scan, print and update when a government page changes.
 
 Do not combine both into one long recording. If a promotional video is produced later, record it only after the orientation UI has been accepted, so the footage does not immediately become obsolete.
@@ -13,16 +13,15 @@ Do not combine both into one long recording. If a promotional video is produced 
 
 The candidate completes orientation when they:
 
-1. acknowledge Jane’s First 5 Jobs handover;
-2. choose whether they already have an ABN or need to apply;
-3. choose whether they will trade under their legal name or register a different business name; and
-4. acknowledge the operating standards.
+1. open Hudson’s guided tour, or use the non-video tour;
+2. choose whether they already have an ABN or need to apply; and
+3. choose whether they will trade under their legal name or register a different business name.
 
-Orientation records understanding. It is not another assessment. Verified Business Details remains the commercial gate for quoting and transaction entry.
+Orientation records operational setup choices. It is not an assessment and does not ask the candidate to acknowledge guidance. Verified Business Details remains the commercial gate for quoting and transaction entry.
 
-Only the four checklist choices and completion time are retained. Never collect or retain a TFN, identity document or raw video response.
+Only the ABN path, business-name path and save time are retained. Never collect or retain a TFN, identity document or raw video response.
 
-## Jane’s welcome script
+## Hudson’s welcome script
 
 **Target:** 2–3 minutes. Calm, direct and commercial.
 
@@ -38,11 +37,11 @@ Only the four checklist choices and completion time are retained. Never collect 
 
 ## Guided-walkthrough visual sequence
 
-1. Jane opens and explains why the candidate is here.
+1. Hudson opens and explains why the candidate is here.
 2. First 5 Jobs dashboard: point to Leads, Conversions, Active Jobs and Gross Margin.
 3. Quotes screen: create quote, then show Accepted becoming a job.
 4. Job Cost Summary: show actual hours, costs, invoice, payment and attachment.
-5. Return to Jane: six weeks, five genuine jobs, keep it lean.
+5. Return to Hudson: six weeks, five genuine jobs, keep it lean.
 
 Use a test account and invented customer details. Never display a real TFN, ABN application, email inbox, password manager, bank details or browser autofill suggestions.
 
@@ -80,7 +79,7 @@ Observe whether they can:
 2. choose the correct ABN path;
 3. distinguish a legal personal name from a registered business name;
 4. state that BuildOS does not collect their TFN;
-5. complete the checklist and reach Business Details; and
+5. save both setup choices and reach Business Details; and
 6. return to the dashboard without assistance.
 
 Record confusion and completion time, but do not record raw audio or retain personal data. Repair repeated confusion only; do not redesign from one person’s stylistic preference.

@@ -14,7 +14,7 @@ export function FollowUpPractice() {
   const [customerResponse, setCustomerResponse] = useState("");
   const [nextStep, setNextStep] = useState("");
   const ready = Boolean(channel && customerResponse && nextStep);
-  const opening = channel === "Text" ? "Hi Sam, it’s Jane from Jane’s Cleaning." : channel === "Email" ? "Hi Sam, I’m following up on quote Q-12 for your office clean." : "Hi Sam, it’s Jane from Jane’s Cleaning. I’m calling about quote Q-12 for your office clean.";
+  const opening = channel === "Text" ? "Hi Sam, it’s Alex from Harbour Cleaning." : channel === "Email" ? "Hi Sam, I’m following up on quote Q-12 for your office clean." : "Hi Sam, it’s Alex from Harbour Cleaning. I’m calling about quote Q-12 for your office clean.";
   const responseLine = customerResponse === "Ready to decide" ? "Is everything clear, and would you like me to book the work?" : customerResponse === "Has a question" ? "What would you like me to clarify before you decide?" : customerResponse === "Needs more time" ? "That’s fine. When would be a reasonable time for me to follow up?" : "Choose the customer’s position to complete the conversation.";
   const nextLine = nextStep === "Book the work" ? "Great—I’ll confirm the agreed date and access details." : nextStep === "Agree one follow-up" ? "I’ll contact you once on the agreed date." : nextStep === "Close the quote" ? "Thanks for considering the quote. I’ll close it now." : "Choose one clear next step.";
 

@@ -221,10 +221,10 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("/api/autopsy-speech");
     expect(component).not.toContain("SpeechSynthesisUtterance");
     expect(speechEndpoint).toContain("authenticateRequest");
-    expect(speechEndpoint).toContain('voice: "marin"');
+    expect(speechEndpoint).toContain('voice: "cedar"');
     expect(speechEndpoint).toContain('model: "gpt-4o-mini-tts"');
-    expect(speechEndpoint).toContain("warm, mature feminine voice");
-    expect(speechEndpoint).not.toContain("warm, mature male voice");
+    expect(speechEndpoint).toContain("clear, mature male voice");
+    expect(speechEndpoint).toContain("volume and energy consistent");
   });
 
   it("extracts decisive facts from long runway answers and leaves embedded typing to the Flight Deck", () => {

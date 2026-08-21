@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, PlayCircle, ShieldCheck } from "lucide-react";
+import { HudsonSupportButton } from "@/components/HudsonSupportButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/components/ui/sonner";
@@ -19,13 +19,12 @@ import {
 const ABN_URL = "https://www.abr.gov.au/business-super-funds-charities/applying-abn";
 const ASIC_NAME_URL = "https://www.asic.gov.au/for-business-and-companies/business-names/register-a-business-name/how-to-register-a-business-name-with-asic/";
 const PRIVATE_NAME_URL = "https://australiabusinessnames.com.au/";
+const QUEENSLAND_BLUE_CARD_URL = "https://www.qld.gov.au/jobs/blue-card";
 
 const initialProgress: Stage1OnboardingProgress = {
-  welcomeAcknowledged: false,
   abnPath: null,
   businessNamePath: null,
-  operatingStandardsAcknowledged: false,
-  completedAt: null,
+  savedAt: null,
 };
 
 export default function Stage1Orientation() {
@@ -40,7 +39,7 @@ export default function Stage1Orientation() {
 
   useEffect(() => {
     if (!runId) {
-      setError("Return to First 5 Jobs and open the orientation from there.");
+      setError("Return to First 5 Jobs and open setup from there.");
       setLoading(false);
       return;
     }
@@ -53,34 +52,32 @@ export default function Stage1Orientation() {
       .finally(() => setLoading(false));
   }, [runId]);
 
-  const readyToSave = Boolean(
-    progress.welcomeAcknowledged &&
-      progress.abnPath &&
-      progress.businessNamePath &&
-      progress.operatingStandardsAcknowledged,
-  );
+  const readyToSave = Boolean(progress.abnPath && progress.businessNamePath);
 
   async function saveAndContinue() {
     if (!runId || !readyToSave) return;
     setSaving(true);
     try {
-      const saved = await saveStage1Onboarding(runId, progress);
+      const saved = await saveStage1Onboarding(runId, {
+        abnPath: progress.abnPath,
+        businessNamePath: progress.businessNamePath,
+      });
       setProgress(saved);
-      toast.success("Orientation complete.");
+      toast.success("First 5 Jobs setup choices saved.");
       navigate(
         businessVerified
           ? `/stage-1?runId=${encodeURIComponent(runId)}`
           : `/business-setup?runId=${encodeURIComponent(runId)}`,
       );
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Orientation could not be saved.");
+      toast.error(cause instanceof Error ? cause.message : "Setup choices could not be saved.");
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <div className="container max-w-3xl py-12 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading your orientation…</div>;
+    return <div className="container max-w-3xl py-12 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading First 5 Jobs setup…</div>;
   }
 
   return (
@@ -88,27 +85,35 @@ export default function Stage1Orientation() {
       <Button asChild variant="ghost" className="-ml-3"><Link to={runId ? `/stage-1?runId=${encodeURIComponent(runId)}` : "/stage-1"}><ArrowLeft className="mr-2 h-4 w-4" /> Back to First 5 Jobs</Link></Button>
 
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · orientation</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">First 5 Jobs · setup</p>
         <h1 className="text-3xl font-semibold tracking-tight">Before your first job</h1>
-        <p className="text-muted-foreground">A short handover from Jane, then choose the setup path that applies to you.</p>
+        <p className="text-muted-foreground">Hudson will show you through your First 5 Jobs workspace, then you choose the setup path that applies to you.</p>
       </header>
 
       {error ? <Card className="border-destructive/40"><CardContent className="pt-6 text-sm text-destructive">{error}</CardContent></Card> : null}
 
       {!error ? <>
-        <Card className="border-sky-200 bg-sky-50/40">
+        <Card className="border-emerald-200 bg-emerald-50/40">
           <CardHeader>
-            <div className="flex items-start gap-3">
-              <span className="rounded-full bg-[#082849] p-2 text-white"><PlayCircle className="h-5 w-5" /></span>
-              <div><CardTitle>Welcome from Jane</CardTitle><CardDescription className="mt-1">Watch the guided handover or read the same words below.</CardDescription></div>
-            </div>
+            <CardTitle>Meet Hudson</CardTitle>
+            <CardDescription>Hudson is your guide and support person throughout First 5 Jobs.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-6">
-            <p>You have passed Autopsy because you are ready to test a real business. First 5 Jobs is a controlled six-week start—not a classroom exercise and not a full accounting system.</p>
-            <p>Record how many leads you receive. Prepare a written quote when an opportunity is real. An accepted quote becomes a job and an invoice. Finish each job in the Job Cost Summary with the actual hours, costs, payments and any useful attachments.</p>
-            <p>Keep it lean. Buy what booked work needs, learn from the figures, and complete five genuine jobs before adding complexity.</p>
-            <Button asChild className="gap-2 bg-[#082849] text-white hover:bg-[#0b345c]"><Link to={`/stage-1?runId=${encodeURIComponent(runId)}&tour=1`}><PlayCircle className="h-4 w-4" /> Tour your actual First 5 Jobs screen</Link></Button>
-            <CheckLine id="welcome" checked={progress.welcomeAcknowledged} onChange={(checked) => setProgress((current) => ({ ...current, welcomeAcknowledged: checked }))} label="I understand how First 5 Jobs works." />
+            <p>Hudson will take you through Leads, Quotes, Jobs, Margin and Money Owing in your actual workspace. Use the buttons below his video to move directly to the area you are discussing.</p>
+            <p>Ask Hudson what a screen means or where to find something whenever you need help. BuildOS continues to control records and progression in the background.</p>
+            <p>He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.</p>
+            <div className="flex flex-wrap gap-2">
+              <HudsonSupportButton
+                runId={runId}
+                label="Open Hudson and tour First 5 Jobs"
+                onOpened={() => navigate(`/stage-1?runId=${encodeURIComponent(runId)}&tour=hudson&step=2`)}
+              />
+              <Button asChild variant="outline" className="gap-2">
+                <Link to={`/stage-1?runId=${encodeURIComponent(runId)}&tour=1`}>
+                  <PlayCircle className="h-4 w-4" /> Tour without live video
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -135,24 +140,36 @@ export default function Stage1Orientation() {
         </CardContent></Card>
 
         <Card>
-          <CardHeader><CardTitle>3. Start with business habits</CardTitle><CardDescription>These standards prepare your records for Core and QBO later.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Start with business habits</CardTitle><CardDescription>Useful starting guidance—not a test or acknowledgement.</CardDescription></CardHeader>
           <CardContent className="space-y-3 text-sm leading-6">
-            <ul className="list-disc space-y-2 pl-5"><li>Open a separate business bank account.</li><li>Order only a small first batch of business cards, with room for notes on the back.</li><li>Buy only what booked work requires.</li></ul>
-            <CheckLine id="standards" checked={progress.operatingStandardsAcknowledged} onChange={(checked) => setProgress((current) => ({ ...current, operatingStandardsAcknowledged: checked }))} label="I understand these starting standards." />
+            <ul className="list-disc space-y-2 pl-5">
+              <li>Open a separate business bank account.</li>
+              <li>Order only a small first batch of business cards, with room for notes on the back.</li>
+              <li>Buy only what booked work requires.</li>
+              <li>
+                <strong className="font-medium text-foreground">Check the requirements of each target market before you approach it.</strong>{" "}
+                Some contracts require screening, licences, training or site-specific credentials. For example, regulated child-related cleaning work in Queensland can require a current blue card. Confirm the requirements for the actual role and location; if you hold a relevant credential, show it clearly on your business card and quote. It tells the customer you already understand their environment.
+                <span className="mt-2 block">
+                  <a className="font-medium text-foreground underline underline-offset-4" href={QUEENSLAND_BLUE_CARD_URL} target="_blank" rel="noreferrer">Check Queensland blue card guidance <ExternalLink className="ml-1 inline h-3.5 w-3.5" /></a>
+                </span>
+              </li>
+            </ul>
           </CardContent>
         </Card>
 
         <div className="rounded-xl border bg-muted/30 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm"><ShieldCheck className="h-5 w-5 text-emerald-600" /><span>{progress.completedAt ? "Orientation already completed. You can review and save it again." : "Complete all four choices to continue."}</span></div>
-          <Button onClick={() => void saveAndContinue()} disabled={!readyToSave || saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{businessVerified ? "Save and return to First 5 Jobs" : "Save and set up Business Details"}</Button>
+          <div className="flex items-start gap-2 text-sm">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+            <span>{progress.savedAt ? "Your current ABN and trading-name choices are shown above. Change them only if your circumstances have changed." : "Choose your ABN and trading-name paths to continue."}</span>
+          </div>
+          <Button onClick={() => void saveAndContinue()} disabled={!readyToSave || saving} className="gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {businessVerified ? "Save choices and open First 5 Jobs" : "Save choices and open Business Details"}
+          </Button>
         </div>
       </> : null}
     </main>
   );
-}
-
-function CheckLine({ id, checked, onChange, label }: { id: string; checked: boolean; onChange: (checked: boolean) => void; label: string }) {
-  return <div className="flex items-start gap-3 rounded-lg border bg-white p-3"><Checkbox id={id} checked={checked} onCheckedChange={(value) => onChange(value === true)} /><Label htmlFor={id} className="cursor-pointer leading-5">{label}</Label></div>;
 }
 
 function ChoiceCard({ title, description, value, onChange, options }: { title: string; description: string; value: string | null; onChange: (value: string) => void; options: [string, string, string][] }) {
