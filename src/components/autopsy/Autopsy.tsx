@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 50269)
-Total output lines: 4752
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -2500,7 +2497,21 @@ const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: 
     consequence: "Quotes go unanswered, records fall behind and small promises to customers are missed—the ordinary failures that quietly sink new operators.",
   },
   psychological_resilience: {
-    positive: "You showed that you can remain responsibl…269 tokens truncated…e, actual cost and money left after delivering the work.",
+    positive: "You showed that you can remain responsible and make considered decisions when the pressure rises.",
+    concern: "Your answers did not yet show how you would respond to uncertainty, rejection, complaints or uneven income.",
+    consequence: "Pressure can lead to impulsive pricing, avoidance, poor customer decisions or giving up at exactly the wrong time.",
+  },
+};
+
+const CANDIDATE_DIMENSION_WORK: Record<string, { work: string; evidence: string; caution: string }> = {
+  cash_reality: {
+    work: "Prepare a truthful household survival budget and identify how regular living costs would be paid while work is uncertain.",
+    evidence: "A protected cash buffer and a written limit on what you can afford to risk without borrowing or missing personal commitments.",
+    caution: "Do not resign, borrow for equipment or use money already needed by your household.",
+  },
+  economic_literacy: {
+    work: "Cost several realistic cleaning jobs from start to finish, including labour time, supplies, travel and the mistakes that make a job run over.",
+    evidence: "Completed job-cost records showing the quoted price, actual cost and money left after delivering the work.",
     caution: "Do not rely on bank balance, turnover or a competitor's price as proof that a job is worthwhile.",
   },
   market_reality: {
