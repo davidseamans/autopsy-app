@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(503).json({ error: "Jane's voice is not configured." });
+  if (!apiKey) return res.status(503).json({ error: "Hudson's voice is not configured." });
 
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text || text.length > 1800) {
@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!response.ok) {
     console.error("Assessment speech failed", response.status);
-    return res.status(502).json({ error: "Jane could not speak just now." });
+    return res.status(502).json({ error: "Hudson could not speak just now." });
   }
 
   const audio = Buffer.from(await response.arrayBuffer());

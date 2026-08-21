@@ -1,5 +1,5 @@
-export const CONSTITUTIONAL_KERNEL_VERSION = "autopsy-kernel-2026-07-16-v2";
-export const TURN_CONTRACT_VERSION = "autopsy-turn-contract-v2";
+export const CONSTITUTIONAL_KERNEL_VERSION = "autopsy-kernel-2026-08-21-v3";
+export const TURN_CONTRACT_VERSION = "autopsy-turn-contract-v3";
 export const POLICY_GATE_VERSION = "autopsy-policy-gate-v2";
 
 export type ConversationMode =
@@ -26,6 +26,11 @@ export type TurnContract = {
   maturity_interpretation: string | null;
   requires_confirmation: boolean;
   memory_basis: string[];
+  identity_memory: {
+    first_name: string | null;
+    broad_region: string | null;
+    carry_consent: "unresolved" | "granted" | "declined";
+  };
   reply: string;
 };
 
@@ -63,6 +68,23 @@ export const validateTurnContract = (contract: TurnContract): PolicyResult => {
   if (!ALLOWED_GUIDANCE_STATES.has(contract.guidance_permission)) violations.push("invalid_guidance_permission");
   if (typeof contract.assessment_authorized !== "boolean") violations.push("missing_assessment_authorization");
   if (!Array.isArray(contract.memory_basis)) violations.push("invalid_memory_basis");
+  const identity = contract.identity_memory;
+  if (!identity || typeof identity !== "object") {
+    violations.push("invalid_identity_memory");
+  } else {
+    if (identity.first_name !== null && (typeof identity.first_name !== "string" || !identity.first_name.trim() || identity.first_name.trim().length > 80)) {
+      violations.push("invalid_first_name_memory");
+    }
+    if (identity.broad_region !== null && (typeof identity.broad_region !== "string" || !identity.broad_region.trim() || identity.broad_region.trim().length > 120)) {
+      violations.push("invalid_broad_region_memory");
+    }
+    if (!["unresolved", "granted", "declined"].includes(identity.carry_consent)) {
+      violations.push("invalid_identity_carry_consent");
+    }
+    if (identity.carry_consent === "granted" && (!identity.first_name?.trim() || !identity.broad_region?.trim())) {
+      violations.push("consent_without_identity_details");
+    }
+  }
   if (typeof contract.evidence_confidence !== "number" || contract.evidence_confidence < 0 || contract.evidence_confidence > 1) {
     violations.push("invalid_evidence_confidence");
   }
@@ -104,4 +126,4 @@ export const parseTurnContract = (raw: string): TurnContract | null => {
 };
 
 export const buildRegenerationInstruction = (violations: string[]) =>
-  `The previous draft failed the constitutional policy gate for: ${violations.join(", ")}. Regenerate the complete JSON turn contract. Default to LISTEN, REFLECT or INQUIRE. GUIDE requires scoped guidance_permission=granted. ASSESS requires assessment_authorized=true. maturity_interpretation must be null outside ASSESS. Preserve operator sovereignty, do not impose priorities, do not assume goals, do not manufacture engagement, and use SILENT with an empty reply when no intervention is useful.`;
+  `The previous draft failed the constitutional policy gate for: ${violations.join(", ")}. Regenerate the complete JSON turn contract. Default to LISTEN, REFLECT or INQUIRE. GUIDE requires scoped guidance_permission=granted. ASSESS requires assessment_authorized=true. maturity_interpretation must be null outside ASSESS. Preserve valid first-name and broad-region identity_memory already disclosed, and keep carry_consent unresolved unless the operator clearly granted or declined permission. Preserve operator sovereignty, do not impose priorities, do not assume goals, do not manufacture engagement, and use SILENT with an empty reply when no intervention is useful.`;
