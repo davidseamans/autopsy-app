@@ -7,6 +7,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 type StageOption = { value: string; label: string; helper: string };
 type ExperienceOption = { value: string; label: string };
 type Message = { id: string; speaker: "john" | "candidate" | "system"; text: string };
+type IdentityCarryConsent = "unresolved" | "granted" | "declined";
+type IdentityMemory = {
+  first_name: string | null;
+  broad_region: string | null;
+  carry_consent: IdentityCarryConsent;
+};
 type RecognitionAlternative = { transcript: string };
 type RecognitionResult = { isFinal: boolean; 0: RecognitionAlternative };
 type RecognitionResultEvent = { resultIndex: number; results: ArrayLike<RecognitionResult> };
@@ -82,6 +88,9 @@ const FirstConversation = () => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState(() => window.localStorage.getItem(VOICE_KEY) ?? "");
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [candidateFirstName, setCandidateFirstName] = useState<string | null>(null);
+  const [broadRegion, setBroadRegion] = useState<string | null>(null);
+  const [identityCarryConsent, setIdentityCarryConsent] = useState<IdentityCarryConsent>("unresolved");
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stableTranscriptRef = useRef("");
@@ -112,6 +121,9 @@ const FirstConversation = () => {
         setIndustry(saved.industry ?? "");
         setMessages(saved.messages);
         setConversationId(saved.conversationId ?? null);
+        setCandidateFirstName(saved.candidateFirstName ?? null);
+        setBroadRegion(saved.broadRegion ?? null);
+        setIdentityCarryConsent(saved.identityCarryConsent ?? "unresolved");
         turnNumberRef.current = saved.messages.filter((message: Message) => message.speaker !== "system").length;
         setStarted(true);
       }
@@ -150,10 +162,10 @@ const FirstConversation = () => {
 
   useEffect(() => {
     if (messages.length) {
-      window.localStorage.setItem(transcriptKey, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, conversationId, messages }));
+      window.localStorage.setItem(transcriptKey, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, conversationId, candidateFirstName, broadRegion, identityCarryConsent, messages }));
       transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [conversationId, experience, industry, messages, stage, transcriptKey]);
+  }, [broadRegion, candidateFirstName, conversationId, experience, identityCarryConsent, industry, messages, stage, transcriptKey]);
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
@@ -175,7 +187,7 @@ const FirstConversation = () => {
     utterance.pitch = 1;
     const selected = voices.find((voice) => voice.name === voiceName) ?? voices.find((voice) => /karen/i.test(voice.name));
     if (selected) utterance.voice = selected;
-    utterance.onstart = () => { setSpeaking(true); setStatus("Jane is speaking…"); };
+    utterance.onstart = () => { setSpeaking(true); setStatus("Hudson is speaking…"); };
     utterance.onend = () => {
       setSpeaking(false);
       setStatus("Ready when you are.");
@@ -204,7 +216,7 @@ const FirstConversation = () => {
     }
     setDraft("");
     setThinking(true);
-    setStatus("Jane is thinking…");
+    setStatus("Hudson is thinking…");
     setMessages((current) => [...current, makeMessage("candidate", text)]);
 
     try {
@@ -216,6 +228,30 @@ const FirstConversation = () => {
       });
       const payload = await response.json();
       if (!response.ok || !payload.reply) throw new Error(payload.error || "No reply");
+      const identity = payload.identity_memory as IdentityMemory | undefined;
+      if (conversationId && identity) {
+        const firstName = typeof identity.first_name === "string" ? normalise(identity.first_name).slice(0, 80) : candidateFirstName;
+        const region = typeof identity.broad_region === "string" ? normalise(identity.broad_region).slice(0, 120) : broadRegion;
+        const responseConsent: IdentityCarryConsent = ["granted", "declined"].includes(identity.carry_consent)
+          ? identity.carry_consent
+          : "unresolved";
+        const consent = responseConsent === "unresolved" ? identityCarryConsent : responseConsent;
+        const identityUpdate: Record<string, string | boolean | null> = {
+          candidate_first_name: firstName || null,
+          broad_region: region || null,
+          identity_carry_consent: consent === "unresolved" ? null : consent === "granted",
+          updated_at: new Date().toISOString(),
+        };
+        if (consent !== "unresolved" && consent !== identityCarryConsent) {
+          identityUpdate.identity_carry_consented_at = new Date().toISOString();
+        }
+        const { error: identityError } = await supabase.from("initial_conversations").update(identityUpdate)
+          .eq("id", conversationId).eq("user_id", user?.id ?? "");
+        if (identityError) throw new Error("The agreed continuity details could not be saved.");
+        setCandidateFirstName(firstName || null);
+        setBroadRegion(region || null);
+        setIdentityCarryConsent(consent);
+      }
       const reply = normalise(payload.reply);
       setMessages((current) => [...current, makeMessage("john", reply)]);
       if (conversationId) await persistTurn(conversationId, "john", reply);
@@ -223,11 +259,11 @@ const FirstConversation = () => {
       speak(reply, true);
     } catch (error) {
       setThinking(false);
-      setStatus("Jane could not respond. Your words are still here—press Send to retry.");
+      setStatus("Hudson could not respond. Your words are still here—press Send to retry.");
       setDraft(text);
       setMessages((current) => [...current, makeMessage("system", error instanceof Error ? error.message : "Conversation service failed")]);
     }
-  }, [conversationHistory, conversationId, experience, industry, navigate, paused, persistTurn, speak, stage, thinking]);
+  }, [broadRegion, candidateFirstName, conversationHistory, conversationId, experience, identityCarryConsent, industry, navigate, paused, persistTurn, speak, stage, thinking, user?.id]);
 
   const startListening = useCallback(() => {
     if (!speechRecognitionConstructor || listening || speaking || thinking || paused) return;
@@ -295,6 +331,9 @@ const FirstConversation = () => {
     window.localStorage.removeItem(transcriptKey);
     turnNumberRef.current = 0;
     setConversationId(conversation.id);
+    setCandidateFirstName(null);
+    setBroadRegion(null);
+    setIdentityCarryConsent("unresolved");
     setMessages([makeMessage("john", opening)]);
     setStarted(true);
     try { await persistTurn(conversation.id, "john", opening); } catch { setStatus("The opening was not saved. Please start again before purchasing Autopsy."); }
@@ -307,14 +346,18 @@ const FirstConversation = () => {
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
     window.localStorage.removeItem(transcriptKey);
-    setMessages([]); setConversationId(null); turnNumberRef.current = 0; setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
+    setMessages([]); setConversationId(null); setCandidateFirstName(null); setBroadRegion(null); setIdentityCarryConsent("unresolved"); turnNumberRef.current = 0; setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
   };
+
+  const identityContinuityReady = identityCarryConsent === "declined" || (
+    identityCarryConsent === "granted" && Boolean(candidateFirstName && broadRegion)
+  );
 
   return (
     <main className="min-h-screen bg-[#f4efe6] px-4 py-6 text-[#211f1b] sm:px-6 sm:py-10">
       <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-[#d9cbb8] bg-[#fffdf8] shadow-2xl shadow-[#4e3f2d]/10">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5dbcc] px-5 py-4 sm:px-8">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8a6335]">Autopsy</p><h1 className="mt-1 text-lg font-semibold sm:text-xl">A conversation with Jane</h1></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8a6335]">Autopsy</p><h1 className="mt-1 text-lg font-semibold sm:text-xl">A conversation with Hudson</h1></div>
           {started ? <div className="flex gap-2"><button type="button" onClick={() => { setPaused((value) => !value); recognitionRef.current?.abort(); window.speechSynthesis?.cancel(); }} className="rounded-full border border-[#cdbb9f] px-4 py-2 text-sm font-semibold">{paused ? "Resume" : "Pause"}</button><button type="button" onClick={restart} className="rounded-full border border-[#cdbb9f] px-4 py-2 text-sm font-semibold">Start again</button></div> : null}
         </header>
 
@@ -322,19 +365,19 @@ const FirstConversation = () => {
           <section className="flex flex-1 items-center px-5 py-8 sm:px-10 sm:py-12"><div className="mx-auto w-full max-w-2xl">
             <p className="text-sm font-semibold text-[#8a6335]">Before we begin</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Tell me enough about your situation so we can have a worthwhile conversation.</h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-[#685f52]">Jane will listen and respond to what you actually say. The Autopsy framework stays in the background.</p>
+            <p className="mt-4 max-w-xl text-base leading-7 text-[#685f52]">Hudson will listen and respond to what you actually say. The Autopsy framework stays in the background.</p>
             <div className="mt-8 space-y-7">
               <div><p className="text-sm font-semibold">What situation are we discussing?</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{stageOptions.map((option) => <button key={option.value} type="button" onClick={() => setStage(option.value)} className={`rounded-2xl border p-4 text-left ${stage === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white"}`}><span className="block font-semibold">{option.label}</span><span className="mt-1 block text-sm text-[#756b5d]">{option.helper}</span></button>)}</div></div>
               <label className="block"><span className="text-sm font-semibold">What kind of business?</span><input value={industry} onChange={(event) => setIndustry(event.target.value)} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3" placeholder="Cleaning, bookkeeping, café, consulting..." /></label>
               <div><p className="text-sm font-semibold">What experience are you bringing?</p><div className="mt-3 space-y-2">{experienceOptions.map((option) => <button key={option.value} type="button" onClick={() => setExperience(option.value)} className={`w-full rounded-2xl border p-4 text-left text-sm ${experience === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white"}`}>{option.label}</button>)}</div></div>
-              {voices.length ? <label className="block"><span className="text-sm font-semibold">Jane's voice</span><select value={voiceName} onChange={(event) => { setVoiceName(event.target.value); window.localStorage.setItem(VOICE_KEY, event.target.value); }} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3">{voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} — {voice.lang}</option>)}</select></label> : null}
+              {voices.length ? <label className="block"><span className="text-sm font-semibold">Hudson's voice</span><select value={voiceName} onChange={(event) => { setVoiceName(event.target.value); window.localStorage.setItem(VOICE_KEY, event.target.value); }} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3">{voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} — {voice.lang}</option>)}</select></label> : null}
             </div>
             <button type="button" onClick={startConversation} className="mt-8 rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white">Begin spoken conversation</button>
           </div></section>
         ) : (
           <>
-            <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"><div className="mx-auto max-w-2xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#fff0ed] text-[#8f2f24]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>{message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">Jane</p> : null}<p>{message.text}</p></div></div>)}<div ref={transcriptEndRef} /></div></section>
-            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "Jane is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p>{messages.filter((message) => message.speaker !== "system").length >= 3 || searchParams.has("checkout") ? <AutopsyCheckoutPanel conversationId={conversationId} /> : null}</div></footer>
+            <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"><div className="mx-auto max-w-2xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#fff0ed] text-[#8f2f24]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>{message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">Hudson</p> : null}<p>{message.text}</p></div></div>)}<div ref={transcriptEndRef} /></div></section>
+            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "Hudson is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p>{messages.filter((message) => message.speaker !== "system").length >= 3 || searchParams.has("checkout") ? identityContinuityReady ? <AutopsyCheckoutPanel conversationId={conversationId} /> : <p className="mt-4 rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm text-[#685f52]">Hudson will first confirm whether your first name and broad region may carry into Autopsy. No audio recording is retained.</p> : null}</div></footer>
           </>
         )}
       </section>
