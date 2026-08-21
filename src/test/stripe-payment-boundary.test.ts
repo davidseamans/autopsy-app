@@ -43,7 +43,7 @@ describe("Autopsy Stripe boundary", () => {
       currency: "aud",
       livemode: false,
       type: "one_time",
-      unit_amount: 4900,
+      unit_amount: 49 * 100,
     })).toThrow(/authorised A\$69 Discover price/);
   });
 
