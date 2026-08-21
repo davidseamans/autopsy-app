@@ -2,11 +2,17 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { AutopsyCheckoutPanel } from "@/components/autopsy/AutopsyCheckoutPanel";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 type StageOption = { value: string; label: string; helper: string };
 type ExperienceOption = { value: string; label: string };
 type Message = { id: string; speaker: "john" | "candidate" | "system"; text: string };
+type IdentityCarryConsent = "unresolved" | "granted" | "declined";
+type IdentityMemory = {
+  first_name: string | null;
+  broad_region: string | null;
+  carry_consent: IdentityCarryConsent;
+};
 type RecognitionAlternative = { transcript: string };
 type RecognitionResult = { isFinal: boolean; 0: RecognitionAlternative };
 type RecognitionResultEvent = { resultIndex: number; results: ArrayLike<RecognitionResult> };
@@ -82,12 +88,16 @@ const FirstConversation = () => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState(() => window.localStorage.getItem(VOICE_KEY) ?? "");
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [candidateFirstName, setCandidateFirstName] = useState<string | null>(null);
+  const [broadRegion, setBroadRegion] = useState<string | null>(null);
+  const [identityCarryConsent, setIdentityCarryConsent] = useState<IdentityCarryConsent>("unresolved");
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stableTranscriptRef = useRef("");
   const silenceTimerRef = useRef<number | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const turnNumberRef = useRef(0);
+  const claimInFlightRef = useRef(false);
 
   const persistTurn = useCallback(async (id: string, speaker: "john" | "candidate", content: string) => {
     if (!user) return;
@@ -112,6 +122,9 @@ const FirstConversation = () => {
         setIndustry(saved.industry ?? "");
         setMessages(saved.messages);
         setConversationId(saved.conversationId ?? null);
+        setCandidateFirstName(saved.candidateFirstName ?? null);
+        setBroadRegion(saved.broadRegion ?? null);
+        setIdentityCarryConsent(saved.identityCarryConsent ?? "unresolved");
         turnNumberRef.current = saved.messages.filter((message: Message) => message.speaker !== "system").length;
         setStarted(true);
       }
@@ -119,6 +132,47 @@ const FirstConversation = () => {
       window.localStorage.removeItem(transcriptKey);
     }
   }, [transcriptKey]);
+
+  useEffect(() => {
+    if (!user || !started || conversationId || messages.length === 0 || claimInFlightRef.current) return;
+    claimInFlightRef.current = true;
+    const claimConversation = async () => {
+      const { data: conversation, error } = await supabase.from("initial_conversations").insert({
+        user_id: user.id,
+        business_stage: stage,
+        ownership_experience: experience,
+        industry_context: industry.trim() || null,
+        is_assessment_context: false,
+        candidate_first_name: candidateFirstName,
+        broad_region: broadRegion,
+        identity_carry_consent: identityCarryConsent === "unresolved" ? null : identityCarryConsent === "granted",
+        identity_carry_consented_at: identityCarryConsent === "unresolved" ? null : new Date().toISOString(),
+      }).select("id").single();
+      if (error || !conversation) throw error ?? new Error("The conversation could not be preserved.");
+      setConversationId(conversation.id);
+      const turns = messages
+        .filter((message) => message.speaker !== "system")
+        .map((message, index) => ({
+          conversation_id: conversation.id,
+          user_id: user.id,
+          turn_number: index + 1,
+          speaker: message.speaker,
+          content: message.text,
+          is_canonical_evidence: false,
+        }));
+      if (turns.length > 0) {
+        const { error: turnsError } = await supabase.from("initial_conversation_turns").insert(turns);
+        if (turnsError) throw turnsError;
+      }
+      turnNumberRef.current = turns.length;
+      window.localStorage.removeItem(`${TRANSCRIPT_KEY}:anonymous`);
+      setStatus("Your conversation is privately preserved. You can now continue to secure Checkout.");
+    };
+    void claimConversation().catch(() => {
+      claimInFlightRef.current = false;
+      setStatus("Your secure identity is active, but the conversation has not yet been preserved. Please keep this page open and try again.");
+    });
+  }, [broadRegion, candidateFirstName, conversationId, experience, identityCarryConsent, industry, messages, stage, started, user]);
 
   useEffect(() => {
     void Promise.all([
@@ -150,10 +204,10 @@ const FirstConversation = () => {
 
   useEffect(() => {
     if (messages.length) {
-      window.localStorage.setItem(transcriptKey, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, conversationId, messages }));
+      window.localStorage.setItem(transcriptKey, JSON.stringify({ savedAt: new Date().toISOString(), stage, experience, industry, conversationId, candidateFirstName, broadRegion, identityCarryConsent, messages }));
       transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [conversationId, experience, industry, messages, stage, transcriptKey]);
+  }, [broadRegion, candidateFirstName, conversationId, experience, identityCarryConsent, industry, messages, stage, transcriptKey]);
 
   useEffect(() => () => {
     recognitionRef.current?.abort();
@@ -216,6 +270,32 @@ const FirstConversation = () => {
       });
       const payload = await response.json();
       if (!response.ok || !payload.reply) throw new Error(payload.error || "No reply");
+      const identity = payload.identity_memory as IdentityMemory | undefined;
+      if (identity) {
+        const firstName = typeof identity.first_name === "string" ? normalise(identity.first_name).slice(0, 80) : candidateFirstName;
+        const region = typeof identity.broad_region === "string" ? normalise(identity.broad_region).slice(0, 120) : broadRegion;
+        const responseConsent: IdentityCarryConsent = ["granted", "declined"].includes(identity.carry_consent)
+          ? identity.carry_consent
+          : "unresolved";
+        const consent = responseConsent === "unresolved" ? identityCarryConsent : responseConsent;
+        const identityUpdate: Record<string, string | boolean | null> = {
+          candidate_first_name: firstName || null,
+          broad_region: region || null,
+          identity_carry_consent: consent === "unresolved" ? null : consent === "granted",
+          updated_at: new Date().toISOString(),
+        };
+        if (consent !== "unresolved" && consent !== identityCarryConsent) {
+          identityUpdate.identity_carry_consented_at = new Date().toISOString();
+        }
+        setCandidateFirstName(firstName || null);
+        setBroadRegion(region || null);
+        setIdentityCarryConsent(consent);
+        if (conversationId && user) {
+          const { error: identityError } = await supabase.from("initial_conversations").update(identityUpdate)
+            .eq("id", conversationId).eq("user_id", user.id);
+          if (identityError) throw new Error("The agreed continuity details could not be saved.");
+        }
+      }
       const reply = normalise(payload.reply);
       setMessages((current) => [...current, makeMessage("john", reply)]);
       if (conversationId) await persistTurn(conversationId, "john", reply);
@@ -227,7 +307,7 @@ const FirstConversation = () => {
       setDraft(text);
       setMessages((current) => [...current, makeMessage("system", error instanceof Error ? error.message : "Conversation service failed")]);
     }
-  }, [conversationHistory, conversationId, experience, industry, navigate, paused, persistTurn, speak, stage, thinking]);
+  }, [broadRegion, candidateFirstName, conversationHistory, conversationId, experience, identityCarryConsent, industry, navigate, paused, persistTurn, speak, stage, thinking, user?.id]);
 
   const startListening = useCallback(() => {
     if (!speechRecognitionConstructor || listening || speaking || thinking || paused) return;
@@ -277,27 +357,17 @@ const FirstConversation = () => {
   useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
 
   const startConversation = async () => {
-    if (!user) return;
     const stageLabel = stageOptions.find((item) => item.value === stage)?.label.toLowerCase() ?? "your situation";
     const context = industry.trim() ? `${stageLabel} in ${industry.trim()}` : stageLabel;
     const opening = `Good morning. Thanks for sitting down with me. This is a private conversation, not a quiz, and there is no script you have to perform against. I understand we are talking about ${context}. Before we go any further, what should I call you, and roughly where are you based?`;
-    const { data: conversation, error } = await supabase.from("initial_conversations").insert({
-      user_id: user.id,
-      business_stage: stage,
-      ownership_experience: experience,
-      industry_context: industry.trim() || null,
-      is_assessment_context: false,
-    }).select("id").single();
-    if (error || !conversation) {
-      setStatus("The private conversation record could not be opened. Please try again.");
-      return;
-    }
     window.localStorage.removeItem(transcriptKey);
     turnNumberRef.current = 0;
-    setConversationId(conversation.id);
+    setConversationId(null);
+    setCandidateFirstName(null);
+    setBroadRegion(null);
+    setIdentityCarryConsent("unresolved");
     setMessages([makeMessage("john", opening)]);
     setStarted(true);
-    try { await persistTurn(conversation.id, "john", opening); } catch { setStatus("The opening was not saved. Please start again before purchasing Autopsy."); }
     speak(opening, true);
   };
 
@@ -307,8 +377,12 @@ const FirstConversation = () => {
     recognitionRef.current?.abort();
     window.speechSynthesis?.cancel();
     window.localStorage.removeItem(transcriptKey);
-    setMessages([]); setConversationId(null); turnNumberRef.current = 0; setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
+    setMessages([]); setConversationId(null); setCandidateFirstName(null); setBroadRegion(null); setIdentityCarryConsent("unresolved"); turnNumberRef.current = 0; setDraft(""); setStarted(false); setPaused(false); setThinking(false); setListening(false); setSpeaking(false); setStatus("Ready when you are.");
   };
+
+  const identityContinuityReady = identityCarryConsent === "declined" || (
+    identityCarryConsent === "granted" && Boolean(candidateFirstName && broadRegion)
+  );
 
   return (
     <main className="min-h-screen bg-[#f4efe6] px-4 py-6 text-[#211f1b] sm:px-6 sm:py-10">
@@ -329,12 +403,12 @@ const FirstConversation = () => {
               <div><p className="text-sm font-semibold">What experience are you bringing?</p><div className="mt-3 space-y-2">{experienceOptions.map((option) => <button key={option.value} type="button" onClick={() => setExperience(option.value)} className={`w-full rounded-2xl border p-4 text-left text-sm ${experience === option.value ? "border-[#8a6335] bg-[#f2e6d4]" : "border-[#ddd0bf] bg-white"}`}>{option.label}</button>)}</div></div>
               {voices.length ? <label className="block"><span className="text-sm font-semibold">Hudson's voice</span><select value={voiceName} onChange={(event) => { setVoiceName(event.target.value); window.localStorage.setItem(VOICE_KEY, event.target.value); }} className="mt-3 w-full rounded-2xl border border-[#ddd0bf] bg-white px-4 py-3">{voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} — {voice.lang}</option>)}</select></label> : null}
             </div>
-            <button type="button" onClick={startConversation} className="mt-8 rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white">Begin spoken conversation</button>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"><button type="button" onClick={startConversation} className="rounded-full bg-[#2b2823] px-6 py-3 text-sm font-semibold text-white">Talk with Hudson</button><Link to="/autopsy/resume" className="text-sm font-semibold text-[#6b4b28] underline underline-offset-4">Resume Autopsy or view my result</Link></div>
           </div></section>
         ) : (
           <>
             <section className="flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"><div className="mx-auto max-w-2xl space-y-5">{messages.map((message) => <div key={message.id} className={`flex ${message.speaker === "candidate" ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-3xl px-5 py-4 text-[15px] leading-7 sm:text-base ${message.speaker === "candidate" ? "rounded-br-md bg-[#2b2823] text-white" : message.speaker === "system" ? "bg-[#fff0ed] text-[#8f2f24]" : "rounded-bl-md border border-[#e1d5c5] bg-white text-[#302c26] shadow-sm"}`}>{message.speaker === "john" ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#9a7041]">Hudson</p> : null}<p>{message.text}</p></div></div>)}<div ref={transcriptEndRef} /></div></section>
-            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "Hudson is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p>{messages.filter((message) => message.speaker !== "system").length >= 3 || searchParams.has("checkout") ? <AutopsyCheckoutPanel conversationId={conversationId} /> : null}</div></footer>
+            <footer className="border-t border-[#e5dbcc] bg-[#fffaf3] px-5 py-4 sm:px-8 sm:py-5"><div className="mx-auto max-w-2xl"><form onSubmit={submit} className="flex items-end gap-2"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} disabled={paused || listening || thinking} rows={2} placeholder={listening ? "Listening…" : thinking ? "Hudson is thinking…" : "Speak naturally or type your response…"} className="min-h-[3.25rem] flex-1 resize-none rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm disabled:bg-[#f3eee6]" /><button type="button" onClick={listening ? stopListening : startListening} disabled={paused || speaking || thinking} className={`h-12 rounded-full px-4 text-sm font-semibold text-white disabled:opacity-45 ${listening ? "bg-[#a14336]" : "bg-[#8a6335]"}`}>{listening ? "Finish" : "Speak"}</button><button type="submit" disabled={!draft.trim() || paused || listening || thinking} className="h-12 rounded-full bg-[#2b2823] px-5 text-sm font-semibold text-white disabled:opacity-45">Send</button></form><p className="mt-3 text-xs text-[#6d6356]">{status}</p>{messages.filter((message) => message.speaker !== "system").length >= 3 || searchParams.has("checkout") ? identityContinuityReady ? <AutopsyCheckoutPanel conversationId={conversationId} /> : <p className="mt-4 rounded-2xl border border-[#d7c9b6] bg-white px-4 py-3 text-sm text-[#685f52]">Hudson will first confirm whether your first name and broad region may carry into Autopsy. No audio recording is retained.</p> : null}</div></footer>
           </>
         )}
       </section>

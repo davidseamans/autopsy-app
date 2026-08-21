@@ -1,0 +1,39 @@
+name: FWC MAPD Contract
+
+on:
+  pull_request:
+    paths:
+      - "api/_lib/fwc-mapd.ts"
+      - "scripts/fwc-mapd-spike.mjs"
+      - "src/test/fwc-mapd-spike.test.ts"
+      - "docs/product/FWC-MAPD-CLEANING-SLEEVE-SPIKE.md"
+      - ".env.example"
+      - "package.json"
+      - ".github/workflows/fwc-mapd-spike.yml"
+  push:
+    branches: [main]
+    paths:
+      - "api/_lib/fwc-mapd.ts"
+      - "scripts/fwc-mapd-spike.mjs"
+      - "src/test/fwc-mapd-spike.test.ts"
+      - "docs/product/FWC-MAPD-CLEANING-SLEEVE-SPIKE.md"
+      - ".env.example"
+      - "package.json"
+      - ".github/workflows/fwc-mapd-spike.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run src/test/fwc-mapd-spike.test.ts
+      - run: npm run build

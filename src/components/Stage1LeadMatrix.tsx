@@ -10,7 +10,6 @@ type MatrixPoint = {
 };
 
 const DAY_MS = 86_400_000;
-const WINDOW_DAYS = 42;
 
 function dateOnly(value: string) {
   const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
@@ -25,31 +24,29 @@ function formatDate(value: Date, includeYear = false) {
   });
 }
 
-function weekForDate(activityDate: Date, windowStart: Date, windowEnd: Date) {
-  if (activityDate < windowStart || activityDate > windowEnd) return null;
-  const elapsedDays = Math.floor((activityDate.getTime() - windowStart.getTime()) / DAY_MS);
-  return Math.min(6, Math.floor(elapsedDays / 7) + 1);
-}
-
 export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1LeadActivity[]; startedAt?: string | null; methods: string[] }) {
   const [selected, setSelected] = useState<MatrixPoint | null>(null);
-  const windowEnd = useMemo(() => activities
-    .map((activity) => dateOnly(activity.activity_date))
-    .filter((date): date is Date => Boolean(date))
-    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null, [activities]);
-  const windowStart = useMemo(
-    () => windowEnd ? new Date(windowEnd.getTime() - WINDOW_DAYS * DAY_MS) : null,
-    [windowEnd],
-  );
+  const window = useMemo(() => {
+    const dates = activities
+      .map((activity) => dateOnly(activity.activity_date))
+      .filter((date): date is Date => Boolean(date))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const latestActivity = dates.at(-1) ?? null;
+    if (!latestActivity) return null;
+    return {
+      start: new Date(latestActivity.getTime() - 41 * DAY_MS),
+      end: latestActivity,
+    };
+  }, [activities]);
 
   const points = useMemo(() => {
-    if (!windowStart || !windowEnd) return [];
+    if (!window) return [];
     const totals = new Map<string, MatrixPoint>();
     activities.forEach((activity) => {
       const activityDate = dateOnly(activity.activity_date);
       if (!activityDate) return;
-      const week = weekForDate(activityDate, windowStart, windowEnd);
-      if (!week) return;
+      const week = Math.floor((activityDate.getTime() - window.start.getTime()) / (DAY_MS * 7)) + 1;
+      if (week < 1 || week > 6) return;
       const key = `${activity.method}:${week}`;
       const existing = totals.get(key) ?? { method: activity.method, week, leads: 0, attempts: 0, contacts: 0 };
       existing.leads += activity.leads_generated;
@@ -58,7 +55,7 @@ export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1Le
       totals.set(key, existing);
     });
     return Array.from(totals.values());
-  }, [activities, windowEnd, windowStart]);
+  }, [activities, window]);
 
   const visibleMethods = useMemo(() => {
     const recorded = new Set(activities.map((activity) => activity.method));
@@ -73,12 +70,12 @@ export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1Le
   }), [points]);
   const sixWeekTotal = weeklyTotals.reduce((total, leads) => total + leads, 0);
   const outsideWindow = useMemo(() => activities.filter((activity) => {
-    if (!windowStart || !windowEnd) return false;
+    if (!window) return false;
     const activityDate = dateOnly(activity.activity_date);
-    return !activityDate || weekForDate(activityDate, windowStart, windowEnd) === null;
-  }).length, [activities, windowEnd, windowStart]);
+    return !activityDate || activityDate < window.start || activityDate > window.end;
+  }).length, [activities, window]);
 
-  if (!windowStart || !windowEnd || visibleMethods.length === 0) {
+  if (!window || visibleMethods.length === 0) {
     return <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">Log the first dated activity to begin the rolling six-week lead-source graph.</div>;
   }
 
@@ -87,7 +84,7 @@ export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1Le
       <div>
         <h3 id="lead-matrix-title" className="font-semibold">Rolling six-week lead-source graph</h3>
         <p className="text-sm text-muted-foreground">
-          {formatDate(windowStart, true)} to {formatDate(windowEnd, true)} · the window ends on your latest logged activity.
+          {formatDate(window.start, true)} to {formatDate(window.end, true)} · the window ends on your latest logged activity.
         </p>
         <p className="text-sm text-muted-foreground">Touch a point to see the result for that source and week.</p>
       </div>
@@ -95,8 +92,8 @@ export function Stage1LeadMatrix({ activities, methods }: { activities: Stage1Le
         <div className="grid min-w-[620px] gap-2" style={{ gridTemplateColumns: "minmax(150px, 1.5fr) repeat(6, minmax(62px, 1fr))" }}>
           <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lead source</div>
           {Array.from({ length: 6 }, (_, index) => {
-            const start = new Date(windowStart.getTime() + index * 7 * DAY_MS);
-            return <div key={index} className="px-1 py-1 text-center text-xs font-semibold"><span className="block">Week {index + 1}</span><span className="font-normal text-muted-foreground">{formatDate(start)}</span></div>;
+            const end = new Date(window.start.getTime() + (index * 7 + 6) * DAY_MS);
+            return <div key={index} className="px-1 py-1 text-center text-xs font-semibold"><span className="block">Week {index + 1}</span><span className="font-normal text-muted-foreground">ends {formatDate(end)}</span></div>;
           })}
           {visibleMethods.map((method) => (
             <MatrixRow key={method} method={method} points={points} onSelect={setSelected} />

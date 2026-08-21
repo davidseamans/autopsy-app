@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const api = readFileSync("api/hudson/session-start.ts", "utf8");
 const endApi = readFileSync("api/hudson/session-end.ts", "utf8");
 const orientation = readFileSync("src/pages/Stage1Orientation.tsx", "utf8");
+const supportButton = readFileSync("src/components/HudsonSupportButton.tsx", "utf8");
 const dock = readFileSync("src/components/HudsonDock.tsx", "utf8");
 const shell = readFileSync("src/components/AppShell.tsx", "utf8");
 const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
@@ -41,19 +42,21 @@ describe("Hudson governed session boundary", () => {
 
   it("states Hudson's non-authoritative limits at the point of use", () => {
     expect(orientation).toContain("He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.");
-    expect(orientation).toContain('mode: "first_5_jobs"');
-    expect(orientation).toContain("crypto.randomUUID()");
-    expect(orientation).toContain("requestId: hudsonRequestId.current");
+    expect(supportButton).toContain('mode: "first_5_jobs"');
+    expect(supportButton).toContain("crypto.randomUUID()");
+    expect(supportButton).toContain("requestId: requestIdRef.current");
   });
 
   it("keeps Hudson beside the governed 5JD tour without granting UI authority", () => {
-    expect(orientation).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId })");
+    expect(orientation).toContain("<HudsonSupportButton");
+    expect(supportButton).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId })");
     expect(orientation).not.toContain('window.open("about:blank"');
     expect(shell).toContain("<HudsonDock />");
     expect(dock).toContain('allow="camera; microphone; fullscreen; display-capture"');
     expect(dock).toContain('url.hostname === "tavus.daily.co"');
-    expect(dock).toContain("Show Hudson beside First 5 Jobs");
-    expect(dock).toContain('tour=hudson&step=${target.step}');
+    expect(dock).toContain("Return to First 5 Jobs dashboard");
+    expect(dock).toContain('tour: "hudson"');
+    expect(dock).toContain("step: String(target.step)");
     expect(orientation).toContain('tour=hudson&step=2');
     expect(dock).toContain("BuildOS alone controls highlights, records, payment, Verdict and progression.");
   });

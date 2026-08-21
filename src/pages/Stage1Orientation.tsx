@@ -101,6 +101,7 @@ export default function Stage1Orientation() {
           <CardContent className="space-y-4 text-sm leading-6">
             <p>Hudson will take you through Leads, Quotes, Jobs, Margin and Money Owing in your actual workspace. Use the buttons below his video to move directly to the area you are discussing.</p>
             <p>Ask Hudson what a screen means or where to find something whenever you need help. BuildOS continues to control records and progression in the background.</p>
+            <p>He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.</p>
             <div className="flex flex-wrap gap-2">
               <HudsonSupportButton
                 runId={runId}

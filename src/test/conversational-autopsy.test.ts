@@ -125,7 +125,8 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("initializationRef.current.presented");
     expect(component).toContain("initializationRef.current.presented = true");
     expect(component).toContain("autopsy.introduction.presented.${id}");
-    expect(component).toContain("Welcome back. Let us continue.");
+    expect(component).toContain("continuityGreeting");
+    expect(component).toContain("Let us continue.");
     expect(component).toContain("firstUnanswered");
     expect(component).toContain("getPriorAutopsyInterpretations");
     expect(resumeMigration).toContain("created_at >= now() - interval '4 hours'");

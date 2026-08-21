@@ -43,6 +43,6 @@ describe("Stage 1 navigation context", () => {
     expect(gate).toContain('new URLSearchParams(window.location.search).get("demo") === "1"');
     expect(gate).toContain("if (demonstrationOnly)");
     expect(app).toContain("const BusinessSetupRoute = () => (\n  <AuthGate>");
-    expect(app).toContain("const FirstConversationRoute = () => (\n  <AuthGate>");
+    expect(app).toContain("const FirstConversationRoute = () => <FirstConversation />");
   });
 });
