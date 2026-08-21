@@ -125,7 +125,8 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("initializationRef.current.presented");
     expect(component).toContain("initializationRef.current.presented = true");
     expect(component).toContain("autopsy.introduction.presented.${id}");
-    expect(component).toContain("Welcome back. Let us continue.");
+    expect(component).toContain("continuityGreeting");
+    expect(component).toContain("Let us continue.");
     expect(component).toContain("firstUnanswered");
     expect(component).toContain("getPriorAutopsyInterpretations");
     expect(resumeMigration).toContain("created_at >= now() - interval '4 hours'");
@@ -144,7 +145,7 @@ describe("conversational Autopsy boundary", () => {
   it("never exposes a backend error or candidate transcript in the assessment UI", () => {
     expect(component).toContain("candidateSafeFailure");
     expect(component).not.toContain('setError(cause instanceof Error ? cause.message');
-    expect(component).toContain("Jane could not complete that step. Your answer has not been lost.");
+    expect(component).toContain("Hudson could not complete that step. Your answer has not been lost.");
   });
 
   it("tailors a successful explanation to disclosed operating experience", () => {
@@ -216,7 +217,7 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("await saveSelectionAndAdvance(next, candidateAnswer)");
     expect(component).toContain("USE MICROPHONE");
     expect(component).toContain("Listening…");
-    expect(component).toContain("Jane is speaking…");
+    expect(component).toContain("Hudson is speaking…");
     expect(component).toContain("/api/autopsy-speech");
     expect(component).not.toContain("SpeechSynthesisUtterance");
     expect(speechEndpoint).toContain("authenticateRequest");
@@ -242,8 +243,8 @@ describe("conversational Autopsy boundary", () => {
     expect(component).toContain("isFlightDeckInput");
     expect(verdict).toContain("buildVerdictVoiceScript");
     expect(verdict).toContain('event: "verdict"');
-    expect(verdict).toContain("Jane · Verdict handover");
-    expect(verdict).toContain("Hear Jane explain this result");
+    expect(verdict).toContain("Hudson · Verdict handover");
+    expect(verdict).toContain("Hear Hudson explain this result");
     expect(verdict).toContain("/api/autopsy-speech");
   });
 });
