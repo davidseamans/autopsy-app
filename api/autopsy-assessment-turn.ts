@@ -238,7 +238,7 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
   const payload = await response.json();
   if (!response.ok) {
     console.error("Assessment interpretation failed", response.status, payload?.error?.code);
-    return res.status(502).json({ error: "Jane could not interpret that answer. Please try again." });
+    return res.status(502).json({ error: "Hudson could not interpret that answer. Please try again." });
   }
 
   try {
@@ -313,7 +313,7 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
     if (policyViolations.length) {
       console.error("Assessment policy gate rejected output", policyViolations);
       return res.status(422).json({
-        error: "Jane could not form a safe interpretation. Please try that answer again.",
+        error: "Hudson could not form a safe interpretation. Please try that answer again.",
       });
     }
     return res.status(200).json({
@@ -330,6 +330,6 @@ The spoken_acknowledgement must always be an empty string. Do not generate or sp
       },
     });
   } catch {
-    return res.status(502).json({ error: "Jane could not form a reliable interpretation. Please try again." });
+    return res.status(502).json({ error: "Hudson could not form a reliable interpretation. Please try again." });
   }
 }
