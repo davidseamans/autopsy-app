@@ -23,7 +23,7 @@ function filesUnder(path: string): string[] {
 }
 
 describe("Discover price contamination guard", () => {
-  it("rejects active A$49 authority outside immutable historical migrations", () => {
+  it("rejects superseded price authority outside immutable historical migrations", () => {
     const violations = roots
       .flatMap(filesUnder)
       .filter((path) => textExtensions.has(path.slice(path.lastIndexOf("."))))
