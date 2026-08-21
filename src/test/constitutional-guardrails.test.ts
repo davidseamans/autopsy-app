@@ -13,11 +13,12 @@ const contract = (overrides: Partial<TurnContract> = {}): TurnContract => ({
   maturity_interpretation: null,
   requires_confirmation: false,
   memory_basis: [],
+  identity_memory: { first_name: null, broad_region: null, carry_consent: "unresolved" },
   reply: "You seem to be weighing two different directions without having committed to either.",
   ...overrides,
 });
 
-describe("constitutional runtime guardrails v2", () => {
+describe("constitutional runtime guardrails v3", () => {
   it("allows thinking aloud without advice", () => {
     expect(validateTurnContract(contract()).pass).toBe(true);
   });
@@ -112,5 +113,18 @@ describe("constitutional runtime guardrails v2", () => {
 
   it("blocks multiple questions", () => {
     expect(validateTurnContract(contract({ reply: "Why does it matter? What changed?" })).violations).toContain("multiple_questions");
+  });
+
+  it("allows consented continuity metadata without making it assessment evidence", () => {
+    expect(validateTurnContract(contract({
+      identity_memory: { first_name: "David", broad_region: "Brisbane", carry_consent: "granted" },
+      memory_basis: ["candidate-disclosed continuity details"],
+    })).pass).toBe(true);
+  });
+
+  it("fails closed when carry-over consent lacks either agreed detail", () => {
+    expect(validateTurnContract(contract({
+      identity_memory: { first_name: "David", broad_region: null, carry_consent: "granted" },
+    })).violations).toContain("consent_without_identity_details");
   });
 });
