@@ -1,6 +1,6 @@
--- Supersede the historical A$49 payment boundary without rewriting migration history.
+-- Supersede the previous payment boundary without rewriting migration history.
 -- Canonical authority: Discover is A$69 once for the complete six-week journey.
--- Historical paid A$49 orders remain valid records; every new or resumed unpaid order is A$69.
+-- Historical paid orders remain valid records; every new or resumed unpaid order is A$69.
 
 begin;
 
