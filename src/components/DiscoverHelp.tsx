@@ -110,6 +110,7 @@ export function HelpTargetFocus() {
     if (!target || !/^[a-z0-9-]+$/.test(target) || lastTarget.current === `${location.pathname}:${target}`) return;
     lastTarget.current = `${location.pathname}:${target}`;
     let highlighted: HTMLElement | null = null;
+    let removeHighlightTimer: number | null = null;
     let attempts = 0;
     const timer = window.setInterval(() => {
       attempts += 1;
@@ -118,12 +119,16 @@ export function HelpTargetFocus() {
         window.clearInterval(timer);
         highlighted.classList.add("relative", "z-30", "ring-4", "ring-teal-400", "ring-offset-4");
         highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
-        window.setTimeout(() => highlighted?.classList.remove("relative", "z-30", "ring-4", "ring-teal-400", "ring-offset-4"), 3500);
+        removeHighlightTimer = window.setTimeout(() => highlighted?.classList.remove("relative", "z-30", "ring-4", "ring-teal-400", "ring-offset-4"), 3500);
       } else if (attempts >= 20) {
         window.clearInterval(timer);
       }
     }, 100);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      if (removeHighlightTimer != null) window.clearTimeout(removeHighlightTimer);
+      highlighted?.classList.remove("relative", "z-30", "ring-4", "ring-teal-400", "ring-offset-4");
+    };
   }, [location.pathname, location.search]);
 
   return null;

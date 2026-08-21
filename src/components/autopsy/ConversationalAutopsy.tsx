@@ -174,7 +174,7 @@ const FALLBACK_SUBJECT_PROMPTS = SUBJECT_ORDER.map(
 );
 
 const AUTOPSY_ORIENTATION = [
-  "Your test payment is acknowledged, so we are now beginning Autopsy.",
+  "Your payment is acknowledged, so we are now beginning Autopsy.",
   "I will take you through twelve practical areas, one at a time, as a conversation.",
   "Answer honestly in your own words. There is no answer you are expected to perform, and I may pause to check that I have understood you before anything is saved.",
   "At the end, you will receive a Verdict. It may open First 5 Jobs, identify something to deal with first, or say that stopping for now is the sensible result.",
@@ -249,6 +249,8 @@ export function ConversationalAutopsy() {
       resumeIndex: number;
       priorMemory: AssessmentMemoryEntry[];
       priorSelections: BaselineSelection[];
+      candidateFirstName: string | null;
+      broadRegion: string | null;
     }>;
     presented: boolean;
   } | null>(null);
@@ -367,11 +369,17 @@ export function ConversationalAutopsy() {
               selected_option_id: entry.selected_option_id,
               confidence: 1,
             }));
-            return { id, ordered, resumeIndex, priorMemory, priorSelections };
+            const candidateFirstName = typeof payload.run?.candidate_first_name === "string"
+              ? payload.run.candidate_first_name.trim()
+              : null;
+            const broadRegion = typeof payload.run?.broad_region === "string"
+              ? payload.run.broad_region.trim()
+              : null;
+            return { id, ordered, resumeIndex, priorMemory, priorSelections, candidateFirstName, broadRegion };
           })();
           initializationRef.current = { email, promise, presented: false };
         }
-        const { id, ordered, resumeIndex, priorMemory, priorSelections } =
+        const { id, ordered, resumeIndex, priorMemory, priorSelections, candidateFirstName, broadRegion } =
           await initializationRef.current.promise;
         if (cancelled) return;
         if (initializationRef.current.presented) return;
@@ -398,9 +406,17 @@ export function ConversationalAutopsy() {
             ? "Resuming your Autopsy."
             : "Hudson is explaining how Autopsy will work.",
         );
+        const continuityGreeting = candidateFirstName
+          ? `Welcome${resumeIndex > 0 ? " back" : ""}, ${candidateFirstName}.`
+          : resumeIndex > 0
+            ? "Welcome back."
+            : "Welcome.";
+        const continuityContext = broadRegion && resumeIndex === 0
+          ? ` I have carried forward that you are based around ${broadRegion}, with your permission.`
+          : "";
         const opening = introductionPresented || resumeIndex > 0
-          ? `Welcome back. Let us continue. ${firstPresentation.prompt}`
-          : `${AUTOPSY_ORIENTATION} ${firstPresentation.prompt}`;
+          ? `${continuityGreeting} Let us continue. ${firstPresentation.prompt}`
+          : `${continuityGreeting}${continuityContext} ${AUTOPSY_ORIENTATION} ${firstPresentation.prompt}`;
         if (embeddedFlightDeck) {
           postToFlightDeck({
             type: "BUILDOS_AUTOPSY_EVENT",

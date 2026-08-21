@@ -17,7 +17,7 @@ export const discoverHelpEntries: HelpEntry[] = [
   {
     id: "first-five-jobs",
     question: "What do I do in First 5 Jobs?",
-    answer: "Use the screen to practise finding leads, preparing written quotes, completing five genuine paid jobs and learning from the simple job and cash figures. It is a supported business trial, not an accounting system or an exam.",
+    answer: "Use the screen to practise finding leads, preparing written quotes, completing five genuine jobs and learning from the simple job and cash figures. It is a supported business trial, not an accounting system or an exam.",
     keywords: ["start", "first 5 jobs", "5jd", "overview", "what next"],
     scope: "discover",
     target: { label: "Show First 5 Jobs", path: "/stage-1", id: "first-five-jobs" },

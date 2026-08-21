@@ -17,6 +17,7 @@ import PaidAutopsyEntry from "@/pages/PaidAutopsyEntry";
 import OwnerCockpit from "@/pages/OwnerCockpit";
 import StaffCockpit from "@/pages/StaffCockpit";
 import CoreOverview from "@/pages/CoreOverview";
+import CoreRoster from "@/pages/CoreRoster";
 import NotFound from "./pages/NotFound.tsx";
 import BusinessSetup from "@/pages/BusinessSetup";
 import Stage1QuoteNew from "@/pages/Stage1QuoteNew";
@@ -26,13 +27,10 @@ import Stage1Quotes from "@/pages/Stage1Quotes";
 import Stage1Orientation from "@/pages/Stage1Orientation";
 import Stage1Learning from "@/pages/Stage1Learning";
 import CleaningTechnicalGuide from "@/pages/CleaningTechnicalGuide";
+import CandidateResume from "@/pages/CandidateResume";
 
 const queryClient = new QueryClient();
-const FirstConversationRoute = () => (
-  <AuthGate>
-    <FirstConversation />
-  </AuthGate>
-);
+const FirstConversationRoute = () => <FirstConversation />;
 const BusinessSetupRoute = () => (
   <AuthGate>
     <BusinessSetup />
@@ -100,9 +98,10 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route element={<AppShell />}>
-              <Route path="/" element={<Navigate to="/orientation" replace />} />
+              <Route path="/" element={<Navigate to="/first-conversation" replace />} />
               <Route path="/orientation" element={<MorningOrientation />} />
               <Route path="/first-conversation" element={<FirstConversationRoute />} />
+              <Route path="/autopsy/resume" element={<CandidateResume />} />
               <Route path="/owner-cockpit" element={<OwnerCockpit />} />
               <Route path="/staff-cockpit" element={<StaffCockpit />} />
               <Route path="/autopsy" element={<Autopsy />} />
@@ -126,6 +125,7 @@ const App = () => (
               <Route path="/launchpad/quote/new" element={<LegacyStage1Redirect to="/stage-1/quotes/new" />} />
               <Route path="/business-setup" element={<BusinessSetupRoute />} />
               <Route path="/core" element={<CoreOverview />} />
+              <Route path="/core/roster" element={<CoreRoster />} />
               <Route path="/leads" element={<Navigate to="/core" replace />} />
               <Route path="/accounts" element={<Navigate to="/core" replace />} />
               <Route path="/pipeline" element={<Navigate to="/core" replace />} />

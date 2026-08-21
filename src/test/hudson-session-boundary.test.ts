@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const api = readFileSync("api/hudson/session-start.ts", "utf8");
 const endApi = readFileSync("api/hudson/session-end.ts", "utf8");
 const orientation = readFileSync("src/pages/Stage1Orientation.tsx", "utf8");
-const support = readFileSync("src/components/HudsonSupportButton.tsx", "utf8");
+const supportButton = readFileSync("src/components/HudsonSupportButton.tsx", "utf8");
 const dock = readFileSync("src/components/HudsonDock.tsx", "utf8");
 const shell = readFileSync("src/components/AppShell.tsx", "utf8");
 const runtime = readFileSync("docs/product/HUDSON-GOVERNED-CONVERSATION-RUNTIME-v1.md", "utf8");
@@ -42,18 +42,18 @@ describe("Hudson governed session boundary", () => {
     expect(runtime).toContain("must never mention elapsed time, remaining time");
   });
 
-  it("introduces Hudson positively while preserving the governed session boundary", () => {
+  it("introduces Hudson positively while stating the governed boundary at the point of use", () => {
     expect(orientation).toContain("Hudson is your guide and support person throughout First 5 Jobs.");
     expect(orientation).toContain("BuildOS continues to control records and progression in the background.");
-    expect(orientation).not.toContain("He cannot issue your Verdict");
-    expect(support).toContain('mode: "first_5_jobs"');
-    expect(support).toContain("crypto.randomUUID()");
-    expect(support).toContain("requestId: requestIdRef.current");
+    expect(orientation).toContain("He cannot issue your Verdict, open a gate, accept payment, waive ABN or GST requirements, or alter authoritative records.");
+    expect(supportButton).toContain('mode: "first_5_jobs"');
+    expect(supportButton).toContain("crypto.randomUUID()");
+    expect(supportButton).toContain("requestId: requestIdRef.current");
   });
 
   it("keeps Hudson beside the governed 5JD tour without granting UI authority", () => {
     expect(orientation).toContain("<HudsonSupportButton");
-    expect(support).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId, practiceKey })");
+    expect(supportButton).toContain("openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId, practiceKey })");
     expect(orientation).not.toContain('window.open("about:blank"');
     expect(shell).toContain("<HudsonDock />");
     expect(dock).toContain('allow="camera; microphone; fullscreen; display-capture"');

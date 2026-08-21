@@ -135,8 +135,8 @@ describe("First 5 Jobs orientation", () => {
     expect(matrix).toContain("Weekly total");
     expect(matrix).toContain("Rolling six-week potential-customer total");
     expect(matrix).toContain("window ends on your latest logged activity");
-    expect(matrix).toContain("WINDOW_DAYS = 42");
-    expect(matrix).toContain("Math.min(6");
+    expect(matrix).toContain("latestActivity.getTime() - 41 * DAY_MS");
+    expect(matrix).toContain("if (week < 1 || week > 6) return");
     expect(matrix).not.toContain("stageStart");
     expect(matrix).not.toContain("outside this six-week window");
     expect(migration).toContain("source_activity_id uuid");

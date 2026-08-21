@@ -36,7 +36,7 @@ describe("Stage 1 aggregate lead to quote funnel", () => {
     expect(indexMigration).toContain("public.stage1_funnel_totals(created_by)");
   });
 
-  it("keeps lead activity aggregate while identifying potential customers for quote follow-up", () => {
+  it("keeps prospecting totals and identified potential customers in one governed dashboard flow", () => {
     const funnel = readFileSync(resolve("src/lib/stage1Funnel.ts"), "utf8");
     const dashboard = readFileSync(resolve("src/pages/Stage1Dashboard.tsx"), "utf8");
     const matrix = readFileSync(resolve("src/components/Stage1LeadMatrix.tsx"), "utf8");

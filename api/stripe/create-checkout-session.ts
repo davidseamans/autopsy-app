@@ -3,6 +3,7 @@ import { authenticateRequest, createServiceClient } from "../_lib/supabase-serve
 import {
   AUTOPSY_AMOUNT_MINOR,
   AUTOPSY_CURRENCY,
+  assertAutopsyPriceAuthority,
   createTestStripeClient,
   getAppBaseUrl,
   getAutopsyPriceId,
@@ -41,6 +42,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(409).json({ error: "This Autopsy has already been paid." });
     }
 
+    const stripe = createTestStripeClient();
+    const priceId = getAutopsyPriceId();
+    const governedPrice = await stripe.prices.retrieve(priceId);
+    assertAutopsyPriceAuthority(governedPrice);
+
     let orderId = existing?.id as string | undefined;
     if (!orderId) {
       const { data: order, error } = await supabase
@@ -55,20 +61,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         .single();
       if (error || !order) throw error ?? new Error("Could not create Autopsy order.");
       orderId = order.id;
+    } else {
+      const { error } = await supabase
+        .from("autopsy_orders")
+        .update({
+          amount_minor: AUTOPSY_AMOUNT_MINOR,
+          currency: AUTOPSY_CURRENCY,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId)
+        .eq("user_id", user.id)
+        .neq("status", "paid");
+      if (error) throw error;
     }
 
-    const stripe = createTestStripeClient();
     const baseUrl = getAppBaseUrl();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      line_items: [{ price: getAutopsyPriceId(), quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       customer_email: user.email ?? undefined,
       client_reference_id: orderId,
       metadata: { order_id: orderId, user_id: user.id, conversation_id: conversationId },
       payment_intent_data: { metadata: { order_id: orderId, user_id: user.id } },
       success_url: `${baseUrl}/first-conversation?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/first-conversation?checkout=cancelled`,
-    }, { idempotencyKey: `autopsy-checkout-${orderId}` });
+    }, { idempotencyKey: `autopsy-checkout-a69-${orderId}` });
 
     if (!session.url) throw new Error("Stripe did not return a Checkout URL.");
     const { error: updateError } = await supabase

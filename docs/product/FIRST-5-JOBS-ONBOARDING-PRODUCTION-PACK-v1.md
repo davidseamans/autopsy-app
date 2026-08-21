@@ -13,14 +13,13 @@ Do not combine both into one long recording. If a promotional video is produced 
 
 The candidate completes orientation when they:
 
-1. acknowledge Hudson’s First 5 Jobs handover;
-2. choose whether they already have an ABN or need to apply;
-3. choose whether they will trade under their legal name or register a different business name; and
-4. acknowledge the operating standards.
+1. open Hudson’s guided tour, or use the non-video tour;
+2. choose whether they already have an ABN or need to apply; and
+3. choose whether they will trade under their legal name or register a different business name.
 
-Orientation records understanding. It is not another assessment. Verified Business Details remains the commercial gate for quoting and transaction entry.
+Orientation records operational setup choices. It is not an assessment and does not ask the candidate to acknowledge guidance. Verified Business Details remains the commercial gate for quoting and transaction entry.
 
-Only the four checklist choices and completion time are retained. Never collect or retain a TFN, identity document or raw video response.
+Only the ABN path, business-name path and save time are retained. Never collect or retain a TFN, identity document or raw video response.
 
 ## Hudson’s welcome script
 
@@ -80,7 +79,7 @@ Observe whether they can:
 2. choose the correct ABN path;
 3. distinguish a legal personal name from a registered business name;
 4. state that BuildOS does not collect their TFN;
-5. complete the checklist and reach Business Details; and
+5. save both setup choices and reach Business Details; and
 6. return to the dashboard without assistance.
 
 Record confusion and completion time, but do not record raw audio or retain personal data. Repair repeated confusion only; do not redesign from one person’s stylistic preference.

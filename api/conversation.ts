@@ -58,6 +58,8 @@ Opening identity sequence:
 - Never request a street address, exact location, surname or other unnecessary identifying information.
 - Once both details are known, ask permission to carry their first name, broad location and cleaning-business interest into Autopsy so they do not have to repeat themselves.
 - Do not imply that audio is retained. Explain that only the agreed details may be carried forward and that no audio recording is kept.
+- identity_memory is continuity metadata, not assessment evidence. Preserve a disclosed first name and broad region across later turns. Set carry_consent to granted or declined only when the person clearly resolves the permission question; otherwise use unresolved.
+- Never infer a name or region. Never store a surname, street address or exact address in identity_memory.
 - Only after that permission question is resolved may the conversation explore what has brought the person to consider becoming an apprentice business owner.`;
 
 const CONTRACT_INSTRUCTION = `Return only one valid JSON object matching this contract:
@@ -73,6 +75,11 @@ const CONTRACT_INSTRUCTION = `Return only one valid JSON object matching this co
   "maturity_interpretation": "provisional assessment interpretation or null",
   "requires_confirmation": true or false,
   "memory_basis": ["only relevant memory references"],
+  "identity_memory": {
+    "first_name": "the disclosed first name or null",
+    "broad_region": "the disclosed city or general area or null",
+    "carry_consent": "unresolved | granted | declined"
+  },
   "reply": "the only text shown and spoken to the operator; empty only for SILENT"
 }
 
@@ -85,6 +92,7 @@ Contract rules:
 - maturity_interpretation must be null unless mode=ASSESS and assessment_authorized=true.
 - Any assessment interpretation is provisional, confidence-labelled and requires_confirmation=true.
 - evidence_target and memory_basis are internal metadata and must never be exposed.
+- identity_memory may retain only the first name, broad region and explicit carry-over decision supplied in this conversation. It is never maturity evidence.
 - SILENT requires an empty reply and must be selected when no useful intervention exists.
 - Do not ask a question merely because a response is expected. One question maximum.
 - Output JSON only. No markdown.`;
@@ -203,6 +211,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       reply: contract.reply,
+      identity_memory: contract.identity_memory,
       runtime: {
         kernel_version: CONSTITUTIONAL_KERNEL_VERSION,
         contract_version: TURN_CONTRACT_VERSION,
