@@ -42,6 +42,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(409).json({ error: "This Autopsy has already been paid." });
     }
 
+    const stripe = createTestStripeClient();
+    const priceId = getAutopsyPriceId();
+    const governedPrice = await stripe.prices.retrieve(priceId);
+    assertAutopsyPriceAuthority(governedPrice);
+
     let orderId = existing?.id as string | undefined;
     if (!orderId) {
       const { data: order, error } = await supabase
@@ -69,11 +74,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         .neq("status", "paid");
       if (error) throw error;
     }
-
-    const stripe = createTestStripeClient();
-    const priceId = getAutopsyPriceId();
-    const governedPrice = await stripe.prices.retrieve(priceId);
-    assertAutopsyPriceAuthority(governedPrice);
 
     const baseUrl = getAppBaseUrl();
     const session = await stripe.checkout.sessions.create({
