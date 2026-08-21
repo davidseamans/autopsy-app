@@ -6,8 +6,6 @@ on:
       - main
       - stage1-build-packet-compliance
   pull_request:
-    branches:
-      - main
 
 jobs:
   app-checks:
@@ -29,6 +27,9 @@ jobs:
 
       - name: Build app
         run: npm run build
+
+      - name: Type-check app
+        run: npm exec tsc -- --noEmit
 
       - name: Run tests
         run: npm test
