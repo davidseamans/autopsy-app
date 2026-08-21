@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiscoverHelp, HelpTargetFocus } from "@/components/DiscoverHelp";
 import { Stage1TourResume } from "@/components/Stage1WelcomeGuide";
 
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({ user: null, session: null, loading: false }),
+}));
+
 function LocationProbe() {
   const location = useLocation();
   return <output aria-label="Current route">{`${location.pathname}${location.search}`}</output>;
