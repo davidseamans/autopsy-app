@@ -1,9 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import AppShell from "@/components/AppShell";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({ user: null, session: null, loading: false }),
+}));
 
 function renderShell(path: string) {
   render(
