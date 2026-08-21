@@ -133,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: error instanceof Error ? error.message : "unknown",
         baseline_count: baselineSelections.length,
       });
-      return res.status(502).json({ error: "Jane could not complete a reliable final cross-check." });
+      return res.status(502).json({ error: "Hudson could not complete a reliable final cross-check." });
     }
   };
 
