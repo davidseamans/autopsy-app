@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 50269)
+Total output lines: 4752
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -2497,21 +2500,7 @@ const CANDIDATE_DIMENSION_FINDINGS: Record<string, { positive: string; concern: 
     consequence: "Quotes go unanswered, records fall behind and small promises to customers are missed—the ordinary failures that quietly sink new operators.",
   },
   psychological_resilience: {
-    positive: "You showed that you can remain responsible and make considered decisions when the pressure rises.",
-    concern: "Your answers did not yet show how you would respond to uncertainty, rejection, complaints or uneven income.",
-    consequence: "Pressure can lead to impulsive pricing, avoidance, poor customer decisions or giving up at exactly the wrong time.",
-  },
-};
-
-const CANDIDATE_DIMENSION_WORK: Record<string, { work: string; evidence: string; caution: string }> = {
-  cash_reality: {
-    work: "Prepare a truthful household survival budget and identify how regular living costs would be paid while work is uncertain.",
-    evidence: "A protected cash buffer and a written limit on what you can afford to risk without borrowing or missing personal commitments.",
-    caution: "Do not resign, borrow for equipment or use money already needed by your household.",
-  },
-  economic_literacy: {
-    work: "Cost several realistic cleaning jobs from start to finish, including labour time, supplies, travel and the mistakes that make a job run over.",
-    evidence: "Completed job-cost records showing the quoted price, actual cost and money left after delivering the work.",
+    positive: "You showed that you can remain responsibl…269 tokens truncated…e, actual cost and money left after delivering the work.",
     caution: "Do not rely on bank balance, turnover or a competitor's price as proof that a job is worthwhile.",
   },
   market_reality: {
@@ -2992,12 +2981,12 @@ function CandidateVerdict({
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-slate-900 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Jane · Verdict handover</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Hudson · Verdict handover</p>
             <p className="mt-2 leading-7 text-slate-700">
               {verdictVoiceState === "speaking"
-                ? "Jane is explaining your result and the next option available."
+                ? "Hudson is explaining your result and the next option available."
                 : verdictVoiceState === "error"
-                  ? "Jane’s explanation is written below. You can also hear it again."
+                  ? "Hudson’s explanation is written below. You can also hear it again."
                   : "Your result and next option are ready to review."}
             </p>
           </div>
@@ -3009,7 +2998,7 @@ function CandidateVerdict({
               disabled={verdictVoiceState === "speaking" || !session?.access_token}
               className="shrink-0 border-sky-500 bg-white text-sky-800 hover:bg-sky-100"
             >
-              {verdictVoiceState === "speaking" ? "Jane is speaking…" : "Hear Jane explain this result"}
+              {verdictVoiceState === "speaking" ? "Hudson is speaking…" : "Hear Hudson explain this result"}
             </Button>
           ) : null}
         </div>
