@@ -63,10 +63,10 @@ function proofItem(
     evidence: {
       employeeExternalId: `employee-${index}`,
       workTypeExternalId: "ordinary-hours",
-      payrollCostCentreExternalId: costCentre,
+      payrollAllocationExternalId: costCentre,
       workerMappingProven: true,
       workTypeMappingProven: true,
-      payrollCostCentreMappingProven: true,
+      payrollAllocationMappingProven: true,
       requestCorrelationProven: true,
     },
   });
@@ -92,14 +92,14 @@ describe("BOS-E03 payroll and Job-cost proof harness", () => {
     const blockers = payrollExportBlockers({
       employeeExternalId: "employee-1",
       workTypeExternalId: "ordinary-hours",
-      payrollCostCentreExternalId: null,
+      payrollAllocationExternalId: null,
       workerMappingProven: true,
       workTypeMappingProven: true,
-      payrollCostCentreMappingProven: false,
+      payrollAllocationMappingProven: false,
       requestCorrelationProven: false,
     });
     expect(blockers.map((blocker) => blocker.code)).toEqual([
-      "payroll_cost_centre_mapping_unproved",
+      "payroll_allocation_mapping_unproved",
       "request_correlation_unproved",
     ]);
   });
