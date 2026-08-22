@@ -6,7 +6,7 @@ Implementation source for the single candidate-facing BuildOS conversational gui
 
 Hudson is the sole candidate-facing conversational guide. Consolidating the presentation layer transfers useful conversation patterns; it does not transfer authority.
 
-## One guide, three bounded modes
+## One guide, four bounded modes
 
 ### Introductory conversation
 
@@ -40,6 +40,21 @@ Hudson explains the controlled six-week start and the real 5JD screen one area a
 5. Money owing.
 
 Five means five real jobs, not five dashboard sections. First 5 Jobs is Stage 1; it is not Control or Core.
+
+### First 5 Jobs customer practice
+
+Six lessons may open an optional, approximately three-minute customer role-play through the existing governed Hudson session boundary:
+
+1. open a customer conversation;
+2. answer a price question without discounting automatically;
+3. clarify an uncertain inspection scope;
+4. follow up a written quote;
+5. respond professionally to a rejected quote; and
+6. close completed work and ask for a referral.
+
+Hudson starts immediately in the customer role without a greeting or general orientation. After two or three useful exchanges, he steps out of the role and gives exactly one observation and one suggested improvement. There is no score, pass mark, acknowledgement or progression effect.
+
+The existing server-only session ledger may retain the allow-listed practice identifier and ordinary session lifecycle only. It must not store a transcript, response content or maturity score. Start, end and repeat trends may later inform support design; they do not judge the business owner.
 
 ## Candidate language
 

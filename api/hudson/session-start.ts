@@ -1,5 +1,6 @@
 import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import { authenticateRequest, createServiceClient } from "../_lib/supabase-server.js";
+import { isHudsonPracticeKey } from "../../src/lib/hudsonPractice.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ALLOWED_MODES = new Set(["autopsy", "first_5_jobs"]);
@@ -47,8 +48,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const runId = typeof body.runId === "string" ? body.runId : "";
   const requestId = typeof body.requestId === "string" ? body.requestId : "";
   const mode = typeof body.mode === "string" ? body.mode : "";
-  if (!UUID_PATTERN.test(runId) || !UUID_PATTERN.test(requestId) || !ALLOWED_MODES.has(mode)) {
+  const requestedPracticeKey = body.practiceKey == null || body.practiceKey === "" ? null : body.practiceKey;
+  const practiceKey = isHudsonPracticeKey(requestedPracticeKey) ? requestedPracticeKey : null;
+  if (!UUID_PATTERN.test(runId) || !UUID_PATTERN.test(requestId) || !ALLOWED_MODES.has(mode) || (requestedPracticeKey !== null && practiceKey === null)) {
     return res.status(400).json({ error: "Hudson session context is incomplete." });
+  }
+  if (practiceKey !== null && mode !== "first_5_jobs") {
+    return res.status(400).json({ error: "Hudson practice is available only inside First 5 Jobs." });
   }
 
   try {
@@ -70,16 +76,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       owner_user_id: user.id,
       run_id: run.id,
       mode,
+      practice_key: practiceKey,
       status: "reserved",
     });
     if (reserveError?.code === "23505") {
       const { data: existing, error: existingError } = await service
         .from("hudson_session_starts")
-        .select("owner_user_id,run_id,mode,status,conversation_id,conversation_url")
+        .select("owner_user_id,run_id,mode,practice_key,status,conversation_id,conversation_url")
         .eq("request_id", requestId)
         .maybeSingle();
       if (existingError) throw existingError;
-      if (!existing || existing.owner_user_id !== user.id || existing.run_id !== run.id || existing.mode !== mode) {
+      if (!existing || existing.owner_user_id !== user.id || existing.run_id !== run.id || existing.mode !== mode || existing.practice_key !== practiceKey) {
         return res.status(409).json({ error: "That Hudson session request cannot be reused." });
       }
       const existingUrl = safeConversationUrl(existing.conversation_url, safeConversationId(existing.conversation_id));
@@ -101,6 +108,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         candidate_uuid: user.id,
         run_uuid: run.id,
         mode,
+        practice_key: practiceKey,
       }),
       signal: AbortSignal.timeout(20_000),
     });

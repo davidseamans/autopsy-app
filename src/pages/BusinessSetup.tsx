@@ -120,7 +120,7 @@ export default function BusinessSetup() {
       {loadError ? (
         <Card className="border-destructive/50"><CardContent className="pt-6 text-sm text-destructive">{loadError}</CardContent></Card>
       ) : (
-        <Card>
+        <Card data-help-target="business-identity">
           <CardHeader>
             <CardTitle className="text-base">Your customer-facing business identity</CardTitle>
             <CardDescription>

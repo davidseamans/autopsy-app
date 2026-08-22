@@ -176,7 +176,7 @@ export default function Stage1QuoteNew() {
         </Card>
       ) : null}
 
-      <Card className={tourActive && tourStep === 1 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
+      <Card data-help-target="quote-customer-work" className={tourActive && tourStep === 1 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}>
         <CardHeader><CardTitle className="text-base">Customer and work</CardTitle><CardDescription>Capture these details because this opportunity is now ready to quote.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field id="client-name" label="Customer or business" value={clientName} onChange={setClientName} required />

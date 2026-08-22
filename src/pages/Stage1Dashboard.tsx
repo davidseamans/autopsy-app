@@ -753,7 +753,7 @@ function KpiCard({
   );
   if (!onClick) {
     return (
-      <div data-hudson-focus={focusTarget} className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <div data-hudson-focus={focusTarget} data-help-target={focusTarget} className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         {content}
       </div>
     );
@@ -761,6 +761,7 @@ function KpiCard({
   return (
     <button
       data-hudson-focus={focusTarget}
+      data-help-target={focusTarget}
       onClick={onClick}
       className={`text-left rounded-lg border border-t-[3px] p-4 shadow-sm transition-all hover:shadow-md ${accentStyles.card} ${highlighted ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}
     >
@@ -1811,6 +1812,19 @@ function Stage1DashboardInner() {
   const [reportN, setReportN] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [ledgerView, setLedgerView] = useState<"debtors" | "summary">(isDemo ? "summary" : "debtors");
+
+  useEffect(() => {
+    const helpTarget = searchParams.get("helpTarget");
+    if (helpTarget === "leads") setDrill("leads");
+    if (helpTarget === "job-summary") {
+      setDrill(null);
+      setLedgerView("summary");
+    }
+    if (helpTarget === "money-owing") {
+      setDrill(null);
+      setLedgerView("debtors");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!tourActive) return;
@@ -3210,14 +3224,14 @@ function Stage1DashboardInner() {
 
   return (
     <div className="px-4 md:px-6 py-6 space-y-6 max-w-[1400px] mx-auto">
-      <header className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10 ${tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <header data-help-target="first-five-jobs" className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#123b63] bg-gradient-to-r from-[#061b34] via-[#082849] to-[#07375a] px-5 py-4 text-white shadow-lg shadow-slate-900/10 ${tourActive && tourStep === 0 ? "relative z-40 ring-4 ring-sky-400 ring-offset-4" : ""}`}>
         <div>
           <p className="text-xs uppercase tracking-widest text-[#52d8c2]">Stage 1 command centre</p>
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">First 5 Jobs</h1>
           <p className="mt-1 text-xs text-slate-300">Track leads, quotes, jobs, margin, and money owing.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={async () => { try { const attachments = !isDemo && activeRunId ? await listRunEvidence(activeRunId) : []; await downloadAccountantPack({ units, business: bd.profile, runId: activeRunId, attachments, attachmentDownloader: downloadEvidenceFile }); toast({ title: "Accountant Pack downloaded", description: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} included. Check QBO and bank feeds before importing or entering transactions.` }); } catch (error) { toast({ title: "Accountant Pack was not downloaded", description: error instanceof Error ? error.message : "An attachment could not be retrieved.", variant: "destructive" }); } }}>
+          <Button data-help-target="accountant-pack" variant="outline" className="gap-2 border-sky-200/50 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={async () => { try { const attachments = !isDemo && activeRunId ? await listRunEvidence(activeRunId) : []; await downloadAccountantPack({ units, business: bd.profile, runId: activeRunId, attachments, attachmentDownloader: downloadEvidenceFile }); toast({ title: "Accountant Pack downloaded", description: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"} included. Check QBO and bank feeds before importing or entering transactions.` }); } catch (error) { toast({ title: "Accountant Pack was not downloaded", description: error instanceof Error ? error.message : "An attachment could not be retrieved.", variant: "destructive" }); } }}>
             <Download className="h-4 w-4" />
             Accountant Pack
           </Button>
@@ -3243,41 +3257,43 @@ function Stage1DashboardInner() {
 
       {!isDemo ? <QboSandboxConnectionCard /> : null}
 
-      {!isDemo && setupChoicesLoaded && activeRunId && (
-        <Card className={setupChoicesSaved ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
+      {(isDemo || (setupChoicesLoaded && activeRunId)) && (
+        <Card className={isDemo || setupChoicesSaved ? "border-emerald-200 bg-emerald-50/40" : "border-sky-300 bg-sky-50/70"}>
           <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
-              <Compass className={setupChoicesSaved ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
+              <Compass className={isDemo || setupChoicesSaved ? "mt-0.5 h-5 w-5 text-emerald-700" : "mt-0.5 h-5 w-5 text-sky-700"} />
               <div>
                 <p className="font-semibold">First 5 Jobs setup</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {setupChoicesSaved
+                  {isDemo
+                    ? "Preview the ABN, trading-name and business-habit setup used before live work."
+                    : setupChoicesSaved
                     ? "Your ABN and trading-name paths are saved. Hudson and the setup guide remain available."
                     : "Choose your ABN and trading-name paths. Hudson can show you around first."}
                 </p>
               </div>
             </div>
-            <Button asChild variant={setupChoicesSaved ? "outline" : "default"} className="shrink-0">
-              <Link to={`/stage-1/orientation?runId=${encodeURIComponent(activeRunId)}`}>
-                {setupChoicesSaved ? "Review setup choices" : "Set up First 5 Jobs"}
+            <Button asChild variant={isDemo || setupChoicesSaved ? "outline" : "default"} className="shrink-0">
+              <Link to={isDemo ? "/stage-1/orientation?demo=1" : `/stage-1/orientation?runId=${encodeURIComponent(activeRunId ?? "")}`}>
+                {isDemo ? "Review setup guide" : setupChoicesSaved ? "Review setup choices" : "Set up First 5 Jobs"}
               </Link>
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {!isDemo && setupChoicesLoaded && setupChoicesSaved && activeRunId && (
+      {(isDemo || (setupChoicesLoaded && activeRunId)) && (
         <Card className="border-violet-200 bg-violet-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <BookOpen className="mt-0.5 h-5 w-5 text-violet-700" />
               <div>
-                <p className="font-semibold">Getting Your First Five Jobs</p>
-                <p className="mt-1 text-sm text-muted-foreground">Short practical lessons, scripts and quick checks for finding and winning your first work.</p>
+                <p className="font-semibold">Practise with Hudson</p>
+                <p className="mt-1 text-sm text-muted-foreground">Six optional customer role-plays and short practical lessons. Practice is available before business registration and never changes your score or progression.</p>
               </div>
             </div>
             <Button asChild variant="outline" className="shrink-0 border-violet-300 bg-white">
-              <Link to={`/stage-1/learning?runId=${encodeURIComponent(activeRunId)}`}>Open learning library</Link>
+              <Link to={isDemo ? "/stage-1/learning?demo=1" : `/stage-1/learning?runId=${encodeURIComponent(activeRunId ?? "")}`}>Open lessons and practices</Link>
             </Button>
           </CardContent>
         </Card>
@@ -4559,6 +4575,7 @@ function Stage1DashboardInner() {
           secondaries={[{ k: "Total leads", v: totalLeads }]}
           onClick={() => setDrill("leads")}
           highlighted={tourActive && tourStep === 1}
+          focusTarget="leads"
         />
         <KpiCard
           label="Conversions"
@@ -4611,7 +4628,7 @@ function Stage1DashboardInner() {
       )}
 
       {/* ---- Bottom: report switcher ---- */}
-      <section data-hudson-focus="money-owing" className={`scroll-mt-6 space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
+      <section data-hudson-focus="money-owing" data-help-target={ledgerView === "debtors" ? "money-owing" : "job-summary"} className={`scroll-mt-6 space-y-3 ${tourActive && (tourStep === 9 || tourStep === 10) ? "relative z-40 rounded-xl ring-4 ring-sky-400 ring-offset-4" : ""}`}>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
             <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-[#f7faff] via-white to-[#f2f8f5] pb-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/lib/auth";
 import { HUDSON_DOCK_CLOSED, HUDSON_DOCK_OPEN, openHudsonDock } from "@/lib/hudsonDock";
+import type { HudsonPracticeKey } from "@/lib/hudsonPractice";
 
 export function HudsonSupportButton({
   runId,
@@ -11,12 +12,14 @@ export function HudsonSupportButton({
   nav = false,
   className = "",
   onOpened,
+  practiceKey,
 }: {
   runId: string;
   label?: string;
   nav?: boolean;
   className?: string;
   onOpened?: () => void;
+  practiceKey?: HudsonPracticeKey;
 }) {
   const { session } = useAuth();
   const [starting, setStarting] = useState(false);
@@ -45,7 +48,7 @@ export function HudsonSupportButton({
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ requestId: requestIdRef.current, runId, mode: "first_5_jobs" }),
+        body: JSON.stringify({ requestId: requestIdRef.current, runId, mode: "first_5_jobs", practiceKey }),
       });
       const payload = await response.json() as { conversationUrl?: string; error?: string };
       if (!response.ok || !payload.conversationUrl) throw new Error(payload.error || "Hudson could not start.");
@@ -53,7 +56,7 @@ export function HudsonSupportButton({
       if (!requestId) throw new Error("Hudson session context was lost.");
       requestIdRef.current = null;
       setHudsonOpen(true);
-      openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId });
+      openHudsonDock({ conversationUrl: payload.conversationUrl, runId, requestId, practiceKey });
       onOpened?.();
     } catch (cause) {
       if (cause instanceof Error && cause.message.includes("start a new session")) requestIdRef.current = null;

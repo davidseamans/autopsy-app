@@ -13,7 +13,7 @@ const activities: Stage1LeadActivity[] = [
 ];
 
 describe("Stage 1 six-week lead-source matrix", () => {
-  it("places dated lead totals into touchable Stage 1 weeks", () => {
+  it("anchors the rolling window to the latest activity and aggregates its final week", () => {
     render(<Stage1LeadMatrix activities={activities} startedAt="2026-08-01T00:00:00Z" methods={["Customer Referral"]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Customer Referral, Week 5, 2 leads" }));
