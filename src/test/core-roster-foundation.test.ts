@@ -29,6 +29,8 @@ const shift: RosterShift = {
   employeeId: ids.employee,
   jobId: ids.job,
   workSiteId: ids.site,
+  serviceEventId: null,
+  overheadClassId: null,
   workDate: "2026-08-18",
   startsAt: "2026-08-18T08:00:00+10:00",
   endsAt: "2026-08-18T16:30:00+10:00",

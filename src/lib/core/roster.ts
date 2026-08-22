@@ -17,8 +17,10 @@ export const RosterShiftSchema = z
     id: uuid,
     tenantId: uuid,
     employeeId: uuid,
-    jobId: uuid,
+    jobId: uuid.nullable(),
     workSiteId: uuid.nullable(),
+    serviceEventId: uuid.nullable(),
+    overheadClassId: uuid.nullable(),
     workDate,
     startsAt: timestamp,
     endsAt: timestamp,
@@ -30,6 +32,16 @@ export const RosterShiftSchema = z
     updatedAt: timestamp,
   })
   .superRefine((shift, context) => {
+    const hasJob = shift.jobId !== null;
+    const hasOverhead = shift.overheadClassId !== null;
+    if (hasJob === hasOverhead || (shift.serviceEventId !== null && !hasJob)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["jobId"],
+        message: "Shift must belong to exactly one Job or governed overhead class.",
+      });
+    }
+
     const elapsedMinutes =
       (new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime()) / 60_000;
 
