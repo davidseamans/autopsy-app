@@ -8,12 +8,16 @@ export const QBO_REVOKE_URL = "https://developer.api.intuit.com/v2/oauth2/tokens
 
 const READ_ONLY_ENTITIES = new Set([
   "Account",
+  "Bill",
   "CompanyInfo",
   "Customer",
   "Invoice",
   "Item",
+  "JournalEntry",
   "Payment",
+  "Purchase",
   "TaxCode",
+  "VendorCredit",
 ]);
 
 const READ_ONLY_REPORTS = new Set(["CashFlow", "GeneralLedger", "ProfitAndLoss"]);
