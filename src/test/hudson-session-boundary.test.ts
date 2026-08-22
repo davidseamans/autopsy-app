@@ -77,6 +77,15 @@ describe("Hudson governed session boundary", () => {
     expect(api).toContain('mode !== "first_5_jobs"');
     expect(dock).toContain("Hudson · three-minute practice");
     expect(dock).toContain("There is no score");
+    const practiceEntry = dashboard.slice(
+      dashboard.indexOf("Practise with Hudson") - 700,
+      dashboard.indexOf("Practise with Hudson") + 900,
+    );
+    expect(practiceEntry).toContain("setupChoicesLoaded && activeRunId");
+    expect(practiceEntry).not.toContain("setupChoicesSaved");
+    expect(practiceEntry).toContain("Six optional customer role-plays");
+    expect(practiceEntry).toContain("never changes your score or progression");
+    expect(practiceEntry).toContain("Open lessons and practices");
     expect(practiceMigration).toContain("add column if not exists practice_key text");
     expect(practiceMigration).toContain("no transcript, response content or maturity score");
     expect(practiceMigration).not.toMatch(/transcript\s+(text|json|jsonb)|maturity_score\s+/i);
