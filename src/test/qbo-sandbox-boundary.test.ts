@@ -68,11 +68,17 @@ describe("QBO Phase 0 sandbox boundary", () => {
 
   it("builds reads only against the sandbox API and allowlisted resources", () => {
     const customer = buildQboReadUrl("123456789", { entity: "Customer" });
+    const bill = buildQboReadUrl("123456789", { entity: "Bill" });
+    const purchase = buildQboReadUrl("123456789", { entity: "Purchase" });
+    const journal = buildQboReadUrl("123456789", { entity: "JournalEntry" });
     const report = buildQboReadUrl("123456789", { report: "ProfitAndLoss" });
     expect(customer.origin).toBe(QBO_SANDBOX_API_ORIGIN);
     expect(customer.searchParams.get("query")).toBe("select * from Customer maxresults 1000");
+    expect(bill.searchParams.get("query")).toBe("select * from Bill maxresults 1000");
+    expect(purchase.searchParams.get("query")).toBe("select * from Purchase maxresults 1000");
+    expect(journal.searchParams.get("query")).toBe("select * from JournalEntry maxresults 1000");
     expect(report.pathname.endsWith("/reports/ProfitAndLoss")).toBe(true);
-    expect(() => buildQboReadUrl("123456789", { entity: "JournalEntry" })).toThrow(/not allowlisted/);
+    expect(() => buildQboReadUrl("123456789", { entity: "PurchaseOrder" })).toThrow(/not allowlisted/);
     expect(() => buildQboReadUrl("123456789", { report: "TaxSummary" })).toThrow(/not allowlisted/);
     expect(() => buildQboReadUrl("not-a-realm", { entity: "Customer" })).toThrow(/Invalid QBO realmId/);
   });
