@@ -80,7 +80,9 @@ describe("Hudson governed session boundary", () => {
     const practiceEntryStart = dashboard.indexOf('<Card className="border-violet-200 bg-violet-50/40">');
     const practiceEntryEnd = dashboard.indexOf("</Card>", practiceEntryStart);
     const practiceEntry = dashboard.slice(practiceEntryStart, practiceEntryEnd);
-    expect(practiceEntry).toContain("setupChoicesLoaded && activeRunId");
+    expect(dashboard).toContain(
+      '{(isDemo || (setupChoicesLoaded && activeRunId)) && (\n        <Card className="border-violet-200 bg-violet-50/40">',
+    );
     expect(practiceEntry).not.toContain("setupChoicesSaved");
     expect(practiceEntry).toContain("Six optional customer role-plays");
     expect(practiceEntry).toContain("never changes your score or progression");
