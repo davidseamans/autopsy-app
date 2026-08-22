@@ -179,7 +179,7 @@ describe("First 5 Jobs orientation", () => {
     const migration = read("supabase/migrations/20260804100000_stage1_learning_library.sql");
 
     expect(routes).toContain('path="/stage-1/learning"');
-    expect(dashboard).toContain("Open learning library");
+    expect(dashboard).toContain("Open lessons and practices");
     expect(learning).toContain("Getting Your First Five Jobs");
     expect(learning).toContain("Where your first leads are");
     expect(learning).toContain("What to say");
