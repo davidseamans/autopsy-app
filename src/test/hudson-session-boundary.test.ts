@@ -77,10 +77,9 @@ describe("Hudson governed session boundary", () => {
     expect(api).toContain('mode !== "first_5_jobs"');
     expect(dock).toContain("Hudson · three-minute practice");
     expect(dock).toContain("There is no score");
-    const practiceEntry = dashboard.slice(
-      dashboard.indexOf("Practise with Hudson") - 700,
-      dashboard.indexOf("Practise with Hudson") + 900,
-    );
+    const practiceEntryStart = dashboard.indexOf('<Card className="border-violet-200 bg-violet-50/40">');
+    const practiceEntryEnd = dashboard.indexOf("</Card>", practiceEntryStart);
+    const practiceEntry = dashboard.slice(practiceEntryStart, practiceEntryEnd);
     expect(practiceEntry).toContain("setupChoicesLoaded && activeRunId");
     expect(practiceEntry).not.toContain("setupChoicesSaved");
     expect(practiceEntry).toContain("Six optional customer role-plays");
