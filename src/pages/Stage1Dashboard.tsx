@@ -3282,18 +3282,18 @@ function Stage1DashboardInner() {
         </Card>
       )}
 
-      {(isDemo || (setupChoicesLoaded && setupChoicesSaved && activeRunId)) && (
+      {(isDemo || (setupChoicesLoaded && activeRunId)) && (
         <Card className="border-violet-200 bg-violet-50/40">
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <BookOpen className="mt-0.5 h-5 w-5 text-violet-700" />
               <div>
-                <p className="font-semibold">Getting Your First Five Jobs</p>
-                <p className="mt-1 text-sm text-muted-foreground">Short practical lessons, scripts and optional Hudson practices for finding and winning your first work.</p>
+                <p className="font-semibold">Practise with Hudson</p>
+                <p className="mt-1 text-sm text-muted-foreground">Six optional customer role-plays and short practical lessons. Practice is available before business registration and never changes your score or progression.</p>
               </div>
             </div>
             <Button asChild variant="outline" className="shrink-0 border-violet-300 bg-white">
-              <Link to={isDemo ? "/stage-1/learning?demo=1" : `/stage-1/learning?runId=${encodeURIComponent(activeRunId ?? "")}`}>Open learning library</Link>
+              <Link to={isDemo ? "/stage-1/learning?demo=1" : `/stage-1/learning?runId=${encodeURIComponent(activeRunId ?? "")}`}>Open lessons and practices</Link>
             </Button>
           </CardContent>
         </Card>
