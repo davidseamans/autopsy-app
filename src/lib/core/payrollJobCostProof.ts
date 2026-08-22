@@ -33,10 +33,10 @@ export type PayrollAllocation =
 export interface PayrollMappingEvidence {
   employeeExternalId: string | null;
   workTypeExternalId: string | null;
-  payrollCostCentreExternalId: string | null;
+  payrollAllocationExternalId: string | null;
   workerMappingProven: boolean;
   workTypeMappingProven: boolean;
-  payrollCostCentreMappingProven: boolean;
+  payrollAllocationMappingProven: boolean;
   requestCorrelationProven: boolean;
 }
 
@@ -45,14 +45,14 @@ export interface PayrollProofItem extends PayrollTimesheetSubmission {
   idempotencyKey: string;
   workTypeExternalId: string;
   allocation: PayrollAllocation;
-  payrollCostCentreExternalId: string;
+  payrollAllocationExternalId: string;
 }
 
 export interface PayrollProofBlocker {
   code:
     | "worker_mapping_unproved"
     | "work_type_mapping_unproved"
-    | "payroll_cost_centre_mapping_unproved"
+    | "payroll_allocation_mapping_unproved"
     | "qbo_customer_project_mapping_unproved"
     | "request_correlation_unproved";
   message: string;
@@ -76,12 +76,12 @@ export function payrollExportBlockers(
     });
   }
   if (
-    !evidence.payrollCostCentreMappingProven ||
-    !evidence.payrollCostCentreExternalId
+    !evidence.payrollAllocationMappingProven ||
+    !evidence.payrollAllocationExternalId
   ) {
     blockers.push({
-      code: "payroll_cost_centre_mapping_unproved",
-      message: "The Employment Hero Cost Centre mapping is not proved.",
+      code: "payroll_allocation_mapping_unproved",
+      message: "The Employment Hero payroll allocation mapping is not proved.",
     });
   }
   if (allocation?.kind === "job" && !validCustomerProjectMapping(allocation)) {
@@ -124,7 +124,7 @@ export function buildPayrollProofItem(input: {
     employeeExternalId: input.evidence.employeeExternalId!,
     workTypeExternalId: input.evidence.workTypeExternalId!,
     allocation: input.allocation,
-    payrollCostCentreExternalId: input.evidence.payrollCostCentreExternalId!,
+    payrollAllocationExternalId: input.evidence.payrollAllocationExternalId!,
     idempotencyKey: `employment-hero:${input.tenantId}:${input.submission.sourceTimeEntryId}`,
   };
 }
@@ -243,7 +243,7 @@ export function reconcileQboLabourCost(input: {
       );
     } else {
       nonJobToAllocation.set(
-        `${item.allocation.kind}:${item.payrollCostCentreExternalId}`,
+        `${item.allocation.kind}:${item.payrollAllocationExternalId}`,
         allocationKey,
       );
     }
